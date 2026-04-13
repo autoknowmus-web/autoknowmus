@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+</head>
+<body style="text-align:center; padding:40px; font-family:Arial;">
+
+    <h1>🚗 Price Dashboard</h1>
+
+    <p>Welcome, {{ user.email }}</p>
+
+    <br>
+
+    <a href="/logout">
+        <button>Logout</button>
+    </a>
+
+    <hr>
+
+    <h3>Submit your transaction</h3>
+
+    <form method="POST" action="/submit">
+        
+        <select name="role">
+            <option value="buyer">Buyer</option>
+            <option value="seller">Seller</option>
+        </select>
+
+        <br><br>
+
+        <input type="number" name="price" placeholder="Enter price">
+
+        <br><br>
+
+        <button type="submit">Submit</button>
+
+    </form>
+
+</body>
+</html>

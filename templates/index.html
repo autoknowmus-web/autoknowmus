@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoKnowMus | Price Transparency</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: white; font-family: 'Inter', sans-serif; overflow-x: hidden; padding-top: 70px; }
+        
+        /* Top Navigation Bar */
+        .navbar-custom { background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .brand-logo { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; margin: 0; }
+        .user-badge { background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; padding: 8px 15px; border-radius: 20px; font-size: 0.9rem; }
+        .credit-badge { color: #f59e0b; font-weight: bold; margin-left: 10px; }
+        .logout-link { color: #ef4444; cursor: pointer; margin-left: 15px; font-size: 0.9rem; text-decoration: none; }
+        .logout-link:hover { text-decoration: underline; }
+
+        /* Main UI Elements */
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; padding: 2.5rem; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+        .form-control, .form-select { background-color: #0f172a !important; border: 1px solid #334155 !important; color: white !important; }
+        
+        /* Social Buttons */
+        .btn-social { font-weight: 600; border: none; margin-bottom: 10px; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+        .btn-google { background: white; color: #1f2937; }
+        .btn-google:hover { background: #f3f4f6; }
+        .btn-apple { background: black; color: white; border: 1px solid #334155; }
+        .btn-apple:hover { background: #1f2937; }
+        
+        /* Action Buttons */
+        .btn-primary { background: #3b82f6; border: none; font-weight: 600; }
+        .btn-seller { background: #10b981; border: none; font-weight: 600; }
+        .btn-buyer { background: #6366f1; border: none; font-weight: 600; }
+        .hidden { display: none !important; }
+
+        /* Typography & Layout */
+        .hero-text { font-size: 1.1rem; color: #94a3b8; line-height: 1.6; max-width: 800px; margin: 0 auto; }
+        .stats-box { text-align: center; padding: 20px; border-right: 1px solid rgba(255,255,255,0.1); }
+        .stats-box:last-child { border: none; }
+        .stat-number { font-size: 2.5rem; font-weight: 800; color: #10b981; }
+        .testimonial-card { background: #1e293b; border-radius: 15px; padding: 20px; font-size: 0.95rem; font-style: italic; color: #cbd5e1; }
+        .testimonial-author { font-weight: bold; font-style: normal; color: white; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark navbar-custom fixed-top">
+    <div class="container">
+        <a class="navbar-brand brand-logo" href="#">
+            <span style="color: #ffffff;">Auto</span><span style="color: #3b82f6;">Know</span><span style="color: #10b981;">Mus</span>
+        </a>
+        <div id="nav-user-info" class="hidden d-flex align-items-center">
+            <div class="user-badge">
+                👤 <span id="display-name">User</span>
+                <span class="credit-badge">🪙 <span id="display-credits">100</span> Credits</span>
+            </div>
+            <a class="logout-link" onclick="simulateLogout()">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container pb-5">
+
+    <div id="welcome-section" class="text-center mt-5 mb-5">
+        <h1 class="fw-bold mb-3">Welcome to True Price Transparency</h1>
+        <p class="hero-text">
+            AutoKnowMus is a community-driven initiative to bring fairness to used car transactions. By recording <strong>real transaction data</strong> from actual buyers and sellers, we protect sellers from undervaluing their cars and protect buyers from overpaying. 
+            <br><br>Join the hub of intelligence.
+        </p>
+    </div>
+
+    <div class="row justify-content-center">
+
+        <div id="section-lead" class="glass-card text-center col-md-5">
+            <h3 class="fw-bold mb-4">Access the Intelligence Hub</h3>
+            
+            <button type="button" class="btn btn-social btn-google w-100 py-2" onclick="simulateLogin('Google User')">
+                <svg width="20" height="20" viewBox="0 0 48 48" class="me-2"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                Continue with Google
+            </button>
+
+            <button type="button" class="btn btn-social btn-apple w-100 py-2" onclick="simulateLogin('Apple User')">
+                <svg width="20" height="20" viewBox="0 0 384 512" class="me-2" fill="white"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.1-44.6-35.9-2.8-74.3 22.7-93.1 22.7-18.9 0-48.6-21.2-76.4-21.2-43.8 0-87.6 25.6-111.4 65.9-48.1 82.2-30.3 203.4 16.6 270.6 23.6 33.7 51.5 70.4 87.7 69.5 34.6-.9 48.7-22.1 89.4-22.1 40.5 0 53.6 22.1 89.4 21.2 37.3-.9 61.9-34.6 84.4-68.5 26.6-38.3 37.5-75.5 38.3-77.5-2.2-1.2-50.6-19.1-50.8-59.2zM263.6 89.2c20.4-24.8 34.3-59.2 30.5-93.5-29.3 1.2-64.8 19.8-85.9 44.9-18.3 21.6-34.6 56.6-30 90.1 32.7 2.5 65.4-16.7 85.4-41.5z"/></svg>
+                Continue with Apple
+            </button>
+            
+            <div class="d-flex align-items-center my-4">
+                <hr class="flex-grow-1 border-secondary opacity-25">
+                <span class="mx-3 text-secondary small">OR SIGN UP WITH EMAIL</span>
+                <hr class="flex-grow-1 border-secondary opacity-25">
+            </div>
+
+            <form id="leadForm" onsubmit="event.preventDefault(); simulateLogin(document.getElementById('userNameInput').value);">
+                <input type="text" id="userNameInput" class="form-control mb-3 py-2" placeholder="Full Name" required>
+                <input type="email" class="form-control mb-3 py-2" placeholder="Email Address" required>
+                <button type="submit" class="btn btn-primary w-100 py-2">Create Account</button>
+            </form>
+        </div>
+
+        <div id="section-choice" class="glass-card text-center col-md-8 hidden">
+            <h3 class="mb-5 fw-bold">What is your goal today?</h3>
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <button class="btn btn-seller w-100 py-3 mb-2" onclick="showSection('section-seller')">I am a Seller</button>
+                    <p class="text-secondary small">Find the right target price to sell your car for maximum profit.</p>
+                </div>
+                <div class="col-md-6">
+                    <button class="btn btn-buyer w-100 py-3 mb-2" onclick="alert('Buyer tool opening...')">I am a Buyer</button>
+                    <p class="text-secondary small">Check if a listing you found online is a fair deal.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="section-seller" class="glass-card col-md-7 hidden">
+            <h4 class="fw-bold mb-4 text-center">Enter Your Car Details</h4>
+            <div class="alert alert-primary py-2 small">🪙 This valuation will use <strong>10 Credits</strong>.</div>
+            <button class="btn btn-seller w-100 py-3" onclick="alert('Valuation Complete! 10 Credits Deducted.')">Get Selling Insights</button>
+        </div>
+
+    </div>
+
+    <div class="row mt-5 pt-5 border-top border-secondary border-opacity-25">
+        <div class="col-md-6 stats-box">
+            <div class="stat-number">{{ stats.total_searches }}</div>
+            <div class="text-secondary text-uppercase tracking-wider small fw-bold">Vehicles Valued</div>
+        </div>
+        <div class="col-md-6 stats-box">
+            <div class="stat-number">{{ stats.real_transactions }}</div>
+            <div class="text-secondary text-uppercase tracking-wider small fw-bold">Real Transactions Submitted</div>
+        </div>
+    </div>
+
+    <div class="mt-5">
+        <h4 class="text-center fw-bold mb-4">What Our Community Says</h4>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="testimonial-card">
+                    "I was about to list my Swift for 4.5L. AutoKnowMus showed me the real market value was 5.1L. I sold it for 5L in three days. Incredible tool!"
+                    <div class="testimonial-author">- rahul_mumbai92</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="testimonial-card">
+                    "As a buyer, dealers always try to overcharge. I cross-checked a Creta price here, showed the dealer it was overpriced, and saved ₹40,000."
+                    <div class="testimonial-author">- priya.auto enthusiast</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="testimonial-card">
+                    "Finally, a platform that uses actual transaction data instead of arbitrary dealer quotes. Complete transparency."
+                    <div class="testimonial-author">- vikram_tata_fan</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // System State
+    let userCredits = 500;
+
+    function hideAllMainSections() {
+        document.getElementById('section-lead').classList.add('hidden');
+        document.getElementById('section-choice').classList.add('hidden');
+        document.getElementById('section-seller').classList.add('hidden');
+    }
+
+    function showSection(id) {
+        hideAllMainSections();
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    // Login Simulation Function
+    function simulateLogin(name) {
+        // Hide welcome text to save space
+        document.getElementById('welcome-section').classList.add('hidden');
+        
+        // Show user info in Navbar
+        document.getElementById('display-name').innerText = name || "User";
+        document.getElementById('display-credits').innerText = userCredits;
+        document.getElementById('nav-user-info').classList.remove('hidden');
+
+        // Move to Choice Screen
+        showSection('section-choice');
+    }
+
+    // Logout Function
+    function simulateLogout() {
+        document.getElementById('nav-user-info').classList.add('hidden');
+        document.getElementById('welcome-section').classList.remove('hidden');
+        showSection('section-lead');
+        document.getElementById('leadForm').reset();
+    }
+</script>
+
+</body>
+</html>
