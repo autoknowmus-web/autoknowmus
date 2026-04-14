@@ -1,24 +1,26 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template
 
 app = Flask(__name__)
 
-# 1. Home Page (Dark Mode with Social Login & Manual Form)
+# Home Page
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        return f"Error loading index: {str(e)}"
 
-# 2. Role Selection (Buyer vs Seller)
+# Role Selection
 @app.route('/role', methods=['GET', 'POST'])
 def role():
-    # If coming from the form on index.html, you can capture data here later
     return render_template('role.html')
 
-# 3. Seller Page (Cascading Dropdowns)
+# Seller Page
 @app.route('/seller')
 def seller():
     return render_template('seller.html')
 
-# 4. Dashboard (Price Simulator)
+# Dashboard Page
 @app.route('/dashboard')
 def dashboard():
     return render_template('dashboard.html')
