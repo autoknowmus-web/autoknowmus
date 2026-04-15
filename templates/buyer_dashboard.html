@@ -1,67 +1,64 @@
-{% extends "layout.html" %}
-{% block content %}
-<div class="row g-4">
-    <div class="col-lg-8">
-        <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 30px;">
-            <div class="d-flex justify-content-between align-items-start mb-4">
-                <div>
-                    <h5 class="text-white-50 mb-1">Fair Market Range</h5>
-                    <h1 class="display-4 fw-bold text-green">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
-                </div>
-                <div class="btn-group bg-dark p-1 rounded-3">
-                    <button class="btn btn-sm btn-outline-secondary">Excellent</button>
-                    <button class="btn btn-sm btn-primary">Average</button>
-                    <button class="btn btn-sm btn-outline-secondary">Fair</button>
-                </div>
-            </div>
+from flask import Flask, render_template, request
+import random
 
-            <div class="py-4">
-                <div class="progress rounded-pill" style="height: 18px; background: #2d2f34;">
-                    <div class="progress-bar bg-success" style="width: 33%"></div>
-                    <div class="progress-bar bg-warning" style="width: 33%"></div>
-                    <div class="progress-bar bg-danger" style="width: 34%"></div>
-                </div>
-                <div class="d-flex justify-content-between mt-2 small text-white-50 fw-bold">
-                    <span>GREAT DEAL</span><span>FAIR PRICE</span><span>OVERPRICED</span>
-                </div>
-                {% if mode == 'evaluation' %}
-                <div class="text-center mt-4">
-                    <div class="badge bg-white text-dark p-2 fs-6">Asking: ₹ {{ "{:,}".format(asking) }}</div>
-                    <h4 class="mt-3 {% if asking > res.high %}text-danger{% elif asking < res.low %}text-success{% else %}text-info{% endif %}">
-                        {% if asking > res.high %}Overpriced{% elif asking < res.low %}Great Deal!{% else %}Fair Price{% endif %}
-                    </h4>
-                </div>
-                {% endif %}
-            </div>
+app = Flask(__name__)
 
-            <div class="row mt-4 g-3">
-                <div class="col-6"><div class="p-4 bg-dark rounded-4 border border-secondary border-opacity-25 text-center">
-                    <small class="text-white-50 d-block">Likely Deal</small>
-                    <span class="fs-4 fw-bold text-white">₹ {{ "{:,}".format(res.likely) }}</span>
-                </div></div>
-                <div class="col-6"><div class="p-4 bg-dark rounded-4 border border-danger border-opacity-25 text-center">
-                    <small class="text-danger d-block">Walkaway Price</small>
-                    <span class="fs-4 fw-bold text-white">₹ {{ "{:,}".format(res.walkaway) }}</span>
-                </div></div>
-            </div>
-        </div>
-    </div>
+# Shared Data for Syncing
+BRANDS = ["Toyota", "Maruti Suzuki", "Hyundai", "Tata Motors", "Mahindra", "Kia", "Honda", "MG Motors", "Skoda", "Volkswagen"]
+CITIES = ["Bangalore", "Hyderabad", "Delhi", "Mumbai", "Pune", "Chennai"]
+CONDITIONS = ["Excellent (Showroom Like)", "Average (Normal Wear)", "Fair (Needs Cosmetic Work)"]
 
-    <div class="col-lg-4">
-        <div class="card p-4 border-0 shadow mb-4" style="background: #16181d; border-radius: 20px;">
-            <h6 class="text-white-50 mb-4">5-Year Value Forecast</h6>
-            <svg viewBox="0 0 200 120" class="w-100">
-                <path d="M20,20 Q100,60 180,110" fill="none" stroke="#28a745" stroke-width="2" />
-                {% for price in forecast %}
-                <circle cx="{{ 20 + (loop.index0 * 32) }}" cy="{{ 20 + (loop.index0 * 18) }}" r="5" fill="#fff" />
-                <text x="{{ 20 + (loop.index0 * 32) }}" y="{{ 12 + (loop.index0 * 18) }}" fill="#888" font-size="6" text-anchor="middle">₹{{ (price/100000)|round(1) }}L</text>
-                {% endfor %}
-            </svg>
-        </div>
-        <div class="p-4 border border-dashed rounded-4 opacity-50 text-center">
-            <h6 class="text-white mb-0">Premium: Live Alerts</h6>
-            <small class="text-white-50">Coming Soon</small>
-        </div>
-    </div>
-</div>
-{% endblock %}
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/role', methods=['GET', 'POST'])
+def role():
+    user_name = request.form.get('name', 'Rajeev Thakur')
+    return render_template('role.html', user_name=user_name)
+
+# --- SELLER JOURNEY ---
+@app.route('/seller')
+def seller():
+    years = list(range(2026, 2010, -1))
+    return render_template('seller.html', years=years, brands=BRANDS, cities=CITIES, conditions=CONDITIONS)
+
+@app.route('/dashboard', methods=['GET', 'POST'])
+def dashboard():
+    # Standard Seller Simulator
+    return render_template('dashboard.html')
+
+# --- BUYER JOURNEY ---
+@app.route('/buyer')
+def buyer():
+    years = list(range(2026, 2010, -1))
+    return render_template('buyer.html', years=years, brands=BRANDS, cities=CITIES, conditions=CONDITIONS)
+
+@app.route('/buyer_dashboard', methods=['GET', 'POST'])
+def buyer_dashboard():
+    mode = request.form.get('search_mode', 'discovery')
+    asking = int(request.form.get('asking_price', 0) or 0)
+    make = request.form.get('make', 'Toyota')
+    model = request.form.get('model', 'Fortuner')
+    
+    # Intelligence Logic for Range
+    base = 1450000 if make == "Toyota" else 1100000
+    res = {
+        'low': int(base * 0.94),
+        'high': int(base * 1.06),
+        'likely': base,
+        'walkaway': int(base * 1.08),
+        'demand': "High" if make in ["Toyota", "Maruti Suzuki"] else "Moderate"
+    }
+    
+    # 5-Year Depreciation Forecast for Graph
+    forecast = []
+    curr = base
+    for i in range(6):
+        forecast.append(int(curr))
+        curr *= 0.88
+
+    return render_template('buyer_dashboard.html', mode=mode, asking=asking, res=res, forecast=forecast, make=make, model=model)
+
+if __name__ == '__main__':
+    app.run(debug=True)
