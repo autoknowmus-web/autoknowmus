@@ -13,10 +13,10 @@
                         <select class="form-select bg-dark text-white border-secondary" name="make" id="brand_s" onchange="updateModelsS()">{% for brand in brands %}<option>{{ brand }}</option>{% endfor %}</select>
                     </div>
                     <div class="col-md-2"><label class="text-white-50 small">Model</label>
-                        <select class="form-select bg-dark text-white border-secondary" id="model_s" name="model"></select>
+                        <select class="form-select bg-dark text-white border-secondary" id="model_s" name="model" onchange="updateVariantsS()"></select>
                     </div>
                     <div class="col-md-2"><label class="text-white-50 small">Variant / Suffix</label>
-                        <select class="form-select bg-dark text-white border-secondary"><option>Base / LXi</option><option>Mid / VXi</option><option>Top / ZXi</option></select>
+                        <select class="form-select bg-dark text-white border-secondary" id="variant_s" name="variant"></select>
                     </div>
                     <div class="col-md-2"><label class="text-white-50 small">Fuel Type</label>
                         <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option></select>
@@ -35,8 +35,24 @@
     </div>
 </div>
 <script>
-function updateModelsS() { const b = document.getElementById('brand_s').value; const m = document.getElementById('model_s'); m.innerHTML = ''; (models[b] || []).forEach(x => m.add(new Option(x, x))); }
-const models = {"Toyota":["Fortuner","Innova"],"Maruti Suzuki":["Swift","Brezza"]};
+const dataMapS = {
+    "Toyota": {"Fortuner": ["4x2 AT", "4x4 AT"], "Innova": ["GX", "VX", "ZX"]},
+    "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["LXi", "VXi"]}
+};
+function updateModelsS() {
+    const b = document.getElementById('brand_s').value;
+    const m = document.getElementById('model_s');
+    m.innerHTML = '';
+    Object.keys(dataMapS[b] || {}).forEach(x => m.add(new Option(x, x)));
+    updateVariantsS();
+}
+function updateVariantsS() {
+    const b = document.getElementById('brand_s').value;
+    const m = document.getElementById('model_s').value;
+    const v = document.getElementById('variant_s');
+    v.innerHTML = '';
+    (dataMapS[b][m] || ["Standard"]).forEach(x => v.add(new Option(x, x)));
+}
 updateModelsS();
 </script>
 {% endblock %}
