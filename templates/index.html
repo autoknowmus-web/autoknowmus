@@ -15,7 +15,7 @@
                 <input type="text" name="name" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Full Name" required>
                 <div class="input-group mb-3">
                     <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
-                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="10 Digit Mobile" pattern="[0-9]{10}" maxlength="10" required>
+                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="10 Digit Mobile" pattern="[0-9]{10}" maxlength="10" minlength="10" required>
                 </div>
                 <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Continue to Selection</button>
             </form>
@@ -25,12 +25,12 @@
             <h5 class="text-white-50 mb-4 text-uppercase small tracking-widest">Community Testimonials</h5>
             <div class="row g-3">
                 {% set tests = [
-                    ('Rajesh K.', 'Found the exact value for my Fortuner.', 'Seller'),
-                    ('Priya S.', 'Negotiated a much better deal.', 'Buyer'),
-                    ('Vikram M.', 'The simulator is a game changer.', 'Seller'),
-                    ('Amit B.', 'Saved 2L on an Innova purchase.', 'Buyer'),
-                    ('Sonal V.', 'Sold my Swift at the peak price.', 'Seller'),
-                    ('Rahul J.', 'Avoided an overpriced luxury SUV.', 'Buyer')
+                    ('Rajesh K., Bangalore', 'Found the exact value for my Fortuner.', 'Seller'),
+                    ('Priya S., Delhi', 'Negotiated a much better deal using the fair range.', 'Buyer'),
+                    ('Vikram M., Mumbai', 'The simulator is a game changer for individual sellers.', 'Seller'),
+                    ('Amit B., Hyderabad', 'Saved 2L on an Innova purchase.', 'Buyer'),
+                    ('Sonal V., Pune', 'Sold my Swift at the peak market price.', 'Seller'),
+                    ('Rahul J., Gurgaon', 'Avoided an overpriced luxury SUV after the eval.', 'Buyer')
                 ] %}
                 {% for name, text, type in tests %}
                 <div class="col-md-4">
