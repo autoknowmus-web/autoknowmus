@@ -1,42 +1,59 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-10">
-        <div class="card p-5 shadow-lg" style="background-color: #16181d; border-radius: 28px; border: 1px solid #2d2f34;">
-            <h2 class="text-blue mb-4 fw-bold"><i class="fas fa-search me-2"></i> Buyer Search: Bangalore Market</h2>
-            
+    <div class="col-md-11">
+        <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 28px;">
+            <div class="d-flex justify-content-center mb-5">
+                <div class="btn-group p-1 bg-dark rounded-pill" style="border: 1px solid #2d2f34;">
+                    <input type="radio" class="btn-check" name="search_mode" id="discovery" value="discovery" checked onclick="toggleMode(false)">
+                    <label class="btn btn-outline-primary rounded-pill px-4" for="discovery">Price Discovery</label>
+                    <input type="radio" class="btn-check" name="search_mode" id="eval" value="evaluation" onclick="toggleMode(true)">
+                    <label class="btn btn-outline-primary rounded-pill px-4" for="eval">Evaluate a Deal</label>
+                </div>
+            </div>
+
             <form action="/buyer_dashboard" method="POST">
                 <div class="row g-4">
-                    <div class="col-md-4">
-                        <label class="form-label text-white-50">Make</label>
-                        <select class="form-select bg-dark text-white border-secondary py-2" name="make" required>
-                            <option value="Toyota">Toyota</option>
-                            <option value="Maruti Suzuki">Maruti Suzuki</option>
-                            <option value="Hyundai">Hyundai</option>
+                    <div class="col-md-3">
+                        <label class="text-white-50 small">Location (City)</label>
+                        <select class="form-select bg-dark text-white border-secondary mb-3" name="city">
+                            {% for city in cities %}<option>{{ city }}</option>{% endfor %}
                         </select>
-                        <label class="form-label text-white-50 mt-3">Model</label>
-                        <input type="text" class="form-control bg-dark text-white border-secondary py-2" name="model" placeholder="e.g. Fortuner" required>
+                        <label class="text-white-50 small">Make</label>
+                        <select class="form-select bg-dark text-white border-secondary" id="brand" name="make" onchange="updateModels()">
+                            {% for brand in brands %}<option>{{ brand }}</option>{% endfor %}
+                        </select>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label text-white-50">Year</label>
-                        <select class="form-select bg-dark text-white border-secondary py-2" name="year">
-                            {% for year in years %}<option value="{{ year }}">{{ year }}</option>{% endfor %}
+                    <div class="col-md-3">
+                        <label class="text-white-50 small">Model</label>
+                        <select class="form-select bg-dark text-white border-secondary mb-3" id="model" name="model" onchange="updateVariants()"></select>
+                        <label class="text-white-50 small">Fuel Type</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="fuel">
+                            <option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>PHEV</option>
                         </select>
-                        <label class="form-label text-white-50 mt-3">Mileage (Kms)</label>
-                        <input type="number" class="form-control bg-dark text-white border-secondary py-2" name="mileage" required>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label text-white-50">Condition</label>
-                        <select class="form-select bg-dark text-white border-secondary py-2" name="condition">
-                            <option value="Excellent">Excellent</option>
-                            <option value="Good" selected>Good</option>
-                            <option value="Fair">Fair</option>
+                    <div class="col-md-3">
+                        <label class="text-white-50 small">Variant</label>
+                        <input type="text" class="form-control bg-dark text-white border-secondary mb-3" name="variant" placeholder="e.g. VXi, ZXi+">
+                        <label class="text-white-50 small">Condition</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="condition">
+                            <option>Excellent (Showroom Like)</option>
+                            <option>Average (Normal Wear)</option>
+                            <option>Fair (Needs Cosmetic Work)</option>
                         </select>
-                        <button type="submit" class="btn btn-primary w-100 py-3 mt-4 fw-bold" style="background-color: #4e54ff; border: none;">Analyze Market Value</button>
+                    </div>
+                    <div class="col-md-3" id="askingBox" style="display:none;">
+                        <label class="text-warning small">Asking Price (₹)</label>
+                        <input type="number" name="asking_price" class="form-control bg-dark text-white border-warning" placeholder="Enter deal price">
                     </div>
                 </div>
+                <button type="submit" class="btn btn-primary w-100 py-3 mt-5 fw-bold">Analyze Market Intelligence</button>
             </form>
         </div>
     </div>
 </div>
+<script>
+function toggleMode(isEval) { document.getElementById('askingBox').style.display = isEval ? 'block' : 'none'; }
+// Add your model mapping logic here
+</script>
 {% endblock %}
