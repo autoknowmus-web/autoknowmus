@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 
 app = Flask(__name__)
 
@@ -8,16 +8,18 @@ def index():
 
 @app.route('/role', methods=['GET', 'POST'])
 def role():
-    return render_template('role.html')
+    # Capture name from home page to personalize the greeting
+    user_name = request.form.get('name', 'Rajeev Thakur')
+    return render_template('role.html', user_name=user_name)
 
 @app.route('/seller')
 def seller():
-    # Adding a range for the year dropdown to avoid manual typing
     years = list(range(2026, 2010, -1))
     return render_template('seller.html', years=years)
 
-@app.route('/dashboard')
+@app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
+    # This route now accepts POST from the seller form
     return render_template('dashboard.html')
 
 if __name__ == '__main__':
