@@ -1,99 +1,59 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card p-5 shadow-lg" style="background-color: #16181d; border-radius: 28px; border: 1px solid #2d2f34;">
-            <h2 class="text-green mb-4 fw-bold"><i class="fas fa-car me-2"></i> Vehicle Details</h2>
-            
-            <form action="/dashboard" method="POST">
-                <div class="row">
-                    <div class="col-md-6 mb-4">
-                        <label class="form-label text-white-50">Car Brand</label>
-                        <select class="form-select bg-dark text-white border-secondary py-2" id="brand" onchange="updateModels()" required>
-                            <option value="">Select Brand</option>
-                            <option value="Maruti">Maruti Suzuki</option>
-                            <option value="Toyota">Toyota</option>
-                            <option value="Hyundai">Hyundai</option>
-                            <option value="Tata">Tata Motors</option>
-                            <option value="Mahindra">Mahindra</option>
-                            <option value="Kia">Kia</option>
-                            <option value="Honda">Honda</option>
-                            <option value="MG">MG Motors</option>
-                            <option value="Skoda">Skoda</option>
-                            <option value="Volkswagen">Volkswagen</option>
+    <div class="col-md-11">
+        <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 28px;">
+            <div class="d-flex justify-content-center mb-5">
+                <div class="btn-group p-1 bg-dark rounded-pill" style="border: 1px solid #2d2f34;">
+                    <input type="radio" class="btn-check" name="search_mode" id="discovery" value="discovery" checked onclick="toggleMode(false)">
+                    <label class="btn btn-outline-primary rounded-pill px-4" for="discovery">Price Discovery</label>
+                    <input type="radio" class="btn-check" name="search_mode" id="eval" value="evaluation" onclick="toggleMode(true)">
+                    <label class="btn btn-outline-primary rounded-pill px-4" for="eval">Evaluate a Deal</label>
+                </div>
+            </div>
+
+            <form action="/buyer_dashboard" method="POST">
+                <div class="row g-4">
+                    <div class="col-md-3">
+                        <label class="text-white-50 small">Location (City)</label>
+                        <select class="form-select bg-dark text-white border-secondary mb-3" name="city">
+                            {% for city in cities %}<option>{{ city }}</option>{% endfor %}
+                        </select>
+                        <label class="text-white-50 small">Make</label>
+                        <select class="form-select bg-dark text-white border-secondary" id="brand" name="make" onchange="updateModels()">
+                            {% for brand in brands %}<option>{{ brand }}</option>{% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-6 mb-4">
-                        <label class="form-label text-white-50">Model</label>
-                        <select class="form-select bg-dark text-white border-secondary py-2" id="model" required>
-                            <option value="">Select Model</option>
+                    <div class="col-md-3">
+                        <label class="text-white-50 small">Model</label>
+                        <select class="form-select bg-dark text-white border-secondary mb-3" id="model" name="model" onchange="updateVariants()"></select>
+                        <label class="text-white-50 small">Fuel Type</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="fuel">
+                            <option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>PHEV</option>
                         </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="text-white-50 small">Variant</label>
+                        <input type="text" class="form-control bg-dark text-white border-secondary mb-3" name="variant" placeholder="e.g. VXi, ZXi+">
+                        <label class="text-white-50 small">Condition</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="condition">
+                            <option>Excellent (Showroom Like)</option>
+                            <option>Average (Normal Wear)</option>
+                            <option>Fair (Needs Cosmetic Work)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3" id="askingBox" style="display:none;">
+                        <label class="text-warning small">Asking Price (₹)</label>
+                        <input type="number" name="asking_price" class="form-control bg-dark text-white border-warning" placeholder="Enter deal price">
                     </div>
                 </div>
-
-                <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <label class="form-label text-white-50">Year</label>
-                        <select class="form-select bg-dark text-white border-secondary py-2" required>
-                            {% for year in years %}<option value="{{ year }}">{{ year }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label text-white-50">Fuel Type</label>
-                        <select class="form-select bg-dark text-white border-secondary py-2" required>
-                            <option value="Petrol">Petrol</option>
-                            <option value="Diesel">Diesel</option>
-                            <option value="EV">Electric (BEV)</option>
-                            <option value="HEV">Hybrid (HEV)</option>
-                            <option value="PHEV">Plug-in Hybrid (PHEV)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label text-white-50">No. of Owners</label>
-                        <select class="form-select bg-dark text-white border-secondary py-2" required>
-                            <option value="1">1st Owner</option>
-                            <option value="2">2nd Owner</option>
-                            <option value="3">3rd Owner</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="mb-5">
-                    <label class="form-label text-white-50">Kms Driven</label>
-                    <input type="number" class="form-control bg-dark text-white border-secondary py-2" placeholder="e.g. 45000" required>
-                </div>
-
-                <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow">Get Market Insights</button>
+                <button type="submit" class="btn btn-primary w-100 py-3 mt-5 fw-bold">Analyze Market Intelligence</button>
             </form>
         </div>
     </div>
 </div>
-
 <script>
-const models = {
-    "Maruti": ["Swift", "Baleno", "Brezza", "Ertiga", "Grand Vitara", "Dzire"],
-    "Toyota": ["Innova Crysta", "Fortuner", "Hyryder", "Glanza", "Camry", "HyCross"],
-    "Hyundai": ["Creta", "Verna", "Venue", "i20", "Alcazar", "Tucson"],
-    "Tata": ["Nexon", "Harrier", "Safari", "Punch", "Altroz", "Tiago"],
-    "Mahindra": ["XUV700", "Scorpio-N", "Thar", "XUV300", "Bolero"],
-    "Kia": ["Seltos", "Sonet", "Carens", "EV6"],
-    "Honda": ["City", "Amaze", "Elevate"],
-    "MG": ["Hector", "Astor", "ZS EV", "Comet"],
-    "Skoda": ["Kushaq", "Slavia", "Kodiaq"],
-    "Volkswagen": ["Taigun", "Virtus", "Tiguan"]
-};
-
-function updateModels() {
-    const brand = document.getElementById("brand").value;
-    const modelDropdown = document.getElementById("model");
-    modelDropdown.innerHTML = '<option value="">Select Model</option>';
-    if (brand && models[brand]) {
-        models[brand].forEach(m => {
-            let opt = document.createElement("option");
-            opt.value = m; opt.innerHTML = m;
-            modelDropdown.appendChild(opt);
-        });
-    }
-}
+function toggleMode(isEval) { document.getElementById('askingBox').style.display = isEval ? 'block' : 'none'; }
+// Add your model mapping logic here
 </script>
 {% endblock %}
