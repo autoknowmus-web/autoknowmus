@@ -5,14 +5,10 @@
         <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 30px;">
             <div class="d-flex justify-content-between align-items-start mb-4">
                 <div>
-                    <h5 class="text-white-50 mb-1">Estimated Fair Market Range</h5>
+                    <h5 class="text-white-50 mb-1">Estimated Fair Market Range ({{ make }})</h5>
                     <h1 class="display-4 fw-bold text-green">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
                 </div>
-                <div class="btn-group bg-dark p-1 rounded-3">
-                    <button class="btn btn-sm btn-outline-secondary px-3">Excellent</button>
-                    <button class="btn btn-sm btn-primary px-3">Average</button>
-                    <button class="btn btn-sm btn-outline-secondary px-3">Fair</button>
-                </div>
+                <div class="nav-info-badge credits-badge">Confidence Score: {{ res.conf }}%</div>
             </div>
 
             <div class="py-4">
@@ -37,11 +33,11 @@
 
             <div class="row mt-4 g-3">
                 <div class="col-6"><div class="p-4 bg-dark rounded-4 text-center border border-secondary border-opacity-25">
-                    <small class="text-white-50 d-block">Likely Deal Price</small>
+                    <small class="text-white-50 d-block mb-1">Likely Deal Price</small>
                     <span class="fs-4 fw-bold text-white">₹ {{ "{:,}".format(res.likely) }}</span>
                 </div></div>
                 <div class="col-6"><div class="p-4 bg-dark rounded-4 text-center border border-danger border-opacity-25">
-                    <small class="text-danger d-block">Walkaway Price</small>
+                    <small class="text-danger d-block mb-1">Walkaway Price</small>
                     <span class="fs-4 fw-bold text-white">₹ {{ "{:,}".format(res.walkaway) }}</span>
                 </div></div>
             </div>
@@ -66,13 +62,12 @@
                 <circle cx="116" cy="102" r="4.5" fill="#fff" />
                 <text x="122" y="97" fill="#888" font-size="6">₹{{ (forecast[3]/100000)|round(1) }}L</text>
 
-                <circle cx="148" cy="110" r="4.5" fill="#fff" />
-                <text x="154" y="105" fill="#888" font-size="6">₹{{ (forecast[4]/100000)|round(1) }}L</text>
-
                 <circle cx="180" cy="115" r="5" fill="#fff" />
-                <text x="165" y="128" fill="#888" font-size="6">₹{{ (forecast[5]/100000)|round(1) }}L</text>
+                <text x="160" y="128" fill="#888" font-size="6">₹{{ (forecast[5]/100000)|round(1) }}L</text>
             </svg>
-            <div class="mt-4 text-center small text-white-50">Suggestion: <strong>Buy Now</strong></div>
+            <div class="mt-4 p-3 bg-dark rounded-3 text-center small text-white-50">
+                Suggestion: <strong>Buy Now</strong>
+            </div>
         </div>
     </div>
 </div>
