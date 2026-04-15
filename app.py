@@ -3,10 +3,9 @@ import random
 
 app = Flask(__name__)
 
-# Core Industry Data
 BRANDS = ["Toyota", "Maruti Suzuki", "Hyundai", "Tata Motors", "Mahindra", "Kia", "Honda", "MG Motors", "Skoda", "Volkswagen"]
 CITIES = ["Bangalore", "Hyderabad", "Delhi", "Mumbai", "Pune", "Chennai"]
-CONDITIONS = ["Excellent (Showroom Like)", "Average (Normal Wear)", "Fair (Needs Cosmetic Work)"]
+CONDITIONS = ["Excellent (Showroom Like)", "Average (Normal Wear)", "Fair (Needs some repair)"]
 
 @app.route('/')
 def index():
@@ -17,7 +16,6 @@ def role():
     user_name = request.form.get('name', 'Rajeev Thakur')
     return render_template('role.html', user_name=user_name)
 
-# SELLER JOURNEY
 @app.route('/seller')
 def seller():
     years = list(range(2026, 2010, -1))
@@ -27,7 +25,6 @@ def seller():
 def dashboard():
     return render_template('dashboard.html')
 
-# BUYER JOURNEY
 @app.route('/buyer')
 def buyer():
     years = list(range(2026, 2010, -1))
@@ -39,12 +36,25 @@ def buyer_dashboard():
     asking = int(request.form.get('asking_price', 0) or 0)
     make = request.form.get('make', 'Toyota')
     
-    # Range Logic for Dashboard
+    # Intelligence Logic
     base = 1450000 if make == "Toyota" else 1100000
-    res = {'low': int(base * 0.94), 'high': int(base * 1.06), 'likely': base, 'walkaway': int(base * 1.10)}
+    res = {
+        'low': int(base * 0.94),
+        'high': int(base * 1.06),
+        'likely': base,
+        'walkaway': int(base * 1.10)
+    }
     
-    forecast = [base]
-    for i in range(5): forecast.append(int(forecast[-1] * 0.88))
+    # STEEP DEPRECIATION LOGIC (Year 0 to 5)
+    # Steep drop initially, flattening over time
+    forecast = [
+        base,                      # Year 0
+        int(base * 0.78),          # Year 1 (22% drop)
+        int(base * 0.68),          # Year 2 (10% more)
+        int(base * 0.61),          # Year 3 (7% more)
+        int(base * 0.56),          # Year 4 (5% more)
+        int(base * 0.53)           # Year 5 (3% more)
+    ]
 
     return render_template('buyer_dashboard.html', mode=mode, asking=asking, res=res, forecast=forecast, make=make)
 
