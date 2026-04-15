@@ -2,7 +2,7 @@
 {% block content %}
 <div class="row justify-content-center text-center py-4">
     <div class="col-lg-8">
-        <h1 class="display-4 fw-bold mb-3">
+        <h1 class="display-5 fw-bold mb-3">
             <span class="text-white">Auto</span><span style="color: #4e54ff;">Know</span><span class="text-green">Mus</span>
         </h1>
         <p class="text-white-50 mb-5 px-lg-5">
@@ -33,8 +33,8 @@
                     ('Rahul J., Gurgaon', 'Avoided an overpriced luxury SUV.', 'Buyer')
                 ] %}
                 {% for name, text, type in tests %}
-                <div class="col-md-4">
-                    <div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-10 h-100 text-start">
+                <div class="col-md-4 text-start">
+                    <div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-10 h-100">
                         <p class="small text-white-50 italic mb-2">"{{ text }}"</p>
                         <small class="text-white fw-bold">{{ name }}</small><br>
                         <small class="text-muted small">{{ type }}</small>
