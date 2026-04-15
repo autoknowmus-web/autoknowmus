@@ -3,10 +3,10 @@ import random
 
 app = Flask(__name__)
 
-# Locked Industry Standards
-BRANDS = ["Toyota", "Maruti Suzuki", "Hyundai", "Tata Motors", "Mahindra", "Kia", "Honda", "MG Motors", "Skoda", "Volkswagen"]
-CITIES = ["Bangalore", "Hyderabad", "Delhi", "Mumbai", "Pune", "Chennai"]
-CONDITIONS = ["Excellent (Showroom Like)", "Average (Normal Wear)", "Fair (Needs some repair)"]
+# Master Industry Data
+CITIES = sorted(["Ahmedabad", "Bangalore", "Chennai", "Delhi", "Gurgaon", "Hyderabad", "Kolkata", "Mumbai", "Noida", "Pune", "Jaipur", "Lucknow", "Chandigarh", "Kochi"])
+BRANDS = sorted(["Toyota", "Maruti Suzuki", "Hyundai", "Tata Motors", "Mahindra", "Kia", "Honda", "MG Motors", "Skoda", "Volkswagen", "BMW", "Mercedes-Benz", "Audi"])
+CONDITIONS = ["Excellent (showroom like)", "Average (normal wear)", "Fair (needs some repair)"]
 
 @app.route('/')
 def index():
@@ -14,7 +14,7 @@ def index():
 
 @app.route('/role', methods=['GET', 'POST'])
 def role():
-    user_name = request.form.get('name', 'Rajeev Thakur')
+    user_name = request.form.get('name', 'User')
     return render_template('role.html', user_name=user_name)
 
 @app.route('/seller')
@@ -29,34 +29,23 @@ def buyer():
 
 @app.route('/buyer_dashboard', methods=['POST'])
 def buyer_dashboard():
-    # Capture Inputs
-    mode = request.form.get('search_mode', 'discovery')
-    asking = int(request.form.get('asking_price', 0) or 0)
-    make = request.form.get('make', 'Toyota')
-    model = request.form.get('model', 'Vehicle')
+    data = request.form
+    make = data.get('make', 'Toyota')
+    model = data.get('model', 'Vehicle')
+    mode = data.get('search_mode', 'discovery')
+    asking = int(data.get('asking_price', 0) or 0)
     
-    # Pricing Intelligence Logic
-    base = 1450000 if make == "Toyota" else 1150000
+    # Real-world Range Logic
+    base = 1450000 if make == "Toyota" else 1100000
     res = {
-        'low': int(base * 0.94),
-        'high': int(base * 1.06),
-        'likely': base,
-        'walkaway': int(base * 1.12),
-        'conf': random.randint(84, 92)
+        'low': int(base * 0.94), 'high': int(base * 1.06),
+        'likely': base, 'walkaway': int(base * 1.10)
     }
     
-    # STEEP DEPRECIATION DATA (Bezier-aligned)
-    # 22% drop Year 1, followed by flattening curve
-    forecast = [
-        base,                      # Year 0
-        int(base * 0.78),          # Year 1
-        int(base * 0.68),          # Year 2
-        int(base * 0.62),          # Year 3
-        int(base * 0.58),          # Year 4
-        int(base * 0.55)           # Year 5
-    ]
-
-    return render_template('buyer_dashboard.html', mode=mode, asking=asking, res=res, forecast=forecast, make=make, model=model)
+    # Steep Logarithmic Depreciation
+    forecast = [base, int(base*0.78), int(base*0.68), int(base*0.61), int(base*0.56), int(base*0.53)]
+    
+    return render_template('buyer_dashboard.html', res=res, forecast=forecast, make=make, model=model, mode=mode, asking=asking)
 
 @app.route('/dashboard', methods=['POST'])
 def dashboard():
