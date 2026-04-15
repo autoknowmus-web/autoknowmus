@@ -6,8 +6,7 @@
             <i class="fas fa-shield-alt text-green me-2"></i>AutoKnowMus
         </h1>
         <p class="lead text-white-50 mb-5">
-            AutoKnowMus is your shield against overpaying. We bring price transparency to the market, 
-            helping you sell at the right price and buy with total confidence.
+            AutoKnowMus is your shield against overpaying. We bring price transparency to the market, helping you avoid buying overpriced cars and ensuring you sell at the right price to maximize your opportunity.
         </p>
 
         <div class="card p-5 border-0 shadow-lg mx-auto" style="background: #16181d; border-radius: 28px; max-width: 500px;">
@@ -23,21 +22,22 @@
         </div>
 
         <div class="mt-5">
-            <h5 class="text-white-50 mb-4">Community Testimonials</h5>
+            <h5 class="text-white-50 mb-4 text-uppercase small tracking-widest">Community Testimonials</h5>
             <div class="row g-3">
                 {% set tests = [
-                    ('Rajesh K.', 'Exact value for my Fortuner.', 'Seller'),
-                    ('Priya S.', 'Negotiated a better deal.', 'Buyer'),
-                    ('Vikram M.', 'Time-to-sell is a game changer.', 'Seller'),
-                    ('Amit B.', 'Saved 2L on an Innova.', 'Buyer'),
-                    ('Sonal V.', 'Sold at peak market price.', 'Seller'),
-                    ('Rahul J.', 'Avoided overpriced deals.', 'Buyer')
+                    ('Rajesh K.', 'Found the exact value for my Fortuner.', 'Seller'),
+                    ('Priya S.', 'Negotiated a much better deal.', 'Buyer'),
+                    ('Vikram M.', 'The simulator is a game changer.', 'Seller'),
+                    ('Amit B.', 'Saved 2L on an Innova purchase.', 'Buyer'),
+                    ('Sonal V.', 'Sold my Swift at the peak price.', 'Seller'),
+                    ('Rahul J.', 'Avoided an overpriced luxury SUV.', 'Buyer')
                 ] %}
                 {% for name, text, type in tests %}
                 <div class="col-md-4">
                     <div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-25 h-100">
-                        <p class="small text-white-50 italic">"{{ text }}"</p>
-                        <small class="text-green">{{ name }} ({{ type }})</small>
+                        <p class="small text-white-50 italic mb-2">"{{ text }}"</p>
+                        <small class="text-green fw-bold">{{ name }}</small><br>
+                        <small class="text-muted small">{{ type }}</small>
                     </div>
                 </div>
                 {% endfor %}
