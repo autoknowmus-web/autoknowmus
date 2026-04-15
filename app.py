@@ -3,7 +3,7 @@ import random
 
 app = Flask(__name__)
 
-# [Iteration 38] Master Industry Standards - Alphabetical
+# [Iteration 39] Master Specification Data
 CITIES = sorted(["Ahmedabad", "Bangalore", "Chandigarh", "Chennai", "Delhi", "Gurgaon", "Hyderabad", "Jaipur", "Kochi", "Kolkata", "Mumbai", "Noida", "Pune", "Lucknow", "Indore"])
 BRANDS = sorted(["Audi", "BMW", "Honda", "Hyundai", "Kia", "Mahindra", "Maruti Suzuki", "Mercedes-Benz", "MG Motors", "Skoda", "Tata Motors", "Toyota", "Volkswagen"])
 CONDITIONS = ["Excellent (showroom like)", "Average (normal wear)", "Fair (needs some repair)"]
@@ -35,11 +35,10 @@ def buyer_dashboard():
     mode = data.get('search_mode', 'discovery')
     asking = int(data.get('asking_price', 0) or 0)
     
-    # Range Logic
     base = 1450000 if make == "Toyota" else 1100000
     res = {'low': int(base * 0.94), 'high': int(base * 1.06), 'likely': base, 'walkaway': int(base * 1.12)}
     
-    # STEEP Initial Depreciation (Industry Reality)
+    # STEEP Logarithmic Forecast
     forecast = [base, int(base*0.78), int(base*0.68), int(base*0.62), int(base*0.58), int(base*0.55)]
     
     return render_template('buyer_dashboard.html', res=res, forecast=forecast, make=make, model=model, mode=mode, asking=asking)
