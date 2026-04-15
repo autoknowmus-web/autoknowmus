@@ -2,9 +2,9 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-11">
-        <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 4px solid #4e54ff;">
+        <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 5px solid #4e54ff;">
             <div class="d-flex justify-content-center mb-4">
-                <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25">
+                <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25 shadow-sm">
                     <input type="radio" class="btn-check" name="sm_toggle" id="disc" checked onclick="setMode(false)">
                     <label class="btn btn-outline-primary rounded-pill px-4" for="disc">Price Discovery</label>
                     <input type="radio" class="btn-check" name="sm_toggle" id="eval" onclick="setMode(true)">
@@ -35,14 +35,8 @@
                     </div>
                 </div>
                 <div class="row mt-4 align-items-center">
-                    <div class="col-md-2">
-                        <label class="text-white-50 small">Mileage (KMs)</label>
-                        <input type="number" class="form-control bg-dark text-white border-secondary">
-                    </div>
-                    <div class="col-md-3" id="askingBox" style="display:none;">
-                        <label class="text-warning small fw-bold">Asking Price (₹)</label>
-                        <input type="number" name="asking_price" class="form-control bg-dark text-white border-warning">
-                    </div>
+                    <div class="col-md-2"><label class="text-white-50 small">Mileage (KMs)</label><input type="number" class="form-control bg-dark text-white border-secondary"></div>
+                    <div class="col-md-3" id="askingBox" style="display:none;"><label class="text-warning small fw-bold">Asking Price (₹)</label><input type="number" name="asking_price" class="form-control bg-dark text-white border-warning"></div>
                     <div class="col-md-4"><button type="submit" class="btn btn-primary w-100 py-3 fw-bold">Analyze Market Intelligence</button></div>
                     <div class="col-md-3 opacity-50 text-end small text-white-50">Unlimited Search | Real-Time Alerts</div>
                 </div>
@@ -52,7 +46,7 @@
 </div>
 <script>
 function setMode(isEval) { document.getElementById('askingBox').style.display = isEval ? 'block' : 'none'; document.getElementById('mode_hidden').value = isEval ? 'evaluation' : 'discovery'; }
-const models = {"Toyota":["Fortuner","Innova"],"Maruti Suzuki":["Swift","Brezza"]};
+const models = {"Toyota":["Fortuner","Innova"],"Maruti Suzuki":["Swift","Brezza"],"Hyundai":["Creta"]};
 function updateModels() { const b = document.getElementById('brand').value; const m = document.getElementById('model'); m.innerHTML = ''; (models[b] || []).forEach(x => m.add(new Option(x, x))); }
 updateModels();
 </script>
