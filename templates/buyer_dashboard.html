@@ -4,17 +4,15 @@
     <div class="col-lg-8">
         <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 24px;">
             <div class="d-flex justify-content-between align-items-start mb-4">
-                <div>
-                    <h6 class="text-white-50 small mb-0">{{ make }} {{ model }}</h6>
-                    <h2 class="text-white fw-bold">Fair Market Range</h2>
-                    <h1 class="text-green fw-bold">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
-                </div>
+                <h2 class="text-white fw-bold">Fair Market Range ({{ model }})</h2>
                 <div class="btn-group bg-dark p-1 rounded-3">
                     <button class="btn btn-sm btn-outline-secondary">Excellent</button>
                     <button class="btn btn-sm btn-primary">Average</button>
                     <button class="btn btn-sm btn-outline-secondary">Fair</button>
                 </div>
             </div>
+
+            <h1 class="text-green fw-bold mb-4">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
 
             <div class="py-3">
                 <div class="progress rounded-pill" style="height: 14px; background: #2d2f34;">
@@ -25,15 +23,6 @@
                 <div class="d-flex justify-content-between mt-2 small text-white-50 fw-bold">
                     <span>GREAT DEAL</span><span>FAIR PRICE</span><span>OVERPRICED</span>
                 </div>
-                
-                {% if mode == 'evaluation' %}
-                <div class="text-center mt-4">
-                    <div class="badge bg-white text-dark p-2 fs-6 shadow">Your Deal: ₹ {{ "{:,}".format(asking) }}</div>
-                    <h4 class="mt-3 fw-bold {{ 'text-danger' if asking > res.high else 'text-success' }}">
-                        {{ "OVERPRICED" if asking > res.high else "GREAT DEAL!" }}
-                    </h4>
-                </div>
-                {% endif %}
             </div>
 
             <div class="row mt-4 g-3 text-center">
@@ -56,19 +45,16 @@
                 <path d="M20,20 Q40,95 180,115" fill="none" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" />
                 <circle cx="20" cy="20" r="5" fill="#fff" />
                 <text x="25" y="14" fill="#fff" font-size="7" font-weight="bold">₹{{ (forecast[0]/100000)|round(1) }}L</text>
-                <circle cx="52" cy="65" r="4" fill="#fff" />
-                <text x="58" y="60" fill="#888" font-size="6">₹{{ (forecast[1]/100000)|round(1) }}L</text>
                 <circle cx="180" cy="115" r="5" fill="#fff" />
                 <text x="160" y="128" fill="#888" font-size="6">₹{{ (forecast[5]/100000)|round(1) }}L</text>
             </svg>
             <p class="text-center small mt-3 text-white-50">Suggestion: <strong>Buy Now</strong></p>
         </div>
-        <div class="opacity-50 text-center p-3 border border-dashed rounded-4">
-            <small class="text-white-50 d-block">Coming Soon:</small>
-            <p class="mb-0 text-white-50 small">Instant Alerts | Accessory Benefits</p>
+        <div class="opacity-50 text-center p-3 border border-dashed rounded-4 small text-white-50">
+            Coming Soon: Instant Alerts | Accessory Valuation
         </div>
         <div class="text-center mt-3">
-            <a href="/buyer" class="text-white-50 small text-decoration-none"><i class="fas fa-edit me-1"></i> Edit Details</a>
+            <a href="/buyer" class="text-white-50 small text-decoration-none"><i class="fas fa-edit me-1"></i> Edit Vehicle Details</a>
         </div>
     </div>
 </div>
