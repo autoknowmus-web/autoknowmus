@@ -1,53 +1,48 @@
-from flask import Flask, render_template, request
-import random
+{% extends "layout.html" %}
+{% block content %}
+<div class="row justify-content-center text-center py-4">
+    <div class="col-lg-8">
+        <h1 class="display-5 fw-bold text-white mb-2">
+            <i class="fas fa-shield-alt text-green me-2"></i>AutoKnowMus
+        </h1>
+        <p class="text-white-50 mb-4 px-lg-5">
+            AutoKnowMus is your shield against overpaying. We bring price transparency to the market, helping you avoid buying overpriced cars and ensuring you sell at the right price to maximize your opportunity.
+        </p>
 
-app = Flask(__name__)
+        <div class="card p-4 border-0 shadow-lg mx-auto" style="background: #16181d; border-radius: 28px; max-width: 450px;">
+            <h4 class="text-green mb-4">Get Started</h4>
+            <form action="/role" method="POST">
+                <input type="text" name="name" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Full Name" required>
+                <div class="input-group mb-3">
+                    <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
+                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="10 Digit Mobile" pattern="[0-9]{10}" maxlength="10" minlength="10" required>
+                </div>
+                <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow">Continue to Selection</button>
+            </form>
+        </div>
 
-# [Master Specification] Alphabetical Industry Data
-CITIES = sorted(["Ahmedabad", "Bangalore", "Chandigarh", "Chennai", "Delhi", "Gurgaon", "Hyderabad", "Jaipur", "Kochi", "Kolkata", "Mumbai", "Noida", "Pune", "Lucknow", "Indore"])
-BRANDS = sorted(["Audi", "BMW", "Honda", "Hyundai", "Kia", "Mahindra", "Maruti Suzuki", "Mercedes-Benz", "MG Motors", "Skoda", "Tata Motors", "Toyota", "Volkswagen"])
-# [Requirement Fix] Decapitalized Labels
-CONDITIONS = ["Excellent (showroom like)", "Average (normal wear)", "Fair (needs some repair)"]
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/role', methods=['GET', 'POST'])
-def role():
-    user_name = request.form.get('name', 'User')
-    return render_template('role.html', user_name=user_name)
-
-@app.route('/seller')
-def seller():
-    years = list(range(2026, 2010, -1))
-    return render_template('seller.html', years=years, brands=BRANDS, cities=CITIES, conditions=CONDITIONS)
-
-@app.route('/buyer')
-def buyer():
-    years = list(range(2026, 2010, -1))
-    return render_template('buyer.html', years=years, brands=BRANDS, cities=CITIES, conditions=CONDITIONS)
-
-@app.route('/buyer_dashboard', methods=['POST'])
-def buyer_dashboard():
-    data = request.form
-    make = data.get('make', 'Toyota')
-    model = data.get('model', 'Vehicle')
-    mode = data.get('search_mode', 'discovery')
-    asking = int(data.get('asking_price', 0) or 0)
-    
-    # Range Logic
-    base = 1450000 if make == "Toyota" else 1100000
-    res = {'low': int(base * 0.94), 'high': int(base * 1.06), 'likely': base, 'walkaway': int(base * 1.12)}
-    
-    # [Requirement Fix] STEEP Initial Depreciation Curve Data
-    forecast = [base, int(base*0.78), int(base*0.68), int(base*0.62), int(base*0.58), int(base*0.55)]
-    
-    return render_template('buyer_dashboard.html', res=res, forecast=forecast, make=make, model=model, mode=mode, asking=asking)
-
-@app.route('/dashboard', methods=['POST'])
-def dashboard():
-    return render_template('dashboard.html')
-
-if __name__ == '__main__':
-    app.run(debug=True)
+        <div class="mt-5 text-start">
+            <h6 class="text-green text-uppercase tracking-widest mb-4 small text-center">Community Testimonials</h6>
+            <div class="row g-3">
+                {% set tests = [
+                    ('Rajesh K., Bangalore', 'Found the exact market value for my Fortuner in minutes.', 'Seller'),
+                    ('Priya S., Delhi', 'Negotiated a better price for my used EV. Highly recommended!', 'Buyer'),
+                    ('Vikram M., Mumbai', 'The time-to-sell simulator is a game changer for individual sellers.', 'Seller'),
+                    ('Amit B., Hyderabad', 'Saved ₹2L on an Innova purchase using the fair range.', 'Buyer'),
+                    ('Sonal V., Pune', 'Sold my Swift at the peak market price without dealer haggling.', 'Seller'),
+                    ('Rahul J., Gurgaon', 'Avoided an overpriced luxury SUV after the eval tool.', 'Buyer')
+                ] %}
+                {% for name, text, type in tests %}
+                <div class="col-md-4">
+                    <div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-10 h-100">
+                        <p class="small text-white-50 italic mb-2">"{{ text }}"</p>
+                        <small class="text-white fw-bold">{{ name }}</small><br>
+                        <small class="text-muted small">{{ type }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
