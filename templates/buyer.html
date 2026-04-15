@@ -4,7 +4,7 @@
     <div class="col-md-11">
         <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 5px solid #4e54ff;">
             <div class="d-flex justify-content-center mb-4">
-                <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25 shadow-sm">
+                <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25">
                     <input type="radio" class="btn-check" name="sm_toggle" id="disc" checked onclick="setMode(false)">
                     <label class="btn btn-outline-primary rounded-pill px-4" for="disc">Price Discovery</label>
                     <input type="radio" class="btn-check" name="sm_toggle" id="eval" onclick="setMode(true)">
@@ -22,10 +22,10 @@
                         <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">{% for brand in brands %}<option>{{ brand }}</option>{% endfor %}</select>
                     </div>
                     <div class="col-md-2"><label class="text-white-50 small">Model</label>
-                        <select class="form-select bg-dark text-white border-secondary" id="model" name="model"></select>
+                        <select class="form-select bg-dark text-white border-secondary" id="model" name="model" onchange="updateVariants()"></select>
                     </div>
                     <div class="col-md-2"><label class="text-white-50 small">Variant / Suffix</label>
-                        <select class="form-select bg-dark text-white border-secondary"><option>Base / LXi</option><option>Mid / VXi</option><option>Top / ZXi</option></select>
+                        <select class="form-select bg-dark text-white border-secondary" id="variant" name="variant"></select>
                     </div>
                     <div class="col-md-2"><label class="text-white-50 small">Fuel Type</label>
                         <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>PHEV</option></select>
@@ -38,16 +38,36 @@
                     <div class="col-md-2"><label class="text-white-50 small">Mileage (KMs)</label><input type="number" class="form-control bg-dark text-white border-secondary"></div>
                     <div class="col-md-3" id="askingBox" style="display:none;"><label class="text-warning small fw-bold">Asking Price (₹)</label><input type="number" name="asking_price" class="form-control bg-dark text-white border-warning"></div>
                     <div class="col-md-4"><button type="submit" class="btn btn-primary w-100 py-3 fw-bold shadow">Analyze Market Intelligence</button></div>
-                    <div class="col-md-3 opacity-50 text-end small text-white-50">Unlimited Search | Real-Time Alerts</div>
+                    <div class="col-md-3">
+                        <small class="text-muted d-block">Coming Soon:</small>
+                        <span class="badge bg-dark border border-secondary text-muted">Price Alerts</span>
+                        <span class="badge bg-dark border border-secondary text-muted">Unlimited Search</span>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
 </div>
 <script>
+const dataMap = {
+    "Toyota": {"Fortuner": ["4x2 AT", "4x4 AT", "Sigma 4"], "Innova": ["GX", "VX", "ZX"]},
+    "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["LXi", "VXi", "ZXi+"]}
+};
+function updateModels() {
+    const b = document.getElementById('brand').value;
+    const m = document.getElementById('model');
+    m.innerHTML = '';
+    Object.keys(dataMap[b] || {}).forEach(x => m.add(new Option(x, x)));
+    updateVariants();
+}
+function updateVariants() {
+    const b = document.getElementById('brand').value;
+    const m = document.getElementById('model').value;
+    const v = document.getElementById('variant');
+    v.innerHTML = '';
+    (dataMap[b][m] || []).forEach(x => v.add(new Option(x, x)));
+}
 function setMode(isEval) { document.getElementById('askingBox').style.display = isEval ? 'block' : 'none'; document.getElementById('mode_hidden').value = isEval ? 'evaluation' : 'discovery'; }
-const models = {"Toyota":["Fortuner","Innova"],"Maruti Suzuki":["Swift","Brezza"],"Hyundai":["Creta"]};
-function updateModels() { const b = document.getElementById('brand').value; const m = document.getElementById('model'); m.innerHTML = ''; (models[b] || []).forEach(x => m.add(new Option(x, x))); }
 updateModels();
 </script>
 {% endblock %}
