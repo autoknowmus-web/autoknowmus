@@ -9,7 +9,7 @@
                 <div class="row">
                     <div class="col-md-6 mb-4">
                         <label class="form-label text-white-50">Car Brand</label>
-                        <select class="form-select bg-dark text-white border-secondary" id="brand" onchange="updateModels()" required>
+                        <select class="form-select bg-dark text-white border-secondary py-2" id="brand" onchange="updateModels()" required>
                             <option value="">Select Brand</option>
                             <option value="Maruti">Maruti Suzuki</option>
                             <option value="Toyota">Toyota</option>
@@ -18,10 +18,9 @@
                             <option value="Mahindra">Mahindra</option>
                         </select>
                     </div>
-
                     <div class="col-md-6 mb-4">
                         <label class="form-label text-white-50">Model</label>
-                        <select class="form-select bg-dark text-white border-secondary" id="model" required>
+                        <select class="form-select bg-dark text-white border-secondary py-2" id="model" required>
                             <option value="">Select Model</option>
                         </select>
                     </div>
@@ -30,43 +29,37 @@
                 <div class="row">
                     <div class="col-md-4 mb-4">
                         <label class="form-label text-white-50">Year</label>
-                        <select class="form-select bg-dark text-white border-secondary" required>
+                        <select class="form-select bg-dark text-white border-secondary py-2" required>
                             {% for year in years %}
                             <option value="{{ year }}">{{ year }}</option>
                             {% endfor %}
                         </select>
                     </div>
-
                     <div class="col-md-4 mb-4">
                         <label class="form-label text-white-50">Fuel Type</label>
-                        <select class="form-select bg-dark text-white border-secondary" required>
+                        <select class="form-select bg-dark text-white border-secondary py-2" required>
                             <option value="Petrol">Petrol</option>
                             <option value="Diesel">Diesel</option>
-                            <option value="CNG">CNG</option>
                             <option value="EV">Electric (BEV)</option>
                             <option value="HEV">Hybrid (HEV)</option>
-                            <option value="PHEV">Plug-in Hybrid (PHEV)</option>
                         </select>
                     </div>
-
                     <div class="col-md-4 mb-4">
-                        <label class="form-label text-white-50">No. of Owners</label>
-                        <select class="form-select bg-dark text-white border-secondary" required>
-                            <option value="1">1st Owner</option>
-                            <option value="2">2nd Owner</option>
-                            <option value="3">3rd Owner</option>
+                        <label class="form-label text-white-50">Owners</label>
+                        <select class="form-select bg-dark text-white border-secondary py-2" required>
+                            <option value="1st">1st Owner</option>
+                            <option value="2nd">2nd Owner</option>
+                            <option value="3rd">3rd Owner</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="mb-5">
                     <label class="form-label text-white-50">Kms Driven</label>
-                    <input type="number" class="form-control bg-dark text-white border-secondary" placeholder="Enter odometer reading" required>
+                    <input type="number" class="form-control bg-dark text-white border-secondary py-2" placeholder="e.g. 45000" required>
                 </div>
 
-                <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow-sm" style="border-radius: 12px;">
-                    Generate Pricing Intelligence
-                </button>
+                <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5">Generate Pricing Intelligence</button>
             </form>
         </div>
     </div>
@@ -74,10 +67,10 @@
 
 <script>
 const models = {
-    "Maruti": ["Swift", "Baleno", "Brezza", "Ertiga", "Dzire", "Grand Vitara"],
-    "Toyota": ["Innova Crysta", "Fortuner", "Hyryder", "Glanza", "Camry", "Vellfire"],
-    "Hyundai": ["Creta", "Verna", "Venue", "i20", "Alcazar", "Tucson"],
-    "Tata": ["Nexon", "Harrier", "Safari", "Punch", "Altroz", "Tiago"],
+    "Maruti": ["Swift", "Baleno", "Brezza", "Ertiga", "Grand Vitara"],
+    "Toyota": ["Innova Crysta", "Fortuner", "Hyryder", "Glanza", "Camry"],
+    "Hyundai": ["Creta", "Verna", "Venue", "i20", "Tucson"],
+    "Tata": ["Nexon", "Harrier", "Safari", "Punch", "Altroz"],
     "Mahindra": ["XUV700", "Scorpio-N", "Thar", "XUV300", "Bolero"]
 };
 
@@ -85,12 +78,10 @@ function updateModels() {
     const brand = document.getElementById("brand").value;
     const modelDropdown = document.getElementById("model");
     modelDropdown.innerHTML = '<option value="">Select Model</option>';
-    
     if (brand && models[brand]) {
         models[brand].forEach(m => {
             let opt = document.createElement("option");
-            opt.value = m;
-            opt.innerHTML = m;
+            opt.value = m; opt.innerHTML = m;
             modelDropdown.appendChild(opt);
         });
     }
