@@ -1,34 +1,79 @@
-<div class="col-lg-4">
-    <div class="card p-4 border-0 shadow-lg h-100" style="background: #16181d; border-radius: 20px;">
-        <h6 class="text-white-50 mb-4">5-Year Value Forecast</h6>
-        
-        <svg viewBox="0 0 200 130" class="w-100" style="filter: drop-shadow(0px 4px 10px rgba(40, 167, 69, 0.2));">
-            <path d="M20,20 Q40,90 180,115" fill="none" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" />
-            
-            <circle cx="20" cy="20" r="5" fill="#fff" />
-            <text x="25" y="15" fill="#fff" font-size="7" font-weight="bold">₹14.5L</text>
+{% extends "layout.html" %}
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 30px;">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h5 class="text-white-50 mb-1">Estimated Fair Market Range</h5>
+                    <h1 class="display-4 fw-bold text-green">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
+                </div>
+                <div class="btn-group bg-dark p-1 rounded-3">
+                    <button class="btn btn-sm btn-outline-secondary px-3">Excellent</button>
+                    <button class="btn btn-sm btn-primary px-3">Average</button>
+                    <button class="btn btn-sm btn-outline-secondary px-3">Fair</button>
+                </div>
+            </div>
 
-            <circle cx="52" cy="62" r="4.5" fill="#fff" />
-            <text x="58" y="58" fill="#888" font-size="6.5">₹11.2L</text>
+            <div class="py-4">
+                <div class="progress rounded-pill shadow-sm" style="height: 18px; background: #2d2f34;">
+                    <div class="progress-bar bg-success" style="width: 33%"></div>
+                    <div class="progress-bar bg-warning" style="width: 33%"></div>
+                    <div class="progress-bar bg-danger" style="width: 34%"></div>
+                </div>
+                <div class="d-flex justify-content-between mt-2 small text-white-50 fw-bold">
+                    <span>GREAT DEAL</span><span>FAIR PRICE</span><span>OVERPRICED</span>
+                </div>
+                
+                {% if mode == 'evaluation' %}
+                <div class="text-center mt-5">
+                    <div class="badge bg-white text-dark p-2 fs-6 mb-2">Asking: ₹ {{ "{:,}".format(asking) }}</div>
+                    <h3 class="{% if asking > res.high %}text-danger{% elif asking < res.low %}text-success{% else %}text-info{% endif %} fw-bold">
+                        {% if asking > res.high %}OVERPRICED{% elif asking < res.low %}GREAT DEAL!{% else %}FAIR PRICE{% endif %}
+                    </h3>
+                </div>
+                {% endif %}
+            </div>
 
-            <circle cx="84" cy="85" r="4.5" fill="#fff" />
-            <text x="90" y="81" fill="#888" font-size="6.5">₹9.8L</text>
+            <div class="row mt-4 g-3">
+                <div class="col-6"><div class="p-4 bg-dark rounded-4 text-center border border-secondary border-opacity-25">
+                    <small class="text-white-50 d-block">Likely Deal Price</small>
+                    <span class="fs-4 fw-bold text-white">₹ {{ "{:,}".format(res.likely) }}</span>
+                </div></div>
+                <div class="col-6"><div class="p-4 bg-dark rounded-4 text-center border border-danger border-opacity-25">
+                    <small class="text-danger d-block">Walkaway Price</small>
+                    <span class="fs-4 fw-bold text-white">₹ {{ "{:,}".format(res.walkaway) }}</span>
+                </div></div>
+            </div>
+        </div>
+    </div>
 
-            <circle cx="116" cy="100" r="4.5" fill="#fff" />
-            <text x="122" y="96" fill="#888" font-size="6.5">₹8.9L</text>
+    <div class="col-lg-4">
+        <div class="card p-4 border-0 shadow-lg h-100" style="background: #16181d; border-radius: 20px;">
+            <h6 class="text-white-50 mb-4">5-Year Value Forecast</h6>
+            <svg viewBox="0 0 200 135" class="w-100">
+                <path d="M20,20 Q40,95 180,115" fill="none" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" />
+                
+                <circle cx="20" cy="20" r="5" fill="#fff" />
+                <text x="25" y="14" fill="#fff" font-size="7" font-weight="bold">₹{{ (forecast[0]/100000)|round(1) }}L</text>
 
-            <circle cx="148" cy="109" r="4.5" fill="#fff" />
-            <text x="154" y="105" fill="#888" font-size="6.5">₹8.2L</text>
+                <circle cx="52" cy="65" r="4.5" fill="#fff" />
+                <text x="58" y="60" fill="#888" font-size="6">₹{{ (forecast[1]/100000)|round(1) }}L</text>
 
-            <circle cx="180" cy="115" r="5" fill="#fff" />
-            <text x="165" y="128" fill="#888" font-size="6.5">₹7.7L</text>
-        </svg>
+                <circle cx="84" cy="88" r="4.5" fill="#fff" />
+                <text x="90" y="83" fill="#888" font-size="6">₹{{ (forecast[2]/100000)|round(1) }}L</text>
 
-        <div class="mt-4 p-3 rounded-4 bg-dark bg-opacity-50 text-center border border-secondary border-opacity-25">
-            <p class="mb-0 text-white-50 small">
-                <i class="fas fa-chart-line text-green me-2"></i>
-                <strong>Suggestion:</strong> Value stabilizes after Year 3.
-            </p>
+                <circle cx="116" cy="102" r="4.5" fill="#fff" />
+                <text x="122" y="97" fill="#888" font-size="6">₹{{ (forecast[3]/100000)|round(1) }}L</text>
+
+                <circle cx="148" cy="110" r="4.5" fill="#fff" />
+                <text x="154" y="105" fill="#888" font-size="6">₹{{ (forecast[4]/100000)|round(1) }}L</text>
+
+                <circle cx="180" cy="115" r="5" fill="#fff" />
+                <text x="165" y="128" fill="#888" font-size="6">₹{{ (forecast[5]/100000)|round(1) }}L</text>
+            </svg>
+            <div class="mt-4 text-center small text-white-50">Suggestion: <strong>Buy Now</strong></div>
         </div>
     </div>
 </div>
+{% endblock %}
