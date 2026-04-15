@@ -2,8 +2,8 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-11">
-        <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 4px solid #28a745;">
-            <h2 class="text-green mb-4 fw-bold"><i class="fas fa-car-side me-2"></i> Sell Your Car: Market Valuation</h2>
+        <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 5px solid #28a745;">
+            <h2 class="text-green mb-4 fw-bold text-center"><i class="fas fa-car-side me-2"></i> Sell Your Car: Market Valuation</h2>
             <form action="/dashboard" method="POST">
                 <div class="row g-3 text-start">
                     <div class="col-md-2"><label class="text-white-50 small">Location (City)</label>
@@ -28,7 +28,7 @@
                 <div class="row mt-4 align-items-center">
                     <div class="col-md-3"><label class="text-white-50 small">Mileage (KMs)</label><input type="number" class="form-control bg-dark text-white border-secondary"></div>
                     <div class="col-md-3"><label class="text-white-50 small">Year</label><select class="form-select bg-dark text-white border-secondary">{% for y in years %}<option>{{ y }}</option>{% endfor %}</select></div>
-                    <div class="col-md-6"><button type="submit" class="btn btn-success w-100 py-3 fw-bold">Generate Pricing Intelligence</button></div>
+                    <div class="col-md-6"><button type="submit" class="btn btn-success w-100 py-3 fw-bold shadow">Generate Pricing Intelligence</button></div>
                 </div>
             </form>
         </div>
