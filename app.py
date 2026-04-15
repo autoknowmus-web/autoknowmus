@@ -3,7 +3,7 @@ import random
 
 app = Flask(__name__)
 
-# Master Industry Data - Alphabetical & Comprehensive
+# Master Data - Strictly Alphabetical & Decapitalized Labels
 CITIES = sorted(["Ahmedabad", "Bangalore", "Chandigarh", "Chennai", "Delhi", "Gurgaon", "Hyderabad", "Jaipur", "Kochi", "Kolkata", "Mumbai", "Noida", "Pune"])
 BRANDS = sorted(["Audi", "BMW", "Honda", "Hyundai", "Kia", "Mahindra", "Maruti Suzuki", "Mercedes-Benz", "MG Motors", "Skoda", "Tata Motors", "Toyota", "Volkswagen"])
 CONDITIONS = ["Excellent (showroom like)", "Average (normal wear)", "Fair (needs some repair)"]
@@ -35,12 +35,18 @@ def buyer_dashboard():
     mode = data.get('search_mode', 'discovery')
     asking = int(data.get('asking_price', 0) or 0)
     
-    # Range Logic
+    # Range Logic for Intelligence
     base = 1450000 if make == "Toyota" else 1100000
-    res = {'low': int(base * 0.94), 'high': int(base * 1.06), 'likely': base, 'walkaway': int(base * 1.10)}
+    res = {
+        'low': int(base * 0.94), 
+        'high': int(base * 1.06),
+        'likely': base, 
+        'walkaway': int(base * 1.10)
+    }
     
-    # STEEP Logarithmic Forecast
+    # Steep Logarithmic Depreciation (Industry Reality)
     forecast = [base, int(base*0.78), int(base*0.68), int(base*0.61), int(base*0.56), int(base*0.53)]
+    
     return render_template('buyer_dashboard.html', res=res, forecast=forecast, make=make, model=model, mode=mode, asking=asking)
 
 @app.route('/dashboard', methods=['POST'])
