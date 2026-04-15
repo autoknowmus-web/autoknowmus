@@ -3,7 +3,7 @@
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="card p-5 shadow-lg" style="background-color: #16181d; border-radius: 28px; border: 1px solid #2d2f34;">
-            <h2 class="text-green mb-4 fw-bold"><i class="fas fa-clipboard-list me-2"></i> Vehicle Details</h2>
+            <h2 class="text-green mb-4 fw-bold"><i class="fas fa-car me-2"></i> Vehicle Details</h2>
             
             <form action="/dashboard" method="POST">
                 <div class="row">
@@ -14,8 +14,13 @@
                             <option value="Maruti">Maruti Suzuki</option>
                             <option value="Toyota">Toyota</option>
                             <option value="Hyundai">Hyundai</option>
-                            <option value="Tata">Tata</option>
+                            <option value="Tata">Tata Motors</option>
                             <option value="Mahindra">Mahindra</option>
+                            <option value="Kia">Kia</option>
+                            <option value="Honda">Honda</option>
+                            <option value="MG">MG Motors</option>
+                            <option value="Skoda">Skoda</option>
+                            <option value="Volkswagen">Volkswagen</option>
                         </select>
                     </div>
                     <div class="col-md-6 mb-4">
@@ -58,7 +63,7 @@
                     <input type="number" class="form-control bg-dark text-white border-secondary py-2" placeholder="e.g. 45000" required>
                 </div>
 
-                <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow">Generate Pricing Intelligence</button>
+                <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow">Get Market Insights</button>
             </form>
         </div>
     </div>
@@ -67,10 +72,15 @@
 <script>
 const models = {
     "Maruti": ["Swift", "Baleno", "Brezza", "Ertiga", "Grand Vitara", "Dzire"],
-    "Toyota": ["Innova Crysta", "Fortuner", "Hyryder", "Glanza", "Camry", "Vellfire"],
+    "Toyota": ["Innova Crysta", "Fortuner", "Hyryder", "Glanza", "Camry", "HyCross"],
     "Hyundai": ["Creta", "Verna", "Venue", "i20", "Alcazar", "Tucson"],
     "Tata": ["Nexon", "Harrier", "Safari", "Punch", "Altroz", "Tiago"],
-    "Mahindra": ["XUV700", "Scorpio-N", "Thar", "XUV300", "Bolero"]
+    "Mahindra": ["XUV700", "Scorpio-N", "Thar", "XUV300", "Bolero"],
+    "Kia": ["Seltos", "Sonet", "Carens", "EV6"],
+    "Honda": ["City", "Amaze", "Elevate"],
+    "MG": ["Hector", "Astor", "ZS EV", "Comet"],
+    "Skoda": ["Kushaq", "Slavia", "Kodiaq"],
+    "Volkswagen": ["Taigun", "Virtus", "Tiguan"]
 };
 
 function updateModels() {
