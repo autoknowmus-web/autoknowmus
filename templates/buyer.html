@@ -2,9 +2,9 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-11">
-        <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px;">
+        <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 4px solid #4e54ff;">
             <div class="d-flex justify-content-center mb-4">
-                <div class="btn-group p-1 bg-dark rounded-pill border border-secondary border-opacity-25 shadow-sm">
+                <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25">
                     <input type="radio" class="btn-check" name="sm_toggle" id="disc" checked onclick="setMode(false)">
                     <label class="btn btn-outline-primary rounded-pill px-4" for="disc">Price Discovery</label>
                     <input type="radio" class="btn-check" name="sm_toggle" id="eval" onclick="setMode(true)">
@@ -15,73 +15,45 @@
             <form action="/buyer_dashboard" method="POST">
                 <input type="hidden" name="search_mode" id="mode_hidden" value="discovery">
                 <div class="row g-3 text-start">
-                    <div class="col-md-2">
-                        <label class="text-white-50 small">1. City</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="city">
-                            {% for city in cities %}<option>{{ city }}</option>{% endfor %}
-                        </select>
+                    <div class="col-md-2"><label class="text-white-50 small">1. City</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="city">{% for city in cities %}<option>{{ city }}</option>{% endfor %}</select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="text-white-50 small">2. Make</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">
-                            {% for brand in brands %}<option>{{ brand }}</option>{% endfor %}
-                        </select>
+                    <div class="col-md-2"><label class="text-white-50 small">2. Make</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">{% for brand in brands %}<option>{{ brand }}</option>{% endfor %}</select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="text-white-50 small">3. Model</label>
+                    <div class="col-md-2"><label class="text-white-50 small">3. Model</label>
                         <select class="form-select bg-dark text-white border-secondary" id="model" name="model"></select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="text-white-50 small">4. Variant / Suffix</label>
-                        <select class="form-select bg-dark text-white border-secondary">
-                            <option>Base / LXi / GX</option><option>Mid / VXi / VX</option><option>Top / ZXi / ZX</option>
-                        </select>
+                    <div class="col-md-2"><label class="text-white-50 small">4. Variant</label>
+                        <select class="form-select bg-dark text-white border-secondary"><option>Base / LXi</option><option>Mid / VXi</option><option>Top / ZXi</option></select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="text-white-50 small">5. Fuel Type</label>
-                        <select class="form-select bg-dark text-white border-secondary">
-                            <option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>PHEV</option>
-                        </select>
+                    <div class="col-md-2"><label class="text-white-50 small">5. Fuel</label>
+                        <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option></select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="text-white-50 small">6. Condition</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="condition">
-                            {% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}
-                        </select>
+                    <div class="col-md-2"><label class="text-white-50 small">6. Condition</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="condition">{% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}</select>
                     </div>
                 </div>
                 <div class="row mt-4 align-items-center">
                     <div class="col-md-2">
-                        <label class="text-white-50 small">7. Mileage (KMs)</label>
+                        <label class="text-white-50 small">Mileage (KMs)</label>
                         <input type="number" class="form-control bg-dark text-white border-secondary">
                     </div>
                     <div class="col-md-3" id="askingBox" style="display:none;">
-                        <label class="text-warning small fw-bold">8. Asking Price (₹)</label>
+                        <label class="text-warning small fw-bold">Asking Price (₹)</label>
                         <input type="number" name="asking_price" class="form-control bg-dark text-white border-warning">
                     </div>
-                    <div class="col-md-4">
-                        <button type="submit" class="btn btn-primary w-100 py-3 fw-bold">Analyze Market Intelligence</button>
-                    </div>
-                    <div class="col-md-3 opacity-50 text-end small text-white-50">
-                        Coming Soon: Unlimited Search | Real-Time Alerts
-                    </div>
+                    <div class="col-md-4"><button type="submit" class="btn btn-primary w-100 py-3 fw-bold">Analyze Market Intelligence</button></div>
+                    <div class="col-md-3 opacity-50 text-end small text-white-50">Unlimited Search | Real-Time Alerts</div>
                 </div>
             </form>
         </div>
     </div>
 </div>
 <script>
-function setMode(isEval) { 
-    document.getElementById('askingBox').style.display = isEval ? 'block' : 'none';
-    document.getElementById('mode_hidden').value = isEval ? 'evaluation' : 'discovery';
-}
-const models = {"Toyota":["Fortuner","Innova Crysta","Glanza"],"Maruti Suzuki":["Swift","Brezza","Baleno"],"Hyundai":["Creta","Verna"]};
-function updateModels() {
-    const b = document.getElementById('brand').value;
-    const m = document.getElementById('model');
-    m.innerHTML = '';
-    (models[b] || []).forEach(x => m.add(new Option(x, x)));
-}
+function setMode(isEval) { document.getElementById('askingBox').style.display = isEval ? 'block' : 'none'; document.getElementById('mode_hidden').value = isEval ? 'evaluation' : 'discovery'; }
+const models = {"Toyota":["Fortuner","Innova"],"Maruti Suzuki":["Swift","Brezza"]};
+function updateModels() { const b = document.getElementById('brand').value; const m = document.getElementById('model'); m.innerHTML = ''; (models[b] || []).forEach(x => m.add(new Option(x, x))); }
 updateModels();
 </script>
 {% endblock %}
