@@ -15,7 +15,7 @@
             <h1 class="text-green fw-bold mb-4">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
 
             <div class="py-3">
-                <div class="progress rounded-pill" style="height: 14px; background: #2d2f34;">
+                <div class="progress rounded-pill shadow-sm" style="height: 14px; background: #2d2f34;">
                     <div class="progress-bar bg-success" style="width: 33%"></div>
                     <div class="progress-bar bg-warning" style="width: 33%"></div>
                     <div class="progress-bar bg-danger" style="width: 34%"></div>
@@ -27,12 +27,12 @@
 
             <div class="row mt-4 g-3 text-center">
                 <div class="col-6"><div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-25">
-                    <small class="text-white-50 d-block">Dealer Price</small>
-                    <span class="fw-bold">₹ {{ "{:,}".format(res.high) }}</span>
+                    <small class="text-white-50 d-block mb-1">Dealer Listing Price</small>
+                    <span class="fw-bold fs-5">₹ {{ "{:,}".format(res.high) }}</span>
                 </div></div>
                 <div class="col-6"><div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-25">
-                    <small class="text-white-50 d-block">Private Price</small>
-                    <span class="fw-bold">₹ {{ "{:,}".format(res.low) }}</span>
+                    <small class="text-white-50 d-block">Private Sale Price</small>
+                    <span class="fw-bold fs-5">₹ {{ "{:,}".format(res.low) }}</span>
                 </div></div>
             </div>
         </div>
@@ -45,16 +45,20 @@
                 <path d="M20,20 Q40,95 180,115" fill="none" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" />
                 <circle cx="20" cy="20" r="5" fill="#fff" />
                 <text x="25" y="14" fill="#fff" font-size="7" font-weight="bold">₹{{ (forecast[0]/100000)|round(1) }}L</text>
+                <circle cx="52" cy="65" r="4.5" fill="#fff" />
+                <text x="58" y="60" fill="#888" font-size="6">₹{{ (forecast[1]/100000)|round(1) }}L</text>
                 <circle cx="180" cy="115" r="5" fill="#fff" />
                 <text x="160" y="128" fill="#888" font-size="6">₹{{ (forecast[5]/100000)|round(1) }}L</text>
             </svg>
             <p class="text-center small mt-3 text-white-50">Suggestion: <strong>Buy Now</strong></p>
         </div>
         <div class="opacity-50 text-center p-3 border border-dashed rounded-4 small text-white-50">
-            Coming Soon: Instant Alerts | Accessory Valuation
+            Coming Soon: Instant Alerts | Detailing & Accessories Benefits
         </div>
         <div class="text-center mt-3">
-            <a href="/buyer" class="text-white-50 small text-decoration-none"><i class="fas fa-edit me-1"></i> Edit Vehicle Details</a>
+            <a href="/buyer" class="text-white-50 small text-decoration-none border-bottom border-secondary">
+                <i class="fas fa-edit me-1"></i> Edit Vehicle Details
+            </a>
         </div>
     </div>
 </div>
