@@ -1,40 +1,12 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Dashboard</title>
-</head>
-<body style="text-align:center; padding:40px; font-family:Arial;">
-
-    <h1>🚗 Price Dashboard</h1>
-
-    <p>Welcome, {{ user.email }}</p>
-
-    <br>
-
-    <a href="/logout">
-        <button>Logout</button>
-    </a>
-
-    <hr>
-
-    <h3>Submit your transaction</h3>
-
-    <form method="POST" action="/submit">
-        
-        <select name="role">
-            <option value="buyer">Buyer</option>
-            <option value="seller">Seller</option>
-        </select>
-
-        <br><br>
-
-        <input type="number" name="price" placeholder="Enter price">
-
-        <br><br>
-
-        <button type="submit">Submit</button>
-
-    </form>
-
-</body>
-</html>
+{% extends "layout.html" %}
+{% block content %}
+<div class="container text-center py-5">
+    <h1 class="text-green fw-bold mb-4">Pricing Dashboard Live</h1>
+    <div class="card p-5 bg-dark border-secondary">
+        <h3>Intelligence Results for Your Vehicle</h3>
+        <p class="text-white-50">[Simulator and Market Metrics Loading...]</p>
+        <hr class="border-secondary">
+        <a href="/role" class="btn btn-outline-success">Start New Search</a>
+    </div>
+</div>
+{% endblock %}
