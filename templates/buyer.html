@@ -5,9 +5,9 @@
         <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 28px;">
             <div class="d-flex justify-content-center mb-5">
                 <div class="btn-group p-1 bg-dark rounded-pill" style="border: 1px solid #2d2f34;">
-                    <input type="radio" class="btn-check" name="search_mode_toggle" id="discovery" checked onclick="toggleMode(false)">
+                    <input type="radio" class="btn-check" name="toggle_btn" id="discovery" checked onclick="updateMode(false)">
                     <label class="btn btn-outline-primary rounded-pill px-4" for="discovery">Price Discovery</label>
-                    <input type="radio" class="btn-check" name="search_mode_toggle" id="eval" onclick="toggleMode(true)">
+                    <input type="radio" class="btn-check" name="toggle_btn" id="eval" onclick="updateMode(true)">
                     <label class="btn btn-outline-primary rounded-pill px-4" for="eval">Evaluate a Deal</label>
                 </div>
             </div>
@@ -21,7 +21,7 @@
                             {% for city in cities %}<option>{{ city }}</option>{% endfor %}
                         </select>
                         <label class="text-white-50 small">Make</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">
+                        <select class="form-select bg-dark text-white border-secondary mb-3" name="make" id="brand" onchange="updateModels()">
                             {% for brand in brands %}<option>{{ brand }}</option>{% endfor %}
                         </select>
                     </div>
@@ -43,7 +43,7 @@
                     </div>
                     <div class="col-12 mt-2" id="askingBox" style="display:none;">
                         <label class="text-warning small fw-bold">Asking Price (₹)</label>
-                        <input type="number" name="asking_price" class="form-control bg-dark text-white border-warning" style="max-width: 300px;" placeholder="Enter deal price">
+                        <input type="number" name="asking_price" class="form-control bg-dark text-white border-warning" style="max-width: 320px;" placeholder="Enter deal price">
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary w-100 py-3 mt-5 fw-bold shadow">Analyze Market Intelligence</button>
@@ -52,16 +52,20 @@
     </div>
 </div>
 <script>
-function toggleMode(isEval) { 
+function updateMode(isEval) { 
     document.getElementById('askingBox').style.display = isEval ? 'block' : 'none';
     document.getElementById('mode_hidden').value = isEval ? 'evaluation' : 'discovery';
 }
-const modelData = {"Toyota":["Fortuner","Innova HyCross","Hyryder","Glanza"],"Maruti Suzuki":["Swift","Baleno","Brezza","Ertiga","Grand Vitara"]};
+const modelData = {
+    "Toyota":["Fortuner","Innova HyCross","Hyryder","Glanza"],
+    "Maruti Suzuki":["Swift","Baleno","Brezza","Ertiga","Grand Vitara"],
+    "Hyundai":["Creta","Verna","Venue","i20"]
+};
 function updateModels() {
     const b = document.getElementById('brand').value;
     const m = document.getElementById('model');
     m.innerHTML = '';
-    (modelData[b] || []).forEach(x => m.add(new Option(x, x)));
+    (modelData[b] || ["Select Brand First"]).forEach(x => m.add(new Option(x, x)));
 }
 updateModels();
 </script>
