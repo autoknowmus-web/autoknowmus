@@ -2,7 +2,7 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <div class="card p-5" style="background-color: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
+        <div class="card p-5 shadow-lg" style="background-color: #16181d; border-radius: 28px; border: 1px solid #2d2f34;">
             <h2 class="text-green mb-4 fw-bold"><i class="fas fa-clipboard-list me-2"></i> Vehicle Details</h2>
             
             <form action="/dashboard" method="POST">
@@ -26,30 +26,29 @@
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-md-4 mb-4">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
                         <label class="form-label text-white-50">Year</label>
                         <select class="form-select bg-dark text-white border-secondary py-2" required>
-                            {% for year in years %}
-                            <option value="{{ year }}">{{ year }}</option>
-                            {% endfor %}
+                            {% for year in years %}<option value="{{ year }}">{{ year }}</option>{% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4 mb-4">
+                    <div class="col-md-4">
                         <label class="form-label text-white-50">Fuel Type</label>
                         <select class="form-select bg-dark text-white border-secondary py-2" required>
                             <option value="Petrol">Petrol</option>
                             <option value="Diesel">Diesel</option>
                             <option value="EV">Electric (BEV)</option>
                             <option value="HEV">Hybrid (HEV)</option>
+                            <option value="PHEV">Plug-in Hybrid (PHEV)</option>
                         </select>
                     </div>
-                    <div class="col-md-4 mb-4">
-                        <label class="form-label text-white-50">Owners</label>
+                    <div class="col-md-4">
+                        <label class="form-label text-white-50">No. of Owners</label>
                         <select class="form-select bg-dark text-white border-secondary py-2" required>
-                            <option value="1st">1st Owner</option>
-                            <option value="2nd">2nd Owner</option>
-                            <option value="3rd">3rd Owner</option>
+                            <option value="1">1st Owner</option>
+                            <option value="2">2nd Owner</option>
+                            <option value="3">3rd Owner</option>
                         </select>
                     </div>
                 </div>
@@ -59,7 +58,7 @@
                     <input type="number" class="form-control bg-dark text-white border-secondary py-2" placeholder="e.g. 45000" required>
                 </div>
 
-                <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5">Generate Pricing Intelligence</button>
+                <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 shadow">Generate Pricing Intelligence</button>
             </form>
         </div>
     </div>
@@ -67,10 +66,10 @@
 
 <script>
 const models = {
-    "Maruti": ["Swift", "Baleno", "Brezza", "Ertiga", "Grand Vitara"],
-    "Toyota": ["Innova Crysta", "Fortuner", "Hyryder", "Glanza", "Camry"],
-    "Hyundai": ["Creta", "Verna", "Venue", "i20", "Tucson"],
-    "Tata": ["Nexon", "Harrier", "Safari", "Punch", "Altroz"],
+    "Maruti": ["Swift", "Baleno", "Brezza", "Ertiga", "Grand Vitara", "Dzire"],
+    "Toyota": ["Innova Crysta", "Fortuner", "Hyryder", "Glanza", "Camry", "Vellfire"],
+    "Hyundai": ["Creta", "Verna", "Venue", "i20", "Alcazar", "Tucson"],
+    "Tata": ["Nexon", "Harrier", "Safari", "Punch", "Altroz", "Tiago"],
     "Mahindra": ["XUV700", "Scorpio-N", "Thar", "XUV300", "Bolero"]
 };
 
