@@ -6,7 +6,7 @@
             <h2 class="text-green mb-4 fw-bold"><i class="fas fa-car-side me-2"></i> Sell Your Car: Market Valuation</h2>
             
             <form action="/dashboard" method="POST">
-                <div class="row g-4">
+                <div class="row g-4 text-start">
                     <div class="col-md-3">
                         <label class="text-white-50 small">Location (City)</label>
                         <select class="form-select bg-dark text-white border-secondary mb-3" name="city">
@@ -17,47 +17,44 @@
                             {% for brand in brands %}<option>{{ brand }}</option>{% endfor %}
                         </select>
                     </div>
-
                     <div class="col-md-3">
                         <label class="text-white-50 small">Model</label>
                         <select class="form-select bg-dark text-white border-secondary mb-3" id="model" name="model"></select>
-                        
                         <label class="text-white-50 small">Year of Manufacture</label>
                         <select class="form-select bg-dark text-white border-secondary" name="year">
                             {% for year in years %}<option value="{{ year }}">{{ year }}</option>{% endfor %}
                         </select>
                     </div>
-
                     <div class="col-md-3">
                         <label class="text-white-50 small">Fuel Type</label>
                         <select class="form-select bg-dark text-white border-secondary mb-3" name="fuel">
                             <option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>PHEV</option>
                         </select>
-                        
                         <label class="text-white-50 small">Condition</label>
                         <select class="form-select bg-dark text-white border-secondary" name="condition">
-                            <option>Excellent (Showroom Like)</option>
-                            <option>Average (Normal Wear)</option>
-                            <option>Fair (Needs Cosmetic Work)</option>
+                            {% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}
                         </select>
                     </div>
-
                     <div class="col-md-3">
                         <label class="text-white-50 small">Mileage (Total Kms)</label>
                         <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary mb-3" placeholder="e.g. 45000" required>
-                        
                         <label class="text-white-50 small">Variant</label>
                         <input type="text" class="form-control bg-dark text-white border-secondary" name="variant" placeholder="e.g. VXi, ZXi+">
                     </div>
                 </div>
-
                 <button type="submit" class="btn btn-success w-100 py-3 mt-5 fw-bold shadow">Generate Pricing Intelligence</button>
             </form>
         </div>
     </div>
 </div>
-
 <script>
-// Keep the same updateModels() script here as in buyer.html to ensure brands sync
+const modelData = {"Toyota":["Fortuner","Innova HyCross","Hyryder","Glanza"],"Maruti Suzuki":["Swift","Baleno","Brezza","Ertiga","Grand Vitara"]};
+function updateModels() {
+    const b = document.getElementById('brand').value;
+    const m = document.getElementById('model');
+    m.innerHTML = '';
+    (modelData[b] || []).forEach(x => m.add(new Option(x, x)));
+}
+updateModels();
 </script>
 {% endblock %}
