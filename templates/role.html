@@ -1,33 +1,35 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="row justify-content-center text-center">
+<div class="row justify-content-center">
     <div class="col-lg-10">
-        <div class="card border-0 shadow-lg p-5" style="background-color: #16181d; border-radius: 24px;">
-            <h1 class="display-5 fw-bold mb-5">Welcome Rajeev Thakur, what is your goal today?</h1>
+        <div class="text-center p-5" style="background-color: #16181d; border-radius: 28px; border: 1px solid #2d2f34;">
             
-            <div class="row g-4 justify-content-center">
+            <h1 class="fw-bold mb-2 text-white" style="font-size: 2.5rem;">Welcome Rajeev Thakur,</h1>
+            <h2 class="text-white-50 mb-5" style="font-size: 1.8rem;">what is your goal today?</h2>
+            
+            <div class="row g-5 justify-content-center mt-2">
                 <div class="col-md-5">
-                    <div class="mb-4">
-                        <i class="fas fa-car fa-5x text-green mb-3"></i>
+                    <div class="role-icon-wrapper mb-4">
+                        <i class="fas fa-car fa-5x text-green"></i>
                     </div>
                     <a href="/seller" class="text-decoration-none">
-                        <button class="btn btn-success w-100 py-4 fw-bold fs-4 mb-3" style="border-radius: 12px; background-color: #28a745;">
+                        <button class="btn btn-success w-100 py-4 fw-bold mb-3" style="font-size: 1.5rem; border-radius: 16px; background-color: #28a745; border: none;">
                             I am a Seller
                         </button>
                     </a>
-                    <p class="text-muted">Find the right target price to sell your car for maximum profit.</p>
+                    <p class="text-white-50 px-3">Find the right target price to sell your car for maximum profit.</p>
                 </div>
 
                 <div class="col-md-5">
-                    <div class="mb-4">
-                        <i class="fas fa-search-dollar fa-5x text-blue mb-3"></i>
+                    <div class="role-icon-wrapper mb-4">
+                        <i class="fas fa-search-dollar fa-5x text-blue"></i>
                     </div>
                     <a href="/dashboard" class="text-decoration-none">
-                        <button class="btn btn-primary w-100 py-4 fw-bold fs-4 mb-3" style="border-radius: 12px; background-color: #5d5fff; border: none;">
+                        <button class="btn btn-primary w-100 py-4 fw-bold mb-3" style="font-size: 1.5rem; border-radius: 16px; background-color: #5d5fff; border: none;">
                             I am a Buyer
                         </button>
                     </a>
-                    <p class="text-muted">Check if a listing you found online is a fair deal.</p>
+                    <p class="text-white-50 px-3">Check if a listing you found online is a fair deal.</p>
                 </div>
             </div>
         </div>
@@ -35,10 +37,18 @@
 </div>
 
 <style>
-    .btn:hover {
-        filter: brightness(1.1);
-        transform: translateY(-2px);
-        transition: 0.2s;
+    .role-icon-wrapper {
+        height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.3s ease;
     }
+    .btn:hover {
+        filter: brightness(1.15);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    }
+    .text-white-50 { color: rgba(255, 255, 255, 0.6) !important; }
 </style>
 {% endblock %}
