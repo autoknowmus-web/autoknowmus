@@ -6,8 +6,8 @@
             <h2 class="text-center mb-4 text-green fw-bold">Get Started</h2>
             
             <div class="d-grid gap-2 mb-4">
-                <button class="btn btn-outline-light py-2" onclick="alert('Social Login Coming Soon')"><i class="fab fa-google me-2 text-danger"></i> Continue with Google</button>
-                <button class="btn btn-outline-light py-2" onclick="alert('Social Login Coming Soon')"><i class="fab fa-apple me-2 text-white"></i> Continue with Apple</button>
+                <button class="btn btn-outline-light py-2"><i class="fab fa-google me-2 text-danger"></i> Continue with Google</button>
+                <button class="btn btn-outline-light py-2"><i class="fab fa-apple me-2 text-white"></i> Continue with Apple</button>
             </div>
 
             <div class="text-center mb-4 text-muted small">—— OR ——</div>
@@ -32,18 +32,24 @@
 </div>
 
 <div class="row mt-5 text-center g-4">
-    <h3 class="text-green mb-2 mt-5">Community Testimonials</h3>
-    {% for text, author in [
-        ("Found the exact market value for my Fortuner in minutes. Accurate for the Indian market.", "Rajesh K., Bangalore"),
-        ("The time-to-sell simulator is a game changer for individual sellers.", "Vikram M., Mumbai"),
-        ("Helped me negotiate a better price for my first used EV. Highly recommended!", "Priya S., Delhi")
-    ] %}
+    <h3 class="text-green mt-5 mb-4">Community Testimonials</h3>
     <div class="col-md-4">
         <div class="p-4 border border-secondary rounded-4 bg-dark h-100 shadow-sm">
-            <p class="text-white-50 italic">"{{ text }}"</p>
-            <footer class="blockquote-footer mt-2 text-green">{{ author }}</footer>
+            <p class="text-white-50 italic">"Found the exact market value for my Fortuner in minutes. Accurate for the Indian market."</p>
+            <footer class="blockquote-footer mt-2 text-green">Rajesh K., Bangalore</footer>
         </div>
     </div>
-    {% endfor %}
+    <div class="col-md-4">
+        <div class="p-4 border border-secondary rounded-4 bg-dark h-100 shadow-sm">
+            <p class="text-white-50 italic">"The time-to-sell simulator is a game changer for individual sellers."</p>
+            <footer class="blockquote-footer mt-2 text-green">Vikram M., Mumbai</footer>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="p-4 border border-secondary rounded-4 bg-dark h-100 shadow-sm">
+            <p class="text-white-50 italic">"Helped me negotiate a better price for my first used EV. Highly recommended!"</p>
+            <footer class="blockquote-footer mt-2 text-green">Priya S., Delhi</footer>
+        </div>
+    </div>
 </div>
 {% endblock %}
