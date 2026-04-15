@@ -5,19 +5,11 @@
         <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 24px; border-left: 5px solid #4e54ff;">
             <div class="d-flex justify-content-between align-items-start mb-4">
                 <h3 class="text-white fw-bold">Fair Market Range ({{ model }})</h3>
-                <div class="btn-group bg-dark p-1 rounded-3">
-                    <button class="btn btn-sm btn-outline-primary">Excellent</button>
-                    <button class="btn btn-sm btn-primary">Average</button>
-                    <button class="btn btn-sm btn-outline-primary">Fair</button>
-                </div>
+                <div class="btn-group bg-dark p-1 rounded-3"><button class="btn btn-sm btn-outline-primary">Excellent</button><button class="btn btn-sm btn-primary">Average</button><button class="btn btn-sm btn-outline-primary">Fair</button></div>
             </div>
             <h1 class="text-green fw-bold mb-4">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
             <div class="py-3">
-                <div class="progress rounded-pill shadow-sm" style="height: 14px; background: #2d2f34;">
-                    <div class="progress-bar bg-success" style="width: 33%"></div>
-                    <div class="progress-bar bg-warning" style="width: 33%"></div>
-                    <div class="progress-bar bg-danger" style="width: 34%"></div>
-                </div>
+                <div class="progress rounded-pill shadow-sm" style="height: 14px; background: #2d2f34;"><div class="progress-bar bg-success" style="width: 33%"></div><div class="progress-bar bg-warning" style="width: 33%"></div><div class="progress-bar bg-danger" style="width: 34%"></div></div>
                 <div class="d-flex justify-content-between mt-2 small text-white-50 fw-bold"><span>GREAT DEAL</span><span>FAIR PRICE</span><span>OVERPRICED</span></div>
             </div>
             <div class="row mt-4 g-3 text-center">
@@ -35,13 +27,12 @@
                 <circle cx="52" cy="65" r="4" fill="#fff" /><text x="58" y="60" fill="#888" font-size="6">₹{{ (forecast[1]/100000)|round(1) }}L</text>
                 <circle cx="180" cy="115" r="5" fill="#fff" /><text x="160" y="128" fill="#888" font-size="6">₹{{ (forecast[5]/100000)|round(1) }}L</text>
             </svg>
+            <p class="text-center small mt-3 text-white-50">Suggestion: <strong>Buy Now</strong></p>
         </div>
-        <div class="text-center">
-            <a href="/buyer" class="text-white-50 small text-decoration-none border-bottom border-primary pb-1"><i class="fas fa-edit me-1"></i> Edit Vehicle Details</a>
-        </div>
-        <div class="mt-4 p-3 border border-dashed rounded-4 opacity-50 text-center">
+        <div class="text-center mb-4"><a href="/buyer" class="text-white-50 small text-decoration-none border-bottom border-primary pb-1"><i class="fas fa-edit me-1"></i> Edit Vehicle Details</a></div>
+        <div class="p-3 border border-dashed rounded-4 opacity-50 text-center">
             <small class="text-white d-block">Coming Soon:</small>
-            <span class="text-white-50 small">Accessory & Detailing Benefits</span>
+            <span class="text-white-50 small">Unlock Detailing & Accessory Benefits</span>
         </div>
     </div>
 </div>
