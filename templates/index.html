@@ -2,20 +2,20 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6">
-        <div class="card p-4 shadow" style="background-color: #16181d; border: 1px solid #2d2f34; border-radius: 20px;">
-            <h3 class="text-center mb-4 text-green fw-bold">Get Started</h3>
+        <div class="card p-5 shadow-lg" style="background-color: #16181d; border: 1px solid #2d2f34; border-radius: 28px;">
+            <h2 class="text-center mb-4 text-green fw-bold">Get Started</h2>
             
             <div class="d-grid gap-2 mb-4">
-                <button class="btn btn-outline-light py-2"><i class="fab fa-google me-2 text-danger"></i> Continue with Google</button>
-                <button class="btn btn-outline-light py-2"><i class="fab fa-apple me-2 text-white"></i> Continue with Apple</button>
+                <button class="btn btn-outline-light py-2" onclick="alert('Social Login Coming Soon')"><i class="fab fa-google me-2 text-danger"></i> Continue with Google</button>
+                <button class="btn btn-outline-light py-2" onclick="alert('Social Login Coming Soon')"><i class="fab fa-apple me-2 text-white"></i> Continue with Apple</button>
             </div>
 
             <div class="text-center mb-4 text-muted small">—— OR ——</div>
 
             <form action="/role" method="POST">
-                <input type="text" name="name" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Full Name" required>
-                <input type="email" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Email Address" required>
-                <input type="tel" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Mobile Number" required>
+                <input type="text" name="name" class="form-control bg-dark text-white border-secondary mb-3 py-2" placeholder="Full Name" required>
+                <input type="email" class="form-control bg-dark text-white border-secondary mb-3 py-2" placeholder="Email Address" required>
+                <input type="tel" class="form-control bg-dark text-white border-secondary mb-3 py-2" placeholder="Mobile Number" required>
 
                 <div class="form-check form-switch mb-3">
                     <input class="form-check-input" type="checkbox" id="waToggle" onclick="document.getElementById('waField').classList.toggle('d-none')">
@@ -25,31 +25,25 @@
                     <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="WhatsApp Number">
                 </div>
 
-                <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Continue to Selection</button>
+                <button type="submit" class="btn btn-success w-100 py-3 fw-bold shadow">Continue to Selection</button>
             </form>
         </div>
     </div>
 </div>
 
-<div class="row mt-5 text-center">
-    <h4 class="text-green mb-4">Community Testimonials</h4>
-    <div class="col-md-4 mb-3">
-        <div class="p-3 border border-secondary rounded bg-dark h-100">
-            <p class="small text-white-50">"Found the exact market value for my Fortuner in minutes. Accurate for the Indian market."</p>
-            <footer class="blockquote-footer mt-2">Rajesh K., Bangalore</footer>
+<div class="row mt-5 text-center g-4">
+    <h3 class="text-green mb-2 mt-5">Community Testimonials</h3>
+    {% for text, author in [
+        ("Found the exact market value for my Fortuner in minutes. Accurate for the Indian market.", "Rajesh K., Bangalore"),
+        ("The time-to-sell simulator is a game changer for individual sellers.", "Vikram M., Mumbai"),
+        ("Helped me negotiate a better price for my first used EV. Highly recommended!", "Priya S., Delhi")
+    ] %}
+    <div class="col-md-4">
+        <div class="p-4 border border-secondary rounded-4 bg-dark h-100 shadow-sm">
+            <p class="text-white-50 italic">"{{ text }}"</p>
+            <footer class="blockquote-footer mt-2 text-green">{{ author }}</footer>
         </div>
     </div>
-    <div class="col-md-4 mb-3">
-        <div class="p-3 border border-secondary rounded bg-dark h-100">
-            <p class="small text-white-50">"The time-to-sell simulator is a game changer for individual sellers."</p>
-            <footer class="blockquote-footer mt-2">Vikram M., Mumbai</footer>
-        </div>
-    </div>
-    <div class="col-md-4 mb-3">
-        <div class="p-3 border border-secondary rounded bg-dark h-100">
-            <p class="small text-white-50">"Helped me negotiate a better price for my first used EV. Highly recommended!"</p>
-            <footer class="blockquote-footer mt-2">Priya S., Delhi</footer>
-        </div>
-    </div>
+    {% endfor %}
 </div>
 {% endblock %}
