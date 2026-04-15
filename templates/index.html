@@ -1,48 +1,59 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="row justify-content-center text-center py-4">
-    <div class="col-lg-8">
-        <h1 class="display-5 fw-bold text-white mb-2">
-            <i class="fas fa-shield-alt text-green me-2"></i>AutoKnowMus
-        </h1>
-        <p class="text-white-50 mb-4 px-lg-5">
-            AutoKnowMus is your shield against overpaying. We bring price transparency to the market, helping you avoid buying overpriced cars and ensuring you sell at the right price to maximize your opportunity.
-        </p>
-
-        <div class="card p-4 border-0 shadow-lg mx-auto" style="background: #16181d; border-radius: 28px; max-width: 450px;">
-            <h4 class="text-green mb-4">Get Started</h4>
-            <form action="/role" method="POST">
-                <input type="text" name="name" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Full Name" required>
-                <div class="input-group mb-3">
-                    <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
-                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="10 Digit Mobile" pattern="[0-9]{10}" maxlength="10" minlength="10" required>
+<div class="row justify-content-center">
+    <div class="col-md-11">
+        <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 4px solid #4e54ff;">
+            <div class="d-flex justify-content-center mb-4">
+                <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25">
+                    <input type="radio" class="btn-check" name="sm_toggle" id="disc" checked onclick="setMode(false)">
+                    <label class="btn btn-outline-primary rounded-pill px-4" for="disc">Price Discovery</label>
+                    <input type="radio" class="btn-check" name="sm_toggle" id="eval" onclick="setMode(true)">
+                    <label class="btn btn-outline-primary rounded-pill px-4" for="eval">Evaluate a Deal</label>
                 </div>
-                <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Continue to Selection</button>
-            </form>
-        </div>
+            </div>
 
-        <div class="mt-5">
-            <h6 class="text-green text-uppercase tracking-widest mb-4">Community Testimonials</h6>
-            <div class="row g-3">
-                {% set tests = [
-                    ('Rajesh K., Bangalore', 'Found the exact value for my Fortuner.', 'Seller'),
-                    ('Priya S., Delhi', 'Negotiated a better deal with the fair range.', 'Buyer'),
-                    ('Vikram M., Mumbai', 'The simulator is a game changer for sellers.', 'Seller'),
-                    ('Amit B., Hyderabad', 'Saved 2L on an Innova purchase.', 'Buyer'),
-                    ('Sonal V., Pune', 'Sold my Swift at the peak market price.', 'Seller'),
-                    ('Rahul J., Gurgaon', 'Avoided an overpriced luxury SUV.', 'Buyer')
-                ] %}
-                {% for name, text, type in tests %}
-                <div class="col-md-4">
-                    <div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-10 h-100">
-                        <p class="small text-white-50 italic mb-2">"{{ text }}"</p>
-                        <small class="text-white fw-bold">{{ name }}</small><br>
-                        <small class="text-muted small">{{ type }}</small>
+            <form action="/buyer_dashboard" method="POST">
+                <input type="hidden" name="search_mode" id="mode_hidden" value="discovery">
+                <div class="row g-3 text-start">
+                    <div class="col-md-2"><label class="text-white-50 small">Location (City)</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="city">{% for city in cities %}<option>{{ city }}</option>{% endfor %}</select>
+                    </div>
+                    <div class="col-md-2"><label class="text-white-50 small">Make</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">{% for brand in brands %}<option>{{ brand }}</option>{% endfor %}</select>
+                    </div>
+                    <div class="col-md-2"><label class="text-white-50 small">Model</label>
+                        <select class="form-select bg-dark text-white border-secondary" id="model" name="model"></select>
+                    </div>
+                    <div class="col-md-2"><label class="text-white-50 small">Variant / Suffix</label>
+                        <select class="form-select bg-dark text-white border-secondary"><option>Base / LXi</option><option>Mid / VXi</option><option>Top / ZXi</option></select>
+                    </div>
+                    <div class="col-md-2"><label class="text-white-50 small">Fuel Type</label>
+                        <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option></select>
+                    </div>
+                    <div class="col-md-2"><label class="text-white-50 small">Condition</label>
+                        <select class="form-select bg-dark text-white border-secondary" name="condition">{% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}</select>
                     </div>
                 </div>
-                {% endfor %}
-            </div>
+                <div class="row mt-4 align-items-center">
+                    <div class="col-md-2">
+                        <label class="text-white-50 small">Mileage (KMs)</label>
+                        <input type="number" class="form-control bg-dark text-white border-secondary">
+                    </div>
+                    <div class="col-md-3" id="askingBox" style="display:none;">
+                        <label class="text-warning small fw-bold">Asking Price (₹)</label>
+                        <input type="number" name="asking_price" class="form-control bg-dark text-white border-warning">
+                    </div>
+                    <div class="col-md-4"><button type="submit" class="btn btn-primary w-100 py-3 fw-bold">Analyze Market Intelligence</button></div>
+                    <div class="col-md-3 opacity-50 text-end small text-white-50">Unlimited Search | Real-Time Alerts</div>
+                </div>
+            </form>
         </div>
     </div>
 </div>
+<script>
+function setMode(isEval) { document.getElementById('askingBox').style.display = isEval ? 'block' : 'none'; document.getElementById('mode_hidden').value = isEval ? 'evaluation' : 'discovery'; }
+const models = {"Toyota":["Fortuner","Innova"],"Maruti Suzuki":["Swift","Brezza"]};
+function updateModels() { const b = document.getElementById('brand').value; const m = document.getElementById('model'); m.innerHTML = ''; (models[b] || []).forEach(x => m.add(new Option(x, x))); }
+updateModels();
+</script>
 {% endblock %}
