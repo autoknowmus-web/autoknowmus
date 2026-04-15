@@ -5,9 +5,9 @@
         <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px;">
             <div class="d-flex justify-content-center mb-4">
                 <div class="btn-group p-1 bg-dark rounded-pill border border-secondary border-opacity-25">
-                    <input type="radio" class="btn-check" name="sm_toggle" id="discovery" checked onclick="setMode(false)">
-                    <label class="btn btn-outline-primary rounded-pill px-4" for="discovery">Price Discovery</label>
-                    <input type="radio" class="btn-check" name="sm_toggle" id="eval" onclick="setMode(true)">
+                    <input type="radio" class="btn-check" name="toggle" id="disc" checked onclick="setMode(false)">
+                    <label class="btn btn-outline-primary rounded-pill px-4" for="disc">Price Discovery</label>
+                    <input type="radio" class="btn-check" name="toggle" id="eval" onclick="setMode(true)">
                     <label class="btn btn-outline-primary rounded-pill px-4" for="eval">Evaluate a Deal</label>
                 </div>
             </div>
@@ -33,15 +33,11 @@
                     </div>
                     <div class="col-md-2">
                         <label class="text-white-50 small">4. Variant</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="variant">
-                            <option>LXi / base</option><option>VXi / mid</option><option>ZXi / top</option>
-                        </select>
+                        <select class="form-select bg-dark text-white border-secondary"><option>ZXi / VX</option></select>
                     </div>
                     <div class="col-md-2">
                         <label class="text-white-50 small">5. Fuel</label>
-                        <select class="form-select bg-dark text-white border-secondary">
-                            <option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>PHEV</option>
-                        </select>
+                        <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>PHEV</option></select>
                     </div>
                     <div class="col-md-2">
                         <label class="text-white-50 small">6. Condition</label>
@@ -49,19 +45,17 @@
                             {% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4 mt-3" id="askingBox" style="display:none;">
-                        <label class="text-warning small fw-bold">7. Asking Price (₹)</label>
-                        <input type="number" name="asking_price" class="form-control bg-dark text-white border-warning" placeholder="Enter deal price">
-                    </div>
                 </div>
                 <div class="row mt-4 align-items-center">
-                    <div class="col-md-8">
+                    <div class="col-md-3" id="askingBox" style="display:none;">
+                        <label class="text-warning small fw-bold">Asking Price (₹)</label>
+                        <input type="number" name="asking_price" class="form-control bg-dark text-white border-warning">
+                    </div>
+                    <div class="col-md-6">
                         <button type="submit" class="btn btn-primary w-100 py-3 fw-bold">Analyze Market Intelligence</button>
                     </div>
-                    <div class="col-md-4 opacity-50 text-center">
-                        <small class="text-white-50 d-block">Coming Soon:</small>
-                        <span class="badge bg-dark border border-secondary">Unlimited Search</span>
-                        <span class="badge bg-dark border border-secondary">Live Deal Alerts</span>
+                    <div class="col-md-3 opacity-50 text-end small text-white-50">
+                        Coming Soon: Unlimited Search | Live Deal Alerts
                     </div>
                 </div>
             </form>
@@ -73,7 +67,7 @@ function setMode(isEval) {
     document.getElementById('askingBox').style.display = isEval ? 'block' : 'none';
     document.getElementById('mode_hidden').value = isEval ? 'evaluation' : 'discovery';
 }
-const models = {"Toyota":["Fortuner","Innova HyCross","Hyryder"],"Maruti Suzuki":["Swift","Baleno","Brezza"]};
+const models = {"Toyota":["Fortuner","Innova"],"Maruti Suzuki":["Swift","Brezza"],"Hyundai":["Creta"]};
 function updateModels() {
     const b = document.getElementById('brand').value;
     const m = document.getElementById('model');
