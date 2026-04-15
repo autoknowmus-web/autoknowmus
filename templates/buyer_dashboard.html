@@ -5,10 +5,25 @@
         <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 24px;">
             <div class="d-flex justify-content-between align-items-start mb-4">
                 <h3 class="text-white fw-bold">Fair Market Range ({{ model }})</h3>
-                <div class="nav-info-badge credits-badge">Confidence: 88%</div>
+                <div class="btn-group bg-dark p-1 rounded-3">
+                    <button class="btn btn-sm btn-outline-secondary">Excellent</button>
+                    <button class="btn btn-sm btn-primary">Average</button>
+                    <button class="btn btn-sm btn-outline-secondary">Fair</button>
+                </div>
             </div>
 
             <h1 class="text-green fw-bold mb-4">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
+
+            <div class="py-3">
+                <div class="progress rounded-pill shadow-sm" style="height: 14px; background: #2d2f34;">
+                    <div class="progress-bar bg-success" style="width: 33%"></div>
+                    <div class="progress-bar bg-warning" style="width: 33%"></div>
+                    <div class="progress-bar bg-danger" style="width: 34%"></div>
+                </div>
+                <div class="d-flex justify-content-between mt-2 small text-white-50 fw-bold">
+                    <span>GREAT DEAL</span><span>FAIR PRICE</span><span>OVERPRICED</span>
+                </div>
+            </div>
 
             <div class="row mt-4 g-3 text-center">
                 <div class="col-6"><div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-10 h-100">
@@ -28,9 +43,12 @@
             <h6 class="text-white-50 mb-4">5-Year Value Forecast</h6>
             <svg viewBox="0 0 200 135" class="w-100">
                 <path d="M20,20 Q40,95 180,115" fill="none" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" />
-                <circle cx="20" cy="20" r="5" fill="#fff" /><text x="25" y="14" fill="#fff" font-size="7" font-weight="bold">₹{{ (forecast[0]/100000)|round(1) }}L</text>
-                <circle cx="52" cy="65" r="4.5" fill="#fff" /><text x="58" y="60" fill="#888" font-size="6">₹{{ (forecast[1]/100000)|round(1) }}L</text>
-                <circle cx="180" cy="115" r="5" fill="#fff" /><text x="160" y="128" fill="#888" font-size="6">₹{{ (forecast[5]/100000)|round(1) }}L</text>
+                <circle cx="20" cy="20" r="5" fill="#fff" />
+                <text x="25" y="14" fill="#fff" font-size="7" font-weight="bold">₹{{ (forecast[0]/100000)|round(1) }}L</text>
+                <circle cx="52" cy="65" r="4.5" fill="#fff" />
+                <text x="58" y="60" fill="#888" font-size="6">₹{{ (forecast[1]/100000)|round(1) }}L</text>
+                <circle cx="180" cy="115" r="5" fill="#fff" />
+                <text x="160" y="128" fill="#888" font-size="6">₹{{ (forecast[5]/100000)|round(1) }}L</text>
             </svg>
             <p class="text-center small mt-3 text-white-50">Suggestion: <strong>Buy Now</strong></p>
         </div>
