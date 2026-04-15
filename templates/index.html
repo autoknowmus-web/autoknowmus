@@ -22,22 +22,22 @@
         </div>
 
         <div class="mt-5">
-            <h6 class="text-green text-uppercase tracking-widest mb-4">Community Testimonials</h6>
+            <h6 class="text-green text-uppercase tracking-widest mb-4 small">Community Testimonials</h6>
             <div class="row g-3">
                 {% set tests = [
                     ('Rajesh K., Bangalore', 'Found the exact value for my Fortuner.', 'Seller'),
-                    ('Priya S., Delhi', 'Negotiated a better deal with their fair range.', 'Buyer'),
-                    ('Vikram M., Mumbai', 'The simulator is a game changer for sellers.', 'Seller'),
+                    ('Priya S., Delhi', 'Negotiated a much better deal with the fair range.', 'Buyer'),
+                    ('Vikram M., Mumbai', 'The simulator is a game changer for individual sellers.', 'Seller'),
                     ('Amit B., Hyderabad', 'Saved 2L on an Innova purchase.', 'Buyer'),
                     ('Sonal V., Pune', 'Sold my Swift at the peak market price.', 'Seller'),
-                    ('Rahul J., Gurgaon', 'Avoided an overpriced luxury SUV.', 'Buyer')
+                    ('Rahul J., Gurgaon', 'Avoided an overpriced luxury SUV after the eval.', 'Buyer')
                 ] %}
                 {% for name, text, type in tests %}
                 <div class="col-md-4">
                     <div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-10 h-100">
                         <p class="small text-white-50 italic mb-2">"{{ text }}"</p>
                         <small class="text-white fw-bold">{{ name }}</small><br>
-                        <small class="text-muted">{{ type }}</small>
+                        <small class="text-muted small">{{ type }}</small>
                     </div>
                 </div>
                 {% endfor %}
