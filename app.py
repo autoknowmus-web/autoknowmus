@@ -2,25 +2,20 @@ from flask import Flask, render_template
 
 app = Flask(__name__)
 
-# Home Page
 @app.route('/')
 def index():
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        return f"Error loading index: {str(e)}"
+    return render_template('index.html')
 
-# Role Selection
 @app.route('/role', methods=['GET', 'POST'])
 def role():
     return render_template('role.html')
 
-# Seller Page
 @app.route('/seller')
 def seller():
-    return render_template('seller.html')
+    # Adding a range for the year dropdown to avoid manual typing
+    years = list(range(2026, 2010, -1))
+    return render_template('seller.html', years=years)
 
-# Dashboard Page
 @app.route('/dashboard')
 def dashboard():
     return render_template('dashboard.html')
