@@ -6,7 +6,7 @@
             <i class="fas fa-shield-alt text-green me-2"></i>AutoKnowMus
         </h1>
         <p class="lead text-white-50 mb-5">
-            AutoKnowMus is your shield against overpaying. We bring price transparency to the used car market, 
+            AutoKnowMus is your shield against overpaying. We bring price transparency to the market, 
             helping you sell at the right price and buy with total confidence.
         </p>
 
@@ -14,10 +14,9 @@
             <h4 class="text-green mb-4">Get Started</h4>
             <form action="/role" method="POST">
                 <input type="text" name="name" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Full Name" required>
-                <input type="email" class="form-control bg-dark text-white border-secondary mb-3" placeholder="Email Address">
                 <div class="input-group mb-3">
                     <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
-                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="10 Digit Mobile" pattern="[0-9]{10}" required title="Enter 10 digit mobile number">
+                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="10 Digit Mobile" pattern="[0-9]{10}" maxlength="10" required>
                 </div>
                 <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Continue to Selection</button>
             </form>
@@ -27,18 +26,18 @@
             <h5 class="text-white-50 mb-4">Community Testimonials</h5>
             <div class="row g-3">
                 {% set tests = [
-                    ('Rajesh K.', 'Found the exact value for my Fortuner in minutes.', 'Seller'),
-                    ('Priya S.', 'Helped me negotiate a better deal for my EV.', 'Buyer'),
-                    ('Vikram M.', 'The time-to-sell simulator is a game changer.', 'Seller'),
-                    ('Amit B.', 'Negotiated 2L off a used Innova using their range.', 'Buyer'),
-                    ('Sonal V.', 'Transparency at its best. Sold my Swift at peak price.', 'Seller'),
-                    ('Rahul J.', 'I avoided three overpriced deals thanks to the eval tool.', 'Buyer')
+                    ('Rajesh K.', 'Exact value for my Fortuner.', 'Seller'),
+                    ('Priya S.', 'Negotiated a better deal.', 'Buyer'),
+                    ('Vikram M.', 'Time-to-sell is a game changer.', 'Seller'),
+                    ('Amit B.', 'Saved 2L on an Innova.', 'Buyer'),
+                    ('Sonal V.', 'Sold at peak market price.', 'Seller'),
+                    ('Rahul J.', 'Avoided overpriced deals.', 'Buyer')
                 ] %}
                 {% for name, text, type in tests %}
                 <div class="col-md-4">
                     <div class="p-3 bg-dark rounded-4 border border-secondary border-opacity-25 h-100">
                         <p class="small text-white-50 italic">"{{ text }}"</p>
-                        <small class="text-green">{{ name }} - {{ type }}</small>
+                        <small class="text-green">{{ name }} ({{ type }})</small>
                     </div>
                 </div>
                 {% endfor %}
