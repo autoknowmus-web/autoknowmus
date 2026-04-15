@@ -7,25 +7,37 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { background-color: #121212; color: #ffffff; }
-        .navbar-brand { font-weight: 700; display: flex; align-items: center; }
-        .logo-box { background-color: #28a745; color: white; padding: 0 8px; border-radius: 4px; margin-right: 5px; }
-        .text-white { color: #ffffff !important; }
-        .text-blue { color: #007bff !important; }
+        body { background-color: #0f1115; color: #ffffff; font-family: 'Inter', sans-serif; }
+        .navbar { background-color: #0f1115; border-bottom: 1px solid #2d2f34; padding: 15px 0; }
+        .logo-box { background-color: #28a745; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; margin-right: 5px; }
+        .nav-info-badge { background: #1a1c21; border: 1px solid #3d3f44; border-radius: 8px; padding: 5px 15px; display: flex; align-items: center; gap: 10px; margin-left: 10px; }
+        .credits-badge { border-color: #ffc107; color: #ffc107; }
+        .text-blue { color: #4e54ff !important; }
         .text-green { color: #28a745 !important; }
-        .card { background-color: #1f1f1f; border: 1px solid #333; }
+        .logout-link { color: #f44336; text-decoration: none; margin-left: 15px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark border-bottom border-secondary mb-4">
+    <nav class="navbar navbar-expand-lg">
         <div class="container">
-            <a class="navbar-brand" href="/">
+            <a class="navbar-brand d-flex align-items-center" href="/">
                 <span class="logo-box">A</span>
-                <span class="text-white">Auto</span><span class="text-blue">Know</span><span class="text-green">Mus</span>
+                <span class="fw-bold text-white">Auto</span><span class="fw-bold text-blue">Know</span><span class="fw-bold text-green">Mus</span>
             </a>
+            <div class="ms-auto d-flex align-items-center">
+                <div class="nav-info-badge">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Rajeev Thakur</span>
+                </div>
+                <div class="nav-info-badge credits-badge">
+                    <i class="fas fa-coins"></i>
+                    <span>500 Credits</span>
+                </div>
+                <a href="#" class="logout-link">Logout</a>
+            </div>
         </div>
     </nav>
-    <div class="container">
+    <div class="container mt-5">
         {% block content %}{% endblock %}
     </div>
 </body>
