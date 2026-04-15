@@ -15,22 +15,22 @@
             <form action="/buyer_dashboard" method="POST">
                 <input type="hidden" name="search_mode" id="mode_hidden" value="discovery">
                 <div class="row g-3 text-start">
-                    <div class="col-md-2"><label class="text-white-50 small">1. City</label>
+                    <div class="col-md-2"><label class="text-white-50 small">Location (City)</label>
                         <select class="form-select bg-dark text-white border-secondary" name="city">{% for city in cities %}<option>{{ city }}</option>{% endfor %}</select>
                     </div>
-                    <div class="col-md-2"><label class="text-white-50 small">2. Make</label>
+                    <div class="col-md-2"><label class="text-white-50 small">Make</label>
                         <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">{% for brand in brands %}<option>{{ brand }}</option>{% endfor %}</select>
                     </div>
-                    <div class="col-md-2"><label class="text-white-50 small">3. Model</label>
+                    <div class="col-md-2"><label class="text-white-50 small">Model</label>
                         <select class="form-select bg-dark text-white border-secondary" id="model" name="model"></select>
                     </div>
-                    <div class="col-md-2"><label class="text-white-50 small">4. Variant</label>
+                    <div class="col-md-2"><label class="text-white-50 small">Variant / Suffix</label>
                         <select class="form-select bg-dark text-white border-secondary"><option>Base / LXi</option><option>Mid / VXi</option><option>Top / ZXi</option></select>
                     </div>
-                    <div class="col-md-2"><label class="text-white-50 small">5. Fuel</label>
+                    <div class="col-md-2"><label class="text-white-50 small">Fuel Type</label>
                         <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option></select>
                     </div>
-                    <div class="col-md-2"><label class="text-white-50 small">6. Condition</label>
+                    <div class="col-md-2"><label class="text-white-50 small">Condition</label>
                         <select class="form-select bg-dark text-white border-secondary" name="condition">{% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}</select>
                     </div>
                 </div>
