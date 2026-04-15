@@ -8,7 +8,7 @@ def index():
 
 @app.route('/role', methods=['GET', 'POST'])
 def role():
-    # Capture name from home page to personalize the greeting
+    # Capture the name from the home page form
     user_name = request.form.get('name', 'Rajeev Thakur')
     return render_template('role.html', user_name=user_name)
 
@@ -19,7 +19,7 @@ def seller():
 
 @app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
-    # This route now accepts POST from the seller form
+    # Accepting POST fixes the 500/Internal Server Error
     return render_template('dashboard.html')
 
 if __name__ == '__main__':
