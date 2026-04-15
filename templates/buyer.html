@@ -5,9 +5,9 @@
         <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 28px;">
             <div class="d-flex justify-content-center mb-5">
                 <div class="btn-group p-1 bg-dark rounded-pill" style="border: 1px solid #2d2f34;">
-                    <input type="radio" class="btn-check" name="search_mode" id="discovery" value="discovery" checked onclick="toggleMode(false)">
+                    <input type="radio" class="btn-check" name="search_mode_toggle" id="discovery" checked onclick="toggleMode(false)">
                     <label class="btn btn-outline-primary rounded-pill px-4" for="discovery">Price Discovery</label>
-                    <input type="radio" class="btn-check" name="search_mode" id="eval" value="evaluation" onclick="toggleMode(true)">
+                    <input type="radio" class="btn-check" name="search_mode_toggle" id="eval" onclick="toggleMode(true)">
                     <label class="btn btn-outline-primary rounded-pill px-4" for="eval">Evaluate a Deal</label>
                 </div>
             </div>
@@ -17,19 +17,19 @@
                 <div class="row g-4 text-start">
                     <div class="col-md-4">
                         <label class="text-white-50 small">Location (City)</label>
-                        <select class="form-select bg-dark text-white border-secondary mb-3">
+                        <select class="form-select bg-dark text-white border-secondary mb-3" name="city">
                             {% for city in cities %}<option>{{ city }}</option>{% endfor %}
                         </select>
                         <label class="text-white-50 small">Make</label>
-                        <select class="form-select bg-dark text-white border-secondary mb-3" name="make" id="brand" onchange="updateModels()">
+                        <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">
                             {% for brand in brands %}<option>{{ brand }}</option>{% endfor %}
                         </select>
                     </div>
                     <div class="col-md-4">
                         <label class="text-white-50 small">Model</label>
-                        <select class="form-select bg-dark text-white border-secondary mb-3" id="model"></select>
+                        <select class="form-select bg-dark text-white border-secondary mb-3" id="model" name="model"></select>
                         <label class="text-white-50 small">Fuel Type</label>
-                        <select class="form-select bg-dark text-white border-secondary mb-3">
+                        <select class="form-select bg-dark text-white border-secondary">
                             <option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>PHEV</option>
                         </select>
                     </div>
@@ -37,7 +37,7 @@
                         <label class="text-white-50 small">Variant / Suffix</label>
                         <input type="text" class="form-control bg-dark text-white border-secondary mb-3" placeholder="e.g. VXi, ZXi+">
                         <label class="text-white-50 small">Condition</label>
-                        <select class="form-select bg-dark text-white border-secondary mb-3">
+                        <select class="form-select bg-dark text-white border-secondary" name="condition">
                             {% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}
                         </select>
                     </div>
