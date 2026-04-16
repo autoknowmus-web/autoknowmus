@@ -1,10 +1,8 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="text-center py-4">
-    <div class="d-flex justify-content-center mb-4">
-        <div class="badge bg-dark border border-warning text-warning p-2">
-            <i class="fas fa-coins me-2"></i> Balance: {{ credits }} Credits
-        </div>
+    <div class="badge bg-dark border border-warning text-warning p-2 mb-4">
+        <i class="fas fa-coins me-2"></i> Balance: {{ credits }} Credits
     </div>
     <h2 class="text-white mb-5">Hello {{ user_name }}! Ready to make a smarter decision?</h2>
     <div class="row g-4 justify-content-center">
