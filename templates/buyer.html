@@ -4,7 +4,7 @@
     <div class="col-md-11">
         <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 5px solid #4e54ff;">
             <div class="d-flex justify-content-center mb-4">
-                <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25">
+                <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25 shadow-sm">
                     <input type="radio" class="btn-check" name="sm_toggle" id="disc" checked onclick="setMode(false)">
                     <label class="btn btn-outline-primary rounded-pill px-4" for="disc">Price Discovery</label>
                     <input type="radio" class="btn-check" name="sm_toggle" id="eval" onclick="setMode(true)">
@@ -50,7 +50,7 @@
 </div>
 <script>
 const dataMap = {
-    "Toyota": {"Fortuner": ["4x2 AT", "4x4 AT"], "Innova": ["GX", "VX", "ZX"], "Glanza": ["S", "G", "V"]},
+    "Toyota": {"Fortuner": ["4x2 AT", "4x4 AT", "Sigma 4"], "Innova": ["GX", "VX", "ZX"], "Glanza": ["S", "G", "V"]},
     "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["LXi", "VXi", "ZXi+"]}
 };
 function updateModels() {
