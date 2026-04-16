@@ -9,12 +9,12 @@
                 <div class="col-6"><div class="p-3 bg-black rounded-3"><small class="text-white-50">Estimated Days to Sell</small><h2 class="text-white">18 Days</h2></div></div>
             </div>
             
-            <h6 class="text-white-50 mb-3 small text-uppercase">6-Month Forecast (Every 15 Days)</h6>
-            <div class="p-2 bg-black rounded-3">
-                <svg viewBox="0 0 500 150" class="w-100">
-                    <path d="M0,20 Q125,120 500,140" fill="none" stroke="#28a745" stroke-width="3" />
+            <h6 class="text-white-50 mb-3 small text-uppercase">6-Month Price Depreciation (15-Day Intervals)</h6>
+            <div class="p-3 bg-black rounded-3">
+                <svg viewBox="0 0 500 120" class="w-100">
+                    <path d="M0,20 Q150,90 500,110" fill="none" stroke="#28a745" stroke-width="3" />
                     {% for val in forecast %}
-                    <circle cx="{{ loop.index0 * 45 }}" cy="{{ 20 + (loop.index0 * 10) }}" r="4" fill="#fff" />
+                    <circle cx="{{ loop.index0 * 45 }}" cy="{{ 20 + (loop.index0 * 8) }}" r="4" fill="#fff" />
                     {% endfor %}
                 </svg>
             </div>
@@ -23,12 +23,18 @@
     <div class="col-lg-4">
         <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100">
             <h6 class="text-green small fw-bold mb-4">PREMIUM TOOLS (COMING SOON)</h6>
-            <div class="opacity-25 mb-4">
-                <div class="mb-3 p-2 border rounded small text-white">Actual selling price of similar car in your city</div>
-                <div class="mb-3 p-2 border rounded small text-white">Unlimited price search (1 Month)</div>
+            <div class="opacity-25">
+                <div class="p-3 border border-secondary rounded mb-3">
+                    <small class="text-white-50 d-block mb-1">Market Insight:</small>
+                    <div class="text-white small">Actual selling price of similar car sold in your city.</div>
+                </div>
+                <div class="p-3 border border-secondary rounded">
+                    <small class="text-white-50 d-block mb-1">Access:</small>
+                    <div class="text-white small">Get unlimited price searches for 1 month.</div>
+                </div>
             </div>
-            <div class="text-center mt-auto">
-                <a href="/seller" class="text-white-50 small"><i class="fas fa-edit me-1"></i> Edit Vehicle Details</a>
+            <div class="mt-auto text-center pt-3 border-top border-secondary border-opacity-25">
+                <a href="/seller" class="text-white-50 small text-decoration-none"><i class="fas fa-edit me-1"></i> Edit Vehicle Details</a>
             </div>
         </div>
     </div>
