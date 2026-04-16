@@ -10,14 +10,16 @@
         </p>
 
         <div class="card p-4 border-0 shadow-lg mx-auto" style="background: #16181d; border-radius: 24px; max-width: 420px;">
-            <h5 class="text-green mb-3">Get Started & Receive Bonus Credits</h5>
-            <button class="btn btn-outline-light w-100 mb-2 btn-sm border-secondary"><i class="fab fa-google me-2"></i> Continue with Google</button>
+            <h5 class="text-green mb-3">Login to Claim 300 Bonus Credits</h5>
+            <a href="/login/google" class="btn btn-outline-light w-100 mb-2 btn-sm border-secondary">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" width="16" class="me-2"> Continue with Google
+            </a>
             <button class="btn btn-outline-light w-100 mb-3 btn-sm border-secondary"><i class="fab fa-apple me-2"></i> Continue with Apple</button>
             <div class="text-white-50 small mb-3">— OR —</div>
 
             <form action="/role" method="POST">
                 <input type="text" name="name" class="form-control form-control-sm bg-dark text-white border-secondary mb-2" placeholder="Full Name" required>
-                <input type="email" name="email" class="form-control form-control-sm bg-dark text-white border-secondary mb-2" placeholder="Email Address" required>
+                <input type="email" class="form-control form-control-sm bg-dark text-white border-secondary mb-2" placeholder="Email Address">
                 <div class="input-group input-group-sm mb-3">
                     <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
                     <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="Mobile Number" pattern="[0-9]{10}" required>
