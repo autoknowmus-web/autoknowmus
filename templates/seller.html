@@ -1,58 +1,71 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-11">
-        <div class="card p-5 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 5px solid #28a745;">
-            <h2 class="text-green mb-4 fw-bold text-center"><i class="fas fa-car-side me-2"></i> Sell Your Car: Market Valuation</h2>
-            <form action="/dashboard" method="POST">
-                <div class="row g-3 text-start">
-                    <div class="col-md-2"><label class="text-white-50 small">Location (City)</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="city">{% for city in cities %}<option>{{ city }}</option>{% endfor %}</select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Make</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="make" id="brand_s" onchange="updateModelsS()">{% for brand in brands %}<option>{{ brand }}</option>{% endfor %}</select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Model</label>
-                        <select class="form-select bg-dark text-white border-secondary" id="model_s" name="model" onchange="updateVariantsS()"></select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Variant / Suffix</label>
-                        <select class="form-select bg-dark text-white border-secondary" id="variant_s" name="variant"></select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Fuel Type</label>
-                        <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option></select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Condition</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="condition">{% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}</select>
-                    </div>
-                </div>
-                <div class="row mt-4 align-items-center">
-                    <div class="col-md-3"><label class="text-white-50 small">Mileage (KMs)</label><input type="number" class="form-control bg-dark text-white border-secondary"></div>
-                    <div class="col-md-3"><label class="text-white-50 small">Year of Manufacture</label><select class="form-select bg-dark text-white border-secondary">{% for y in years %}<option>{{ y }}</option>{% endfor %}</select></div>
-                    <div class="col-md-6"><button type="submit" class="btn btn-success w-100 py-3 fw-bold shadow">Generate Pricing Intelligence</button></div>
-                </div>
-            </form>
-        </div>
+<div class="card p-4 border-0 shadow-lg mx-auto" style="background: #16181d; border-radius: 24px; max-width: 1000px; border-top: 4px solid #28a745;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="text-green fw-bold mb-0"><i class="fas fa-car-side me-2"></i> Sell Your Car: Market Valuation</h3>
+        <button class="btn btn-sm btn-outline-secondary disabled">Enter Details of Sold Car</button>
     </div>
+    
+    <form action="/dashboard" method="POST">
+        <div class="row g-2 text-start">
+            <div class="col-md-4">
+                <label class="text-white-50 small">Location (City)</label>
+                <select class="form-select bg-dark text-white border-secondary h-100-px" name="city">{% for city in cities %}<option>{{ city }}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-4">
+                <label class="text-white-50 small">Make</label>
+                <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">{% for brand in brands %}<option>{{ brand }}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-4">
+                <label class="text-white-50 small">Model</label>
+                <select class="form-select bg-dark text-white border-secondary" id="model" name="model" onchange="updateVariants()"></select>
+            </div>
+            <div class="col-md-4">
+                <label class="text-white-50 small">Variant / Suffix</label>
+                <select class="form-select bg-dark text-white border-secondary" id="variant" name="variant"></select>
+            </div>
+            <div class="col-md-4">
+                <label class="text-white-50 small">Fuel Type</label>
+                <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>HEV</option><option>PHEV</option></select>
+            </div>
+            <div class="col-md-4">
+                <label class="text-white-50 small">Condition</label>
+                <select class="form-select bg-dark text-white border-secondary" name="condition">{% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-3">
+                <label class="text-white-50 small">Mileage (KMs)</label>
+                <input type="number" class="form-control bg-dark text-white border-secondary">
+            </div>
+            <div class="col-md-3">
+                <label class="text-white-50 small">Year of Manufacture</label>
+                <select class="form-select bg-dark text-white border-secondary">{% for y in years %}<option>{{ y }}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-6 pt-4">
+                <button type="submit" class="btn btn-success w-100 fw-bold" style="height: 38px;">Generate Pricing Intelligence</button>
+            </div>
+        </div>
+    </form>
 </div>
+
 <script>
-const dataMapS = {
+const dataMap = {
     "Toyota": {"Fortuner": ["4x2 AT", "4x4 AT"], "Innova": ["GX", "VX", "ZX"]},
     "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["LXi", "VXi"]}
 };
-function updateModelsS() {
-    const b = document.getElementById('brand_s').value;
-    const m = document.getElementById('model_s');
+function updateModels() {
+    const b = document.getElementById('brand').value;
+    const m = document.getElementById('model');
     m.innerHTML = '';
-    Object.keys(dataMapS[b] || {}).forEach(x => m.add(new Option(x, x)));
-    updateVariantsS();
+    Object.keys(dataMap[b] || {}).forEach(x => m.add(new Option(x, x)));
+    updateVariants();
 }
-function updateVariantsS() {
-    const b = document.getElementById('brand_s').value;
-    const m = document.getElementById('model_s').value;
-    const v = document.getElementById('variant_s');
+function updateVariants() {
+    const b = document.getElementById('brand').value;
+    const m = document.getElementById('model').value;
+    const v = document.getElementById('variant');
     v.innerHTML = '';
-    (dataMapS[b][m] || ["Standard"]).forEach(x => v.add(new Option(x, x)));
+    (dataMap[b][m] || ["Standard"]).forEach(x => v.add(new Option(x, x)));
 }
-updateModelsS();
+updateModels();
 </script>
 {% endblock %}
