@@ -1,11 +1,11 @@
 from flask import Flask, render_template, request
-import datetime
+import random
 
 app = Flask(__name__)
 
+# Master Data
 CITIES = sorted(["Ahmedabad", "Bangalore", "Chandigarh", "Chennai", "Delhi", "Gurgaon", "Hyderabad", "Jaipur", "Kochi", "Kolkata", "Mumbai", "Noida", "Pune", "Lucknow", "Indore"])
 BRANDS = sorted(["Audi", "BMW", "Honda", "Hyundai", "Kia", "Mahindra", "Maruti Suzuki", "Mercedes-Benz", "MG Motors", "Skoda", "Tata Motors", "Toyota", "Volkswagen"])
-# [Requirement Fix] Decapitalized descriptions, Capitalized Start
 CONDITIONS = ["Excellent (showroom like)", "Average (normal wear)", "Fair (needs some repair)"]
 
 @app.route('/')
@@ -25,17 +25,17 @@ def seller():
 @app.route('/dashboard', methods=['POST'])
 def dashboard():
     make = request.form.get('make', 'Toyota')
+    model = request.form.get('model', 'Vehicle')
     base = 1450000 if make == "Toyota" else 1100000
     
     # [Requirement Fix] 6-Month Forecast (Every 15 days = 12 points)
-    # Steep drop initially, then 0.5% every 15 days
-    forecast_15d = []
+    forecast_points = []
     current_val = base
     for i in range(12):
-        current_val = int(current_val * 0.995)
-        forecast_15d.append(current_val)
+        current_val = int(current_val * 0.993) # ~0.7% drop every 15 days
+        forecast_points.append(current_val)
         
-    return render_template('dashboard.html', base=base, forecast=forecast_15d)
+    return render_template('dashboard.html', base=base, forecast=forecast_points, model=model)
 
 @app.route('/buyer')
 def buyer():
