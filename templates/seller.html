@@ -48,10 +48,10 @@
 </div>
 
 <script>
+// [FIX] Hardcoded Object to ensure Dropdowns work
 const dataMap = {
     "Toyota": {"Fortuner": ["4x2 AT", "4x4 AT", "Sigma 4"], "Innova": ["GX", "VX", "ZX"], "Glanza": ["S", "G", "V"]},
-    "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["LXi", "VXi", "ZXi+"], "Baleno": ["Delta", "Zeta", "Alpha"]},
-    "Hyundai": {"Creta": ["E", "EX", "S", "SX"], "Verna": ["EX", "S", "SX", "SX(O)"]}
+    "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["LXi", "VXi", "ZXi+"], "Baleno": ["Delta", "Zeta", "Alpha"]}
 };
 function updateModels() {
     const b = document.getElementById('brand').value;
