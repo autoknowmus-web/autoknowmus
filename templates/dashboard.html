@@ -1,100 +1,36 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-10">
-        <div class="d-flex justify-content-between align-items-end mb-4">
-            <div>
-                <h2 class="text-white fw-bold mb-0">Market Intelligence Dashboard</h2>
-                <p class="text-white-50">Real-time valuation based on current Indian market trends</p>
-            </div>
-            <div class="text-end">
-                <span class="badge bg-success p-2">Confidence Score: 78%</span>
-            </div>
-        </div>
-
-        <div class="card p-5 mb-4" style="background-color: #16181d; border-radius: 28px; border: 1px solid #2d2f34;">
-            <h4 class="text-center text-white-50 mb-5">Price vs. Time-to-Sell Simulator</h4>
-            
-            <div class="position-relative mb-5" style="height: 100px;">
-                <div id="priceBubble" class="position-absolute translate-middle-x shadow-lg" 
-                     style="background: #28a745; color: white; padding: 10px 20px; border-radius: 50px; font-weight: bold; font-size: 1.4rem; top: 20px; transition: left 0.1s ease-out;">
-                    ₹ <span id="currentPrice">12,50,000</span>
-                </div>
-            </div>
-
-            <input type="range" class="form-range custom-slider" id="priceSlider" min="1000000" max="1500000" step="10000" value="1250000" oninput="updateDashboard()">
-            
-            <div class="d-flex justify-content-between text-white-50 mt-2 small">
-                <span>Fastest Sell</span>
-                <span>Balanced</span>
-                <span>Premium Value</span>
-            </div>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-md-6">
-                <div class="card p-4 h-100" style="background-color: #16181d; border: 1px solid #2d2f34; border-radius: 20px;">
-                    <p class="text-white-50 mb-1">Market Demand</p>
-                    <h3 id="demandStatus" class="fw-bold text-green">Very High</h3>
-                    <p class="small text-muted mb-0 mt-2">Based on 142 recent inquiries for this model.</p>
-                </div>
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100">
+            <h4 class="text-green mb-4">Pricing Intelligence</h4>
+            <div class="row text-center mb-4">
+                <div class="col-6"><div class="p-3 bg-black rounded-3"><small class="text-white-50">Market Value</small><h2 class="text-white">₹{{ "{:,}".format(base) }}</h2></div></div>
+                <div class="col-6"><div class="p-3 bg-black rounded-3"><small class="text-white-50">Estimated Days to Sell</small><h2 class="text-white">18 Days</h2></div></div>
             </div>
             
-            <div class="col-md-6">
-                <div class="card p-4 h-100" style="background-color: #16181d; border: 1px solid #2d2f34; border-radius: 20px;">
-                    <p class="text-white-50 mb-1">Est. Days to Sell</p>
-                    <h3 id="daysToSell" class="fw-bold text-white">12 Days</h3>
-                    <p class="small text-muted mb-0 mt-2">Individual seller average in your region.</p>
-                </div>
+            <h6 class="text-white-50 mb-3 small text-uppercase">6-Month Forecast (Every 15 Days)</h6>
+            <div class="p-2 bg-black rounded-3">
+                <svg viewBox="0 0 500 150" class="w-100">
+                    <path d="M0,20 Q125,120 500,140" fill="none" stroke="#28a745" stroke-width="3" />
+                    {% for val in forecast %}
+                    <circle cx="{{ loop.index0 * 45 }}" cy="{{ 20 + (loop.index0 * 10) }}" r="4" fill="#fff" />
+                    {% endfor %}
+                </svg>
             </div>
         </div>
-
-        <div class="text-center mt-5">
-            <a href="/seller" class="text-white-50 text-decoration-none small"><i class="fas fa-arrow-left me-2"></i> Edit Vehicle Details</a>
+    </div>
+    <div class="col-lg-4">
+        <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100">
+            <h6 class="text-green small fw-bold mb-4">PREMIUM TOOLS (COMING SOON)</h6>
+            <div class="opacity-25 mb-4">
+                <div class="mb-3 p-2 border rounded small text-white">Actual selling price of similar car in your city</div>
+                <div class="mb-3 p-2 border rounded small text-white">Unlimited price search (1 Month)</div>
+            </div>
+            <div class="text-center mt-auto">
+                <a href="/seller" class="text-white-50 small"><i class="fas fa-edit me-1"></i> Edit Vehicle Details</a>
+            </div>
         </div>
     </div>
 </div>
-
-<style>
-    .custom-slider { height: 10px; border-radius: 5px; background: #2d2f34; outline: none; -webkit-appearance: none; }
-    .custom-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 25px; height: 25px; background: #ffffff; border-radius: 50%; cursor: pointer; border: 4px solid #28a745; }
-    #priceBubble::after { content: ''; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 8px solid #28a745; }
-</style>
-
-<script>
-function updateDashboard() {
-    const slider = document.getElementById('priceSlider');
-    const bubble = document.getElementById('priceBubble');
-    const priceDisplay = document.getElementById('currentPrice');
-    const daysDisplay = document.getElementById('daysToSell');
-    const demandDisplay = document.getElementById('demandStatus');
-
-    // Update Price Text
-    let val = parseInt(slider.value);
-    priceDisplay.innerText = val.toLocaleString('en-IN');
-
-    // Move Bubble
-    const percent = (val - slider.min) / (slider.max - slider.min);
-    bubble.style.left = `calc(${percent * 100}% )`;
-
-    // Dynamic Days Calculation
-    let days = Math.floor(5 + (percent * 40));
-    daysDisplay.innerText = days + " Days";
-
-    // Dynamic Demand Logic
-    if (percent < 0.3) {
-        demandDisplay.innerText = "Very High";
-        demandDisplay.className = "fw-bold text-green";
-    } else if (percent < 0.7) {
-        demandDisplay.innerText = "Moderate";
-        demandDisplay.className = "fw-bold text-warning";
-    } else {
-        demandDisplay.innerText = "Low";
-        demandDisplay.className = "fw-bold text-danger";
-    }
-}
-
-// Initialize on load
-window.onload = updateDashboard;
-</script>
 {% endblock %}
