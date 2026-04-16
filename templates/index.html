@@ -11,8 +11,9 @@
 
         <div class="card p-4 border-0 shadow-lg mx-auto" style="background: #16181d; border-radius: 24px; max-width: 420px;">
             <h5 class="text-green mb-3">Get Started</h5>
-            <button class="btn btn-outline-light w-100 mb-2 btn-sm"><i class="fab fa-google me-2"></i> Continue with Google</button>
-            <button class="btn btn-outline-light w-100 mb-3 btn-sm"><i class="fab fa-apple me-2"></i> Continue with Apple</button>
+            
+            <button class="btn btn-outline-light w-100 mb-2 btn-sm border-secondary"><i class="fab fa-google me-2"></i> Continue with Google</button>
+            <button class="btn btn-outline-light w-100 mb-3 btn-sm border-secondary"><i class="fab fa-apple me-2"></i> Continue with Apple</button>
             <div class="text-white-50 small mb-3">— OR —</div>
 
             <form action="/role" method="POST">
@@ -20,9 +21,9 @@
                 <input type="email" class="form-control form-control-sm bg-dark text-white border-secondary mb-2" placeholder="Email Address">
                 <div class="input-group input-group-sm mb-3">
                     <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
-                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="Mobile Number" pattern="[0-9]{10}">
+                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="Mobile Number" pattern="[0-9]{10}" maxlength="10">
                 </div>
-                <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Continue to Selection</button>
+                <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow">Continue to Selection</button>
             </form>
         </div>
 
@@ -33,12 +34,10 @@
                 ('Priya S., Delhi', 'Negotiated a better price for my first EV.')
             ] %}
             {% for name, text in tests %}
-            <div class="col-md-4">
-                <div class="p-2 bg-dark rounded-3 border border-secondary border-opacity-10 h-100 small">
-                    <p class="text-white-50 italic mb-1">"{{ text }}"</p>
-                    <small class="text-green">{{ name }}</small>
-                </div>
-            </div>
+            <div class="col-md-4"><div class="p-2 bg-dark rounded-3 border border-secondary border-opacity-10 h-100 small">
+                <p class="text-white-50 italic mb-1">"{{ text }}"</p>
+                <small class="text-green">{{ name }}</small>
+            </div></div>
             {% endfor %}
         </div>
     </div>
