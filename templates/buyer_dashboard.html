@@ -5,19 +5,11 @@
         <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 24px; border-left: 5px solid #4e54ff;">
             <div class="d-flex justify-content-between align-items-start mb-4">
                 <h3 class="text-white fw-bold">Fair Market Range ({{ model }})</h3>
-                <div class="btn-group bg-dark p-1 rounded-3">
-                    <button class="btn btn-sm btn-outline-primary">Excellent</button>
-                    <button class="btn btn-sm btn-primary">Average</button>
-                    <button class="btn btn-sm btn-outline-primary">Fair</button>
-                </div>
+                <div class="btn-group bg-dark p-1 rounded-3"><button class="btn btn-sm btn-outline-primary">Excellent</button><button class="btn btn-sm btn-primary">Average</button><button class="btn btn-sm btn-outline-primary">Fair</button></div>
             </div>
             <h1 class="text-green fw-bold mb-4">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
             <div class="py-3">
-                <div class="progress rounded-pill shadow-sm" style="height: 14px; background: #2d2f34;">
-                    <div class="progress-bar bg-success" style="width: 33%"></div>
-                    <div class="progress-bar bg-warning" style="width: 33%"></div>
-                    <div class="progress-bar bg-danger" style="width: 34%"></div>
-                </div>
+                <div class="progress rounded-pill shadow-sm" style="height: 14px; background: #2d2f34;"><div class="progress-bar bg-success" style="width: 33%"></div><div class="progress-bar bg-warning" style="width: 33%"></div><div class="progress-bar bg-danger" style="width: 34%"></div></div>
                 <div class="d-flex justify-content-between mt-2 small text-white-50 fw-bold"><span>GREAT DEAL</span><span>FAIR PRICE</span><span>OVERPRICED</span></div>
             </div>
             <div class="row mt-4 g-3 text-center">
