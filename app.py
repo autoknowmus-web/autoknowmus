@@ -1,35 +1,70 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>AutoKnowMus</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        body { background-color: #0b0c10; color: white; font-family: 'Inter', sans-serif; min-height: 100vh; }
-        .text-green { color: #28a745 !important; }
-        .text-blue { color: #4e54ff !important; }
-        .navbar { background-color: #16181d; border-bottom: 1px solid #2d2f34; }
-        .card { background: #16181d; border-radius: 18px; border: none; }
-    </style>
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark px-4 py-2">
-        <a class="navbar-brand fw-bold fs-3" href="/">
-            <span class="text-white">Auto</span><span class="text-blue">Know</span><span class="text-green">Mus</span>
-        </a>
-        <div class="ms-auto d-flex align-items-center gap-3">
-            {% if session.get('credits') is not none %}
-                <div class="badge bg-dark border border-warning text-warning px-3 py-2">
-                    <i class="fas fa-coins me-1"></i> {{ session.get('credits') }} Credits
-                </div>
-                <div class="text-white-50 small"><i class="fas fa-user-circle"></i> {{ session.get('user_name') }}</div>
-                <a href="/" class="btn btn-sm btn-outline-danger border-0">LOGOUT</a>
-            {% endif %}
-        </div>
-    </nav>
-    <div class="container mt-4">
-        {% block content %}{% endblock %}
-    </div>
-</body>
-</html>
+import os
+from flask import Flask, render_template, request, session, redirect, url_for, flash
+from authlib.integrations.flask_client import OAuth
+
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
+
+# [FIX] Actual Google OAuth Trigger
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
+
+# [FIX] Bangalore Only by Default
+CITIES = ["Bangalore"]
+BRANDS = sorted(["Audi", "BMW", "Honda", "Hyundai", "Kia", "Mahindra", "Maruti Suzuki", "Mercedes-Benz", "MG Motors", "Skoda", "Tata Motors", "Toyota", "Volkswagen"])
+CONDITIONS = ["Excellent (showroom like)", "Average (normal wear)", "Fair (needs some repair)"]
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/login/google')
+def login():
+    return google.authorize_redirect(url_for('auth', _external=True))
+
+@app.route('/auth')
+def auth():
+    token = google.authorize_access_token()
+    user = token.get('userinfo')
+    if user:
+        session['user_name'] = user['name']
+        session['credits'] = 500 # [FIX] Synchronized to 500
+        flash("Success! 500 Bonus Credits added to your account.")
+    return redirect(url_for('role'))
+
+@app.route('/role', methods=['GET', 'POST'])
+def role():
+    name = session.get('user_name', request.form.get('name', 'Rajeev Thakur'))
+    if 'credits' not in session: 
+        session['credits'] = 500
+        flash("Success! 500 Bonus Credits added to your account.")
+    return render_template('role.html', user_name=name, credits=session['credits'])
+
+@app.route('/seller')
+def seller():
+    return render_template('seller.html', years=list(range(2026, 2010, -1)), brands=BRANDS, cities=CITIES, conditions=CONDITIONS, credits=session.get('credits', 500))
+
+@app.route('/dashboard', methods=['POST'])
+def dashboard():
+    # [FIX] Mileage Validation
+    mileage = request.form.get('mileage')
+    if not mileage or int(mileage) < 0:
+        return redirect(url_for('seller'))
+        
+    if session.get('credits', 0) >= 100:
+        session['credits'] -= 100
+    
+    make = request.form.get('make')
+    base = 1450000 if make == "Toyota" else 1100000
+    # [FIX] Logarithmic 15-day interval data
+    forecast = [int(base * (0.991**i)) for i in range(12)]
+    return render_template('dashboard.html', base=base, forecast=forecast, credits=session.get('credits'))
+
+if __name__ == '__main__':
+    app.run(debug=True)
