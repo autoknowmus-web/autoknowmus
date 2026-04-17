@@ -20,11 +20,12 @@
             <div class="text-white-50 small mb-3">OR</div>
             <form action="/role" method="POST">
                 <input type="text" name="name" class="form-control form-control-sm bg-dark text-white border-secondary mb-2" placeholder="Full Name" required>
+                <input type="email" class="form-control form-control-sm bg-dark text-white border-secondary mb-2" placeholder="Email" required>
                 <div class="input-group input-group-sm mb-3">
                     <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
-                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="Mobile" pattern="[0-9]{10}" maxlength="10" required>
+                    <input type="tel" name="mobile" class="form-control bg-dark text-white border-secondary" placeholder="Mobile" pattern="[0-9]{10}" maxlength="10" minlength="10" required>
                 </div>
-                <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Login & Claim Credits</button>
+                <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow">Login & Claim Credits</button>
             </form>
         </div>
     </div>
