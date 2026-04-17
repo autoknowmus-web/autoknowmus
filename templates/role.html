@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="py-2">
+<div class="text-center py-2">
     {% with messages = get_flashed_messages() %}{% if messages %}{% for message in messages %}
     <div class="alert alert-success d-inline-block px-4 py-2 small rounded-pill mb-4 border-0" style="background: rgba(40, 167, 69, 0.2); color: #28a745;">
         <i class="fas fa-gift me-2"></i> {{ message }}
@@ -14,18 +14,31 @@
             <div class="card p-4 h-100 border-top border-success border-4" style="background: #16181d;">
                 <h4 class="fw-bold mb-3">I am a Seller</h4>
                 <p class="text-white-50 small mb-4">Maximize the sale opportunity by listing at the right price.</p>
-                <a href="/seller" class="btn btn-success w-100 py-2 fw-bold mb-3 shadow">Find My Car Value</a>
+                <a href="/seller" class="btn btn-success w-100 py-2 fw-bold mb-3">Find My Car Value</a>
+                
                 <hr class="border-secondary opacity-25">
-                <p class="text-white-50" style="font-size: 0.75rem;">Purchase 500 credits for ₹500 to unlock real transaction prices in your city. Full refund on verified deal data match.</p>
+                <p class="text-white-50 mb-3" style="font-size: 0.75rem;">Purchase 500 credits for ₹500 to unlock real transaction prices in your city. Full refund on verified deal data match.</p>
+                
+                <div class="d-grid gap-2">
+                    <button class="btn btn-sm btn-outline-warning">Purchase 500 Credits (₹500)</button>
+                    <button class="btn btn-sm btn-outline-info">Record Actual Transaction Data</button>
+                </div>
             </div>
         </div>
+
         <div class="col-md-5">
             <div class="card p-4 h-100 border-top border-primary border-4" style="background: #16181d;">
                 <h4 class="fw-bold mb-3">I am a Buyer</h4>
                 <p class="text-white-50 small mb-4">Research fair market prices and evaluate deals before you buy.</p>
-                <a href="/buyer" class="btn btn-primary w-100 py-2 fw-bold mb-3 shadow">Research Prices</a>
+                <a href="/buyer" class="btn btn-primary w-100 py-2 fw-bold mb-3">Research Prices</a>
+
                 <hr class="border-secondary opacity-25">
-                <p class="text-white-50" style="font-size: 0.75rem;">Purchase 500 credits for WhatsApp alerts on new listings, deal evaluation, or detailing discounts with partners.</p>
+                <p class="text-white-50 mb-3" style="font-size: 0.75rem;">Purchase 500 credits for WhatsApp alerts on new listings, deal evaluation, or detailing discounts with partners.</p>
+                
+                <div class="d-grid gap-2">
+                    <button class="btn btn-sm btn-outline-warning">Purchase 500 Credits (₹500)</button>
+                    <button class="btn btn-sm btn-outline-info">Record Actual Transaction Data</button>
+                </div>
             </div>
         </div>
     </div>
