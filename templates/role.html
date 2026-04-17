@@ -1,24 +1,32 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="text-center py-4">
-    <div class="badge bg-dark border border-warning text-warning p-2 mb-4">
-        <i class="fas fa-coins me-2"></i> Balance: {{ credits }} Credits
+    {% with messages = get_flashed_messages() %}{% if messages %}{% for message in messages %}
+    <div class="alert alert-success d-inline-block px-4 py-2 small rounded-pill shadow-sm mb-4">
+        <i class="fas fa-gift me-2"></i> {{ message }}
     </div>
+    {% endfor %}{% endif %}{% endwith %}
+
     <h2 class="text-white mb-5">Hello {{ user_name }}! Ready to make a smarter decision?</h2>
+    
     <div class="row g-4 justify-content-center">
         <div class="col-md-5">
             <div class="card p-4 bg-dark border-0 h-100 rounded-4 shadow border-top border-success border-4">
-                <i class="fas fa-car fa-3x text-green mb-3"></i>
                 <h4 class="text-white">I am a Seller</h4>
-                <p class="text-white-50 small">Find out what your car is worth today and maximize the sale opportunity by listing at the right price.</p>
+                <p class="text-white-50 small mb-4">Maximize the sale opportunity by listing at the right price.</p>
+                <div class="opacity-25 small text-white border border-secondary p-2 rounded mb-3">
+                    Purchase 500 credits for ₹500 to unlock real transaction prices in your city. Get refund on verified deal data match.
+                </div>
                 <a href="/seller" class="btn btn-success w-100 py-2 fw-bold mt-auto">Find My Car Value</a>
             </div>
         </div>
         <div class="col-md-5">
             <div class="card p-4 bg-dark border-0 h-100 rounded-4 shadow border-top border-primary border-4">
-                <i class="fas fa-search-dollar fa-3x text-blue mb-3"></i>
                 <h4 class="text-white">I am a Buyer</h4>
-                <p class="text-white-50 small">Research fair market prices and evaluate deals before you buy.</p>
+                <p class="text-white-50 small mb-4">Research fair market prices and evaluate deals before you buy.</p>
+                <div class="opacity-25 small text-white border border-secondary p-2 rounded mb-3">
+                    Use credits for instant listing alerts, deal evaluation, or detailing discounts with partners. Get 100 bonus credits on deal data submission.
+                </div>
                 <a href="/buyer" class="btn btn-primary w-100 py-2 fw-bold mt-auto">Research Prices</a>
             </div>
         </div>
