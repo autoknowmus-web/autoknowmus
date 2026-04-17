@@ -1,23 +1,28 @@
+import os
+from flask import Flask, render_template, request, session, redirect, url_for
+from authlib.integrations.flask_client import OAuth
+
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
+
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"), # This reads from the screen you're on!
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
+
 @app.route('/auth')
 def auth():
     token = google.authorize_access_token()
-    user_info = google.get('userinfo').json()
-    
-    # Store user info in session
-    session['user_id'] = user_info['id']
-    session['user_name'] = user_info['name']
-    
-    # [Requirement Fix] Check if first time login to give 300 Bonus Credits
-    # In a real app, you'd check a database. Here we use session for MVP:
-    if 'has_logged_in' not in session:
-        session['credits'] = 300  # 3 free searches (100 each)
-        session['has_logged_in'] = True
-    
+    user = token.get('userinfo')
+    if user:
+        session['user_name'] = user['name']
+        session['email'] = user['email']
+        # [FIX] Grant 300 Bonus Credits on very first login
+        if 'has_claimed_bonus' not in session:
+            session['credits'] = 300
+            session['has_claimed_bonus'] = True
     return redirect(url_for('role'))
-
-@app.route('/role')
-def role():
-    # Ensure credits are visible globally
-    credits = session.get('credits', 0)
-    name = session.get('user_name', 'Guest')
-    return render_template('role.html', user_name=name, credits=credits)
