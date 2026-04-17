@@ -2,18 +2,21 @@
 {% block content %}
 <div class="row justify-content-center text-center py-2">
     <div class="col-lg-8">
-        <div class="mb-3 position-relative d-inline-block">
-            <svg width="120" height="120" viewBox="0 0 100 100">
-                <path d="M50 5 L15 20 V50 C15 75 50 90 50 90 C50 90 85 75 85 50 V20 L50 5 Z" fill="#28a745"/>
-                <rect x="35" y="45" width="30" height="20" rx="2" fill="url(#grad1)"/>
-                <line x1="50" y1="45" x2="50" y2="65" stroke="#0b0c10" stroke-width="1"/>
-                <text x="50" y="38" font-family="Arial" font-size="28" fill="white" font-weight="bold" text-anchor="middle">A</text>
+        <div class="mb-3 d-inline-block">
+            <svg width="150" height="150" viewBox="0 0 100 100">
                 <defs>
-                    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <linearGradient id="gradCap" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" style="stop-color:#4e54ff;stop-opacity:1" />
                         <stop offset="100%" style="stop-color:#8e44ad;stop-opacity:1" />
                     </linearGradient>
                 </defs>
+                <path d="M50 5 L18 20 V50 C18 75 50 90 50 90 C50 90 82 75 82 50 V20 L50 5 Z" fill="#28a745"/>
+                
+                <path d="M38 34 L50 26 L62 34 L50 42 Z" fill="url(#gradCap)"/>
+                <path d="M41 35 V41 C41 41 50 44 59 41 V35" fill="#1c2833"/>
+                <line x1="62" y1="34" x2="65" y2="44" stroke="#f1c40f" stroke-width="1.2"/>
+
+                <text x="50" y="70" font-family="Verdana" font-size="34" fill="white" font-weight="bold" text-anchor="middle">A</text>
             </svg>
         </div>
 
@@ -26,9 +29,9 @@
         </p>
 
         <div class="card p-4 mx-auto shadow-lg" style="background: #16181d; border-radius: 24px; max-width: 420px; border: 1px solid #2d2f34;">
-            <h5 class="text-green mb-3" style="font-size: 1rem;">Get Started & Receive 500 Bonus Credits</h5>
+            <h5 class="text-green mb-3" style="font-size: 0.9rem;">Get Started & Receive 500 Bonus Credits for 5 Free Search</h5>
             
-            <a href="/login/google" class="btn btn-outline-light w-100 mb-2 btn-sm border-secondary shadow-sm py-2 d-flex align-items-center justify-content-center">
+            <a href="/login/google" class="btn btn-outline-light w-100 mb-2 btn-sm border-secondary shadow-sm py-2 d-flex align-items-center justify-content-center text-decoration-none">
                 <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" width="18" class="me-2"> Continue with Google
             </a>
             
