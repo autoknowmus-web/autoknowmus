@@ -1,60 +1,116 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card p-4 border-0 shadow-lg mx-auto" style="background: #16181d; border-radius: 24px; max-width: 1000px; border-top: 5px solid #28a745;">
-    <h3 class="text-green fw-bold mb-4">Sell Your Car: Market Valuation <span class="float-end fs-6 text-warning">({{ credits }} Credits Remaining)</span></h3>
-    <form action="/dashboard" method="POST">
-        <div class="row g-2 text-start">
-            <div class="col-md-4"><label class="text-white-50 small mb-1">Location (City)</label>
-                <select class="form-select bg-dark text-white border-secondary"><option selected>Bangalore</option></select>
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card p-4 shadow-lg" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="text-green fw-bold mb-0">Sell Your Car: Market Valuation</h3>
+                <span class="text-warning fw-bold small">({{ session.get('credits', 500) }} Credits Remaining)</span>
             </div>
-            <div class="col-md-4"><label class="text-white-50 small mb-1">Make</label>
-                <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()" required>
-                    <option value="" disabled selected>Select Make</option>
-                    {% for brand in brands %}<option>{{ brand }}</option>{% endfor %}
-                </select>
-            </div>
-            <div class="col-md-4"><label class="text-white-50 small mb-1">Model</label>
-                <select class="form-select bg-dark text-white border-secondary" id="model" name="model" onchange="updateVariants()" required>
-                    <option value="" disabled selected>Select Model</option>
-                </select>
-            </div>
-            <div class="col-md-4"><label class="text-white-50 small mb-1">Variant / Suffix</label>
-                <select class="form-select bg-dark text-white border-secondary" id="variant" name="variant" required>
-                    <option value="" disabled selected>Select Variant</option>
-                </select>
-            </div>
-            <div class="col-md-4"><label class="text-white-50 small mb-1">Fuel Type</label>
-                <select class="form-select bg-dark text-white border-secondary">
-                    <option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>HEV</option><option>PHEV</option>
-                </select>
-            </div>
-            <div class="col-md-4"><label class="text-white-50 small mb-1">Condition</label>
-                <select class="form-select bg-dark text-white border-secondary" name="condition" style="font-size: 0.85rem;">
-                    <option>Excellent (showroom like)</option><option>Average (normal wear)</option><option>Fair (needs some repair)</option>
-                </select>
-            </div>
-            <div class="col-md-3"><label class="text-white-50 small mb-1">Mileage (KMs)</label>
-                <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary" required>
-            </div>
-            <div class="col-md-3"><label class="text-white-50 small mb-1">Year</label>
-                <select class="form-select bg-dark text-white border-secondary">{% for y in years %}<option>{{ y }}</option>{% endfor %}</select>
-            </div>
-            <div class="col-md-6 pt-4">
-                <button type="submit" class="btn btn-success w-100 fw-bold" style="height: 38px;">Generate Intelligence (100 Credits)</button>
-            </div>
+
+            <form action="/generate_report" method="POST" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label text-white-50 small">Location (City)</label>
+                    <select name="city" class="form-select bg-dark text-white border-secondary" required>
+                        <option value="Indore">Indore</option>
+                        <option value="Bangalore">Bangalore</option>
+                        <option value="Hyderabad">Hyderabad</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label text-white-50 small">Make</label>
+                    <select id="make" name="make" class="form-select bg-dark text-white border-secondary" required>
+                        <option value="">Select Make</option>
+                        <option value="Toyota">Toyota</option>
+                        <option value="Lexus">Lexus</option>
+                        <option value="Honda">Honda</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label text-white-50 small">Model</label>
+                    <select id="model" name="model" class="form-select bg-dark text-white border-secondary" required>
+                        <option value="">Select Model</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label text-white-50 small">Variant / Suffix</label>
+                    <select id="variant" name="variant" class="form-select bg-dark text-white border-secondary" required>
+                        <option value="">Select Variant</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label text-white-50 small">Fuel Type</label>
+                    <select name="fuel" class="form-select bg-dark text-white border-secondary">
+                        <option value="Petrol">Petrol</option>
+                        <option value="Diesel">Diesel</option>
+                        <option value="Hybrid">Hybrid</option>
+                        <option value="EV">EV</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label text-white-50 small">Condition</label>
+                    <select name="condition" class="form-select bg-dark text-white border-secondary">
+                        <option value="Excellent">Excellent (Showroom like)</option>
+                        <option value="Good">Good (Minor wear & tear)</option>
+                        <option value="Fair">Fair (Noticeable dents/scratches)</option>
+                        <option value="Poor">Poor (Needs repair/restoration)</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-white-50 small">Mileage (KMs)</label>
+                    <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary" placeholder="e.g. 45000" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white-50 small">Year</label>
+                    <input type="number" name="year" class="form-control bg-dark text-white border-secondary" placeholder="YYYY" min="2000" max="2026" required>
+                </div>
+
+                <div class="col-md-6 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success w-100 py-3 fw-bold shadow-lg" style="letter-spacing: 1px; border-radius: 12px; background: linear-gradient(45deg, #28a745, #1e7e34);">
+                        GENERATE INTELLIGENCE (100 Credits)
+                    </button>
+                </div>
+            </form>
         </div>
-    </form>
+    </div>
 </div>
+
 <script>
-const dataMap = {"Toyota": {"Fortuner": ["4x2 AT", "4x4 AT"], "Innova Crysta": ["GX", "VX", "ZX"]}, "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["LXi", "VXi", "ZXi+"]}};
-function updateModels() {
-    const b = document.getElementById('brand').value; const m = document.getElementById('model'); m.innerHTML = '<option value="" disabled selected>Select Model</option>';
-    if(dataMap[b]) Object.keys(dataMap[b]).forEach(x => m.add(new Option(x, x)));
-    updateVariants();
-}
-function updateVariants() {
-    const b = document.getElementById('brand').value; const m = document.getElementById('model').value; const v = document.getElementById('variant'); v.innerHTML = '<option value="" disabled selected>Select Variant</option>';
-    if(dataMap[b] && dataMap[b][m]) dataMap[b][m].forEach(x => v.add(new Option(x, x)));
-}
+const carData = {
+    "Toyota": { "Innova": ["GX", "VX", "ZX"], "Fortuner": ["Sigma 4", "Legender"], "Glanza": ["V", "G"] },
+    "Lexus": { "ES": ["300h Exquisite", "300h Luxury"], "RX": ["350h", "500h F-Sport"], "NX": ["350h"] },
+    "Honda": { "City": ["V", "VX", "ZX"], "Amaze": ["S", "VX"], "Elevate": ["V", "VX", "ZX"] }
+};
+
+document.getElementById('make').addEventListener('change', function() {
+    const modelSel = document.getElementById('model');
+    const variantSel = document.getElementById('variant');
+    modelSel.innerHTML = '<option value="">Select Model</option>';
+    variantSel.innerHTML = '<option value="">Select Variant</option>';
+    
+    if(this.value && carData[this.value]) {
+        Object.keys(carData[this.value]).forEach(model => {
+            modelSel.innerHTML += `<option value="${model}">${model}</option>`;
+        });
+    }
+});
+
+document.getElementById('model').addEventListener('change', function() {
+    const makeVal = document.getElementById('make').value;
+    const variantSel = document.getElementById('variant');
+    variantSel.innerHTML = '<option value="">Select Variant</option>';
+    
+    if(this.value && carData[makeVal][this.value]) {
+        carData[makeVal][this.value].forEach(v => {
+            variantSel.innerHTML += `<option value="${v}">${v}</option>`;
+        });
+    }
+});
 </script>
 {% endblock %}
