@@ -5,7 +5,7 @@ from authlib.integrations.flask_client import OAuth
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# [FIX] Google OAuth Setup
+# [FIX] Actual Google OAuth Configuration
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -21,7 +21,7 @@ def index():
 
 @app.route('/login/google')
 def login():
-    # [FIX] Triggers the actual Google Flow
+    # [FIX] This route is now explicitly called by the button
     return google.authorize_redirect(url_for('auth', _external=True))
 
 @app.route('/auth')
@@ -30,7 +30,7 @@ def auth():
     user = token.get('userinfo')
     if user:
         session['user_name'] = user['name']
-        session['credits'] = 500 # [FIX] Unified to 500
+        session['credits'] = 500 # [FIX] Synchronized bonus
         flash("Success! 500 Bonus Credits added to your account.")
     return redirect(url_for('role'))
 
