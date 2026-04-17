@@ -1,47 +1,48 @@
 {% extends "layout.html" %}
 {% block content %}
-{% if not can_view %}
-<div class="text-center py-5">
-    <h3 class="text-white mb-4">Insufficient Credits</h3>
-    <div class="row g-3 justify-content-center">
-        <div class="col-md-3"><div class="card p-4 border border-secondary"><h6>1 Search</h6><p class="text-green fs-4">₹99</p><small>Valid 7 Days</small></div></div>
-        <div class="col-md-3"><div class="card p-4 border border-primary"><h6>3 Searches</h6><p class="text-green fs-4">₹249</p><small>Valid 14 Days</small></div></div>
-        <div class="col-md-3"><div class="card p-4 border border-warning"><h6>Unlimited</h6><p class="text-green fs-4">₹499</p><small>Valid 30 Days</small></div></div>
-    </div>
-</div>
-{% else %}
 <div class="row g-3">
     <div class="col-lg-8">
-        <div class="card p-4 shadow h-100">
+        <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100">
             <div class="d-flex justify-content-between mb-4">
-                <h4 class="text-green fw-bold">Pricing Intelligence: {{ model }}</h4>
-                <button class="btn btn-sm btn-success">Earn Bonus Credits: Submit Deal Price</button>
+                <h4 class="text-green fw-bold">Pricing Intelligence</h4>
+                <button class="btn btn-sm btn-success">Get Bonus Credits: Submit Real Deal Price</button>
             </div>
             <div class="row text-center mb-4">
-                <div class="col-6"><div class="p-3 bg-dark rounded-3"><small class="text-white-50">Market Value</small><h2 class="text-white">₹{{ "{:,}".format(base) }}</h2></div></div>
-                <div class="col-6"><div class="p-3 bg-dark rounded-3"><small class="text-white-50">Estimated Days to Sell</small><h2 class="text-white">18 Days</h2></div></div>
+                <div class="col-6"><div class="p-3 bg-black rounded-3"><small class="text-white-50">Market Value</small><h2 class="text-white">₹{{ "{:,}".format(base) }}</h2></div></div>
+                <div class="col-6"><div class="p-3 bg-black rounded-3"><small class="text-white-50">Estimated Days to Sell</small><h2 class="text-white">18 Days</h2></div></div>
             </div>
-            <h6 class="text-white-50 mb-3 small text-uppercase">6-Month Forecast (15-Day Intervals)</h6>
-            <div class="p-3 bg-dark rounded-3">
+            <h6 class="text-white-50 mb-3 small text-uppercase">6-Month Price Depreciation (15-Day Intervals)</h6>
+            <div class="p-3 bg-black rounded-3 position-relative">
                 <svg viewBox="0 0 500 120" class="w-100">
                     <path d="M0,20 Q150,90 500,110" fill="none" stroke="#28a745" stroke-width="3" />
-                    {% for val in forecast %}<circle cx="{{ loop.index0 * 45 }}" cy="{{ 20 + (loop.index0 * 8) }}" r="4" fill="#fff" />{% endfor %}
+                    {% for val in forecast %}
+                    <circle cx="{{ loop.index0 * 45 }}" cy="{{ 20 + (loop.index0 * 8) }}" r="5" fill="#fff" 
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="₹{{ "{:,}".format(val) }}" />
+                    {% endfor %}
                 </svg>
             </div>
         </div>
     </div>
     <div class="col-lg-4">
-        <div class="card p-4 shadow h-100">
-            <h6 class="text-green small fw-bold mb-4">PREMIUM TOOLS (COMING SOON)</h6>
-            <div class="opacity-25 mb-4">
-                <div class="p-3 border border-secondary rounded mb-3 small">Actual selling price of similar car in your city.</div>
-                <div class="p-3 border border-secondary rounded small">Unlimited price search for 1 month.</div>
+        <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100">
+            <h6 class="text-green small fw-bold mb-4">PREMIUM TOOLS (USE CREDITS)</h6>
+            <div class="opacity-25 mb-4 small">
+                <div class="p-2 border border-secondary rounded mb-2">Actual selling price of similar car in city.</div>
+                <div class="p-2 border border-secondary rounded">Unlimited searches for 1 month.</div>
             </div>
             <div class="mt-auto text-center border-top border-secondary pt-3">
-                <a href="/seller" class="text-white-50 small text-decoration-none">Edit Details</a>
+                <a href="/seller" class="text-white-50 small text-decoration-none border-bottom border-secondary pb-1">
+                    <i class="fas fa-edit me-1"></i> Edit Vehicle Details
+                </a>
             </div>
         </div>
     </div>
 </div>
-{% endif %}
+<script>
+    // Initialize Tooltips for the Graph Points
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+</script>
 {% endblock %}
