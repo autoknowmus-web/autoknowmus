@@ -3,21 +3,21 @@
 <div class="row g-3">
     <div class="col-lg-8">
         <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100">
-            <div class="d-flex justify-content-between mb-4">
-                <h4 class="text-green fw-bold">Pricing Intelligence</h4>
+            <div class="d-flex justify-content-between mb-4 align-items-center">
+                <h4 class="text-green fw-bold mb-0">Pricing Intelligence</h4>
                 <button class="btn btn-sm btn-success">Get Bonus Credits: Submit Real Deal Price</button>
             </div>
             <div class="row text-center mb-4">
-                <div class="col-6"><div class="p-3 bg-black rounded-3"><small class="text-white-50">Market Value</small><h2 class="text-white">₹{{ "{:,}".format(base) }}</h2></div></div>
-                <div class="col-6"><div class="p-3 bg-black rounded-3"><small class="text-white-50">Estimated Days to Sell</small><h2 class="text-white">18 Days</h2></div></div>
+                <div class="col-6"><div class="p-3 bg-black rounded-3 border border-secondary border-opacity-25"><small class="text-white-50">Market Value</small><h2 class="text-white">₹{{ "{:,}".format(base) }}</h2></div></div>
+                <div class="col-6"><div class="p-3 bg-black rounded-3 border border-secondary border-opacity-25"><small class="text-white-50">Estimated Days to Sell</small><h2 class="text-white">18 Days</h2></div></div>
             </div>
             <h6 class="text-white-50 mb-3 small text-uppercase">6-Month Price Depreciation (15-Day Intervals)</h6>
             <div class="p-3 bg-black rounded-3 position-relative">
                 <svg viewBox="0 0 500 120" class="w-100">
                     <path d="M0,20 Q150,90 500,110" fill="none" stroke="#28a745" stroke-width="3" />
                     {% for val in forecast %}
-                    <circle cx="{{ loop.index0 * 45 }}" cy="{{ 20 + (loop.index0 * 8) }}" r="5" fill="#fff" 
-                            data-bs-toggle="tooltip" data-bs-placement="top" title="₹{{ "{:,}".format(val) }}" />
+                    <circle cx="{{ loop.index0 * 45 }}" cy="{{ 20 + (loop.index0 * 8) }}" r="6" fill="#fff" 
+                            data-bs-toggle="tooltip" data-bs-placement="top" title="₹{{ "{:,}".format(val) }}" style="cursor:pointer;" />
                     {% endfor %}
                 </svg>
             </div>
@@ -27,19 +27,16 @@
         <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100">
             <h6 class="text-green small fw-bold mb-4">PREMIUM TOOLS (USE CREDITS)</h6>
             <div class="opacity-25 mb-4 small">
-                <div class="p-2 border border-secondary rounded mb-2">Actual selling price of similar car in city.</div>
-                <div class="p-2 border border-secondary rounded">Unlimited searches for 1 month.</div>
+                <div class="p-2 border border-secondary rounded mb-2">Unlock real transaction prices in Bangalore.</div>
+                <div class="p-2 border border-secondary rounded">Get 100 Credits for submitting Deal Data.</div>
             </div>
             <div class="mt-auto text-center border-top border-secondary pt-3">
-                <a href="/seller" class="text-white-50 small text-decoration-none border-bottom border-secondary pb-1">
-                    <i class="fas fa-edit me-1"></i> Edit Vehicle Details
-                </a>
+                <a href="/seller" class="text-white-50 small text-decoration-none"><i class="fas fa-edit me-1"></i> Edit Vehicle Details</a>
             </div>
         </div>
     </div>
 </div>
 <script>
-    // Initialize Tooltips for the Graph Points
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl)
