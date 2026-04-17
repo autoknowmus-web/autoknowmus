@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, session, redirect, url_for, flash
+from flask import Flask, render_template, request, session, redirect, url_for, flash, get_flashed_messages
 from authlib.integrations.flask_client import OAuth
 
 app = Flask(__name__)
@@ -27,6 +27,8 @@ def login():
 
 @app.route('/auth')
 def auth():
+    # Clear any old messages before logging in
+    get_flashed_messages()
     try:
         token = google.authorize_access_token()
         user = token.get('userinfo')
@@ -36,13 +38,14 @@ def auth():
             flash("Success! 500 Bonus Credits added to your account.")
         return redirect(url_for('role'))
     except Exception as e:
-        print(f"Auth Error: {e}")
         flash("Login failed. Please try again.")
         return redirect(url_for('index'))
 
 @app.route('/role', methods=['GET', 'POST'])
 def role():
     if request.method == 'POST':
+        # Clear old messages if user is submitting the manual login form
+        get_flashed_messages()
         session['user_name'] = request.form.get('name')
         session['credits'] = 500
         flash("Success! 500 Bonus Credits added to your account.")
@@ -64,15 +67,14 @@ def buyer():
         return redirect(url_for('index'))
     return render_template('buyer.html')
 
-# [FIX] Logic to deduct credits and send data to your existing dashboard
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
+    # Clear any "Welcome" messages before doing credit logic
+    get_flashed_messages()
     current_credits = session.get('credits', 0)
     
     if current_credits >= 100:
         session['credits'] = current_credits - 100
-        
-        # Capture form data
         session['last_search'] = {
             'make': request.form.get('make'),
             'model': request.form.get('model'),
@@ -83,7 +85,6 @@ def generate_report():
             'condition': request.form.get('condition'),
             'mileage': request.form.get('mileage')
         }
-        
         return redirect(url_for('dashboard'))
     else:
         flash("Insufficient credits! Please purchase more.")
@@ -93,7 +94,6 @@ def generate_report():
 def dashboard():
     if 'user_name' not in session:
         return redirect(url_for('index'))
-    
     search_data = session.get('last_search', {})
     return render_template('dashboard.html', data=search_data)
 
