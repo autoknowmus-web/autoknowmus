@@ -9,13 +9,18 @@
     <style>
         body { background-color: #0b0c10; color: white; font-family: 'Inter', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
         .text-green { color: #28a745 !important; }
-        .text-blue { color: #4e54ff !important; }
+        .text-blue { color: #007bff !important; }
         .navbar { background-color: #16181d; border-bottom: 1px solid #2d2f34; padding: 0.6rem 1.2rem; }
         .credit-badge { background: #1c1e22; border: 1px solid #ffc107; color: #ffc107; font-size: 0.8rem; padding: 4px 12px; border-radius: 8px; font-weight: bold; }
-        .nav-logout { color: #ffffff; text-decoration: none; font-size: 0.85rem; font-weight: bold; opacity: 0.8; }
-        .nav-logout:hover { opacity: 1; color: #dc3545; }
+        
+        /* [FIX] Greyish Logout and White Name */
+        .nav-name { color: #ffffff !important; font-size: 0.85rem; }
+        .nav-logout { color: #6c757d !important; text-decoration: none; font-size: 0.85rem; font-weight: bold; }
+        .nav-logout:hover { color: #dc3545 !important; }
+        
+        /* [FIX] Greyish Copyright */
+        .footer-copy { color: #6c757d !important; font-size: 0.75rem; }
         .content-wrapper { flex: 1; }
-        footer { border-top: 1px solid #2d2f34; background: #0b0c10; }
     </style>
 </head>
 <body>
@@ -32,7 +37,7 @@
             <div class="d-flex align-items-center gap-3">
                 <div class="credit-badge"><i class="fas fa-coins me-1"></i> {{ session.get('credits', 0) }} Credits</div>
                 {% if session.get('user_name') %}
-                <div class="text-white-50 small d-none d-md-block"><i class="fas fa-user-circle"></i> {{ session.get('user_name') }}</div>
+                <div class="nav-name d-none d-md-block"><i class="fas fa-user-circle"></i> {{ session.get('user_name') }}</div>
                 <a href="/logout" class="nav-logout">LOGOUT</a>
                 {% endif %}
             </div>
@@ -44,7 +49,7 @@
     </div>
 
     <footer class="py-3 text-center mt-auto">
-        <p class="text-white-50 small mb-0 opacity-25">© 2026 AutoKnowMus</p>
+        <p class="footer-copy mb-0">© 2026 AutoKnowMus</p>
     </footer>
 </body>
 </html>
