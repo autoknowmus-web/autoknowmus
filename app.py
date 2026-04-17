@@ -34,7 +34,7 @@ def auth():
     user = token.get('userinfo')
     if user:
         session['user_name'] = user['name']
-        session['credits'] = 500 # [FIX] Synchronized to 500
+        session['credits'] = 500 # [FIX] Sync to 500
         flash("Success! 500 Bonus Credits added to your account.")
     return redirect(url_for('role'))
 
@@ -52,7 +52,7 @@ def seller():
 
 @app.route('/dashboard', methods=['POST'])
 def dashboard():
-    # [FIX] Mileage Gate - User cannot proceed without mileage
+    # [FIX] Mandatory Mileage check
     mileage = request.form.get('mileage')
     if not mileage or int(mileage) <= 0:
         flash("Please enter mileage to proceed.")
@@ -66,6 +66,10 @@ def dashboard():
     # [FIX] Logarithmic depreciation with 12 points (15-day intervals)
     forecast = [int(base * (0.991**i)) for i in range(12)]
     return render_template('dashboard.html', base=base, forecast=forecast, credits=session.get('credits'))
+
+@app.route('/buyer')
+def buyer():
+    return render_template('buyer.html', brands=BRANDS, cities=CITIES, conditions=CONDITIONS, credits=session.get('credits', 500))
 
 if __name__ == '__main__':
     app.run(debug=True)
