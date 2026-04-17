@@ -1,63 +1,32 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="card p-4 border-top border-5 border-success shadow-lg">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="text-green fw-bold mb-0">Sell Your Car: Market Valuation</h2>
-        <button class="btn btn-sm btn-outline-secondary disabled">Enter details of car already sold</button>
-    </div>
-    
-    <form action="/dashboard" method="POST">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label class="text-white-50 small mb-1">Location (City)</label>
-                <select class="form-select bg-dark text-white border-secondary" name="city">{% for city in cities %}<option>{{ city }}</option>{% endfor %}</select>
-            </div>
-            <div class="col-md-4">
-                <label class="text-white-50 small mb-1">Make</label>
-                <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">{% for brand in brands %}<option>{{ brand }}</option>{% endfor %}</select>
-            </div>
-            <div class="col-md-4">
-                <label class="text-white-50 small mb-1">Model</label>
-                <select class="form-select bg-dark text-white border-secondary" id="model" name="model" onchange="updateVariants()"></select>
-            </div>
-            <div class="col-md-4">
-                <label class="text-white-50 small mb-1">Variant / Suffix</label>
-                <select class="form-select bg-dark text-white border-secondary" id="variant" name="variant"></select>
-            </div>
-            <div class="col-md-4">
-                <label class="text-white-50 small mb-1">Fuel Type</label>
-                <select class="form-select bg-dark text-white border-secondary">
-                    <option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>HEV</option><option>PHEV</option>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label class="text-white-50 small mb-1">Condition</label>
-                <select class="form-select bg-dark text-white border-secondary" name="condition">{% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}</select>
-            </div>
-            <div class="col-md-6 pt-4">
-                <button type="submit" class="btn btn-success w-100 fw-bold py-2">Generate Intelligence (100 Credits)</button>
-            </div>
-        </div>
-    </form>
-</div>
+<div class="row justify-content-center text-center py-2">
+    <div class="col-lg-8">
+        <div class="mb-3"><i class="fas fa-shield-alt fa-4x" style="color: #28a745;"></i></div>
+        <h1 class="display-4 fw-bold mb-3">
+            <span class="text-white">Auto</span><span style="color: #4e54ff;">Know</span><span style="color: #28a745;">Mus</span>
+        </h1>
+        <p class="text-white-50 small mb-4 px-lg-5">
+            AutoKnowMus cuts through market opacity with real price transparency—helping you avoid overpaying and ensuring you sell at the right price, at the right time.
+        </p>
 
-<script>
-const dataMap = {
-    "Toyota": {"Fortuner": ["4x2 AT", "4x4 AT"], "Innova": ["GX", "VX", "ZX"], "Glanza": ["S", "G", "V"]},
-    "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["VXi", "ZXi+"]}
-};
-function updateModels() {
-    const b = document.getElementById('brand').value;
-    const m = document.getElementById('model'); m.innerHTML = '';
-    Object.keys(dataMap[b] || {}).forEach(x => m.add(new Option(x, x)));
-    updateVariants();
-}
-function updateVariants() {
-    const b = document.getElementById('brand').value;
-    const m = document.getElementById('model').value;
-    const v = document.getElementById('variant'); v.innerHTML = '';
-    (dataMap[b][m] || ["Standard"]).forEach(x => v.add(new Option(x, x)));
-}
-updateModels();
-</script>
+        <div class="card p-4 mx-auto shadow-lg" style="background: #16181d; border-radius: 24px; max-width: 420px;">
+            <h5 class="text-green mb-3">Get Started & Receive 500 Bonus Credits</h5>
+            <a href="/login/google" class="btn btn-outline-light w-100 mb-2 btn-sm border-secondary shadow-sm">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" width="16" class="me-2"> Continue with Google
+            </a>
+            <button class="btn btn-outline-light w-100 mb-3 btn-sm border-secondary opacity-50"><i class="fab fa-apple me-2"></i> Continue with Apple</button>
+            
+            <div class="text-white-50 small mb-3">OR</div>
+            <form action="/role" method="POST">
+                <input type="text" name="name" class="form-control form-control-sm bg-dark text-white border-secondary mb-2" placeholder="Full Name" required>
+                <div class="input-group input-group-sm mb-3">
+                    <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
+                    <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="Mobile" pattern="[0-9]{10}" maxlength="10" required>
+                </div>
+                <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Login & Claim Credits</button>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
