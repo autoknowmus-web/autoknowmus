@@ -1,60 +1,56 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-10">
-        <div class="card p-4 shadow-lg" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
+    <div class="col-lg-11">
+        <div class="card p-4 shadow-lg mt-4" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h3 class="text-green fw-bold mb-0">Sell Your Car: Market Valuation</h3>
-                <span class="text-warning fw-bold small">({{ session.get('credits', 500) }} Credits Remaining)</span>
+                <span class="text-warning fw-bold">(500 Credits Remaining)</span>
             </div>
 
-            <form action="/generate_report" method="POST" class="row g-3">
+            <form action="/generate_report" method="POST" class="row g-4">
                 <div class="col-md-4">
-                    <label class="form-label text-white-50 small">Location (City)</label>
-                    <select name="city" class="form-select bg-dark text-white border-secondary" required>
+                    <label class="form-label text-white fw-bold small">Location (City)</label>
+                    <select name="city" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="Indore">Indore</option>
                         <option value="Bangalore">Bangalore</option>
                         <option value="Hyderabad">Hyderabad</option>
                     </select>
                 </div>
-
                 <div class="col-md-4">
-                    <label class="form-label text-white-50 small">Make</label>
-                    <select id="make" name="make" class="form-select bg-dark text-white border-secondary" required>
+                    <label class="form-label text-white fw-bold small">Make</label>
+                    <select id="make" name="make" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="">Select Make</option>
                         <option value="Toyota">Toyota</option>
                         <option value="Lexus">Lexus</option>
                         <option value="Honda">Honda</option>
                     </select>
                 </div>
-
                 <div class="col-md-4">
-                    <label class="form-label text-white-50 small">Model</label>
-                    <select id="model" name="model" class="form-select bg-dark text-white border-secondary" required>
+                    <label class="form-label text-white fw-bold small">Model</label>
+                    <select id="model" name="model" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="">Select Model</option>
                     </select>
                 </div>
 
                 <div class="col-md-4">
-                    <label class="form-label text-white-50 small">Variant / Suffix</label>
-                    <select id="variant" name="variant" class="form-select bg-dark text-white border-secondary" required>
+                    <label class="form-label text-white fw-bold small">Variant / Suffix</label>
+                    <select id="variant" name="variant" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="">Select Variant</option>
                     </select>
                 </div>
-
                 <div class="col-md-4">
-                    <label class="form-label text-white-50 small">Fuel Type</label>
-                    <select name="fuel" class="form-select bg-dark text-white border-secondary">
+                    <label class="form-label text-white fw-bold small">Fuel Type</label>
+                    <select name="fuel" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="Petrol">Petrol</option>
                         <option value="Diesel">Diesel</option>
                         <option value="Hybrid">Hybrid</option>
                         <option value="EV">EV</option>
                     </select>
                 </div>
-
                 <div class="col-md-4">
-                    <label class="form-label text-white-50 small">Condition</label>
-                    <select name="condition" class="form-select bg-dark text-white border-secondary">
+                    <label class="form-label text-white fw-bold small">Condition</label>
+                    <select name="condition" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="Excellent">Excellent (Showroom like)</option>
                         <option value="Good">Good (Minor wear & tear)</option>
                         <option value="Fair">Fair (Noticeable dents/scratches)</option>
@@ -63,16 +59,16 @@
                 </div>
 
                 <div class="col-md-3">
-                    <label class="form-label text-white-50 small">Mileage (KMs)</label>
-                    <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary" placeholder="e.g. 45000" required>
+                    <label class="form-label text-white fw-bold small">Mileage (KMs) <span class="text-danger">*</span></label>
+                    <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary py-2" placeholder="e.g. 45000" required>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label text-white-50 small">Year</label>
-                    <input type="number" name="year" class="form-control bg-dark text-white border-secondary" placeholder="YYYY" min="2000" max="2026" required>
+                    <label class="form-label text-white fw-bold small">Year <span class="text-danger">*</span></label>
+                    <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" placeholder="YYYY" min="2000" max="2026" required>
                 </div>
-
                 <div class="col-md-6 d-flex align-items-end">
-                    <button type="submit" class="btn btn-success w-100 py-3 fw-bold shadow-lg" style="letter-spacing: 1px; border-radius: 12px; background: linear-gradient(45deg, #28a745, #1e7e34);">
+                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-lg" 
+                            style="border-radius: 12px; background: linear-gradient(45deg, #28a745, #1e7e34); border: none; font-size: 1.1rem; text-transform: uppercase;">
                         GENERATE INTELLIGENCE (100 Credits)
                     </button>
                 </div>
@@ -83,9 +79,21 @@
 
 <script>
 const carData = {
-    "Toyota": { "Innova": ["GX", "VX", "ZX"], "Fortuner": ["Sigma 4", "Legender"], "Glanza": ["V", "G"] },
-    "Lexus": { "ES": ["300h Exquisite", "300h Luxury"], "RX": ["350h", "500h F-Sport"], "NX": ["350h"] },
-    "Honda": { "City": ["V", "VX", "ZX"], "Amaze": ["S", "VX"], "Elevate": ["V", "VX", "ZX"] }
+    "Toyota": { 
+        "Innova": ["GX", "VX", "ZX", "Crysta", "Hycross"], 
+        "Fortuner": ["4x2", "4x4", "Legender", "GR-S"], 
+        "Glanza": ["V", "G", "S"] 
+    },
+    "Lexus": { 
+        "ES": ["300h Exquisite", "300h Luxury"], 
+        "RX": ["350h", "500h F-Sport"], 
+        "NX": ["350h Luxury", "350h F-Sport"] 
+    },
+    "Honda": { 
+        "City": ["V", "VX", "ZX", "e:HEV"], 
+        "Amaze": ["S", "VX"], 
+        "Elevate": ["V", "VX", "ZX"] 
+    }
 };
 
 document.getElementById('make').addEventListener('change', function() {
