@@ -1,30 +1,28 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="row justify-content-center text-center py-2">
+<div class="row justify-content-center text-center">
     <div class="col-lg-8">
-        <h1 class="display-4 fw-bold mb-2">
-            <span class="text-white">Auto</span><span style="color: #4e54ff;">Know</span><span style="color: #28a745;">Mus</span>
+        <h1 class="display-3 fw-bold mb-3">
+            <span class="text-white">Auto</span><span class="text-blue">Know</span><span class="text-green">Mus</span>
         </h1>
-        <p class="text-white-50 small mb-4 px-lg-5">
+        <p class="text-white-50 mb-4 px-lg-5">
             AutoKnowMus is your shield against overpaying. We bring price transparency to the market, helping you avoid overpaying when you buy and ensuring you sell at the right price to maximize your opportunity.
         </p>
 
-        <div class="card p-4 border-0 shadow-lg mx-auto" style="background: #16181d; border-radius: 24px; max-width: 420px;">
+        <div class="card p-4 mx-auto shadow-lg" style="max-width: 400px;">
             <h5 class="text-green mb-3">Login to Claim 300 Bonus Credits</h5>
             <a href="/login/google" class="btn btn-outline-light w-100 mb-2 btn-sm border-secondary">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" width="16" class="me-2"> Continue with Google
             </a>
-            <button class="btn btn-outline-light w-100 mb-3 btn-sm border-secondary"><i class="fab fa-apple me-2"></i> Continue with Apple</button>
-            <div class="text-white-50 small mb-3">— OR —</div>
-
+            <button class="btn btn-outline-light w-100 mb-3 btn-sm border-secondary opacity-50"><i class="fab fa-apple me-2"></i> Continue with Apple</button>
+            <div class="text-white-50 small mb-3">OR</div>
             <form action="/role" method="POST">
                 <input type="text" name="name" class="form-control form-control-sm bg-dark text-white border-secondary mb-2" placeholder="Full Name" required>
-                <input type="email" class="form-control form-control-sm bg-dark text-white border-secondary mb-2" placeholder="Email Address">
                 <div class="input-group input-group-sm mb-3">
                     <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
                     <input type="tel" class="form-control bg-dark text-white border-secondary" placeholder="Mobile Number" pattern="[0-9]{10}" required>
                 </div>
-                <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow">Login & Claim Credits</button>
+                <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Login & Get Credits</button>
             </form>
         </div>
     </div>
