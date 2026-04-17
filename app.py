@@ -15,7 +15,7 @@ google = oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
-# [FIX] Bangalore Only by Default
+# [FIX] Bangalore Only per instructions
 CITIES = ["Bangalore"]
 BRANDS = sorted(["Audi", "BMW", "Honda", "Hyundai", "Kia", "Mahindra", "Maruti Suzuki", "Mercedes-Benz", "MG Motors", "Skoda", "Tata Motors", "Toyota", "Volkswagen"])
 CONDITIONS = ["Excellent (showroom like)", "Average (normal wear)", "Fair (needs some repair)"]
@@ -52,9 +52,10 @@ def seller():
 
 @app.route('/dashboard', methods=['POST'])
 def dashboard():
-    # [FIX] Mileage Validation
+    # [FIX] Mileage Gate - User cannot proceed without mileage
     mileage = request.form.get('mileage')
-    if not mileage or int(mileage) < 0:
+    if not mileage or int(mileage) <= 0:
+        flash("Please enter mileage to proceed.")
         return redirect(url_for('seller'))
         
     if session.get('credits', 0) >= 100:
@@ -62,7 +63,7 @@ def dashboard():
     
     make = request.form.get('make')
     base = 1450000 if make == "Toyota" else 1100000
-    # [FIX] Logarithmic 15-day interval data
+    # [FIX] Logarithmic depreciation with 12 points (15-day intervals)
     forecast = [int(base * (0.991**i)) for i in range(12)]
     return render_template('dashboard.html', base=base, forecast=forecast, credits=session.get('credits'))
 
