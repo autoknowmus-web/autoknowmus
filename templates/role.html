@@ -1,35 +1,51 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="text-center py-4">
-    {% with messages = get_flashed_messages() %}{% if messages %}{% for message in messages %}
-    <div class="alert alert-success d-inline-block px-4 py-2 small rounded-pill shadow-sm mb-4">
-        <i class="fas fa-gift me-2"></i> {{ message }}
-    </div>
-    {% endfor %}{% endif %}{% endwith %}
-
-    <h2 class="text-white mb-5">Hello {{ user_name }}! Ready to make a smarter decision?</h2>
-    
-    <div class="row g-4 justify-content-center">
-        <div class="col-md-5">
-            <div class="card p-4 bg-dark border-0 h-100 rounded-4 shadow border-top border-success border-4">
-                <h4 class="text-white">I am a Seller</h4>
-                <p class="text-white-50 small mb-4">Maximize the sale opportunity by listing at the right price.</p>
-                <div class="opacity-25 small text-white border border-secondary p-2 rounded mb-3">
-                    Purchase 500 credits for ₹500 to unlock real transaction prices in your city. Get refund on verified deal data match.
-                </div>
-                <a href="/seller" class="btn btn-success w-100 py-2 fw-bold mt-auto">Find My Car Value</a>
+<div class="card p-4 border-0 shadow-lg mx-auto" style="background: #16181d; border-radius: 24px; max-width: 1000px; border-top: 5px solid #28a745;">
+    <h3 class="text-green fw-bold mb-4">Sell Your Car: Market Valuation <span class="float-end fs-6 text-warning">({{ credits }} Credits Remaining)</span></h3>
+    <form action="/dashboard" method="POST">
+        <div class="row g-2 text-start">
+            <div class="col-md-4"><label class="text-white-50 small mb-1">Location (City)</label>
+                <select class="form-select bg-dark text-white border-secondary"><option selected>Bangalore</option></select>
+            </div>
+            <div class="col-md-4"><label class="text-white-50 small mb-1">Make</label>
+                <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()" required>
+                    <option value="" disabled selected>Select Make</option>
+                    {% for brand in brands %}<option>{{ brand }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4"><label class="text-white-50 small mb-1">Model</label>
+                <select class="form-select bg-dark text-white border-secondary" id="model" name="model" onchange="updateVariants()" required></select>
+            </div>
+            <div class="col-md-4"><label class="text-white-50 small mb-1">Variant / Suffix</label>
+                <select class="form-select bg-dark text-white border-secondary" id="variant" name="variant" required></select>
+            </div>
+            <div class="col-md-4"><label class="text-white-50 small mb-1">Fuel Type</label>
+                <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>HEV</option><option>PHEV</option></select>
+            </div>
+            <div class="col-md-4"><label class="text-white-50 small mb-1">Condition</label>
+                <select class="form-select bg-dark text-white border-secondary" name="condition">{% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-3"><label class="text-white-50 small mb-1">Mileage (KMs)</label>
+                <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary" required>
+            </div>
+            <div class="col-md-3"><label class="text-white-50 small mb-1">Year</label>
+                <select class="form-select bg-dark text-white border-secondary">{% for y in years %}<option>{{ y }}</option>{% endfor %}</select>
+            </div>
+            <div class="col-md-6 pt-4">
+                <button type="submit" class="btn btn-success w-100 fw-bold" style="height: 38px;">Generate Intelligence (100 Credits)</button>
             </div>
         </div>
-        <div class="col-md-5">
-            <div class="card p-4 bg-dark border-0 h-100 rounded-4 shadow border-top border-primary border-4">
-                <h4 class="text-white">I am a Buyer</h4>
-                <p class="text-white-50 small mb-4">Research fair market prices and evaluate deals before you buy.</p>
-                <div class="opacity-25 small text-white border border-secondary p-2 rounded mb-3">
-                    Use credits for instant listing alerts, deal evaluation, or detailing discounts with partners. Get 100 bonus credits on deal data submission.
-                </div>
-                <a href="/buyer" class="btn btn-primary w-100 py-2 fw-bold mt-auto">Research Prices</a>
-            </div>
-        </div>
-    </div>
+    </form>
 </div>
+<script>
+const dataMap = {"Toyota": {"Fortuner": ["4x2 AT", "4x4 AT"], "Innova": ["GX", "VX", "ZX"]}, "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["LXi", "VXi"]}};
+function updateModels() {
+    const b = document.getElementById('brand').value; const m = document.getElementById('model'); m.innerHTML = '<option value="" disabled selected>Select Model</option>';
+    if(dataMap[b]) Object.keys(dataMap[b]).forEach(x => m.add(new Option(x, x)));
+}
+function updateVariants() {
+    const b = document.getElementById('brand').value; const m = document.getElementById('model').value; const v = document.getElementById('variant'); v.innerHTML = '<option value="" disabled selected>Select Variant</option>';
+    if(dataMap[b] && dataMap[b][m]) dataMap[b][m].forEach(x => v.add(new Option(x, x)));
+}
+</script>
 {% endblock %}
