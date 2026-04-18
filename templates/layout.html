@@ -27,10 +27,10 @@
             font-weight: bold;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 2px;
             text-decoration: none;
         }
-        .navbar-brand svg { width: 40px; height: 40px; }
+        .navbar-brand svg { width: 40px; height: 40px; margin-right: 0; }
         .text-white { color: white !important; }
         .text-blue { color: #4e54ff !important; }
         .text-green { color: #28a745 !important; }
@@ -58,13 +58,16 @@
             display: inline-block;
         }
         .btn-logout:hover { background-color: #666; color: #fff; text-decoration: none; }
-        .alert-success-custom {
-            background-color: rgba(40, 167, 69, 0.2);
-            border: 1px solid #28a745;
-            color: #28a745;
+        .alert-orange-custom {
+            background-color: rgba(255, 165, 0, 0.15);
+            border: 1px solid #ffa500;
+            color: #ffa500;
             border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1.5rem;
+            padding: 1rem 1.2rem;
+            margin: 1.5rem auto;
+            max-width: 600px;
+            text-align: center;
+            font-weight: 600;
         }
         .navbar-nav-right { display: flex; align-items: center; gap: 1rem; }
     </style>
@@ -94,9 +97,9 @@
             {% if messages %}
                 {% for category, message in messages %}
                     {% if category == 'success' %}
-                        <div class="alert alert-success-custom alert-dismissible fade show" role="alert">
-                            ✅ {{ message }}
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+                        <div class="alert-orange-custom alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" style="float:right;"></button>
                         </div>
                     {% else %}
                         <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
