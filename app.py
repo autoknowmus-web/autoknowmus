@@ -127,12 +127,12 @@ def submit_deal():
 def submit_deal_post():
     if not session.get('user_name'):
         return redirect(url_for('index'))
-    session['credits'] += 200
+    session['credits'] += 100
     session.modified = True
     transactions = session.get('credit_transactions', [])
-    transactions.append({'type': 'earned', 'amount': 200, 'description': 'Deal Submission Reward', 'date': 'Today'})
+    transactions.append({'type': 'earned', 'amount': 100, 'description': 'Deal Submission Reward', 'date': 'Today'})
     session['credit_transactions'] = transactions
-    flash('Deal submitted successfully! +200 credits awarded!', 'success')
+    flash('Deal submitted successfully! +100 credits awarded!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.errorhandler(404)
