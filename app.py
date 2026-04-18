@@ -5,6 +5,7 @@ from authlib.integrations.flask_client import OAuth
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+# Google OAuth Setup
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -90,6 +91,20 @@ def dashboard():
         return redirect(url_for('index'))
     search_data = session.get('last_search', {})
     return render_template('dashboard.html', data=search_data)
+
+@app.route('/submit_deal')
+def submit_deal():
+    if 'user_name' not in session:
+        return redirect(url_for('index'))
+    return render_template('submit_deal.html')
+
+@app.route('/process_deal', methods=['POST'])
+def process_deal():
+    # Reward user with 200 credits for submitting data
+    session['credits'] = session.get('credits', 0) + 200
+    session.modified = True
+    flash("Thank you! 200 Credits added for your data contribution.")
+    return redirect(url_for('role'))
 
 @app.route('/logout')
 def logout():
