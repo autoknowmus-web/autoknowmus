@@ -16,7 +16,6 @@
     .brand-know { color: #4e54ff; }
     .brand-mus { color: #28a745; }
 
-    /* Credit badge — standardized everywhere */
     .credit-badge {
       background: transparent; border: 2px solid #ffa500; color: #ffa500;
       padding: 6px 16px; border-radius: 25px; font-weight: 600;
@@ -33,7 +32,6 @@
     }
     .btn-logout:hover { background: #5a6268; color: #fff; }
 
-    /* Standardized back button */
     .btn-back {
       background: #6c757d !important; color: #fff !important; border: none !important;
       padding: 7px 18px !important; border-radius: 6px !important; font-size: 0.9rem !important;
@@ -41,7 +39,6 @@
     }
     .btn-back:hover { background: #5a6268 !important; color: #fff !important; }
 
-    /* Orange dismissible alert */
     .alert-orange {
       background: rgba(255,165,0,0.15); border: 1px solid #ffa500;
       color: #ffa500; border-radius: 8px; padding: 14px 45px 14px 20px;
@@ -66,19 +63,15 @@
     }
     .form-label { color: #b0b0b0; font-weight: 500; margin-bottom: 6px; }
 
-    /* ===== DISABLED / READONLY FIELDS — dark bg, grey text (global override) ===== */
     .form-control:disabled, .form-control[readonly],
     .form-select:disabled, .form-select[readonly] {
       background: #15181e !important;
       color: #6c757d !important;
       border-color: #2a2d34 !important;
       opacity: 1 !important;
-      -webkit-text-fill-color: #6c757d !important;  /* iOS Safari */
+      -webkit-text-fill-color: #6c757d !important;
       cursor: not-allowed;
     }
-    .form-select:disabled option { color: #6c757d; }
-    /* Remove white fill on autofilled/dropdown-closed state */
-    select.form-select { -webkit-appearance: none; }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
@@ -108,7 +101,6 @@
 </nav>
 {% endif %}
 
-{# Shared dismissible orange alert macro #}
 {% macro orange_alert(msg) %}
   {% if msg %}
   <div class="alert-orange" id="orangeAlert">
