@@ -1,52 +1,107 @@
 {% extends "layout.html" %}
+{% block title %}Choose Your Role - AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  .role-wrap { padding: 20px 40px 60px; }
+  .greeting {
+    text-align: center; color: #fff; font-size: 1.8rem; font-weight: 600;
+    margin: 10px 0 35px;
+  }
+  .role-card {
+    background: #1a1d24; border-radius: 12px; padding: 30px;
+    height: 100%; display: flex; flex-direction: column;
+  }
+  .role-card.seller { border: 2px solid #28a745; }
+  .role-card.buyer { border: 2px solid #4e54ff; }
+  .role-title { text-align: center; font-size: 1.5rem; font-weight: 600; margin-bottom: 10px; }
+  .role-title.seller-title { color: #28a745; }
+  .role-title.buyer-title { color: #4e54ff; }
+  .role-sub { text-align: center; color: #b0b0b0; margin-bottom: 20px; font-size: 0.95rem; }
+
+  .btn-role { padding: 13px; border-radius: 8px; font-weight: 600; border: none; color: #fff; }
+  .btn-role-seller { background: #28a745; }
+  .btn-role-seller:hover { background: #218838; color: #fff; }
+  .btn-role-buyer { background: #4e54ff; }
+  .btn-role-buyer:hover { background: #3a40d9; color: #fff; }
+
+  .benefit-box {
+    background: #0e1117; border-radius: 8px; padding: 18px; margin: 18px 0;
+  }
+  .benefit-title { font-weight: 600; margin-bottom: 6px; font-size: 0.98rem; }
+  .benefit-title.seller-b { color: #28a745; }
+  .benefit-title.buyer-b { color: #4e54ff; }
+  .benefit-text { color: #b0b0b0; font-size: 0.88rem; line-height: 1.5; margin: 0; }
+
+  .btn-secondary-outline {
+    background: transparent; border: 1px solid #4eb0ff; color: #4eb0ff;
+    padding: 11px; border-radius: 8px; font-weight: 500; text-decoration: none;
+    text-align: center; display: block;
+  }
+  .btn-secondary-outline:hover { background: rgba(78,176,255,0.1); color: #4eb0ff; }
+
+  .btn-disabled-coming {
+    background: #2a2d34; color: #666; padding: 11px; border-radius: 8px;
+    font-weight: 500; text-align: center; margin-bottom: 10px; cursor: not-allowed;
+  }
+  .btn-disabled-coming .coming-soon { color: #ffa500; font-size: 0.8rem; font-weight: 600; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="text-center py-2">
-    <h2 class="text-white mb-5 fw-bold">Hello{% if user_name %} {{ user_name }}{% endif %}! Ready to make a smarter decision?</h2>
-    
-    <div class="row g-4 justify-content-center px-2">
-        <div class="col-md-5">
-            <div class="card p-4 h-100 border-top border-success border-4 d-flex flex-column shadow-lg" style="background: #16181d;">
-                <h4 class="text-green fw-bold mb-3">I am a Seller</h4>
-                <p class="text-white-50 small mb-4">Maximize the sale opportunity by listing at the right price.</p>
-                <a href="/seller" class="btn btn-success w-100 py-2 fw-bold mb-4 shadow">Find My Car Value</a>
-                
-                <div class="p-3 mb-4 rounded text-start" style="background: #1c1e22; border: 1px solid #2d2f34;">
-                    <h6 class="text-green small fw-bold mb-1">Seller Credit Benefits</h6>
-                    <p class="text-white m-0" style="font-size: 0.75rem; line-height: 1.4; opacity: 0.9;">
-                        Unlimited real price search for 30 days or Get live transaction alerts in WhatsApp & email as soon as car similar as yours gets sold in your city.
-                    </p>
-                </div>
+<div class="role-wrap">
 
-                <div class="mt-auto d-grid gap-2">
-                    <button class="btn btn-sm py-2 fw-bold" disabled style="background: #444; border: 1px solid #555; color: #888; cursor: not-allowed;">
-                        Purchase 500 Credits for Seller <span style="color: #ffa500; font-size: 0.7rem;">(Coming Soon)</span>
-                    </button>
-                    <a href="/submit_deal" class="btn btn-sm btn-outline-info py-2 fw-bold text-decoration-none">Record Actual Transaction Data</a>
-                </div>
-            </div>
+  {# Dismissible welcome message — shown only on first login #}
+  {% if show_welcome %}
+    {{ orange_alert('Welcome! 500 bonus credits added for 5 free searches! (500 Credits)') }}
+  {% endif %}
+
+  <h2 class="greeting">Hello {{ session.user.name }}! Ready to make a smarter decision?</h2>
+
+  <div class="row g-4">
+    <!-- Seller -->
+    <div class="col-md-6">
+      <div class="role-card seller">
+        <h3 class="role-title seller-title">I am a Seller</h3>
+        <p class="role-sub">Maximize the sale opportunity by listing at the right price.</p>
+        <a href="{{ url_for('seller') }}" class="btn btn-role btn-role-seller">Find My Car Value</a>
+        <div class="benefit-box">
+          <div class="benefit-title seller-b">Seller Credit Benefits</div>
+          <p class="benefit-text">
+            Unlimited real price search for 30 days or Get live transaction alerts in WhatsApp &amp; email
+            as soon as a car similar to yours gets sold in your city.
+          </p>
         </div>
-
-        <div class="col-md-5">
-            <div class="card p-4 h-100 border-top border-primary border-4 d-flex flex-column shadow-lg" style="background: #16181d;">
-                <h4 class="text-blue fw-bold mb-3" style="color: #007bff !important;">I am a Buyer</h4>
-                <p class="text-white-50 small mb-4">Research fair market prices and evaluate deals before you buy.</p>
-                <a href="/buyer" class="btn btn-primary w-100 py-2 fw-bold mb-4 shadow">Research Prices</a>
-
-                <div class="p-3 mb-4 rounded text-start" style="background: #1c1e22; border: 1px solid #2d2f34;">
-                    <h6 class="text-primary small fw-bold mb-1">Buyer Credit Benefits</h6>
-                    <p class="text-white m-0" style="font-size: 0.75rem; line-height: 1.4; opacity: 0.9;">
-                        Unlimited real price search based on user submitted data for 30 days, or Get live listing alerts in WhatsApp & email as soon as the car you are looking for is listed in your city.
-                    </p>
-                </div>
-
-                <div class="mt-auto d-grid gap-2">
-                    <button class="btn btn-sm py-2 fw-bold" disabled style="background: #444; border: 1px solid #555; color: #888; cursor: not-allowed;">
-                        Purchase 500 Credits as Buyer <span style="color: #ffa500; font-size: 0.7rem;">(Coming Soon)</span>
-                    </button>
-                    <a href="/submit_deal" class="btn btn-sm btn-outline-info py-2 fw-bold text-decoration-none">Record Actual Transaction Data</a>
-                </div>
-            </div>
+        <div class="btn-disabled-coming">
+          Purchase 500 Credits for Seller <span class="coming-soon">(Coming Soon)</span>
         </div>
+        <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
+          Record Actual Transaction Data
+        </a>
+      </div>
     </div>
+
+    <!-- Buyer -->
+    <div class="col-md-6">
+      <div class="role-card buyer">
+        <h3 class="role-title buyer-title">I am a Buyer</h3>
+        <p class="role-sub">Research fair market prices and evaluate deals before you buy.</p>
+        <a href="{{ url_for('buyer') }}" class="btn btn-role btn-role-buyer">Research Prices</a>
+        <div class="benefit-box">
+          <div class="benefit-title buyer-b">Buyer Credit Benefits</div>
+          <p class="benefit-text">
+            Unlimited real price search based on user-submitted data for 30 days, or Get live listing alerts
+            in WhatsApp &amp; email as soon as the car you are looking for is listed in your city.
+          </p>
+        </div>
+        <div class="btn-disabled-coming">
+          Purchase 500 Credits as Buyer <span class="coming-soon">(Coming Soon)</span>
+        </div>
+        <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
+          Record Actual Transaction Data
+        </a>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
