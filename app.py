@@ -92,18 +92,20 @@ def dashboard():
     search_data = session.get('last_search', {})
     return render_template('dashboard.html', data=search_data)
 
+# [NEW] Route to show the Submit Deal page
 @app.route('/submit_deal')
 def submit_deal():
     if 'user_name' not in session:
         return redirect(url_for('index'))
     return render_template('submit_deal.html')
 
+# [NEW] Route to process the deal and reward credits
 @app.route('/process_deal', methods=['POST'])
 def process_deal():
-    # Reward user with 200 credits for submitting data
+    get_flashed_messages()
     session['credits'] = session.get('credits', 0) + 200
     session.modified = True
-    flash("Thank you! 200 Credits added for your data contribution.")
+    flash("Success! 200 Credits rewarded for your contribution.")
     return redirect(url_for('role'))
 
 @app.route('/logout')
