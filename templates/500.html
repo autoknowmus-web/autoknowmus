@@ -1,12 +1,13 @@
 {% extends "layout.html" %}
 {% block title %}Server Error - AutoKnowMus{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-6 text-center">
-        <h1 class="display-1 text-danger">500</h1>
-        <h2 class="mb-3">Server Error</h2>
-        <p class="text-white-50 mb-4">Something went wrong on our end. Please try again later.</p>
-        <a href="/" class="btn btn-success">Go Home</a>
-    </div>
+<div style="text-align:center; padding: 80px 20px; color: #e6e6e6;">
+  <div style="font-size: 5rem; color: #e74c3c; font-weight: 700; line-height: 1;">500</div>
+  <h2 style="margin: 15px 0 10px;">Server Error</h2>
+  <p style="color: #b0b0b0;">Something went wrong on our end. Please try again in a moment.</p>
+  <a href="{{ url_for('index') }}" style="background: #28a745; color: #fff; padding: 10px 24px; border-radius: 8px; text-decoration: none; display: inline-block; margin-top: 15px; font-weight: 600;">
+    Go Home
+  </a>
 </div>
 {% endblock %}
