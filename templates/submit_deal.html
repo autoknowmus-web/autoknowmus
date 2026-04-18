@@ -3,7 +3,7 @@
 
 {% block extra_head %}
 <style>
-  .deal-wrap { padding: 30px 40px; max-width: 1000px; margin: 0 auto; }
+  .deal-wrap { padding: 30px 40px; max-width: 1100px; margin: 0 auto; }
   .page-title { color: #4eb0ff; font-size: 1.8rem; font-weight: 700; margin: 0; }
   .form-section { background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px; padding: 30px; }
   .btn-submit-deal {
@@ -11,31 +11,34 @@
     border-radius: 8px; font-weight: 700; width: 320px; display: block; margin: 15px auto 0;
   }
   .btn-submit-deal:hover { background: #3a40d9; color: #fff; }
-  .btn-submit-deal .credit-reward { display: block; font-size: 0.85rem; font-weight: 500; margin-top: 3px; }
+  .btn-submit-deal .credit-reward {
+    display: block; font-size: 0.85rem; font-weight: 500; margin-top: 3px;
+  }
   .info-box {
     background: rgba(78,84,255,0.1); border: 1px solid #4e54ff;
     color: #b0b8ff; padding: 12px 16px; border-radius: 8px; font-size: 0.9rem;
     margin-bottom: 20px;
   }
-  .info-box .credit-inline { font-weight: 700; }
 
-  /* Date field with calendar icon in corner */
+  /* Date field with calendar icon */
   .date-field-wrap { position: relative; }
   .date-field-wrap input[type="date"] {
     background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
     padding: 8px 40px 8px 12px; border-radius: 6px; width: 100%;
-    color-scheme: dark;
+    color-scheme: dark; height: 38px;
   }
   .date-field-wrap input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(1) brightness(0.8); cursor: pointer;
     position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-    width: 20px; height: 20px; opacity: 0.8;
+    width: 20px; height: 20px; opacity: 0.85;
   }
   .date-format-hint { color: #888; font-size: 0.8rem; margin-top: 4px; display: block; }
 
   .file-upload {
     background: #1a1d24; border: 1px dashed #4e54ff; border-radius: 8px;
-    padding: 20px; text-align: center; cursor: pointer; color: #b0b0b0;
+    padding: 10px 15px; text-align: center; cursor: pointer; color: #b0b0b0;
+    height: 38px; display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; margin: 0;
   }
   .file-upload:hover { background: #1f222a; }
   .file-upload input { display: none; }
@@ -44,12 +47,13 @@
 
 {% block content %}
 <div class="deal-wrap">
-  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+
+  <div class="d-flex justify-content-between align-items-start mb-3">
+    <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+    <h2 class="page-title">Record Actual Transaction Data</h2>
+  </div>
 
   <div class="form-section">
-    <div class="text-center mb-3">
-      <h2 class="page-title">Record Actual Transaction Data</h2>
-    </div>
 
     <div class="info-box">
       <i class="bi bi-info-circle"></i>
@@ -58,43 +62,48 @@
     </div>
 
     <form method="POST" action="{{ url_for('submit_deal') }}" enctype="multipart/form-data">
-      <!-- Row 1 -->
+      <!-- Row 1: Location, Make, Fuel, Model (mirrors seller) -->
       <div class="row g-3 mb-3">
-        <div class="col-md-4">
+        <div class="col-md-3">
+          <label class="form-label">Location</label>
+          <select class="form-select" disabled><option>Bangalore</option></select>
+        </div>
+        <div class="col-md-3">
           <label class="form-label">Make *</label>
-          <select class="form-select" name="make" required>
+          <select class="form-select" name="make" id="make" required>
             <option value="">Select Make</option>
             {% for brand in brands|sort %}
               <option value="{{ brand }}">{{ brand }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-4">
-          <label class="form-label">Model *</label>
-          <input type="text" class="form-control" name="model" placeholder="e.g. Baleno" required>
-        </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <label class="form-label">Fuel Type *</label>
-          <select class="form-select" name="fuel" required>
+          <select class="form-select" name="fuel" id="fuel" required>
             <option value="">Select Fuel</option>
-            {% for fuel in fuels|sort %}
+            {# Fixed order — do NOT sort #}
+            {% for fuel in fuels %}
               <option value="{{ fuel }}">{{ fuel }}</option>
             {% endfor %}
           </select>
         </div>
+        <div class="col-md-3">
+          <label class="form-label">Model *</label>
+          <select class="form-select" name="model" id="model" required disabled>
+            <option value="">Select Model</option>
+          </select>
+        </div>
       </div>
 
-      <!-- Row 2 -->
+      <!-- Row 2: Variant, Owner, Mileage, Year -->
       <div class="row g-3 mb-3">
-        <div class="col-md-4">
-          <label class="form-label">Year *</label>
-          <input type="number" class="form-control" name="year" min="1990" max="2026" required>
+        <div class="col-md-3">
+          <label class="form-label">Variant / Suffix</label>
+          <select class="form-select" name="variant" id="variant" disabled>
+            <option value="">Select Variant</option>
+          </select>
         </div>
-        <div class="col-md-4">
-          <label class="form-label">Mileage (KMs) *</label>
-          <input type="number" class="form-control" name="mileage" min="0" required>
-        </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <label class="form-label">No. of Owners *</label>
           <select class="form-select" name="owner" required>
             {% for owner in owners %}
@@ -102,9 +111,22 @@
             {% endfor %}
           </select>
         </div>
+        <div class="col-md-3">
+          <label class="form-label">Mileage (KMs) *</label>
+          <input type="number" class="form-control" name="mileage" min="0" required placeholder="e.g. 45000">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Year *</label>
+          <select class="form-select" name="year" required>
+            <option value="">Select Year</option>
+            {% for y in years %}
+              <option value="{{ y }}">{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
 
-      <!-- Row 3 -->
+      <!-- Row 3: Condition, Buyer Type, Sale Price -->
       <div class="row g-3 mb-3">
         <div class="col-md-4">
           <label class="form-label">Condition *</label>
@@ -125,11 +147,11 @@
         </div>
         <div class="col-md-4">
           <label class="form-label">Sale Price (₹) *</label>
-          <input type="number" class="form-control" name="sale_price" min="0" required>
+          <input type="number" class="form-control" name="sale_price" min="0" required placeholder="e.g. 650000">
         </div>
       </div>
 
-      <!-- Row 4: Date with calendar icon + File upload -->
+      <!-- Row 4: Date (DD-MMM-YYYY + calendar icon) + File upload -->
       <div class="row g-3 mb-3">
         <div class="col-md-6">
           <label class="form-label">Transaction Date *</label>
@@ -141,7 +163,7 @@
         <div class="col-md-6">
           <label class="form-label">Upload Proof (Invoice / RC / Receipt) *</label>
           <label class="file-upload">
-            <i class="bi bi-cloud-arrow-up"></i> <span id="fileLabel">Click to upload (PDF/JPG/PNG)</span>
+            <span><i class="bi bi-cloud-arrow-up"></i> <span id="fileLabel">Click to upload (PDF/JPG/PNG)</span></span>
             <input type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png" required
                    onchange="document.getElementById('fileLabel').textContent = this.files[0].name">
           </label>
@@ -159,7 +181,74 @@
 
 {% block scripts %}
 <script>
-  // Set today's date as default
+  // Default today's date
   document.getElementById('txDate').valueAsDate = new Date();
+
+  // === Mirror seller's fuel-first cascade ===
+  const MODELS_BY_BRAND = {{ {
+    'Audi': ['A3','A4','A6','Q3','Q5','Q7'],
+    'BMW': ['3 Series','5 Series','X1','X3','X5','X7'],
+    'Ford': ['EcoSport','Endeavour','Figo','Freestyle'],
+    'Honda': ['Amaze','City','Civic','Elevate','Jazz','WR-V'],
+    'Hyundai': ['Alcazar','Aura','Creta','Exter','Grand i10 Nios','i20','Kona Electric','Tucson','Venue','Verna'],
+    'Jaguar': ['F-Pace','XE','XF'],
+    'Kia': ['Carens','Carnival','EV6','Seltos','Sonet'],
+    'Land Rover': ['Defender','Discovery','Range Rover','Range Rover Evoque','Range Rover Sport'],
+    'Lexus': ['ES','LX','NX','RX'],
+    'Mahindra': ['Bolero','Scorpio','Scorpio N','Thar','XUV300','XUV400','XUV700','XUV3XO'],
+    'Maruti Suzuki': ['Alto K10','Baleno','Brezza','Celerio','Dzire','Eeco','Ertiga','Fronx','Grand Vitara','Ignis','Jimny','S-Presso','Swift','Wagon R','XL6'],
+    'Mercedes-Benz': ['A-Class','C-Class','E-Class','GLA','GLC','GLE','S-Class'],
+    'MG': ['Astor','Gloster','Hector','Hector Plus','ZS EV'],
+    'Nissan': ['Kicks','Magnite'],
+    'Renault': ['Kiger','Kwid','Triber'],
+    'Skoda': ['Kushaq','Octavia','Slavia','Superb'],
+    'Tata': ['Altroz','Harrier','Nexon','Nexon EV','Punch','Safari','Tiago','Tigor'],
+    'Toyota': ['Camry','Fortuner','Glanza','Hilux','Hyryder','Innova Crysta','Innova Hycross','Vellfire'],
+    'Volkswagen': ['Taigun','Tiguan','Virtus'],
+    'Volvo': ['XC40','XC60','XC90']
+  }|tojson }};
+
+  const makeEl = document.getElementById('make');
+  const fuelEl = document.getElementById('fuel');
+  const modelEl = document.getElementById('model');
+  const variantEl = document.getElementById('variant');
+
+  function refreshModels() {
+    const make = makeEl.value;
+    const fuel = fuelEl.value;
+    modelEl.innerHTML = '<option value="">Select Model</option>';
+    variantEl.innerHTML = '<option value="">Select Variant</option>';
+    variantEl.disabled = true;
+
+    if (make && fuel && MODELS_BY_BRAND[make]) {
+      const models = [...MODELS_BY_BRAND[make]].sort((a,b)=>a.localeCompare(b));
+      models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m;
+        modelEl.appendChild(opt);
+      });
+      modelEl.disabled = false;
+    } else {
+      modelEl.disabled = true;
+    }
+  }
+
+  function refreshVariants() {
+    variantEl.innerHTML = '<option value="">Select Variant</option>';
+    if (modelEl.value) {
+      ['Base','LXi','VXi','ZXi','ZXi Plus'].sort().forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        variantEl.appendChild(opt);
+      });
+      variantEl.disabled = false;
+    } else {
+      variantEl.disabled = true;
+    }
+  }
+
+  makeEl.addEventListener('change', refreshModels);
+  fuelEl.addEventListener('change', refreshModels);
+  modelEl.addEventListener('change', refreshVariants);
 </script>
 {% endblock %}
