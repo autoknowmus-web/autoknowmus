@@ -12,7 +12,10 @@
     width: 320px; display: block; margin: 0 auto;
   }
   .btn-generate:hover { background: #218838; color: #fff; }
-  .btn-generate .credit-cost { display: block; font-size: 0.85rem; font-weight: 500; margin-top: 3px; opacity: 0.95; }
+  .btn-generate .credit-cost {
+    display: block; font-size: 0.85rem; font-weight: 500;
+    margin-top: 3px; opacity: 0.95;
+  }
 </style>
 {% endblock %}
 
@@ -25,7 +28,7 @@
     </div>
 
     <form method="POST" action="{{ url_for('valuate') }}">
-      <!-- Row 1: 4 filters -->
+      <!-- Row 1: Location, Make, Fuel, Model -->
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Location</label>
@@ -44,7 +47,8 @@
           <label class="form-label">Fuel Type</label>
           <select class="form-select" name="fuel" id="fuel" required>
             <option value="">Select Fuel</option>
-            {% for fuel in fuels|sort %}
+            {# Fixed order — do NOT sort #}
+            {% for fuel in fuels %}
               <option value="{{ fuel }}">{{ fuel }}</option>
             {% endfor %}
           </select>
@@ -57,7 +61,7 @@
         </div>
       </div>
 
-      <!-- Row 2: 4 filters -->
+      <!-- Row 2: Variant, Owner, Mileage, Year -->
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Variant / Suffix</label>
@@ -75,15 +79,20 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">Mileage (KMs) *</label>
-          <input type="number" class="form-control" name="mileage" required min="0">
+          <input type="number" class="form-control" name="mileage" required min="0" placeholder="e.g. 45000">
         </div>
         <div class="col-md-3">
           <label class="form-label">Year *</label>
-          <input type="number" class="form-control" name="year" required min="1990" max="2026">
+          <select class="form-select" name="year" required>
+            <option value="">Select Year</option>
+            {% for y in years %}
+              <option value="{{ y }}">{{ y }}</option>
+            {% endfor %}
+          </select>
         </div>
       </div>
 
-      <!-- Row 3: 1 filter + centered button -->
+      <!-- Row 3: Condition + Button -->
       <div class="row g-3 mb-4">
         <div class="col-md-6 offset-md-3">
           <label class="form-label">Condition</label>
@@ -106,7 +115,7 @@
 
 {% block scripts %}
 <script>
-  // Fuel-first filtering: Fuel → Model → Variant (all alphabetical)
+  // Fuel-first filtering (alphabetical model/variant lists)
   const MODELS_BY_BRAND = {{ {
     'Audi': ['A3','A4','A6','Q3','Q5','Q7'],
     'BMW': ['3 Series','5 Series','X1','X3','X5','X7'],
@@ -143,7 +152,6 @@
     variantEl.disabled = true;
 
     if (make && fuel && MODELS_BY_BRAND[make]) {
-      // Alphabetical sort enforced
       const models = [...MODELS_BY_BRAND[make]].sort((a,b)=>a.localeCompare(b));
       models.forEach(m => {
         const opt = document.createElement('option');
@@ -159,7 +167,6 @@
   function refreshVariants() {
     variantEl.innerHTML = '<option value="">Select Variant</option>';
     if (modelEl.value) {
-      // Generic alphabetical variants (can be model-specific later)
       ['Base','LXi','VXi','ZXi','ZXi Plus'].sort().forEach(v => {
         const opt = document.createElement('option');
         opt.value = v; opt.textContent = v;
