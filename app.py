@@ -5,7 +5,6 @@ from authlib.integrations.flask_client import OAuth
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Google OAuth Setup
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -15,85 +14,160 @@ google = oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
+# =====================
+# AUTHENTICATION ROUTES
+# =====================
+
 @app.route('/')
 def index():
-    if 'credits' not in session:
-        session['credits'] = 0
+    """Landing page - login screen"""
+    if session.get('user_name'):
+        return redirect(url_for('role'))
     return render_template('index.html')
 
-@app.route('/login/google')
+@app.route('/login')
 def login():
+    """Initiate Google OAuth"""
     return google.authorize_redirect(url_for('auth', _external=True))
 
 @app.route('/auth')
 def auth():
-    get_flashed_messages()
+    """Google OAuth callback - initialize credits and redirect to role selection"""
     try:
         token = google.authorize_access_token()
         user = token.get('userinfo')
         if user:
             session['user_name'] = user.get('name') or user.get('email').split('@')[0]
-            session['credits'] = 500 
+            session['credits'] = 500  # ← CRITICAL: Initialize with 500 credits
+            session['city'] = 'Bangalore'
             session.modified = True
-            flash("Success! 500 Bonus Credits added to your account.")
         return redirect(url_for('role'))
-    except Exception:
+    except Exception as e:
+        print(f"Auth error: {e}")
         return redirect(url_for('index'))
-
-@app.route('/role', methods=['GET', 'POST'])
-def role():
-    if request.method == 'POST':
-        get_flashed_messages()
-        session['user_name'] = request.form.get('name')
-        session['credits'] = 500
-        session.modified = True
-        flash("Success! 500 Bonus Credits added to your account.")
-    
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-    return render_template('role.html', user_name=session.get('user_name'), credits=session.get('credits'))
-
-@app.route('/seller')
-def seller():
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-    return render_template('seller.html')
-
-@app.route('/generate_report', methods=['POST'])
-def generate_report():
-    get_flashed_messages()
-    current_credits = session.get('credits', 0)
-    if current_credits >= 100:
-        session['credits'] = current_credits - 100
-        session.modified = True 
-        session['last_search'] = {
-            'make': request.form.get('make'),
-            'model': request.form.get('model'),
-            'variant': request.form.get('variant'),
-            'year': request.form.get('year'),
-            'city': "Bangalore",
-            'fuel': request.form.get('fuel'),
-            'condition': request.form.get('condition'),
-            'mileage': request.form.get('mileage'),
-            'owners': request.form.get('owners')
-        }
-        return redirect(url_for('dashboard'))
-    else:
-        flash("Insufficient credits!")
-        return redirect(url_for('role'))
-
-@app.route('/dashboard')
-def dashboard():
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-    search_data = session.get('last_search', {})
-    return render_template('dashboard.html', data=search_data)
 
 @app.route('/logout')
 def logout():
+    """Logout and clear session"""
     session.clear()
     return redirect(url_for('index'))
 
+# =====================
+# ROLE SELECTION
+# =====================
+
+@app.route('/role')
+def role():
+    """Role selection page - Seller/Buyer/Dashboard"""
+    if not session.get('user_name'):
+        return redirect(url_for('index'))
+    return render_template('role.html', 
+                         user_name=session.get('user_name'),
+                         credits=session.get('credits', 0))
+
+# =====================
+# SELLER ROUTES
+# =====================
+
+@app.route('/seller')
+def seller():
+    """Seller valuation form - 4-4-1 grid layout"""
+    if not session.get('user_name'):
+        return redirect(url_for('index'))
+    return render_template('seller.html',
+                         user_name=session.get('user_name'),
+                         credits=session.get('credits', 0))
+
+@app.route('/generate_report', methods=['POST'])
+def generate_report():
+    """Deduct 100 credits for valuation and show dashboard with results"""
+    if not session.get('user_name'):
+        return redirect(url_for('index'))
+    
+    if session.get('credits', 0) < 100:
+        flash('Insufficient credits! You need 100 credits for a valuation.', 'danger')
+        return redirect(url_for('seller'))
+    
+    # Deduct credits
+    session['credits'] -= 100
+    session.modified = True
+    
+    # Store search parameters for dashboard display
+    session['last_search'] = request.form.to_dict()
+    
+    return redirect(url_for('dashboard'))
+
+# =====================
+# BUYER ROUTES
+# =====================
+
+@app.route('/buyer')
+def buyer():
+    """Buyer search form - similar layout to seller"""
+    if not session.get('user_name'):
+        return redirect(url_for('index'))
+    return render_template('buyer.html',
+                         user_name=session.get('user_name'),
+                         credits=session.get('credits', 0))
+
+# =====================
+# DASHBOARD & RESULTS
+# =====================
+
+@app.route('/dashboard')
+def dashboard():
+    """Show valuation results after search"""
+    if not session.get('user_name'):
+        return redirect(url_for('index'))
+    
+    last_search = session.get('last_search', {})
+    
+    return render_template('dashboard.html',
+                         user_name=session.get('user_name'),
+                         credits=session.get('credits', 0),
+                         search_data=last_search)
+
+# =====================
+# DEAL SUBMISSION
+# =====================
+
+@app.route('/submit_deal')
+def submit_deal():
+    """Form to submit real deal data - awards 200 credits"""
+    if not session.get('user_name'):
+        return redirect(url_for('index'))
+    return render_template('submit_deal.html',
+                         user_name=session.get('user_name'),
+                         credits=session.get('credits', 0))
+
+@app.route('/submit_deal_post', methods=['POST'])
+def submit_deal_post():
+    """Process deal submission and add 200 credits"""
+    if not session.get('user_name'):
+        return redirect(url_for('index'))
+    
+    # Add 200 credits for submitting deal data
+    session['credits'] += 200
+    session.modified = True
+    
+    flash('Deal submitted successfully! +200 credits awarded!', 'success')
+    return redirect(url_for('dashboard'))
+
+# =====================
+# ERROR HANDLERS
+# =====================
+
+@app.errorhandler(404)
+def not_found(error):
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def server_error(error):
+    return render_template('500.html'), 500
+
+# =====================
+# RUN APP
+# =====================
+
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=False)
