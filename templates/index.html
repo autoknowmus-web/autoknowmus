@@ -1,296 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoKnowMus - Used Car Price Intelligence</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --neon-green: #00ff88;
-            --neon-blue: #00a8ff;
-            --dark-bg: #0a0e27;
-            --card-bg: #1a1f3a;
-        }
-
-        body {
-            background: linear-gradient(135deg, var(--dark-bg) 0%, #16213e 100%);
-            color: #e0e0e0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-        }
-
-        /* Header */
-        .navbar {
-            background-color: rgba(10, 14, 39, 0.95);
-            border-bottom: 2px solid var(--neon-green);
-            padding: 1rem 2rem;
-        }
-
-        .navbar-brand {
-            font-size: 1.5rem;
-            font-weight: bold;
-            letter-spacing: 2px;
-        }
-
-        .navbar-brand .logo-text {
-            color: var(--neon-green);
-        }
-
-        .navbar-brand .logo-text-blue {
-            color: var(--neon-blue);
-        }
-
-        .credits-badge {
-            background-color: rgba(0, 255, 136, 0.1);
-            border: 2px solid var(--neon-green);
-            color: var(--neon-green);
-            padding: 0.5rem 1.5rem;
-            border-radius: 25px;
-            font-weight: bold;
-            font-size: 1rem;
-        }
-
-        /* Main Container */
-        .hero-section {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: calc(100vh - 80px);
-            padding: 2rem;
-        }
-
-        .hero-content {
-            text-align: center;
-            max-width: 600px;
-        }
-
-        .logo {
-            width: 100px;
-            height: 100px;
-            margin: 0 auto 2rem;
-            background: linear-gradient(135deg, var(--neon-green) 0%, var(--neon-blue) 100%);
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 4rem;
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
-        }
-
-        .hero-title {
-            font-size: 3.5rem;
-            font-weight: 900;
-            margin-bottom: 1rem;
-            letter-spacing: 2px;
-        }
-
-        .hero-title .blue {
-            color: var(--neon-blue);
-        }
-
-        .hero-title .green {
-            color: var(--neon-green);
-        }
-
-        .hero-subtitle {
-            font-size: 1.1rem;
-            color: #b0b0b0;
-            margin-bottom: 2rem;
-            line-height: 1.6;
-        }
-
-        /* Form Card */
-        .login-card {
-            background-color: var(--card-bg);
-            border: 2px solid rgba(0, 255, 136, 0.2);
-            border-radius: 20px;
-            padding: 2.5rem;
-            margin-top: 2rem;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(10px);
-        }
-
-        .promo-text {
-            color: var(--neon-green);
-            font-weight: bold;
-            margin-bottom: 1.5rem;
-            font-size: 1rem;
-            letter-spacing: 1px;
-        }
-
-        /* Buttons */
-        .btn-social {
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            color: #e0e0e0;
-            padding: 0.8rem 1.5rem;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border-radius: 10px;
-            transition: all 0.3s ease;
-            margin-bottom: 1rem;
-        }
-
-        .btn-social:hover {
-            background-color: rgba(0, 255, 136, 0.1);
-            border-color: var(--neon-green);
-            color: var(--neon-green);
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
-        }
-
-        .divider {
-            color: #666;
-            margin: 1.5rem 0;
-            font-size: 0.9rem;
-        }
-
-        /* Form Fields */
-        .form-control {
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            color: #e0e0e0;
-            padding: 0.8rem 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-        }
-
-        .form-control:focus {
-            background-color: rgba(255, 255, 255, 0.08);
-            border-color: var(--neon-green);
-            color: #e0e0e0;
-            box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
-        }
-
-        .form-control::placeholder {
-            color: #888;
-        }
-
-        /* Phone Input Group */
-        .input-group {
-            margin-bottom: 1rem;
-        }
-
-        .input-group-text {
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            color: #888;
-        }
-
-        /* Primary Button */
-        .btn-primary-custom {
-            background: linear-gradient(135deg, var(--neon-green) 0%, #00dd77 100%);
-            border: none;
-            color: #000;
-            padding: 1rem 2rem;
-            font-size: 1.1rem;
-            font-weight: 700;
-            border-radius: 10px;
-            width: 100%;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.4);
-            letter-spacing: 1px;
-        }
-
-        .btn-primary-custom:hover {
-            background: linear-gradient(135deg, #00ff88 0%, #00ff99 100%);
-            box-shadow: 0 0 50px rgba(0, 255, 136, 0.6);
-            transform: translateY(-2px);
-        }
-
-        .btn-primary-custom:active {
-            transform: translateY(0);
-        }
-
-        /* Footer */
-        .footer {
-            text-align: center;
-            color: #666;
-            font-size: 0.9rem;
-            margin-top: 2rem;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .hero-title {
-                font-size: 2rem;
-            }
-
-            .hero-subtitle {
-                font-size: 0.95rem;
-            }
-
-            .login-card {
-                padding: 1.5rem;
-            }
-        }
-    </style>
-</head>
-<body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/">
-                <span>Auto</span><span class="logo-text">Know</span><span class="logo-text-blue">Mus</span>
-            </a>
-            <div class="ms-auto">
-                <span class="credits-badge">💳 0 Credits</span>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Main Content -->
-    <div class="hero-section">
-        <div class="hero-content">
-            <!-- Logo -->
-            <div class="logo">A</div>
-
-            <!-- Title -->
-            <h1 class="hero-title">
-                Auto<span class="blue">Know</span><span class="green">Mus</span>
+{% extends "layout.html" %}
+{% block content %}
+<div class="row justify-content-center text-center">
+    <div class="col-12">
+        <div class="d-flex align-items-center justify-content-center flex-wrap mb-2">
+            <svg width="70" height="70" viewBox="0 0 100 100" class="me-2">
+                <path d="M50 10 L22 22 V50 C22 72 50 85 50 85 C50 85 78 72 78 50 V22 L50 10 Z" fill="#28a745" stroke="#28a745" stroke-width="4"/>
+                <text x="50" y="66" font-family="Arial" font-size="55" fill="white" font-weight="900" text-anchor="middle">A</text>
+            </svg>
+            <h1 class="display-4 fw-bold mb-0">
+                <span class="text-white">Auto</span><span style="color: #4e54ff;">Know</span><span style="color: #28a745;">Mus</span>
             </h1>
+        </div>
 
-            <!-- Subtitle -->
-            <p class="hero-subtitle">
-                AutoKnowMus cuts through market opacity with real price transparency—helping you avoid overpaying and ensuring you sell at the right price, at the right time.
+        <p class="text-white-50 small mb-4 px-lg-5 mx-auto" style="max-width: 800px; line-height: 1.6;">
+            AutoKnowMus cuts through market opacity with real price transparency—helping you avoid overpaying and ensuring you sell at the right price, at the right time.
+        </p>
+
+        <div class="card p-4 mx-auto shadow-lg mt-4" style="background: #16181d; border: 1px solid #2d2f34; max-width: 420px; border-radius: 24px;">
+            <p class="text-green mb-3" style="font-size: 0.72rem; white-space: nowrap; font-weight: 600;">
+                Get Started & Receive 500 Bonus Credits for 5 Free Searches
             </p>
+            
+            <!-- Google Login Button -->
+            <a href="/login/google" class="btn btn-outline-light w-100 mb-2 btn-sm border-secondary py-2 d-flex align-items-center justify-content-center text-decoration-none">
+                <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" width="16" class="me-2"> Continue with Google
+            </a>
+            
+            <!-- Apple Login Button - REMOVED (was disabled before) -->
+            
+            <div class="text-white-50 small mb-3 text-center">—— OR ——</div>
 
-            <!-- Login Card -->
-            <div class="login-card">
-                <p class="promo-text">GET STARTED & RECEIVE 500 BONUS CREDITS FOR 5 FREE SEARCHES</p>
-
-                <!-- Google Login -->
-                <a href="/login" class="btn btn-social btn-lg w-100" style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                    🔵 Continue with Google
-                </a>
-
-                <!-- Divider -->
-                <p class="divider">— OR —</p>
-
-                <!-- Email Field (Optional - for manual login if needed) -->
-                <input type="email" class="form-control form-control-lg" placeholder="Enter your email" required>
-
-                <!-- Phone Field (Simplified) -->
-                <div class="input-group input-group-lg">
-                    <span class="input-group-text">+91</span>
-                    <input type="tel" class="form-control" placeholder="Enter 10-digit mobile number" maxlength="10" required>
+            <!-- Manual Login Form -->
+            <form action="/role" method="POST">
+                <input type="text" name="name" class="form-control bg-dark text-white border-secondary mb-2 py-2" placeholder="Full Name" required>
+                <input type="email" name="email" class="form-control bg-dark text-white border-secondary mb-2 py-2" placeholder="Email Address" required>
+                <div class="input-group mb-3">
+                    <span class="input-group-text bg-secondary border-secondary text-white">+91</span>
+                    <input type="tel" name="mobile" class="form-control bg-dark text-white border-secondary py-2" placeholder="Mobile Number" pattern="[0-9]{10}" maxlength="10" required>
                 </div>
-
-                <!-- Submit Button -->
-                <button type="submit" class="btn btn-primary-custom btn-lg">
-                    Login & Claim Credits
-                </button>
-            </div>
-
-            <!-- Footer -->
-            <div class="footer">
-                © 2026 AutoKnowMus
-            </div>
+                <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow">Login & Claim Credits</button>
+            </form>
         </div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</div>
+{% endblock %}
