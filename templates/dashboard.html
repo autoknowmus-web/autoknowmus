@@ -1,11 +1,15 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row g-3">
+    <div class="col-lg-12 mb-2">
+        <a href="/seller" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-arrow-left me-1"></i> Back to Search</a>
+    </div>
+    
     <div class="col-lg-8">
         <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100" style="background: #16181d !important; border: 1px solid #2d2f34 !important;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h4 class="text-green fw-bold mb-0">Pricing Intelligence</h4>
-                <button class="btn btn-sm btn-success">Get Bonus Credits: Submit Real Deal Price</button>
+                <a href="/submit_deal" class="btn btn-sm btn-success">Get Bonus Credits: Submit Real Deal Price</a>
             </div>
 
             <div class="mb-4">
@@ -13,26 +17,26 @@
                     {{ data.year }} {{ data.make }} {{ data.model }} 
                     <span class="text-blue">{{ data.variant }}</span>
                 </h3>
-                <p class="text-white-50 small"><i class="fas fa-map-marker-alt me-1"></i> Market Intelligence for {{ data.city }}</p>
+                <p class="text-white small">Market Intelligence for {{ data.city }}</p>
             </div>
 
             <div class="row text-center mb-4">
                 <div class="col-6">
                     <div class="p-3 bg-black rounded-3 border border-secondary border-opacity-25">
                         <small class="text-white-50 d-block">Market Range</small>
-                        <span class="text-white fw-bold">₹ [Calculated Range]</span>
+                        <span class="text-white fw-bold">₹ [Calculating...]</span>
                     </div>
                 </div>
                 <div class="col-6">
                     <div class="p-3 bg-black rounded-3 border border-secondary border-opacity-25">
                         <small class="text-white-50 d-block">Estimated Fair Price</small>
-                        <span class="text-green fw-bold">₹ [Fair Price]</span>
+                        <span class="text-green fw-bold">₹ [Calculating...]</span>
                     </div>
                 </div>
             </div>
 
-            <h6 class="text-white-50 mb-3 small text-uppercase">6-Month Price Depreciation (15-Day Intervals)</h6>
-            <div class="p-3 bg-black rounded-3 position-relative">
+            <h6 class="text-white-50 mb-3 small text-uppercase">6-Month Price Depreciation</h6>
+            <div class="p-3 bg-black rounded-3">
                 <svg viewBox="0 0 500 120" class="w-100">
                     <path d="M0,20 Q150,90 500,110" fill="none" stroke="#28a745" stroke-width="3" />
                     <circle cx="50" cy="45" r="6" fill="#fff" />
@@ -48,17 +52,16 @@
             <h5 class="text-white fw-bold mb-3">Market Insights</h5>
             <div class="mb-3">
                 <small class="text-white-50">Demand for {{ data.model }}</small>
-                <div class="progress bg-black" style="height: 8px;">
+                <div class="progress bg-black mt-1" style="height: 8px;">
                     <div class="progress-bar bg-warning" style="width: 75%;"></div>
                 </div>
                 <small class="text-warning">High Demand</small>
             </div>
+            <hr class="border-secondary opacity-25">
             <div class="mb-3">
                 <small class="text-white-50">Average Days to Sell</small>
                 <h4 class="text-white">18 Days</h4>
             </div>
-            <hr class="border-secondary opacity-25">
-            <a href="/seller" class="btn btn-outline-secondary w-100 btn-sm">New Valuation</a>
         </div>
     </div>
 </div>
