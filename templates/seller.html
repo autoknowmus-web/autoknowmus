@@ -3,27 +3,34 @@
 <div class="row justify-content-center">
     <div class="col-lg-11">
         <div class="card p-4 shadow-lg mt-4" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="mb-4">
                 <h3 class="text-green fw-bold mb-0">Sell Your Car: Market Valuation</h3>
-                <span class="text-warning fw-bold">(500 Credits Remaining)</span>
             </div>
 
             <form action="/generate_report" method="POST" class="row g-4">
                 <div class="col-md-4">
                     <label class="form-label text-white fw-bold small">Location (City)</label>
-                    <select name="city" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="Indore">Indore</option>
+                    <select class="form-select bg-dark text-white border-secondary py-2" disabled>
                         <option value="Bangalore">Bangalore</option>
-                        <option value="Hyderabad">Hyderabad</option>
                     </select>
+                    <input type="hidden" name="city" value="Bangalore">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label text-white fw-bold small">Make</label>
                     <select id="make" name="make" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="">Select Make</option>
-                        <option value="Toyota">Toyota</option>
-                        <option value="Lexus">Lexus</option>
+                        <option value="Audi">Audi</option>
+                        <option value="BMW">BMW</option>
                         <option value="Honda">Honda</option>
+                        <option value="Hyundai">Hyundai</option>
+                        <option value="Kia">Kia</option>
+                        <option value="Lexus">Lexus</option>
+                        <option value="Mahindra">Mahindra</option>
+                        <option value="Maruti Suzuki">Maruti Suzuki</option>
+                        <option value="Mercedes-Benz">Mercedes-Benz</option>
+                        <option value="MG">MG</option>
+                        <option value="Tata">Tata</option>
+                        <option value="Toyota">Toyota</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -44,8 +51,10 @@
                     <select name="fuel" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="Petrol">Petrol</option>
                         <option value="Diesel">Diesel</option>
-                        <option value="Hybrid">Hybrid</option>
-                        <option value="EV">EV</option>
+                        <option value="CNG">CNG</option>
+                        <option value="HEV">HEV (Hybrid)</option>
+                        <option value="PHEV">PHEV (Plug-in Hybrid)</option>
+                        <option value="BEV">BEV (Electric)</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -54,7 +63,6 @@
                         <option value="Excellent">Excellent (Showroom like)</option>
                         <option value="Good">Good (Minor wear & tear)</option>
                         <option value="Fair">Fair (Noticeable dents/scratches)</option>
-                        <option value="Poor">Poor (Needs repair/restoration)</option>
                     </select>
                 </div>
 
@@ -67,9 +75,8 @@
                     <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" placeholder="YYYY" min="2000" max="2026" required>
                 </div>
                 <div class="col-md-6 d-flex align-items-end">
-                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-lg" 
-                            style="border-radius: 12px; background: linear-gradient(45deg, #28a745, #1e7e34); border: none; font-size: 1.1rem; text-transform: uppercase;">
-                        GENERATE INTELLIGENCE (100 Credits)
+                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: linear-gradient(45deg, #28a745, #1e7e34); border: none; font-size: 1.1rem;">
+                        GENERATE INTELLIGENCE (100 CREDITS)
                     </button>
                 </div>
             </form>
@@ -79,21 +86,12 @@
 
 <script>
 const carData = {
-    "Toyota": { 
-        "Innova": ["GX", "VX", "ZX", "Crysta", "Hycross"], 
-        "Fortuner": ["4x2", "4x4", "Legender", "GR-S"], 
-        "Glanza": ["V", "G", "S"] 
-    },
-    "Lexus": { 
-        "ES": ["300h Exquisite", "300h Luxury"], 
-        "RX": ["350h", "500h F-Sport"], 
-        "NX": ["350h Luxury", "350h F-Sport"] 
-    },
-    "Honda": { 
-        "City": ["V", "VX", "ZX", "e:HEV"], 
-        "Amaze": ["S", "VX"], 
-        "Elevate": ["V", "VX", "ZX"] 
-    }
+    "Toyota": { "Innova": ["GX", "VX", "ZX", "Hycross"], "Fortuner": ["4x2", "4x4", "Legender"], "Glanza": ["V", "G"] },
+    "Honda": { "City": ["V", "VX", "ZX"], "Amaze": ["S", "VX"], "Elevate": ["V", "VX", "ZX"] },
+    "Lexus": { "ES": ["300h Luxury"], "RX": ["350h"], "NX": ["350h"] },
+    "Maruti Suzuki": { "Swift": ["LXi", "VXi", "ZXi"], "Baleno": ["Delta", "Zeta", "Alpha"], "Brezza": ["VXi", "ZXi"] },
+    "Tata": { "Nexon": ["XE", "XM", "XZ"], "Harrier": ["Pure", "Adventure", "Fearless"], "Punch": ["Pure", "Creative"] },
+    "Hyundai": { "Creta": ["E", "S", "SX", "SX(O)"], "Verna": ["EX", "S", "SX"], "i20": ["Magna", "Sportz", "Asta"] }
 };
 
 document.getElementById('make').addEventListener('change', function() {
@@ -101,7 +99,6 @@ document.getElementById('make').addEventListener('change', function() {
     const variantSel = document.getElementById('variant');
     modelSel.innerHTML = '<option value="">Select Model</option>';
     variantSel.innerHTML = '<option value="">Select Variant</option>';
-    
     if(this.value && carData[this.value]) {
         Object.keys(carData[this.value]).forEach(model => {
             modelSel.innerHTML += `<option value="${model}">${model}</option>`;
@@ -113,7 +110,6 @@ document.getElementById('model').addEventListener('change', function() {
     const makeVal = document.getElementById('make').value;
     const variantSel = document.getElementById('variant');
     variantSel.innerHTML = '<option value="">Select Variant</option>';
-    
     if(this.value && carData[makeVal][this.value]) {
         carData[makeVal][this.value].forEach(v => {
             variantSel.innerHTML += `<option value="${v}">${v}</option>`;
