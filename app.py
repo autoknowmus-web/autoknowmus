@@ -5,6 +5,7 @@ from authlib.integrations.flask_client import OAuth
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+# Google OAuth Setup
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -26,13 +27,15 @@ def login():
 
 @app.route('/auth')
 def auth():
-    get_flashed_messages()
+    get_flashed_messages() # Clear old messages
     try:
         token = google.authorize_access_token()
         user = token.get('userinfo')
         if user:
+            # Use name if available, otherwise email prefix
             session['user_name'] = user.get('name') or user.get('email').split('@')[0]
             session['credits'] = 500 
+            session.modified = True
             flash("Success! 500 Bonus Credits added to your account.")
         return redirect(url_for('role'))
     except Exception:
@@ -44,9 +47,12 @@ def role():
         get_flashed_messages()
         session['user_name'] = request.form.get('name')
         session['credits'] = 500
+        session.modified = True
         flash("Success! 500 Bonus Credits added to your account.")
+    
     if 'user_name' not in session:
         return redirect(url_for('index'))
+        
     return render_template('role.html', user_name=session.get('user_name'), credits=session.get('credits'))
 
 @app.route('/seller')
@@ -55,13 +61,21 @@ def seller():
         return redirect(url_for('index'))
     return render_template('seller.html')
 
+@app.route('/buyer')
+def buyer():
+    if 'user_name' not in session:
+        return redirect(url_for('index'))
+    return render_template('buyer.html')
+
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
     get_flashed_messages()
     current_credits = session.get('credits', 0)
+    
     if current_credits >= 100:
         session['credits'] = current_credits - 100
         session.modified = True 
+        
         session['last_search'] = {
             'make': request.form.get('make'),
             'model': request.form.get('model'),
