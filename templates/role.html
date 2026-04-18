@@ -1,286 +1,106 @@
-from flask import Flask, render_template, redirect, url_for, session, request, flash
-from authlib.integrations.flask_client import OAuth
-from datetime import datetime
-import os
+{% extends "layout.html" %}
+{% block title %}Choose Your Role - AutoKnowMus{% endblock %}
 
-app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
+{% block extra_head %}
+<style>
+  .role-wrap { padding: 20px 40px 60px; }
+  .greeting {
+    text-align: center; color: #fff; font-size: 1.8rem; font-weight: 600;
+    margin: 10px 0 35px;
+  }
+  .role-card {
+    background: #1a1d24; border-radius: 12px; padding: 30px;
+    height: 100%; display: flex; flex-direction: column;
+  }
+  .role-card.seller { border: 2px solid #28a745; }
+  .role-card.buyer { border: 2px solid #4e54ff; }
+  .role-title { text-align: center; font-size: 1.5rem; font-weight: 600; margin-bottom: 10px; }
+  .role-title.seller-title { color: #28a745; }
+  .role-title.buyer-title { color: #4e54ff; }
+  .role-sub { text-align: center; color: #b0b0b0; margin-bottom: 20px; font-size: 0.95rem; }
 
-# ========== GOOGLE OAUTH ==========
-oauth = OAuth(app)
-google = oauth.register(
-    name='google',
-    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
-    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'}
-)
+  .btn-role { padding: 13px; border-radius: 8px; font-weight: 600; border: none; color: #fff; }
+  .btn-role-seller { background: #28a745; }
+  .btn-role-seller:hover { background: #218838; color: #fff; }
+  .btn-role-buyer { background: #4e54ff; }
+  .btn-role-buyer:hover { background: #3a40d9; color: #fff; }
 
-# ========== MASTER DATA ==========
-CAR_BRANDS = sorted([
-    'Audi', 'BMW', 'Ford', 'Honda', 'Hyundai', 'Jaguar', 'Kia',
-    'Land Rover', 'Lexus', 'Mahindra', 'Maruti Suzuki', 'Mercedes-Benz',
-    'MG', 'Nissan', 'Renault', 'Skoda', 'Tata', 'Toyota', 'Volkswagen', 'Volvo'
-])
+  .benefit-box {
+    background: #0e1117; border-radius: 8px; padding: 18px; margin: 18px 0;
+  }
+  .benefit-title { font-weight: 600; margin-bottom: 6px; font-size: 0.98rem; }
+  .benefit-title.seller-b { color: #28a745; }
+  .benefit-title.buyer-b { color: #4e54ff; }
+  .benefit-text { color: #b0b0b0; font-size: 0.88rem; line-height: 1.5; margin: 0; }
 
-MODELS_BY_BRAND = {
-    'Audi': sorted(['A3', 'A4', 'A6', 'Q3', 'Q5', 'Q7']),
-    'BMW': sorted(['3 Series', '5 Series', 'X1', 'X3', 'X5', 'X7']),
-    'Ford': sorted(['EcoSport', 'Endeavour', 'Figo', 'Freestyle']),
-    'Honda': sorted(['Amaze', 'City', 'Civic', 'Elevate', 'Jazz', 'WR-V']),
-    'Hyundai': sorted(['Alcazar', 'Aura', 'Creta', 'Exter', 'Grand i10 Nios', 'i20', 'Kona Electric', 'Tucson', 'Venue', 'Verna']),
-    'Jaguar': sorted(['F-Pace', 'XE', 'XF']),
-    'Kia': sorted(['Carens', 'Carnival', 'EV6', 'Seltos', 'Sonet']),
-    'Land Rover': sorted(['Defender', 'Discovery', 'Range Rover', 'Range Rover Evoque', 'Range Rover Sport']),
-    'Lexus': sorted(['ES', 'LX', 'NX', 'RX']),
-    'Mahindra': sorted(['Bolero', 'Scorpio', 'Scorpio N', 'Thar', 'XUV300', 'XUV400', 'XUV700', 'XUV3XO']),
-    'Maruti Suzuki': sorted(['Alto K10', 'Baleno', 'Brezza', 'Celerio', 'Dzire', 'Eeco', 'Ertiga', 'Fronx', 'Grand Vitara', 'Ignis', 'Jimny', 'S-Presso', 'Swift', 'Wagon R', 'XL6']),
-    'Mercedes-Benz': sorted(['A-Class', 'C-Class', 'E-Class', 'GLA', 'GLC', 'GLE', 'S-Class']),
-    'MG': sorted(['Astor', 'Gloster', 'Hector', 'Hector Plus', 'ZS EV']),
-    'Nissan': sorted(['Kicks', 'Magnite']),
-    'Renault': sorted(['Kiger', 'Kwid', 'Triber']),
-    'Skoda': sorted(['Kushaq', 'Octavia', 'Slavia', 'Superb']),
-    'Tata': sorted(['Altroz', 'Harrier', 'Nexon', 'Nexon EV', 'Punch', 'Safari', 'Tiago', 'Tigor']),
-    'Toyota': sorted(['Camry', 'Fortuner', 'Glanza', 'Hilux', 'Hyryder', 'Innova Crysta', 'Innova Hycross', 'Vellfire']),
-    'Volkswagen': sorted(['Taigun', 'Tiguan', 'Virtus']),
-    'Volvo': sorted(['XC40', 'XC60', 'XC90'])
-}
+  .btn-secondary-outline {
+    background: transparent; border: 1px solid #4eb0ff; color: #4eb0ff;
+    padding: 11px; border-radius: 8px; font-weight: 500; text-decoration: none;
+    text-align: center; display: block;
+  }
+  .btn-secondary-outline:hover { background: rgba(78,176,255,0.1); color: #4eb0ff; }
 
-# FIXED ORDER — NOT alphabetical (per UI rule)
-FUEL_TYPES = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV']
+  .btn-disabled-coming {
+    background: #2a2d34; color: #666; padding: 11px; border-radius: 8px;
+    font-weight: 500; text-align: center; margin-bottom: 10px; cursor: not-allowed;
+  }
+  .btn-disabled-coming .coming-soon { color: #ffa500; font-size: 0.8rem; font-weight: 600; }
+</style>
+{% endblock %}
 
-# 3 OPTIONS ONLY (per UI rule)
-CONDITIONS = [
-    'Excellent (Showroom like)',
-    'Good (Minor wear)',
-    'Fair (Visible wear)'
-]
+{% block content %}
+<div class="role-wrap">
 
-OWNERS = ['1st Owner', '2nd Owner', '3rd Owner or more']
+  {% if show_welcome %}
+    {{ orange_alert('Welcome! 500 bonus credits added for 5 free searches — (500 Credits)') }}
+  {% endif %}
 
-# Alphabetical
-BUYER_TYPES = sorted(['Dealer', 'Direct Buyer', 'Exchange at Showroom'])
+  <h2 class="greeting">Hello {{ session.user.name | firstname }}! Ready to make a smarter decision?</h2>
 
-# Year dropdown — newest first
-YEARS = list(range(2026, 2010, -1))  # 2026 down to 2011
+  <div class="row g-4">
+    <!-- Seller -->
+    <div class="col-md-6">
+      <div class="role-card seller">
+        <h3 class="role-title seller-title">I am a Seller</h3>
+        <p class="role-sub">Price your car right with real market intelligence before you list.</p>
+        <a href="{{ url_for('seller') }}" class="btn btn-role btn-role-seller">Find My Car Value</a>
+        <div class="benefit-box">
+          <div class="benefit-title seller-b">Seller Credit Benefits</div>
+          <p class="benefit-text">
+            Unlimited real price searches for 30 days based on verified transaction data from your city.
+            Know your car's fair market value before any buyer makes you an offer.
+          </p>
+        </div>
+        <div class="btn-disabled-coming">
+          Purchase 500 Credits for Seller <span class="coming-soon">(Coming Soon)</span>
+        </div>
+        <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
+          Record Actual Transaction Data
+        </a>
+      </div>
+    </div>
 
-# ========== HELPERS ==========
-def require_login():
-    if 'user' not in session:
-        return redirect(url_for('index'))
-    return None
-
-def ensure_session_defaults():
-    if 'user' in session:
-        session.setdefault('credits', 500)
-        session.setdefault('transactions', [])
-        session.setdefault('last_valuation', None)
-
-def first_name(full_name):
-    """Return only the first name (e.g. 'Rajeev Thakur' -> 'Rajeev')."""
-    if not full_name:
-        return 'there'
-    return full_name.strip().split()[0]
-
-# Jinja filter — so templates can use {{ session.user.name | firstname }}
-@app.template_filter('firstname')
-def firstname_filter(s):
-    return first_name(s)
-
-# ========== ROUTES ==========
-@app.route('/')
-def index():
-    if 'user' in session:
-        return redirect(url_for('role'))
-    return render_template('index.html')
-
-@app.route('/login')
-def login():
-    redirect_uri = url_for('auth', _external=True)
-    return google.authorize_redirect(redirect_uri)
-
-@app.route('/auth')
-def auth():
-    try:
-        token = google.authorize_access_token()
-        user_info = token.get('userinfo')
-        if not user_info:
-            user_info = google.parse_id_token(token)
-        session['user'] = {
-            'name': user_info.get('name', 'User'),
-            'email': user_info.get('email', '')
-        }
-        # First-time bonus — ensures credit history starts with Signup Bonus
-        if 'credits' not in session:
-            session['credits'] = 500
-            session['transactions'] = [{
-                'date': datetime.now().strftime('%d-%b-%Y'),
-                'type': 'Signup Bonus',
-                'description': 'Welcome gift — 5 free searches',
-                'amount': 500,
-                'balance': 500
-            }]
-            session['welcome_shown'] = False
-        return redirect(url_for('role'))
-    except Exception as e:
-        flash(f'Login error: {str(e)}', 'danger')
-        return redirect(url_for('index'))
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('index'))
-
-@app.route('/role')
-def role():
-    guard = require_login()
-    if guard: return guard
-    ensure_session_defaults()
-    show_welcome = not session.get('welcome_shown', True)
-    session['welcome_shown'] = True
-    return render_template('role.html', show_welcome=show_welcome)
-
-@app.route('/seller')
-def seller():
-    guard = require_login()
-    if guard: return guard
-    ensure_session_defaults()
-    return render_template('seller.html',
-                           brands=CAR_BRANDS,
-                           fuels=FUEL_TYPES,
-                           conditions=CONDITIONS,
-                           owners=OWNERS,
-                           years=YEARS)
-
-@app.route('/buyer')
-def buyer():
-    guard = require_login()
-    if guard: return guard
-    ensure_session_defaults()
-    return render_template('buyer.html',
-                           brands=CAR_BRANDS,
-                           fuels=FUEL_TYPES,
-                           years=YEARS)
-
-@app.route('/valuate', methods=['POST'])
-def valuate():
-    guard = require_login()
-    if guard: return guard
-    ensure_session_defaults()
-
-    if session.get('credits', 0) < 100:
-        flash('Insufficient credits. Please submit a deal to earn credits.', 'warning')
-        return redirect(url_for('seller'))
-
-    car_data = {
-        'make': request.form.get('make', 'N/A'),
-        'model': request.form.get('model', 'N/A'),
-        'variant': request.form.get('variant', 'N/A'),
-        'fuel': request.form.get('fuel', 'N/A'),
-        'year': request.form.get('year', 'N/A'),
-        'mileage': request.form.get('mileage', '0'),
-        'condition': request.form.get('condition', 'N/A'),
-        'owner': request.form.get('owner', 'N/A'),
-    }
-
-    try:
-        year = int(car_data['year'])
-        mileage = int(car_data['mileage'])
-        age = max(0, 2026 - year)
-        base = 800000
-        depreciated = base * (0.85 ** age)
-        km_penalty = max(0, (mileage - 10000 * age) * 2)
-        estimated = max(50000, int(depreciated - km_penalty))
-    except (ValueError, TypeError):
-        estimated = 500000
-
-    car_data['estimated_price'] = estimated
-    car_data['price_low'] = int(estimated * 0.92)
-    car_data['price_high'] = int(estimated * 1.08)
-
-    # Deduct credits + log transaction
-    session['credits'] = session.get('credits', 500) - 100
-    txns = session.get('transactions', [])
-    txns.append({
-        'date': datetime.now().strftime('%d-%b-%Y'),
-        'type': 'Valuation',
-        'description': f"{car_data['make']} {car_data['model']} ({car_data['year']})",
-        'amount': -100,
-        'balance': session['credits']
-    })
-    session['transactions'] = txns
-    session['last_valuation'] = car_data
-    session['dashboard_message'] = 'Valuation complete! 100 credits used.'
-    session.modified = True
-
-    return redirect(url_for('dashboard'))
-
-@app.route('/dashboard')
-def dashboard():
-    guard = require_login()
-    if guard: return guard
-    ensure_session_defaults()
-
-    valuation = session.get('last_valuation')
-    message = session.pop('dashboard_message', None)
-
-    return render_template('dashboard.html',
-                           valuation=valuation,
-                           message=message)
-
-@app.route('/submit_deal', methods=['GET', 'POST'])
-def submit_deal():
-    guard = require_login()
-    if guard: return guard
-    ensure_session_defaults()
-
-    if request.method == 'POST':
-        make = request.form.get('make', 'Car')
-        model = request.form.get('model', '')
-        year = request.form.get('year', '')
-
-        session['credits'] = session.get('credits', 0) + 100
-        txns = session.get('transactions', [])
-        txns.append({
-            'date': datetime.now().strftime('%d-%b-%Y'),
-            'type': 'Deal Submission',
-            'description': f"{make} {model} ({year})",
-            'amount': 100,
-            'balance': session['credits']
-        })
-        session['transactions'] = txns
-        session['dashboard_message'] = 'Deal submitted successfully! +100 Credits awarded!'
-        session.modified = True
-        return redirect(url_for('dashboard'))
-
-    return render_template('submit_deal.html',
-                           brands=CAR_BRANDS,
-                           fuels=FUEL_TYPES,
-                           conditions=CONDITIONS,
-                           owners=OWNERS,
-                           buyer_types=BUYER_TYPES,
-                           years=YEARS,
-                           today=datetime.now().strftime('%d-%b-%Y'))
-
-@app.route('/credit_history')
-def credit_history():
-    guard = require_login()
-    if guard: return guard
-    ensure_session_defaults()
-    # Show newest first
-    txns = list(reversed(session.get('transactions', [])))
-    return render_template('credit_history.html',
-                           transactions=txns,
-                           balance=session.get('credits', 0))
-
-# ========== ERROR HANDLERS ==========
-@app.errorhandler(404)
-def not_found(e):
-    return render_template('404.html'), 404
-
-@app.errorhandler(500)
-def server_error(e):
-    return render_template('500.html'), 500
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    <!-- Buyer -->
+    <div class="col-md-6">
+      <div class="role-card buyer">
+        <h3 class="role-title buyer-title">I am a Buyer</h3>
+        <p class="role-sub">Evaluate any deal against real market data before you pay.</p>
+        <a href="{{ url_for('buyer') }}" class="btn btn-role btn-role-buyer">Research Prices</a>
+        <div class="benefit-box">
+          <div class="benefit-title buyer-b">Buyer Credit Benefits</div>
+          <p class="benefit-text">
+            Unlimited real price searches for 30 days based on user-submitted transaction data.
+            Never overpay — know exactly what similar cars are selling for in Bangalore.
+          </p>
+        </div>
+        <div class="btn-disabled-coming">
+          Purchase 500 Credits as Buyer <span class="coming-soon">(Coming Soon)</span>
+        </div>
+        <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
+          Record Actual Transaction Data
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
