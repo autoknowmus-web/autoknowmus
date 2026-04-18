@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-11">
+    <div class="col-lg-12">
         <div class="card p-4 shadow-lg mt-2" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <a href="/role" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-arrow-left me-1"></i> Back</a>
@@ -11,22 +11,20 @@
             <form action="/generate_report" method="POST" class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Location</label>
-                    <select class="form-select bg-dark text-white border-secondary py-2" disabled>
-                        <option>Bangalore</option>
-                    </select>
+                    <select class="form-select bg-dark text-white border-secondary py-2" disabled><option>Bangalore</option></select>
+                    <input type="hidden" name="city" value="Bangalore">
                 </div>
-
                 <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Make</label>
                     <select id="make" name="make" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="">Select Make</option>
-                        <option value="Maruti Suzuki">Maruti Suzuki</option>
-                        <option value="Toyota">Toyota</option>
                         <option value="Honda">Honda</option>
                         <option value="Hyundai">Hyundai</option>
+                        <option value="Lexus">Lexus</option>
+                        <option value="Maruti Suzuki">Maruti Suzuki</option>
+                        <option value="Toyota">Toyota</option>
                     </select>
                 </div>
-
                 <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Fuel Type</label>
                     <select id="fuel" name="fuel" class="form-select bg-dark text-white border-secondary py-2" required>
@@ -39,7 +37,6 @@
                         <option value="BEV">BEV (Electric)</option>
                     </select>
                 </div>
-
                 <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Model</label>
                     <select id="model" name="model" class="form-select bg-dark text-white border-secondary py-2" required>
@@ -47,24 +44,21 @@
                     </select>
                 </div>
 
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label text-white fw-bold small">Variant / Suffix</label>
                     <select id="variant" name="variant" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="">Select Variant</option>
                     </select>
                 </div>
-
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label text-white fw-bold small">No. of Owners</label>
                     <select name="owners" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="1">1st Owner</option>
                         <option value="2">2nd Owner</option>
                         <option value="3">3rd Owner</option>
-                        <option value="4">4+ Owners</option>
                     </select>
                 </div>
-
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label text-white fw-bold small">Condition</label>
                     <select name="condition" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="Excellent">Excellent (Showroom like)</option>
@@ -77,14 +71,12 @@
                     <label class="form-label text-white fw-bold small">Mileage (KMs) <span class="text-danger">*</span></label>
                     <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary py-2" required>
                 </div>
-
-                <div class="col-md-2">
+                <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Year <span class="text-danger">*</span></label>
                     <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" min="2000" max="2026" required>
                 </div>
-
-                <div class="col-md-10 d-flex align-items-end">
-                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: linear-gradient(45deg, #28a745, #1e7e34); border: none;">
+                <div class="col-md-6 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold" style="border-radius: 12px; background: #28a745; border: none; font-size: 1rem;">
                         GENERATE INTELLIGENCE (100 CREDITS)
                     </button>
                 </div>
@@ -96,16 +88,27 @@
 <script>
 const carData = {
     "Maruti Suzuki": { 
-        "Swift": { "Petrol": ["LXi", "VXi", "ZXi"], "Diesel": ["LDi", "VDi", "ZDi"] },
-        "Brezza": { "Petrol": ["LXi", "VXi", "ZXi"], "CNG": ["VXi CNG", "ZXi CNG"] },
-        "Baleno": { "Petrol": ["Delta", "Zeta", "Alpha"] }
+        "Swift": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "Diesel": ["LDi", "VDi", "ZDi", "ZDi+"] },
+        "Brezza": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "CNG": ["VXi CNG", "ZXi CNG"] },
+        "Baleno": { "Petrol": ["Sigma", "Delta", "Zeta", "Alpha"], "CNG": ["Delta CNG", "Zeta CNG"] },
+        "Ertiga": { "Petrol": ["LXi", "VXi", "ZXi"], "CNG": ["VXi CNG", "ZXi CNG"], "Diesel": ["VDi", "ZDi"] }
     },
     "Toyota": { 
-        "Innova": { "Diesel": ["GX", "VX", "ZX"], "HEV": ["Hycross VX", "Hycross ZX"] },
-        "Fortuner": { "Diesel": ["4x2", "4x4", "Legender"], "Petrol": ["2.7L 4x2"] }
+        "Innova Crysta": { "Diesel": ["G", "GX", "VX", "ZX"], "Petrol": ["GX", "VX"] },
+        "Innova Hycross": { "HEV": ["VX", "VX(O)", "ZX", "ZX(O)"], "Petrol": ["G", "GX"] },
+        "Fortuner": { "Diesel": ["4x2 MT", "4x2 AT", "4x4 MT", "4x4 AT", "Legender"], "Petrol": ["2.7L 4x2"] },
+        "Glanza": { "Petrol": ["E", "S", "G", "V"], "CNG": ["S CNG", "G CNG"] },
+        "Camry": { "HEV": ["2.5L Hybrid"] }
     },
-    "Maruti Suzuki": {
-        "Invictus": { "HEV": ["Zeta Plus", "Alpha Plus"] }
+    "Lexus": {
+        "ES": { "HEV": ["300h Exquisite", "300h Luxury"] },
+        "RX": { "HEV": ["350h Luxury", "500h F-Sport"] },
+        "NX": { "HEV": ["350h Exquisite", "350h Luxury", "350h F-Sport"] }
+    },
+    "Honda": {
+        "City": { "Petrol": ["V", "VX", "ZX"], "HEV": ["e:HEV ZX"], "Diesel": ["V", "VX", "ZX"] },
+        "Amaze": { "Petrol": ["E", "S", "VX"], "Diesel": ["S", "VX"] },
+        "Elevate": { "Petrol": ["V", "VX", "ZX"] }
     }
 };
 
@@ -119,7 +122,6 @@ function updateModels() {
     const fuel = fuelEl.value;
     modelEl.innerHTML = '<option value="">Select Model</option>';
     variantEl.innerHTML = '<option value="">Select Variant</option>';
-    
     if (make && carData[make]) {
         Object.keys(carData[make]).forEach(model => {
             if (carData[make][model][fuel]) {
@@ -134,7 +136,6 @@ function updateVariants() {
     const model = modelEl.value;
     const fuel = fuelEl.value;
     variantEl.innerHTML = '<option value="">Select Variant</option>';
-    
     if (make && model && fuel && carData[make][model][fuel]) {
         carData[make][model][fuel].forEach(v => {
             variantEl.innerHTML += `<option value="${v}">${v}</option>`;
