@@ -28,7 +28,8 @@ def index():
 @app.route('/login/google')
 def login_google():
     """Initiate Google OAuth"""
-    return google.authorize_redirect(url_for('auth', _external=True))
+    redirect_uri = url_for('auth', _external=True, _scheme='https')
+    return google.authorize_redirect(redirect_uri)
 
 @app.route('/auth')
 def auth():
@@ -44,6 +45,7 @@ def auth():
         return redirect(url_for('role'))
     except Exception as e:
         print(f"Auth error: {e}")
+        flash('Login failed. Please try again.', 'danger')
         return redirect(url_for('index'))
 
 @app.route('/logout')
