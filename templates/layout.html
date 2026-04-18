@@ -9,24 +9,19 @@
         :root {
             --neon-green: #28a745;
             --neon-blue: #4e54ff;
-            --dark-bg: #0a0e27;
-            --card-bg: #16181d;
             --gold: #ffa500;
         }
-
         body {
             background: linear-gradient(135deg, #0f1419 0%, #1a1f3a 100%);
             color: #e0e0e0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
         }
-
         .navbar {
             background-color: rgba(15, 20, 25, 0.95);
             border-bottom: 2px solid var(--neon-green);
             padding: 0.8rem 2rem;
         }
-
         .navbar-brand {
             font-size: 1.5rem;
             font-weight: bold;
@@ -35,51 +30,87 @@
             gap: 8px;
             text-decoration: none;
         }
-
-        .navbar-brand:hover {
-            text-decoration: none;
-        }
-
-        .navbar-brand svg {
-            width: 40px;
-            height: 40px;
-        }
-
-        .brand-text {
-            display: inline-block;
-            font-weight: 900;
-            letter-spacing: 0;
-        }
-
-        .text-white {
-            color: white !important;
-        }
-
-        .text-blue {
-            color: var(--neon-blue) !important;
-        }
-
-        .text-green {
-            color: var(--neon-green) !important;
-        }
-
+        .navbar-brand svg { width: 40px; height: 40px; }
+        .text-white { color: white !important; }
+        .text-blue { color: #4e54ff !important; }
+        .text-green { color: #28a745 !important; }
         .credit-badge {
             background-color: rgba(255, 165, 0, 0.2);
-            border: 2px solid var(--gold);
-            color: var(--gold);
+            border: 2px solid #ffa500;
+            color: #ffa500;
             padding: 0.5rem 1.2rem;
             border-radius: 25px;
             font-weight: bold;
             font-size: 0.95rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
             text-decoration: none;
             display: inline-block;
         }
-
-        .credit-badge:hover {
-            background-color: rgba(255, 165, 0, 0.3);
-            box-shadow: 0 0 15px rgba(255, 165, 0, 0.4);
-            color: var(--gold);
+        .credit-badge:hover { color: #ffa500; text-decoration: none; }
+        .navbar-user { color: #b0b0b0; font-weight: 500; margin-right: 1rem; font-size: 0.95rem; }
+        .btn-logout {
+            background-color: #555;
+            border: 1px solid #666;
+            color: #ccc;
+            padding: 0.4rem 0.8rem;
+            border-radius: 5px;
+            font-size: 0.85rem;
             text-decoration: none;
+            display: inline-block;
         }
+        .btn-logout:hover { background-color: #666; color: #fff; text-decoration: none; }
+        .alert-success-custom {
+            background-color: rgba(40, 167, 69, 0.2);
+            border: 1px solid #28a745;
+            color: #28a745;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .navbar-nav-right { display: flex; align-items: center; gap: 1rem; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M50 10 L22 22 V50 C22 72 50 85 50 85 C50 85 78 72 78 50 V22 L50 10 Z" fill="#28a745" stroke="#28a745" stroke-width="4"/>
+                    <text x="50" y="66" font-family="Arial" font-size="55" fill="white" font-weight="900" text-anchor="middle">A</text>
+                </svg>
+                <span><span class="text-white">Auto</span><span class="text-blue">Know</span><span class="text-green">Mus</span></span>
+            </a>
+            <div class="ms-auto navbar-nav-right">
+                {% if session.get('user_name') %}
+                    <a href="/credit_history" class="credit-badge">💳 {{ session.get('credits', 0) }} Credits</a>
+                    <span class="navbar-user">👤 {{ session.get('user_name') }}</span>
+                    <a href="/logout" class="btn-logout">Logout</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    {% if category == 'success' %}
+                        <div class="alert alert-success-custom alert-dismissible fade show" role="alert">
+                            ✅ {{ message }}
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
