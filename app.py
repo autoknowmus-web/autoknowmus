@@ -35,7 +35,7 @@ def auth():
             session['credits'] = 500 
             flash("Success! 500 Bonus Credits added to your account.")
         return redirect(url_for('role'))
-    except Exception as e:
+    except Exception:
         return redirect(url_for('index'))
 
 @app.route('/role', methods=['GET', 'POST'])
@@ -45,7 +45,6 @@ def role():
         session['user_name'] = request.form.get('name')
         session['credits'] = 500
         flash("Success! 500 Bonus Credits added to your account.")
-    
     if 'user_name' not in session:
         return redirect(url_for('index'))
     return render_template('role.html', user_name=session.get('user_name'), credits=session.get('credits'))
@@ -54,18 +53,17 @@ def role():
 def seller():
     if 'user_name' not in session:
         return redirect(url_for('index'))
-    return render_template('seller.html')
+    # Pass previous search back to the form if it exists
+    prev_data = session.get('last_search', {})
+    return render_template('seller.html', prev=prev_data)
 
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
     get_flashed_messages()
     current_credits = session.get('credits', 0)
-    
     if current_credits >= 100:
-        # Deduct credits and update session immediately
         session['credits'] = current_credits - 100
         session.modified = True 
-        
         session['last_search'] = {
             'make': request.form.get('make'),
             'model': request.form.get('model'),
@@ -74,11 +72,12 @@ def generate_report():
             'city': "Bangalore",
             'fuel': request.form.get('fuel'),
             'condition': request.form.get('condition'),
-            'mileage': request.form.get('mileage')
+            'mileage': request.form.get('mileage'),
+            'owners': request.form.get('owners')
         }
         return redirect(url_for('dashboard'))
     else:
-        flash("Insufficient credits! Please purchase more.")
+        flash("Insufficient credits!")
         return redirect(url_for('role'))
 
 @app.route('/dashboard')
