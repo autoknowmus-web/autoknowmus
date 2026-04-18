@@ -3,53 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoKnowMus</title>
+    <title>{% block title %}AutoKnowMus - Used Car Price Intelligence{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { background-color: #0b0c10; color: white; font-family: 'Inter', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
-        .text-green { color: #28a745 !important; }
-        .text-blue { color: #007bff !important; }
-        .navbar { background-color: #16181d; border-bottom: 1px solid #2d2f34; padding: 0.6rem 1.2rem; }
-        .credit-badge { background: #1c1e22; border: 1px solid #ffc107; color: #ffc107; font-size: 0.8rem; padding: 4px 12px; border-radius: 8px; font-weight: bold; }
-        
-        /* [FIX] Greyish Logout and White Name */
-        .nav-name { color: #ffffff !important; font-size: 0.85rem; }
-        .nav-logout { color: #6c757d !important; text-decoration: none; font-size: 0.85rem; font-weight: bold; }
-        .nav-logout:hover { color: #dc3545 !important; }
-        
-        /* [FIX] Greyish Copyright */
-        .footer-copy { color: #6c757d !important; font-size: 0.75rem; }
-        .content-wrapper { flex: 1; }
+        :root {
+            --neon-green: #28a745;
+            --neon-blue: #4e54ff;
+            --dark-bg: #0a0e27;
+            --card-bg: #16181d;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f1419 0%, #1a1f3a 100%);
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background-color: rgba(15, 20, 25, 0.95);
+            border-bottom: 2px solid var(--neon-green);
+            padding: 0.8rem 2rem;
+        }
+
+        .navbar-brand {
+            font-size: 1.3rem;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .text-green {
+            color: var(--neon-green) !important;
+        }
+
+        .text-blue {
+            color: var(--neon-blue) !important;
+        }
+
+        .credit-badge {
+            background-color: rgba(40, 167, 69, 0.2);
+            border: 2px solid var(--neon-green);
+            color: var(--neon-green);
+            padding: 0.4rem 1.2rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark shadow-sm">
-        <div class="container-fluid d-flex justify-content-between align-items-center">
-            <a class="navbar-brand fw-bold d-flex align-items-center mb-0" href="/" style="font-size: 1.5rem; padding: 0;">
-                <svg viewBox="0 0 100 100" style="height: 1.5rem; width: 1.5rem; margin-right: 8px;">
-                    <path d="M50 10 L22 22 V50 C22 72 50 85 50 85 C50 85 78 72 78 50 V22 L50 10 Z" fill="#28a745" stroke="#28a745" stroke-width="4"/>
-                    <text x="50" y="64" font-family="Arial" font-size="50" fill="white" font-weight="900" text-anchor="middle">A</text>
-                </svg>
-                <span style="line-height: 1.5rem;">Auto<span class="text-blue">Know</span><span class="text-green">Mus</span></span>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <span class="text-white">Auto</span><span class="text-blue">Know</span><span class="text-green">Mus</span>
             </a>
-            
-            <div class="d-flex align-items-center gap-3">
-                <div class="credit-badge"><i class="fas fa-coins me-1"></i> {{ session.get('credits', 0) }} Credits</div>
+            <div class="ms-auto d-flex align-items-center gap-3">
                 {% if session.get('user_name') %}
-                <div class="nav-name d-none d-md-block"><i class="fas fa-user-circle"></i> {{ session.get('user_name') }}</div>
-                <a href="/logout" class="nav-logout">LOGOUT</a>
+                    <span class="credit-badge">💳 {{ session.get('credits', 0) }} Credits</span>
+                    <a href="/logout" class="btn btn-sm btn-outline-light">Logout</a>
                 {% endif %}
             </div>
         </div>
     </nav>
 
-    <div class="container mt-4 content-wrapper">
+    <!-- Main Content -->
+    <div class="container-fluid py-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
         {% block content %}{% endblock %}
     </div>
 
-    <footer class="py-3 text-center mt-auto">
-        <p class="footer-copy mb-0">© 2026 AutoKnowMus</p>
-    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
