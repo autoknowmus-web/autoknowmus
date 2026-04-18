@@ -20,19 +20,38 @@
     margin-bottom: 20px;
   }
 
-  /* Date field with calendar icon */
+  /* Custom date display DD-MMM-YYYY */
   .date-field-wrap { position: relative; }
-  .date-field-wrap input[type="date"] {
+  .date-display {
     background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
     padding: 8px 40px 8px 12px; border-radius: 6px; width: 100%;
-    color-scheme: dark; height: 38px;
+    height: 38px; cursor: pointer;
+    display: flex; align-items: center; font-size: 0.95rem;
   }
-  .date-field-wrap input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(1) brightness(0.8); cursor: pointer;
-    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-    width: 20px; height: 20px; opacity: 0.85;
+  .date-display.placeholder { color: #6c757d; }
+  .date-hidden { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+  .date-calendar-btn {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: none; color: #b0b0b0; cursor: pointer;
+    padding: 4px; border-radius: 4px; font-size: 1rem;
   }
-  .date-format-hint { color: #888; font-size: 0.8rem; margin-top: 4px; display: block; }
+  .date-calendar-btn:hover { color: #28a745; background: rgba(40,167,69,0.1); }
+
+  /* Registration number — 3 fields */
+  .reg-wrap { display: flex; gap: 6px; align-items: stretch; }
+  .reg-wrap input {
+    background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
+    padding: 8px 10px; border-radius: 6px; text-align: center;
+    font-family: monospace; font-size: 0.95rem; text-transform: uppercase;
+    height: 38px;
+  }
+  .reg-wrap input:focus {
+    outline: none; border-color: #28a745;
+    box-shadow: 0 0 0 0.15rem rgba(40,167,69,0.25);
+  }
+  .reg-rto { width: 70px; }
+  .reg-series { width: 60px; }
+  .reg-num { flex: 1; }
 
   .file-upload {
     background: #1a1d24; border: 1px dashed #4e54ff; border-radius: 8px;
@@ -62,7 +81,7 @@
     </div>
 
     <form method="POST" action="{{ url_for('submit_deal') }}" enctype="multipart/form-data">
-      <!-- Row 1: Location, Make, Fuel, Model (mirrors seller) -->
+      <!-- Row 1: Location, Make, Fuel, Model -->
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Location</label>
@@ -81,7 +100,6 @@
           <label class="form-label">Fuel Type *</label>
           <select class="form-select" name="fuel" id="fuel" required>
             <option value="">Select Fuel</option>
-            {# Fixed order — do NOT sort #}
             {% for fuel in fuels %}
               <option value="{{ fuel }}">{{ fuel }}</option>
             {% endfor %}
@@ -98,8 +116,8 @@
       <!-- Row 2: Variant, Owner, Mileage, Year -->
       <div class="row g-3 mb-3">
         <div class="col-md-3">
-          <label class="form-label">Variant / Suffix</label>
-          <select class="form-select" name="variant" id="variant" disabled>
+          <label class="form-label">Variant / Suffix *</label>
+          <select class="form-select" name="variant" id="variant" disabled required>
             <option value="">Select Variant</option>
           </select>
         </div>
@@ -151,16 +169,37 @@
         </div>
       </div>
 
-      <!-- Row 4: Date (DD-MMM-YYYY + calendar icon) + File upload -->
+      <!-- Row 4: Vehicle Registration (3 fields) -->
       <div class="row g-3 mb-3">
-        <div class="col-md-6">
+        <div class="col-md-8">
+          <label class="form-label">Vehicle Registration Number *</label>
+          <div class="reg-wrap">
+            <input type="text" class="reg-rto" name="reg_rto" placeholder="KA03" maxlength="4" required
+                   pattern="[A-Za-z]{2}[0-9]{1,2}" title="State code + district (e.g. KA03)">
+            <input type="text" class="reg-series" name="reg_series" placeholder="MK" maxlength="3" required
+                   pattern="[A-Za-z]{1,3}" title="Series letters (e.g. MK)">
+            <input type="text" class="reg-num" name="reg_number" placeholder="8201" maxlength="4" required
+                   pattern="[0-9]{1,4}" title="4-digit number">
+          </div>
+          <small style="color: #888; font-size: 0.78rem; margin-top: 3px; display: block;">
+            Format: KA 03 MK 8201
+          </small>
+        </div>
+        <div class="col-md-4">
           <label class="form-label">Transaction Date *</label>
           <div class="date-field-wrap">
-            <input type="date" name="transaction_date" id="txDate" required max="2026-12-31">
+            <div class="date-display placeholder" id="dateDisplay">Select date</div>
+            <input type="date" class="date-hidden" name="transaction_date" id="txDate" required max="2026-12-31">
+            <button type="button" class="date-calendar-btn" onclick="document.getElementById('txDate').showPicker()">
+              <i class="bi bi-calendar3"></i>
+            </button>
           </div>
-          <small class="date-format-hint">Format: DD-MMM-YYYY (e.g. {{ today }})</small>
         </div>
-        <div class="col-md-6">
+      </div>
+
+      <!-- Row 5: File upload -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-12">
           <label class="form-label">Upload Proof (Invoice / RC / Receipt) *</label>
           <label class="file-upload">
             <span><i class="bi bi-cloud-arrow-up"></i> <span id="fileLabel">Click to upload (PDF/JPG/PNG)</span></span>
@@ -181,10 +220,40 @@
 
 {% block scripts %}
 <script>
-  // Default today's date
-  document.getElementById('txDate').valueAsDate = new Date();
+  // === DD-MMM-YYYY date display ===
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const txDate = document.getElementById('txDate');
+  const dateDisplay = document.getElementById('dateDisplay');
 
-  // === Mirror seller's fuel-first cascade ===
+  function updateDateDisplay() {
+    if (txDate.value) {
+      const [y, m, d] = txDate.value.split('-');
+      dateDisplay.textContent = `${d}-${MONTHS[parseInt(m,10)-1]}-${y}`;
+      dateDisplay.classList.remove('placeholder');
+    } else {
+      dateDisplay.textContent = 'Select date';
+      dateDisplay.classList.add('placeholder');
+    }
+  }
+
+  txDate.addEventListener('change', updateDateDisplay);
+  dateDisplay.addEventListener('click', () => txDate.showPicker && txDate.showPicker());
+
+  // Default today
+  const today = new Date();
+  txDate.valueAsDate = today;
+  updateDateDisplay();
+
+  // === Reg number auto-uppercase + auto-advance ===
+  document.querySelectorAll('.reg-wrap input').forEach(inp => {
+    inp.addEventListener('input', e => {
+      e.target.value = e.target.value.toUpperCase();
+    });
+  });
+
+  // === Real per-model variants ===
+  const VARIANTS_BY_MODEL = {{ variants_by_model | tojson }};
+
   const MODELS_BY_BRAND = {{ {
     'Audi': ['A3','A4','A6','Q3','Q5','Q7'],
     'BMW': ['3 Series','5 Series','X1','X3','X5','X7'],
@@ -219,7 +288,6 @@
     modelEl.innerHTML = '<option value="">Select Model</option>';
     variantEl.innerHTML = '<option value="">Select Variant</option>';
     variantEl.disabled = true;
-
     if (make && fuel && MODELS_BY_BRAND[make]) {
       const models = [...MODELS_BY_BRAND[make]].sort((a,b)=>a.localeCompare(b));
       models.forEach(m => {
@@ -235,8 +303,9 @@
 
   function refreshVariants() {
     variantEl.innerHTML = '<option value="">Select Variant</option>';
-    if (modelEl.value) {
-      ['Base','LXi','VXi','ZXi','ZXi Plus'].sort().forEach(v => {
+    if (modelEl.value && VARIANTS_BY_MODEL[modelEl.value]) {
+      const variants = [...VARIANTS_BY_MODEL[modelEl.value]].sort((a,b)=>a.localeCompare(b));
+      variants.forEach(v => {
         const opt = document.createElement('option');
         opt.value = v; opt.textContent = v;
         variantEl.appendChild(opt);
