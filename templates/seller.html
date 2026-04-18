@@ -77,7 +77,7 @@
                 </div>
 
                 <div class="col-12 mt-4 text-center">
-                    <button type="submit" class="btn btn-success px-5 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: #28a745; border: none; min-width: 300px;">
+                    <button type="submit" class="btn btn-success px-5 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: #28a745; border: none; min-width: 320px;">
                         GENERATE INTELLIGENCE (100 CREDITS)
                     </button>
                 </div>
@@ -92,15 +92,17 @@ const carData = {
         "Swift": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "Diesel": ["LDi", "VDi", "ZDi", "ZDi+"] },
         "Brezza": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "CNG": ["VXi CNG", "ZXi CNG"] },
         "Baleno": { "Petrol": ["Sigma", "Delta", "Zeta", "Alpha"], "CNG": ["Delta CNG", "Zeta CNG"] },
-        "Invictus": { "HEV": ["Zeta Plus", "Alpha Plus"] }
+        "Invictus": { "HEV": ["Zeta Plus", "Alpha Plus"] },
+        "Ertiga": { "Petrol": ["VXi", "ZXi"], "CNG": ["VXi CNG", "ZXi CNG"], "Diesel": ["VDi", "ZDi"] }
     },
     "Toyota": { 
         "Innova Crysta": { "Diesel": ["G", "GX", "VX", "ZX"], "Petrol": ["GX", "VX"] },
         "Innova Hycross": { "HEV": ["VX", "VX(O)", "ZX", "ZX(O)"], "Petrol": ["G", "GX"] },
-        "Fortuner": { "Diesel": ["4x2 MT", "4x2 AT", "4x4 MT", "4x4 AT", "Legender"], "Petrol": ["2.7L 4x2"] }
+        "Fortuner": { "Diesel": ["4x2 MT", "4x2 AT", "4x4 MT", "4x4 AT", "Legender"], "Petrol": ["2.7L 4x2"] },
+        "Glanza": { "Petrol": ["E", "S", "G", "V"], "CNG": ["S CNG", "G CNG"] }
     },
-    "Lexus": { "ES": { "HEV": ["300h Exquisite", "300h Luxury"] } },
-    "Honda": { "City": { "Petrol": ["V", "VX", "ZX"], "HEV": ["e:HEV ZX"] } }
+    "Lexus": { "ES": { "HEV": ["300h Exquisite", "300h Luxury"] }, "RX": { "HEV": ["350h Luxury", "500h F-Sport"] } },
+    "Honda": { "City": { "Petrol": ["V", "VX", "ZX"], "HEV": ["e:HEV ZX"] }, "Amaze": { "Petrol": ["S", "VX"], "Diesel": ["S", "VX"] } }
 };
 
 const makeEl = document.getElementById('make');
