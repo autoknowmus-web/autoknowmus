@@ -1,14 +1,6 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="text-center py-2">
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div class="alert d-inline-block px-4 py-2 small rounded-pill mb-4 border-0 shadow-sm" style="background: rgba(255, 193, 7, 0.2); color: #ffc107;">
-                <i class="fas fa-gift me-2"></i> {{ messages[-1] }}
-            </div>
-        {% endif %}
-    {% endwith %}
-
     <h2 class="text-white mb-5 fw-bold">Hello{% if user_name %} {{ user_name }}{% endif %}! Ready to make a smarter decision?</h2>
     
     <div class="row g-4 justify-content-center px-2">
@@ -26,7 +18,9 @@
                 </div>
 
                 <div class="mt-auto d-grid gap-2">
-                    <button class="btn btn-sm btn-outline-warning py-2 fw-bold">Purchase 500 Credits for Seller</button>
+                    <button class="btn btn-sm py-2 fw-bold" disabled style="background: #444; border: 1px solid #555; color: #888; cursor: not-allowed;">
+                        Purchase 500 Credits for Seller <span style="color: #ffa500; font-size: 0.7rem;">(Coming Soon)</span>
+                    </button>
                     <a href="/submit_deal" class="btn btn-sm btn-outline-info py-2 fw-bold text-decoration-none">Record Actual Transaction Data</a>
                 </div>
             </div>
@@ -46,7 +40,9 @@
                 </div>
 
                 <div class="mt-auto d-grid gap-2">
-                    <button class="btn btn-sm btn-outline-warning py-2 fw-bold">Purchase 500 Credits as Buyer</button>
+                    <button class="btn btn-sm py-2 fw-bold" disabled style="background: #444; border: 1px solid #555; color: #888; cursor: not-allowed;">
+                        Purchase 500 Credits as Buyer <span style="color: #ffa500; font-size: 0.7rem;">(Coming Soon)</span>
+                    </button>
                     <a href="/submit_deal" class="btn btn-sm btn-outline-info py-2 fw-bold text-decoration-none">Record Actual Transaction Data</a>
                 </div>
             </div>
