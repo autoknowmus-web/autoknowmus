@@ -2,53 +2,35 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-11">
-        <div class="card p-4 shadow-lg mt-4" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
-            <div class="mb-4">
+        <div class="card p-4 shadow-lg mt-2" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <a href="/role" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-arrow-left me-1"></i> Back</a>
                 <h3 class="text-green fw-bold mb-0">Sell Your Car: Market Valuation</h3>
             </div>
 
-            <form action="/generate_report" method="POST" class="row g-4">
-                <div class="col-md-4">
-                    <label class="form-label text-white fw-bold small">Location (City)</label>
+            <form action="/generate_report" method="POST" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Location</label>
                     <select class="form-select bg-dark text-white border-secondary py-2" disabled>
-                        <option value="Bangalore">Bangalore</option>
-                    </select>
-                    <input type="hidden" name="city" value="Bangalore">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label text-white fw-bold small">Make</label>
-                    <select id="make" name="make" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="">Select Make</option>
-                        <option value="Audi">Audi</option>
-                        <option value="BMW">BMW</option>
-                        <option value="Honda">Honda</option>
-                        <option value="Hyundai">Hyundai</option>
-                        <option value="Kia">Kia</option>
-                        <option value="Lexus">Lexus</option>
-                        <option value="Mahindra">Mahindra</option>
-                        <option value="Maruti Suzuki">Maruti Suzuki</option>
-                        <option value="Mercedes-Benz">Mercedes-Benz</option>
-                        <option value="MG">MG</option>
-                        <option value="Tata">Tata</option>
-                        <option value="Toyota">Toyota</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label text-white fw-bold small">Model</label>
-                    <select id="model" name="model" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="">Select Model</option>
+                        <option>Bangalore</option>
                     </select>
                 </div>
 
-                <div class="col-md-4">
-                    <label class="form-label text-white fw-bold small">Variant / Suffix</label>
-                    <select id="variant" name="variant" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="">Select Variant</option>
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Make</label>
+                    <select id="make" name="make" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="">Select Make</option>
+                        <option value="Maruti Suzuki">Maruti Suzuki</option>
+                        <option value="Toyota">Toyota</option>
+                        <option value="Honda">Honda</option>
+                        <option value="Hyundai">Hyundai</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+
+                <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Fuel Type</label>
-                    <select name="fuel" class="form-select bg-dark text-white border-secondary py-2" required>
+                    <select id="fuel" name="fuel" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="">Select Fuel</option>
                         <option value="Petrol">Petrol</option>
                         <option value="Diesel">Diesel</option>
                         <option value="CNG">CNG</option>
@@ -57,25 +39,52 @@
                         <option value="BEV">BEV (Electric)</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Model</label>
+                    <select id="model" name="model" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="">Select Model</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Variant / Suffix</label>
+                    <select id="variant" name="variant" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="">Select Variant</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">No. of Owners</label>
+                    <select name="owners" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="1">1st Owner</option>
+                        <option value="2">2nd Owner</option>
+                        <option value="3">3rd Owner</option>
+                        <option value="4">4+ Owners</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Condition</label>
                     <select name="condition" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="Excellent">Excellent (Showroom like)</option>
                         <option value="Good">Good (Minor wear & tear)</option>
-                        <option value="Fair">Fair (Noticeable dents/scratches)</option>
+                        <option value="Fair">Fair (Dents/Scratches)</option>
                     </select>
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Mileage (KMs) <span class="text-danger">*</span></label>
-                    <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary py-2" placeholder="e.g. 45000" required>
+                    <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary py-2" required>
                 </div>
-                <div class="col-md-3">
+
+                <div class="col-md-2">
                     <label class="form-label text-white fw-bold small">Year <span class="text-danger">*</span></label>
-                    <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" placeholder="YYYY" min="2000" max="2026" required>
+                    <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" min="2000" max="2026" required>
                 </div>
-                <div class="col-md-6 d-flex align-items-end">
-                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: linear-gradient(45deg, #28a745, #1e7e34); border: none; font-size: 1.1rem;">
+
+                <div class="col-md-10 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: linear-gradient(45deg, #28a745, #1e7e34); border: none;">
                         GENERATE INTELLIGENCE (100 CREDITS)
                     </button>
                 </div>
@@ -86,35 +95,55 @@
 
 <script>
 const carData = {
-    "Toyota": { "Innova": ["GX", "VX", "ZX", "Hycross"], "Fortuner": ["4x2", "4x4", "Legender"], "Glanza": ["V", "G"] },
-    "Honda": { "City": ["V", "VX", "ZX"], "Amaze": ["S", "VX"], "Elevate": ["V", "VX", "ZX"] },
-    "Lexus": { "ES": ["300h Luxury"], "RX": ["350h"], "NX": ["350h"] },
-    "Maruti Suzuki": { "Swift": ["LXi", "VXi", "ZXi"], "Baleno": ["Delta", "Zeta", "Alpha"], "Brezza": ["VXi", "ZXi"] },
-    "Tata": { "Nexon": ["XE", "XM", "XZ"], "Harrier": ["Pure", "Adventure", "Fearless"], "Punch": ["Pure", "Creative"] },
-    "Hyundai": { "Creta": ["E", "S", "SX", "SX(O)"], "Verna": ["EX", "S", "SX"], "i20": ["Magna", "Sportz", "Asta"] }
+    "Maruti Suzuki": { 
+        "Swift": { "Petrol": ["LXi", "VXi", "ZXi"], "Diesel": ["LDi", "VDi", "ZDi"] },
+        "Brezza": { "Petrol": ["LXi", "VXi", "ZXi"], "CNG": ["VXi CNG", "ZXi CNG"] },
+        "Baleno": { "Petrol": ["Delta", "Zeta", "Alpha"] }
+    },
+    "Toyota": { 
+        "Innova": { "Diesel": ["GX", "VX", "ZX"], "HEV": ["Hycross VX", "Hycross ZX"] },
+        "Fortuner": { "Diesel": ["4x2", "4x4", "Legender"], "Petrol": ["2.7L 4x2"] }
+    },
+    "Maruti Suzuki": {
+        "Invictus": { "HEV": ["Zeta Plus", "Alpha Plus"] }
+    }
 };
 
-document.getElementById('make').addEventListener('change', function() {
-    const modelSel = document.getElementById('model');
-    const variantSel = document.getElementById('variant');
-    modelSel.innerHTML = '<option value="">Select Model</option>';
-    variantSel.innerHTML = '<option value="">Select Variant</option>';
-    if(this.value && carData[this.value]) {
-        Object.keys(carData[this.value]).forEach(model => {
-            modelSel.innerHTML += `<option value="${model}">${model}</option>`;
-        });
-    }
-});
+const makeEl = document.getElementById('make');
+const fuelEl = document.getElementById('fuel');
+const modelEl = document.getElementById('model');
+const variantEl = document.getElementById('variant');
 
-document.getElementById('model').addEventListener('change', function() {
-    const makeVal = document.getElementById('make').value;
-    const variantSel = document.getElementById('variant');
-    variantSel.innerHTML = '<option value="">Select Variant</option>';
-    if(this.value && carData[makeVal][this.value]) {
-        carData[makeVal][this.value].forEach(v => {
-            variantSel.innerHTML += `<option value="${v}">${v}</option>`;
+function updateModels() {
+    const make = makeEl.value;
+    const fuel = fuelEl.value;
+    modelEl.innerHTML = '<option value="">Select Model</option>';
+    variantEl.innerHTML = '<option value="">Select Variant</option>';
+    
+    if (make && carData[make]) {
+        Object.keys(carData[make]).forEach(model => {
+            if (carData[make][model][fuel]) {
+                modelEl.innerHTML += `<option value="${model}">${model}</option>`;
+            }
         });
     }
-});
+}
+
+function updateVariants() {
+    const make = makeEl.value;
+    const model = modelEl.value;
+    const fuel = fuelEl.value;
+    variantEl.innerHTML = '<option value="">Select Variant</option>';
+    
+    if (make && model && fuel && carData[make][model][fuel]) {
+        carData[make][model][fuel].forEach(v => {
+            variantEl.innerHTML += `<option value="${v}">${v}</option>`;
+        });
+    }
+}
+
+makeEl.addEventListener('change', updateModels);
+fuelEl.addEventListener('change', updateModels);
+modelEl.addEventListener('change', updateVariants);
 </script>
 {% endblock %}
