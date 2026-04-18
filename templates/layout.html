@@ -11,6 +11,7 @@
             --neon-blue: #4e54ff;
             --dark-bg: #0a0e27;
             --card-bg: #16181d;
+            --gold: #ffa500;
         }
 
         body {
@@ -30,6 +31,23 @@
             font-size: 1.3rem;
             font-weight: bold;
             letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .navbar-logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--neon-green) 0%, var(--neon-blue) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 0 15px rgba(40, 167, 69, 0.3);
         }
 
         .text-green {
@@ -41,13 +59,25 @@
         }
 
         .credit-badge {
-            background-color: rgba(40, 167, 69, 0.2);
-            border: 2px solid var(--neon-green);
-            color: var(--neon-green);
+            background-color: rgba(255, 165, 0, 0.2);
+            border: 2px solid var(--gold);
+            color: var(--gold);
             padding: 0.4rem 1.2rem;
             border-radius: 20px;
             font-weight: bold;
             font-size: 0.9rem;
+        }
+
+        .navbar-user {
+            color: #e0e0e0;
+            font-weight: 600;
+            margin-right: 1.5rem;
+        }
+
+        .alert-success-custom {
+            background-color: rgba(40, 167, 69, 0.2);
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
         }
     </style>
 </head>
@@ -56,10 +86,12 @@
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">
+                <div class="navbar-logo">A</div>
                 <span class="text-white">Auto</span><span class="text-blue">Know</span><span class="text-green">Mus</span>
             </a>
             <div class="ms-auto d-flex align-items-center gap-3">
                 {% if session.get('user_name') %}
+                    <span class="navbar-user">👤 {{ session.get('user_name') }}</span>
                     <span class="credit-badge">💳 {{ session.get('credits', 0) }} Credits</span>
                     <a href="/logout" class="btn btn-sm btn-outline-light">Logout</a>
                 {% endif %}
@@ -72,10 +104,17 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
+                    {% if category == 'success' %}
+                        <div class="alert alert-success-custom alert-dismissible fade show" role="alert">
+                            ✅ {{ message }}
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endif %}
                 {% endfor %}
             {% endif %}
         {% endwith %}
