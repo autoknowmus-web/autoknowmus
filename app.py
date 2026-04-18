@@ -25,8 +25,8 @@ def index():
         return redirect(url_for('role'))
     return render_template('index.html')
 
-@app.route('/login')
-def login():
+@app.route('/login/google')
+def login_google():
     """Initiate Google OAuth"""
     return google.authorize_redirect(url_for('auth', _external=True))
 
@@ -56,11 +56,25 @@ def logout():
 # ROLE SELECTION
 # =====================
 
-@app.route('/role')
+@app.route('/role', methods=['GET', 'POST'])
 def role():
     """Role selection page - Seller/Buyer/Dashboard"""
+    if request.method == 'POST':
+        # Handle manual login form submission
+        name = request.form.get('name')
+        email = request.form.get('email')
+        mobile = request.form.get('mobile')
+        
+        if name and email and mobile:
+            session['user_name'] = name
+            session['credits'] = 500
+            session['city'] = 'Bangalore'
+            session.modified = True
+            return redirect(url_for('role'))
+    
     if not session.get('user_name'):
         return redirect(url_for('index'))
+    
     return render_template('role.html', 
                          user_name=session.get('user_name'),
                          credits=session.get('credits', 0))
