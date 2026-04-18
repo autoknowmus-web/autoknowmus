@@ -1,68 +1,88 @@
 {% extends "layout.html" %}
+{% block title %}Valuation Dashboard - AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  .dashboard-wrap { padding: 30px 40px; max-width: 1100px; margin: 0 auto; }
+  .page-title { color: #28a745; font-size: 1.8rem; font-weight: 700; margin: 0 0 20px; }
+  .valuation-card {
+    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px;
+    padding: 35px; text-align: center;
+  }
+  .price-main {
+    font-size: 3.2rem; font-weight: 700; color: #28a745; margin: 15px 0 5px;
+  }
+  .price-range {
+    color: #b0b0b0; font-size: 1.05rem; margin-bottom: 25px;
+  }
+  .price-range strong { color: #ffa500; }
+  .car-summary {
+    background: #0e1117; border-radius: 8px; padding: 20px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;
+    margin: 25px 0; text-align: left;
+  }
+  .car-summary div { font-size: 0.9rem; }
+  .car-summary .label { color: #888; display: block; margin-bottom: 3px; font-size: 0.78rem; }
+  .car-summary .value { color: #e6e6e6; font-weight: 500; }
+
+  .cta-row { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+  .btn-cta {
+    padding: 11px 28px; border-radius: 8px; font-weight: 600;
+    text-decoration: none; border: none; font-size: 0.95rem;
+  }
+  .btn-cta-green { background: #28a745; color: #fff; }
+  .btn-cta-blue { background: #4e54ff; color: #fff; }
+  .btn-cta-green:hover { background: #218838; color: #fff; }
+  .btn-cta-blue:hover { background: #3a40d9; color: #fff; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: #888; }
+  .empty-state h3 { color: #e6e6e6; margin-bottom: 15px; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row g-3">
-    <div class="col-lg-12 mb-2">
-        <a href="/seller" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-arrow-left me-1"></i> Back to Search</a>
-    </div>
-    
-    <div class="col-lg-8">
-        <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100" style="background: #16181d !important; border: 1px solid #2d2f34 !important;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h4 class="text-green fw-bold mb-0">Pricing Intelligence</h4>
-                <a href="/submit_deal" class="btn btn-sm btn-success">Get Bonus Credits: Submit Real Deal Price</a>
-            </div>
+<div class="dashboard-wrap">
 
-            <div class="mb-4">
-                <h3 class="text-white fw-bold">
-                    {{ data.year }} {{ data.make }} {{ data.model }} 
-                    <span class="text-blue">{{ data.variant }}</span>
-                </h3>
-                <p class="text-white small">Market Intelligence for {{ data.city }}</p>
-            </div>
+  {# Dismissible orange alert (after deal submit or valuation) #}
+  {{ orange_alert(message) }}
 
-            <div class="row text-center mb-4">
-                <div class="col-6">
-                    <div class="p-3 bg-black rounded-3 border border-secondary border-opacity-25">
-                        <small class="text-white-50 d-block">Market Range</small>
-                        <span class="text-white fw-bold">₹ [Calculating...]</span>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="p-3 bg-black rounded-3 border border-secondary border-opacity-25">
-                        <small class="text-white-50 d-block">Estimated Fair Price</small>
-                        <span class="text-green fw-bold">₹ [Calculating...]</span>
-                    </div>
-                </div>
-            </div>
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
 
-            <h6 class="text-white-50 mb-3 small text-uppercase">6-Month Price Depreciation</h6>
-            <div class="p-3 bg-black rounded-3">
-                <svg viewBox="0 0 500 120" class="w-100">
-                    <path d="M0,20 Q150,90 500,110" fill="none" stroke="#28a745" stroke-width="3" />
-                    <circle cx="50" cy="45" r="6" fill="#fff" />
-                    <circle cx="250" cy="85" r="6" fill="#fff" />
-                    <circle cx="450" cy="105" r="6" fill="#fff" />
-                </svg>
-            </div>
-        </div>
+  {% if valuation %}
+    <h2 class="page-title">Your Market Valuation</h2>
+
+    <div class="valuation-card">
+      <div style="color:#888; font-size:0.9rem; letter-spacing:1px;">ESTIMATED MARKET PRICE</div>
+      <div class="price-main">₹{{ "{:,}".format(valuation.estimated_price) }}</div>
+      <div class="price-range">
+        Fair range: <strong>₹{{ "{:,}".format(valuation.price_low) }}</strong> —
+        <strong>₹{{ "{:,}".format(valuation.price_high) }}</strong>
+      </div>
+
+      <div class="car-summary">
+        <div><span class="label">MAKE</span><span class="value">{{ valuation.make }}</span></div>
+        <div><span class="label">MODEL</span><span class="value">{{ valuation.model }}</span></div>
+        <div><span class="label">VARIANT</span><span class="value">{{ valuation.variant }}</span></div>
+        <div><span class="label">FUEL</span><span class="value">{{ valuation.fuel }}</span></div>
+        <div><span class="label">YEAR</span><span class="value">{{ valuation.year }}</span></div>
+        <div><span class="label">MILEAGE</span><span class="value">{{ valuation.mileage }} km</span></div>
+        <div><span class="label">OWNER</span><span class="value">{{ valuation.owner }}</span></div>
+        <div><span class="label">CONDITION</span><span class="value">{{ valuation.condition }}</span></div>
+      </div>
+
+      <div class="cta-row">
+        <a href="{{ url_for('seller') }}" class="btn btn-cta btn-cta-green">Run Another Valuation</a>
+        <a href="{{ url_for('submit_deal') }}" class="btn btn-cta btn-cta-blue">Submit Deal · Earn (100 Credits)</a>
+      </div>
     </div>
 
-    <div class="col-lg-4">
-        <div class="card p-4 bg-dark border-0 rounded-4 shadow h-100" style="background: #16181d !important; border: 1px solid #2d2f34 !important;">
-            <h5 class="text-white fw-bold mb-3">Market Insights</h5>
-            <div class="mb-3">
-                <small class="text-white-50">Demand for {{ data.model }}</small>
-                <div class="progress bg-black mt-1" style="height: 8px;">
-                    <div class="progress-bar bg-warning" style="width: 75%;"></div>
-                </div>
-                <small class="text-warning">High Demand</small>
-            </div>
-            <hr class="border-secondary opacity-25">
-            <div class="mb-3">
-                <small class="text-white-50">Average Days to Sell</small>
-                <h4 class="text-white">18 Days</h4>
-            </div>
-        </div>
+  {% else %}
+    <div class="empty-state">
+      <h3>No valuation yet</h3>
+      <p>Head back and fill the seller form to generate your market valuation.</p>
+      <a href="{{ url_for('seller') }}" class="btn btn-cta btn-cta-green mt-3">Start a Valuation</a>
     </div>
+  {% endif %}
+
 </div>
 {% endblock %}
