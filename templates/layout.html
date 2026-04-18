@@ -8,10 +8,10 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     body { background: #0e1117; color: #e6e6e6; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
-    .navbar-custom { background: #000; border-bottom: 2px solid #28a745; padding: 15px 40px; }
+    .navbar-custom { background: #000; border-bottom: 2px solid #28a745; padding: 12px 30px; }
     .brand-logo { display: flex; align-items: center; text-decoration: none; }
-    .brand-shield { width: 38px; height: 38px; margin-right: 10px; }
-    .brand-text { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
+    .brand-shield { width: 34px; height: 34px; margin-right: 10px; }
+    .brand-text { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
     .brand-auto { color: #fff; }
     .brand-know { color: #4e54ff; }
     .brand-mus { color: #28a745; }
@@ -24,7 +24,7 @@
       align-items: center; gap: 6px; transition: all 0.2s;
     }
     .credit-badge:hover { background: rgba(255,165,0,0.1); color: #ffa500; }
-    .credit-inline { color: #ffa500; font-weight: 600; font-size: 0.95rem; }
+    .credit-inline { color: #ffa500; font-weight: 700; font-size: 0.95rem; }
 
     .user-name { color: #b0b0b0; margin: 0 15px; font-size: 0.95rem; }
     .btn-logout {
@@ -33,7 +33,7 @@
     }
     .btn-logout:hover { background: #5a6268; color: #fff; }
 
-    /* Standardized back button — used on ALL screens */
+    /* Standardized back button */
     .btn-back {
       background: #6c757d !important; color: #fff !important; border: none !important;
       padding: 7px 18px !important; border-radius: 6px !important; font-size: 0.9rem !important;
@@ -41,7 +41,7 @@
     }
     .btn-back:hover { background: #5a6268 !important; color: #fff !important; }
 
-    /* Orange dismissible alert — used EVERYWHERE for success/credit messages */
+    /* Orange dismissible alert */
     .alert-orange {
       background: rgba(255,165,0,0.15); border: 1px solid #ffa500;
       color: #ffa500; border-radius: 8px; padding: 14px 45px 14px 20px;
@@ -65,6 +65,20 @@
       box-shadow: 0 0 0 0.2rem rgba(40,167,69,0.25);
     }
     .form-label { color: #b0b0b0; font-weight: 500; margin-bottom: 6px; }
+
+    /* ===== DISABLED / READONLY FIELDS — dark bg, grey text (global override) ===== */
+    .form-control:disabled, .form-control[readonly],
+    .form-select:disabled, .form-select[readonly] {
+      background: #15181e !important;
+      color: #6c757d !important;
+      border-color: #2a2d34 !important;
+      opacity: 1 !important;
+      -webkit-text-fill-color: #6c757d !important;  /* iOS Safari */
+      cursor: not-allowed;
+    }
+    .form-select:disabled option { color: #6c757d; }
+    /* Remove white fill on autofilled/dropdown-closed state */
+    select.form-select { -webkit-appearance: none; }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
@@ -87,14 +101,14 @@
       ({{ session.credits|default(0) }} Credits)
     </a>
     <span class="user-name">
-      <i class="bi bi-person-circle"></i> {{ session.user.name }}
+      <i class="bi bi-person-circle"></i> {{ session.user.name | firstname }}
     </span>
     <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
   </div>
 </nav>
 {% endif %}
 
-{# ===== Shared dismissible orange alert macro ===== #}
+{# Shared dismissible orange alert macro #}
 {% macro orange_alert(msg) %}
   {% if msg %}
   <div class="alert-orange" id="orangeAlert">
