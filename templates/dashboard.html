@@ -1,88 +1,366 @@
 {% extends "layout.html" %}
-{% block title %}Valuation Dashboard - AutoKnowMus{% endblock %}
+{% block title %}Market Insights - AutoKnowMus{% endblock %}
 
 {% block extra_head %}
 <style>
-  .dashboard-wrap { padding: 30px 40px; max-width: 1100px; margin: 0 auto; }
-  .page-title { color: #28a745; font-size: 1.8rem; font-weight: 700; margin: 0 0 20px; }
-  .valuation-card {
-    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px;
-    padding: 35px; text-align: center;
-  }
-  .price-main {
-    font-size: 3.2rem; font-weight: 700; color: #28a745; margin: 15px 0 5px;
-  }
-  .price-range {
-    color: #b0b0b0; font-size: 1.05rem; margin-bottom: 25px;
-  }
-  .price-range strong { color: #ffa500; }
-  .car-summary {
-    background: #0e1117; border-radius: 8px; padding: 20px;
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;
-    margin: 25px 0; text-align: left;
-  }
-  .car-summary div { font-size: 0.9rem; }
-  .car-summary .label { color: #888; display: block; margin-bottom: 3px; font-size: 0.78rem; }
-  .car-summary .value { color: #e6e6e6; font-weight: 500; }
+  .dashboard-wrap { padding: 25px 30px 50px; max-width: 1200px; margin: 0 auto; }
+  .page-title { color: #fff; font-size: 1.6rem; font-weight: 600; margin: 0 0 4px; }
+  .car-line { color: #4eb0ff; font-size: 1.05rem; font-weight: 500; margin-bottom: 4px; }
+  .meta-line { color: #888; font-size: 0.85rem; margin-bottom: 18px; }
 
-  .cta-row { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
-  .btn-cta {
-    padding: 11px 28px; border-radius: 8px; font-weight: 600;
-    text-decoration: none; border: none; font-size: 0.95rem;
+  /* Centered hero price */
+  .price-hero {
+    text-align: center; padding: 25px 20px;
+    background: rgba(40,167,69,0.08); border: 2px solid #28a745;
+    border-radius: 12px; margin-bottom: 20px;
   }
-  .btn-cta-green { background: #28a745; color: #fff; }
-  .btn-cta-blue { background: #4e54ff; color: #fff; }
-  .btn-cta-green:hover { background: #218838; color: #fff; }
-  .btn-cta-blue:hover { background: #3a40d9; color: #fff; }
+  .price-hero-lbl {
+    color: #b0b0b0; font-size: 0.85rem; text-transform: uppercase;
+    letter-spacing: 1.5px; margin-bottom: 8px;
+  }
+  .price-hero-val {
+    color: #28a745; font-weight: 800; font-size: 2.4rem;
+    letter-spacing: -1px;
+  }
+
+  .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .grid-2col { grid-template-columns: 1fr; } }
+
+  .card {
+    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px;
+    padding: 20px;
+  }
+  .card-label {
+    color: #888; font-size: 0.78rem; text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 12px; font-weight: 600;
+  }
+
+  /* Slider */
+  .slider-wrap { margin: 30px 5px 15px; position: relative; }
+  .slider-bubble {
+    position: absolute; bottom: 32px; transform: translateX(-50%);
+    background: #4e54ff; color: #fff; padding: 5px 12px; border-radius: 6px;
+    font-size: 0.95rem; font-weight: 700; white-space: nowrap;
+    transition: left 0.1s;
+  }
+  .slider-bubble::after {
+    content: ''; position: absolute; bottom: -5px; left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: #4e54ff;
+  }
+  .price-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 6px; background: #2a2d34; border-radius: 3px;
+    outline: none;
+  }
+  .price-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #4e54ff; border: 3px solid #fff; cursor: pointer;
+  }
+  .price-slider::-moz-range-thumb {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #4e54ff; border: 3px solid #fff; cursor: pointer;
+  }
+  .slider-labels {
+    display: flex; justify-content: space-between;
+    font-size: 0.8rem; margin-top: 8px;
+  }
+  .slider-labels .quick { color: #4eb0ff; font-weight: 600; }
+  .slider-labels .highest { color: #28a745; font-weight: 600; }
+
+  /* KPIs */
+  .kpi-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 18px; }
+  .kpi-card {
+    background: #0e1117; border: 1px solid #2a2d34; border-radius: 8px;
+    padding: 12px; text-align: center;
+  }
+  .kpi-label { color: #888; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-value { font-size: 1.15rem; font-weight: 700; margin-top: 4px; }
+  .kpi-value.demand { color: #4eb0ff; }
+  .kpi-value.confidence { color: #28a745; }
+  .kpi-value.days { color: #ffa500; }
+
+  /* Depreciation chart */
+  .chart-wrap { position: relative; height: 200px; margin-top: 10px; }
+  #depChart { width: 100%; height: 100%; cursor: crosshair; }
+  .chart-tooltip {
+    position: absolute; background: #4e54ff; color: #fff;
+    padding: 6px 10px; border-radius: 6px; font-size: 0.8rem;
+    font-weight: 600; pointer-events: none; opacity: 0;
+    transition: opacity 0.15s; white-space: nowrap; z-index: 10;
+    transform: translate(-50%, -120%);
+  }
+  .chart-tooltip.show { opacity: 1; }
+  .chart-tooltip::after {
+    content: ''; position: absolute; bottom: -5px; left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: #4e54ff;
+  }
+  .chart-tooltip .day { display: block; color: #d0d0ff; font-size: 0.7rem; font-weight: 400; }
+
+  /* Data transparency row */
+  .data-row {
+    background: rgba(78,84,255,0.1); border: 1px solid #4e54ff;
+    border-radius: 8px; padding: 12px 18px; margin-top: 18px;
+    font-size: 0.92rem; color: #b0b8ff;
+  }
+  .data-row .highlight { color: #fff; font-weight: 700; }
+
+  /* Buyer % bars */
+  .buyer-bar-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 0.88rem; }
+  .buyer-bar-lbl { width: 75px; color: #b0b0b0; font-weight: 500; }
+  .buyer-bar-track { flex: 1; height: 8px; background: #2a2d34; border-radius: 4px; overflow: hidden; }
+  .buyer-bar-fill { height: 100%; transition: width 0.3s; }
+  .buyer-bar-pct { width: 42px; text-align: right; font-weight: 700; }
 
   .empty-state { text-align: center; padding: 60px 20px; color: #888; }
-  .empty-state h3 { color: #e6e6e6; margin-bottom: 15px; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard-wrap">
 
-  {# Dismissible orange alert (after deal submit or valuation) #}
   {{ orange_alert(message) }}
 
-  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
-
   {% if valuation %}
-    <h2 class="page-title">Your Market Valuation</h2>
+    {# Back button with prefill — goes back to seller with same filters #}
+    <a href="{{ url_for('seller',
+                        make=valuation.make,
+                        fuel=valuation.fuel,
+                        model=valuation.model,
+                        variant=valuation.variant,
+                        owner=valuation.owner,
+                        mileage=valuation.mileage,
+                        year=valuation.year,
+                        condition=valuation.condition) }}" class="btn-back">← Back</a>
 
-    <div class="valuation-card">
-      <div style="color:#888; font-size:0.9rem; letter-spacing:1px;">ESTIMATED MARKET PRICE</div>
-      <div class="price-main">₹{{ "{:,}".format(valuation.estimated_price) }}</div>
-      <div class="price-range">
-        Fair range: <strong>₹{{ "{:,}".format(valuation.price_low) }}</strong> —
-        <strong>₹{{ "{:,}".format(valuation.price_high) }}</strong>
+    <h2 class="page-title">Market Insights</h2>
+    <div class="car-line">{{ valuation.year }} {{ valuation.make }} {{ valuation.model }} · {{ valuation.variant }} · {{ valuation.fuel }}</div>
+    <div class="meta-line">Owner: {{ valuation.owner }} · Condition: {{ valuation.condition.split(' (')[0] }} · Mileage: {{ "{:,}".format(valuation.mileage|int) }} km</div>
+
+    <!-- Centered hero price -->
+    <div class="price-hero">
+      <div class="price-hero-lbl">Estimated Fair Price Range</div>
+      <div class="price-hero-val">
+        ₹{{ "{:,}".format(valuation.price_low) }} — ₹{{ "{:,}".format(valuation.price_high) }}
+      </div>
+    </div>
+
+    <!-- 2-col: Slider | Depreciation chart -->
+    <div class="grid-2col">
+
+      <!-- LEFT: Price vs Time-to-Sell slider + KPIs -->
+      <div class="card">
+        <div class="card-label">Price vs Time-to-Sell</div>
+        <div class="slider-wrap">
+          <div class="slider-bubble" id="sliderBubble">₹{{ "{:,}".format(valuation.estimated_price) }}</div>
+          <input type="range" class="price-slider" id="priceSlider"
+                 min="{{ valuation.price_low }}"
+                 max="{{ valuation.price_high }}"
+                 value="{{ valuation.estimated_price }}"
+                 step="1000">
+        </div>
+        <div class="slider-labels">
+          <span class="quick">⚡ Quick Sale</span>
+          <span class="highest">Highest Price ↑</span>
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi-card">
+            <div class="kpi-label">Demand</div>
+            <div class="kpi-value demand">{{ valuation.demand }}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Confidence</div>
+            <div class="kpi-value confidence">{{ valuation.confidence }}%</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Days to Sell</div>
+            <div class="kpi-value days" id="daysToSell">{{ valuation.days_low }}–{{ valuation.days_high }}</div>
+          </div>
+        </div>
       </div>
 
-      <div class="car-summary">
-        <div><span class="label">MAKE</span><span class="value">{{ valuation.make }}</span></div>
-        <div><span class="label">MODEL</span><span class="value">{{ valuation.model }}</span></div>
-        <div><span class="label">VARIANT</span><span class="value">{{ valuation.variant }}</span></div>
-        <div><span class="label">FUEL</span><span class="value">{{ valuation.fuel }}</span></div>
-        <div><span class="label">YEAR</span><span class="value">{{ valuation.year }}</span></div>
-        <div><span class="label">MILEAGE</span><span class="value">{{ valuation.mileage }} km</span></div>
-        <div><span class="label">OWNER</span><span class="value">{{ valuation.owner }}</span></div>
-        <div><span class="label">CONDITION</span><span class="value">{{ valuation.condition }}</span></div>
+      <!-- RIGHT: Depreciation chart -->
+      <div class="card">
+        <div class="card-label">Depreciation · Next 3 Months</div>
+        <div class="chart-wrap">
+          <canvas id="depChart"></canvas>
+          <div class="chart-tooltip" id="chartTip">
+            <span class="day" id="tipDay">Day 0</span>
+            <span id="tipVal">₹0</span>
+          </div>
+        </div>
       </div>
 
-      <div class="cta-row">
-        <a href="{{ url_for('seller') }}" class="btn btn-cta btn-cta-green">Run Another Valuation</a>
-        <a href="{{ url_for('submit_deal') }}" class="btn btn-cta btn-cta-blue">Submit Deal · Earn (100 Credits)</a>
-      </div>
+    </div>
+
+    <!-- Data transparency -->
+    <div class="data-row">
+      Based on <span class="highlight">{{ valuation.verified_txns }} verified transactions</span>
+      · <span class="highlight">{{ valuation.buyers_30d }} buyers</span> searched this car in the last 30 days
+      · Average <span class="highlight">{{ valuation.avg_buyers_per_day }} buyers/day</span>
+    </div>
+
+    <!-- Buyer % distribution -->
+    <div class="card" style="margin-top: 18px;">
+      <div class="card-label">% of Buyers Searching at Each Price Band</div>
+      <div id="buyerBars"></div>
     </div>
 
   {% else %}
     <div class="empty-state">
-      <h3>No valuation yet</h3>
-      <p>Head back and fill the seller form to generate your market valuation.</p>
-      <a href="{{ url_for('seller') }}" class="btn btn-cta btn-cta-green mt-3">Start a Valuation</a>
+      <h3 style="color:#e6e6e6;">No valuation yet</h3>
+      <p>Head back and fill the seller form to generate your market insights.</p>
+      <a href="{{ url_for('seller') }}" class="btn" style="background:#28a745;color:#fff;padding:10px 24px;border-radius:8px;margin-top:15px;font-weight:600;">
+        Start a Valuation
+      </a>
     </div>
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if valuation %}
+<script>
+  // ===== Price slider + days-to-sell live update =====
+  const slider = document.getElementById('priceSlider');
+  const bubble = document.getElementById('sliderBubble');
+  const daysEl = document.getElementById('daysToSell');
+  const priceLow = {{ valuation.price_low }};
+  const priceHigh = {{ valuation.price_high }};
+  const priceMid = {{ valuation.estimated_price }};
+  const daysLow = {{ valuation.days_low }};
+  const daysHigh = {{ valuation.days_high }};
+
+  function fmt(n) { return '₹' + Math.round(n).toLocaleString('en-IN'); }
+
+  function updateSlider() {
+    const v = parseInt(slider.value, 10);
+    bubble.textContent = fmt(v);
+    const pct = (v - priceLow) / (priceHigh - priceLow);
+    bubble.style.left = (pct * 100) + '%';
+    // Days: quick-sale=low, highest-price=more days
+    const dLow = Math.round(daysLow + pct * 8);
+    const dHigh = Math.round(daysHigh + pct * 12);
+    daysEl.textContent = dLow + '–' + dHigh;
+    updateBuyerBars(v);
+  }
+
+  slider.addEventListener('input', updateSlider);
+  window.addEventListener('load', updateSlider);
+
+  // ===== Depreciation chart =====
+  const canvas = document.getElementById('depChart');
+  const tip = document.getElementById('chartTip');
+  const tipDay = document.getElementById('tipDay');
+  const tipVal = document.getElementById('tipVal');
+
+  const startPrice = priceMid;
+  // Gentle logarithmic decay — ~5% drop over 90 days
+  function priceOnDay(day) {
+    // Smoother log curve: price = start * (1 - k * ln(1+day))
+    const decay = 0.011 * Math.log(1 + day);
+    return Math.round(startPrice * (1 - decay));
+  }
+
+  function drawChart() {
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * devicePixelRatio;
+    canvas.height = rect.height * devicePixelRatio;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    const w = rect.width, h = rect.height;
+    const padL = 40, padR = 15, padT = 15, padB = 30;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Grid lines
+    ctx.strokeStyle = '#2a2d34'; ctx.lineWidth = 0.5;
+    ctx.strokeRect(padL, padT, w - padL - padR, h - padT - padB);
+
+    // Y labels
+    ctx.fillStyle = '#888'; ctx.font = '11px Segoe UI';
+    const priceDay0 = priceOnDay(0);
+    const priceDay90 = priceOnDay(90);
+    ctx.textAlign = 'right';
+    ctx.fillText('₹' + (priceDay0/100000).toFixed(1) + 'L', padL - 4, padT + 5);
+    ctx.fillText('₹' + (priceDay90/100000).toFixed(1) + 'L', padL - 4, h - padB + 4);
+
+    // X labels
+    ctx.textAlign = 'center';
+    ctx.fillText('Today', padL + 5, h - 10);
+    ctx.fillText('Day 45', padL + (w - padL - padR) / 2, h - 10);
+    ctx.fillText('Day 90', w - padR - 5, h - 10);
+
+    // Line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let day = 0; day <= 90; day++) {
+      const x = padL + (day / 90) * (w - padL - padR);
+      const p = priceOnDay(day);
+      const y = padT + ((priceDay0 - p) / (priceDay0 - priceDay90)) * (h - padT - padB);
+      if (day === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Start dot (green)
+    const x0 = padL, y0 = padT;
+    ctx.fillStyle = '#28a745';
+    ctx.beginPath(); ctx.arc(x0, y0, 4, 0, 2 * Math.PI); ctx.fill();
+
+    // End dot (red)
+    const xE = w - padR;
+    const yE = h - padB;
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(xE, yE, 4, 0, 2 * Math.PI); ctx.fill();
+
+    canvas._chartMeta = { padL, padR, padT, padB, w, h, priceDay0, priceDay90 };
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const m = canvas._chartMeta;
+    if (!m) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    if (mx < m.padL || mx > m.w - m.padR) { tip.classList.remove('show'); return; }
+    const day = Math.round(((mx - m.padL) / (m.w - m.padL - m.padR)) * 90);
+    const p = priceOnDay(day);
+    tipDay.textContent = day === 0 ? 'Today' : 'Day ' + day;
+    tipVal.textContent = fmt(p);
+    tip.style.left = mx + 'px';
+    const yOnLine = m.padT + ((m.priceDay0 - p) / (m.priceDay0 - m.priceDay90)) * (m.h - m.padT - m.padB);
+    tip.style.top = yOnLine + 'px';
+    tip.classList.add('show');
+  });
+  canvas.addEventListener('mouseleave', () => tip.classList.remove('show'));
+
+  window.addEventListener('load', drawChart);
+  window.addEventListener('resize', drawChart);
+
+  // ===== Buyer % distribution (dynamic based on slider) =====
+  function updateBuyerBars(currentPrice) {
+    // 4 bands: -15%, -5%, +5%, +15% from current
+    const bands = [
+      { price: currentPrice * 0.9,  pct: 92, color: '#28a745' },
+      { price: currentPrice * 0.98, pct: 68, color: '#ffa500' },
+      { price: currentPrice * 1.05, pct: 38, color: '#ffa500' },
+      { price: currentPrice * 1.12, pct: 14, color: '#e74c3c' }
+    ];
+    const html = bands.map(b => `
+      <div class="buyer-bar-row">
+        <span class="buyer-bar-lbl">₹${(b.price/100000).toFixed(1)}L</span>
+        <div class="buyer-bar-track">
+          <div class="buyer-bar-fill" style="width:${b.pct}%; background:${b.color};"></div>
+        </div>
+        <span class="buyer-bar-pct" style="color:${b.color};">${b.pct}%</span>
+      </div>
+    `).join('');
+    document.getElementById('buyerBars').innerHTML = html;
+  }
+</script>
+{% endif %}
 {% endblock %}
