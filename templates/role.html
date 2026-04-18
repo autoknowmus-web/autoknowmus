@@ -1,58 +1,118 @@
-{% extends "layout.html" %}
-{% block content %}
-<div class="text-center py-2">
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div class="alert d-inline-block px-4 py-2 small rounded-pill mb-4 border-0 shadow-sm" style="background: rgba(255, 193, 7, 0.2); color: #ffc107;">
-                <i class="fas fa-gift me-2"></i> {{ messages[-1] }}
-            </div>
-        {% endif %}
-    {% endwith %}
+import os
+from flask import Flask, render_template, request, session, redirect, url_for, flash, get_flashed_messages
+from authlib.integrations.flask_client import OAuth
 
-    <h2 class="text-white mb-5 fw-bold">Hello{% if user_name %} {{ user_name }}{% endif %}! Ready to make a smarter decision?</h2>
-    
-    <div class="row g-4 justify-content-center px-2">
-        <div class="col-md-5">
-            <div class="card p-4 h-100 border-top border-success border-4 d-flex flex-column shadow-lg" style="background: #16181d;">
-                <h4 class="text-green fw-bold mb-3">I am a Seller</h4>
-                <p class="text-white-50 small mb-4">Maximize the sale opportunity by listing at the right price.</p>
-                
-                <a href="/seller" class="btn btn-success w-100 py-2 fw-bold mb-4">Find My Car Value</a>
-                
-                <div class="p-3 mb-4 rounded text-start" style="background: #1c1e22; border: 1px solid #2d2f34;">
-                    <h6 class="text-green small fw-bold mb-1">Seller Credit Benefits</h6>
-                    <p class="text-white m-0" style="font-size: 0.75rem; line-height: 1.4; opacity: 0.9;">
-                        Unlimited real price search for 30 days or Get live transaction alerts in WhatsApp & email as soon as car similar as yours gets sold in your city.
-                    </p>
-                </div>
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
 
-                <div class="mt-auto d-grid gap-2">
-                    <button class="btn btn-sm btn-outline-warning py-2 fw-bold">Purchase 500 Credits for Seller</button>
-                    <button class="btn btn-sm btn-outline-info py-2 fw-bold">Record Actual Transaction Data</button>
-                </div>
-            </div>
-        </div>
+# Google OAuth Setup
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
 
-        <div class="col-md-5">
-            <div class="card p-4 h-100 border-top border-primary border-4 d-flex flex-column shadow-lg" style="background: #16181d;">
-                <h4 class="text-blue fw-bold mb-3" style="color: #007bff !important;">I am a Buyer</h4>
-                <p class="text-white-50 small mb-4">Research fair market prices and evaluate deals before you buy.</p>
-                
-                <a href="/buyer" class="btn btn-primary w-100 py-2 fw-bold mb-4">Research Prices</a>
+@app.route('/')
+def index():
+    if 'credits' not in session:
+        session['credits'] = 0
+    return render_template('index.html')
 
-                <div class="p-3 mb-4 rounded text-start" style="background: #1c1e22; border: 1px solid #2d2f34;">
-                    <h6 class="text-primary small fw-bold mb-1">Buyer Credit Benefits</h6>
-                    <p class="text-white m-0" style="font-size: 0.75rem; line-height: 1.4; opacity: 0.9;">
-                        Unlimited real price search based on user submitted data for 30 days, or Get live listing alerts in WhatsApp & email as soon as the car you are looking for is listed in your city.
-                    </p>
-                </div>
+@app.route('/login/google')
+def login():
+    return google.authorize_redirect(url_for('auth', _external=True))
 
-                <div class="mt-auto d-grid gap-2">
-                    <button class="btn btn-sm btn-outline-warning py-2 fw-bold">Purchase 500 Credits as Buyer</button>
-                    <button class="btn btn-sm btn-outline-info py-2 fw-bold">Record Actual Transaction Data</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
+@app.route('/auth')
+def auth():
+    get_flashed_messages()
+    try:
+        token = google.authorize_access_token()
+        user = token.get('userinfo')
+        if user:
+            session['user_name'] = user.get('name') or user.get('email').split('@')[0]
+            session['credits'] = 500 
+            flash("Success! 500 Bonus Credits added to your account.")
+        return redirect(url_for('role'))
+    except Exception:
+        return redirect(url_for('index'))
+
+@app.route('/role', methods=['GET', 'POST'])
+def role():
+    if request.method == 'POST':
+        get_flashed_messages()
+        session['user_name'] = request.form.get('name')
+        session['credits'] = 500
+        flash("Success! 500 Bonus Credits added to your account.")
+    if 'user_name' not in session:
+        return redirect(url_for('index'))
+    return render_template('role.html', user_name=session.get('user_name'), credits=session.get('credits'))
+
+@app.route('/seller')
+def seller():
+    if 'user_name' not in session:
+        return redirect(url_for('index'))
+    return render_template('seller.html')
+
+@app.route('/buyer')
+def buyer():
+    if 'user_name' not in session:
+        return redirect(url_for('index'))
+    return render_template('buyer.html')
+
+@app.route('/generate_report', methods=['POST'])
+def generate_report():
+    get_flashed_messages()
+    current_credits = session.get('credits', 0)
+    if current_credits >= 100:
+        session['credits'] = current_credits - 100
+        session.modified = True 
+        session['last_search'] = {
+            'make': request.form.get('make'),
+            'model': request.form.get('model'),
+            'variant': request.form.get('variant'),
+            'year': request.form.get('year'),
+            'city': "Bangalore",
+            'fuel': request.form.get('fuel'),
+            'condition': request.form.get('condition'),
+            'mileage': request.form.get('mileage'),
+            'owners': request.form.get('owners')
+        }
+        return redirect(url_for('dashboard'))
+    else:
+        flash("Insufficient credits!")
+        return redirect(url_for('role'))
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user_name' not in session:
+        return redirect(url_for('index'))
+    search_data = session.get('last_search', {})
+    return render_template('dashboard.html', data=search_data)
+
+# [NEW] Route to show the Submit Deal page
+@app.route('/submit_deal')
+def submit_deal():
+    if 'user_name' not in session:
+        return redirect(url_for('index'))
+    return render_template('submit_deal.html')
+
+# [NEW] Route to process the deal and reward credits
+@app.route('/process_deal', methods=['POST'])
+def process_deal():
+    get_flashed_messages()
+    session['credits'] = session.get('credits', 0) + 200
+    session.modified = True
+    flash("Success! 200 Credits rewarded for your contribution.")
+    return redirect(url_for('role'))
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
