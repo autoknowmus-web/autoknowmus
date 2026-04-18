@@ -5,7 +5,6 @@ from authlib.integrations.flask_client import OAuth
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Google OAuth Setup
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -27,7 +26,6 @@ def login():
 
 @app.route('/auth')
 def auth():
-    # Clear any old messages before logging in
     get_flashed_messages()
     try:
         token = google.authorize_access_token()
@@ -38,13 +36,11 @@ def auth():
             flash("Success! 500 Bonus Credits added to your account.")
         return redirect(url_for('role'))
     except Exception as e:
-        flash("Login failed. Please try again.")
         return redirect(url_for('index'))
 
 @app.route('/role', methods=['GET', 'POST'])
 def role():
     if request.method == 'POST':
-        # Clear old messages if user is submitting the manual login form
         get_flashed_messages()
         session['user_name'] = request.form.get('name')
         session['credits'] = 500
@@ -52,7 +48,6 @@ def role():
     
     if 'user_name' not in session:
         return redirect(url_for('index'))
-        
     return render_template('role.html', user_name=session.get('user_name'), credits=session.get('credits'))
 
 @app.route('/seller')
@@ -61,26 +56,22 @@ def seller():
         return redirect(url_for('index'))
     return render_template('seller.html')
 
-@app.route('/buyer')
-def buyer():
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-    return render_template('buyer.html')
-
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
-    # Clear any "Welcome" messages before doing credit logic
     get_flashed_messages()
     current_credits = session.get('credits', 0)
     
     if current_credits >= 100:
+        # Deduct credits and update session immediately
         session['credits'] = current_credits - 100
+        session.modified = True 
+        
         session['last_search'] = {
             'make': request.form.get('make'),
             'model': request.form.get('model'),
             'variant': request.form.get('variant'),
             'year': request.form.get('year'),
-            'city': request.form.get('city'),
+            'city': "Bangalore",
             'fuel': request.form.get('fuel'),
             'condition': request.form.get('condition'),
             'mileage': request.form.get('mileage')
