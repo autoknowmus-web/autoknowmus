@@ -1,283 +1,48 @@
 {% extends "layout.html" %}
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-12">
-        <div class="card p-4 shadow-lg mt-2" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <a href="/role" class="btn btn-sm btn-outline-secondary rounded-pill px-3">← Back</a>
-                <h3 class="text-green fw-bold mb-0">Sell Your Car: Market Valuation</h3>
-            </div>
+{% block title %}Sell Your Car - AutoKnowMus{% endblock %}
 
-            <form action="/generate_report" method="POST" class="row g-3 justify-content-center">
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Location</label>
-                    <select class="form-select bg-dark text-white border-secondary py-2" disabled><option>Bangalore</option></select>
-                    <input type="hidden" name="city" value="Bangalore">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Make</label>
-                    <select id="make" name="make" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="">Select Make</option>
-                        <option value="Maruti Suzuki">Maruti Suzuki</option>
-                        <option value="Hyundai">Hyundai</option>
-                        <option value="Tata">Tata</option>
-                        <option value="Mahindra">Mahindra</option>
-                        <option value="Toyota">Toyota</option>
-                        <option value="Honda">Honda</option>
-                        <option value="Kia">Kia</option>
-                        <option value="Volkswagen">Volkswagen</option>
-                        <option value="Skoda">Skoda</option>
-                        <option value="Renault">Renault</option>
-                        <option value="Nissan">Nissan</option>
-                        <option value="Ford">Ford</option>
-                        <option value="MG">MG</option>
-                        <option value="BMW">BMW</option>
-                        <option value="Mercedes-Benz">Mercedes-Benz</option>
-                        <option value="Audi">Audi</option>
-                        <option value="Lexus">Lexus</option>
-                        <option value="Jaguar">Jaguar</option>
-                        <option value="Volvo">Volvo</option>
-                        <option value="Land Rover">Land Rover</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Fuel Type</label>
-                    <select id="fuel" name="fuel" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="">Select Fuel</option>
-                        <option value="Petrol">Petrol</option>
-                        <option value="Diesel">Diesel</option>
-                        <option value="CNG">CNG</option>
-                        <option value="HEV">HEV (Hybrid)</option>
-                        <option value="PHEV">PHEV (Plug-in Hybrid)</option>
-                        <option value="BEV">BEV (Electric)</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Model</label>
-                    <select id="model" name="model" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="">Select Model</option>
-                    </select>
-                </div>
-
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Variant / Suffix</label>
-                    <select id="variant" name="variant" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="">Select Variant</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">No. of Owners</label>
-                    <select name="owners" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="1">1st Owner</option>
-                        <option value="2">2nd Owner</option>
-                        <option value="3">3rd Owner or more</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Mileage (KMs) *</label>
-                    <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary py-2" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Year *</label>
-                    <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" min="2000" max="2026" required>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label text-white fw-bold small">Condition</label>
-                    <select name="condition" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="Excellent">Excellent (Showroom like)</option>
-                        <option value="Good">Good (Minor wear & tear)</option>
-                        <option value="Fair">Fair (Dents/Scratches)</option>
-                    </select>
-                </div>
-
-                <div class="col-12 mt-4 text-center">
-                    <button type="submit" class="btn btn-success py-2 fw-bold shadow-lg" style="border-radius: 12px; background: #28a745; border: none; width: 320px; line-height: 1.2;">
-                        GENERATE INTELLIGENCE<br><span style="font-size: 0.7rem; font-weight: 500; opacity: 0.9;">(100 Credits)</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-const carData = {
-    "Maruti Suzuki": {
-        "Swift": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "Diesel": ["LDi", "VDi", "ZDi", "ZDi+"] },
-        "Baleno": { "Petrol": ["Sigma", "Delta", "Zeta", "Alpha"], "CNG": ["Delta CNG", "Zeta CNG"] },
-        "Brezza": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "CNG": ["VXi CNG", "ZXi CNG"] },
-        "Dzire": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "CNG": ["VXi CNG", "ZXi CNG"] },
-        "Ertiga": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "CNG": ["VXi CNG", "ZXi CNG"] },
-        "Grand Vitara": { "Petrol": ["Sigma", "Delta", "Zeta", "Alpha"], "HEV": ["Zeta Plus", "Alpha Plus"] },
-        "XL6": { "Petrol": ["Zeta", "Alpha"], "CNG": ["Zeta CNG"] },
-        "Invictus": { "HEV": ["Zeta Plus", "Alpha Plus"] },
-        "Celerio": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "CNG": ["VXi CNG"] },
-        "Alto K10": { "Petrol": ["STD", "LXi", "VXi", "VXi+"], "CNG": ["LXi CNG", "VXi CNG"] },
-        "S-Presso": { "Petrol": ["STD", "LXi", "VXi", "VXi+"], "CNG": ["LXi CNG", "VXi CNG"] },
-        "Wagon R": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "CNG": ["LXi CNG", "VXi CNG"] },
-        "Ignis": { "Petrol": ["Sigma", "Delta", "Zeta", "Alpha"] },
-        "Ciaz": { "Petrol": ["Sigma", "Delta", "Zeta", "Alpha"] },
-        "Jimny": { "Petrol": ["Zeta", "Alpha"] },
-        "Fronx": { "Petrol": ["Sigma", "Delta", "Zeta", "Alpha"], "CNG": ["Delta CNG"] }
-    },
-    "Hyundai": {
-        "i20": { "Petrol": ["Magna", "Sportz", "Asta", "Asta(O)"] },
-        "Creta": { "Petrol": ["E", "EX", "S", "SX", "SX(O)"], "Diesel": ["E", "EX", "S", "SX", "SX(O)"] },
-        "Venue": { "Petrol": ["E", "S", "SX", "SX(O)"], "Diesel": ["S", "SX", "SX(O)"] },
-        "Verna": { "Petrol": ["EX", "S", "SX", "SX(O)"] },
-        "Alcazar": { "Petrol": ["Prestige", "Platinum", "Signature"], "Diesel": ["Prestige", "Platinum", "Signature"] },
-        "Tucson": { "Petrol": ["Signature", "Signature(O)"], "Diesel": ["Signature", "Signature(O)"] },
-        "Exter": { "Petrol": ["EX", "S", "SX", "SX(O)"], "CNG": ["S CNG", "SX CNG"] },
-        "Aura": { "Petrol": ["E", "S", "SX", "SX(O)"], "CNG": ["S CNG"] },
-        "Grand i10 Nios": { "Petrol": ["Magna", "Sportz", "Asta"], "CNG": ["Magna CNG", "Sportz CNG"] },
-        "Ioniq 5": { "BEV": ["Premium", "Techniq"] },
-        "Kona Electric": { "BEV": ["Premium", "Premium Dual Tone"] }
-    },
-    "Tata": {
-        "Nexon": { "Petrol": ["XE", "XM", "XZ", "XZ+"], "Diesel": ["XM", "XZ", "XZ+"], "BEV": ["XM", "XZ+", "XZ+ Lux"] },
-        "Punch": { "Petrol": ["Pure", "Adventure", "Accomplished", "Creative"], "CNG": ["Pure CNG", "Adventure CNG"], "BEV": ["Medium Range", "Long Range"] },
-        "Harrier": { "Diesel": ["XE", "XM", "XT", "XZ", "XZ+"] },
-        "Safari": { "Diesel": ["XE", "XM", "XT", "XZ", "XZ+"] },
-        "Tiago": { "Petrol": ["XE", "XM", "XT", "XZ", "XZ+"], "CNG": ["XE CNG", "XT CNG"], "BEV": ["XE", "XT", "XZ+"] },
-        "Altroz": { "Petrol": ["XE", "XM", "XT", "XZ", "XZ+"], "Diesel": ["XE", "XM", "XT", "XZ"], "CNG": ["XM CNG"] },
-        "Tigor": { "Petrol": ["XE", "XM", "XZ", "XZ+"], "CNG": ["XZ CNG"], "BEV": ["XE", "XT", "XZ+"] },
-        "Curvv": { "Petrol": ["Smart", "Pure", "Creative", "Accomplished"], "Diesel": ["Smart", "Pure", "Creative", "Accomplished"] }
-    },
-    "Mahindra": {
-        "XUV700": { "Petrol": ["MX", "AX3", "AX5", "AX7", "AX7(L)"], "Diesel": ["MX", "AX3", "AX5", "AX7", "AX7(L)"] },
-        "Scorpio-N": { "Petrol": ["Z2", "Z4", "Z6", "Z8", "Z8L"], "Diesel": ["Z2", "Z4", "Z6", "Z8", "Z8L"] },
-        "Scorpio Classic": { "Diesel": ["S", "S3+", "S11"] },
-        "Thar": { "Petrol": ["AX(O)", "LX"], "Diesel": ["AX(O)", "LX"] },
-        "XUV300": { "Petrol": ["W4", "W6", "W8", "W8(O)"], "Diesel": ["W4", "W6", "W8"] },
-        "Bolero": { "Diesel": ["B4", "B6", "B6(O)"] },
-        "Bolero Neo": { "Diesel": ["N4", "N8", "N10", "N10(O)"] },
-        "XUV400": { "BEV": ["EC", "EL", "EL Pro"] }
-    },
-    "Toyota": {
-        "Innova Crysta": { "Diesel": ["G", "GX", "VX", "ZX"], "Petrol": ["GX", "VX"] },
-        "Innova Hycross": { "HEV": ["VX", "ZX", "ZX(O)"], "Petrol": ["G", "GX"] },
-        "Fortuner": { "Diesel": ["4x2 MT", "4x2 AT", "4x4 MT", "4x4 AT", "Legender"], "Petrol": ["2.7L 4x2"] },
-        "Glanza": { "Petrol": ["E", "S", "G", "V"], "CNG": ["S CNG", "G CNG"] },
-        "Urban Cruiser Hyryder": { "Petrol": ["E", "S", "G", "V"], "HEV": ["S", "G", "V"] },
-        "Camry": { "HEV": ["Hybrid"] },
-        "Vellfire": { "HEV": ["Executive Lounge"] },
-        "Rumion": { "Petrol": ["S", "G", "V"], "CNG": ["S CNG", "G CNG"] },
-        "Land Cruiser": { "Diesel": ["GX-R", "ZX"] }
-    },
-    "Honda": {
-        "City": { "Petrol": ["V", "VX", "ZX"], "HEV": ["e:HEV ZX"] },
-        "Amaze": { "Petrol": ["E", "S", "V", "VX"] },
-        "Elevate": { "Petrol": ["SV", "V", "VX", "ZX"] },
-        "WR-V": { "Petrol": ["SV", "VX"] }
-    },
-    "Kia": {
-        "Seltos": { "Petrol": ["HTE", "HTK", "HTK+", "HTX", "GTX+", "X-Line"], "Diesel": ["HTE", "HTK", "HTK+", "HTX", "GTX+", "X-Line"] },
-        "Sonet": { "Petrol": ["HTE", "HTK", "HTK+", "HTX", "GTX+", "X-Line"], "Diesel": ["HTE", "HTK", "HTK+", "HTX", "GTX+", "X-Line"] },
-        "Carens": { "Petrol": ["Premium", "Prestige", "Prestige+", "Luxury", "Luxury Plus"], "Diesel": ["Premium", "Prestige", "Prestige+", "Luxury", "Luxury Plus"] },
-        "EV6": { "BEV": ["GT Line", "GT"] }
-    },
-    "Volkswagen": {
-        "Virtus": { "Petrol": ["Comfortline", "Highline", "Topline", "GT"] },
-        "Taigun": { "Petrol": ["Comfortline", "Highline", "Topline", "GT", "GT Plus"] }
-    },
-    "Skoda": {
-        "Slavia": { "Petrol": ["Active", "Ambition", "Style"] },
-        "Kushaq": { "Petrol": ["Active", "Ambition", "Style", "Monte Carlo"] },
-        "Kodiaq": { "Petrol": ["Style", "Sportline", "L&K"] }
-    },
-    "Renault": {
-        "Kwid": { "Petrol": ["STD", "RXL", "RXT", "Climber"] },
-        "Kiger": { "Petrol": ["RXE", "RXL", "RXT", "RXZ"] },
-        "Triber": { "Petrol": ["RXE", "RXL", "RXT", "RXZ"] }
-    },
-    "Nissan": {
-        "Magnite": { "Petrol": ["XE", "XL", "XV", "XV Premium"] }
-    },
-    "Ford": {
-        "EcoSport": { "Petrol": ["Ambiente", "Trend", "Titanium"], "Diesel": ["Ambiente", "Trend", "Titanium"] },
-        "Endeavour": { "Diesel": ["Titanium", "Titanium Plus"] }
-    },
-    "MG": {
-        "Hector": { "Petrol": ["Style", "Sharp", "Savvy"], "Diesel": ["Style", "Sharp", "Savvy"] },
-        "Astor": { "Petrol": ["Style", "Super", "Smart", "Sharp"] },
-        "ZS EV": { "BEV": ["Excite", "Exclusive"] },
-        "Gloster": { "Diesel": ["Super", "Smart", "Sharp", "Savvy"] }
-    },
-    "BMW": {
-        "3 Series": { "Petrol": ["Sport", "Luxury Line", "M Sport"], "Diesel": ["Sport", "Luxury Line", "M Sport"] },
-        "5 Series": { "Petrol": ["Luxury Line", "M Sport"], "Diesel": ["Luxury Line", "M Sport"] },
-        "X1": { "Petrol": ["xLine", "M Sport"], "Diesel": ["xLine", "M Sport"] },
-        "X3": { "Petrol": ["xLine", "Luxury", "M Sport"], "Diesel": ["xLine", "Luxury", "M Sport"] },
-        "X5": { "Petrol": ["xLine", "M Sport"], "Diesel": ["xLine", "M Sport"] }
-    },
-    "Mercedes-Benz": {
-        "C-Class": { "Petrol": ["C 200", "C 300"], "Diesel": ["C 220d"] },
-        "E-Class": { "Petrol": ["E 200", "E 300"], "Diesel": ["E 220d"] },
-        "GLC": { "Petrol": ["GLC 200", "GLC 300"], "Diesel": ["GLC 220d"] },
-        "GLE": { "Petrol": ["GLE 450"], "Diesel": ["GLE 300d"] }
-    },
-    "Audi": {
-        "A4": { "Petrol": ["Premium", "Premium Plus", "Technology"] },
-        "A6": { "Petrol": ["Premium", "Premium Plus", "Technology"] },
-        "Q3": { "Petrol": ["Premium", "Premium Plus", "Technology"] },
-        "Q5": { "Petrol": ["Premium Plus", "Technology"] }
-    },
-    "Lexus": {
-        "ES": { "HEV": ["300h Exquisite", "300h Luxury"] },
-        "NX": { "HEV": ["Overtrail", "Luxury", "F Sport"] },
-        "RX": { "HEV": ["Luxury", "F Sport"] },
-        "LX": { "Diesel": ["Ultra Luxury"] }
-    },
-    "Jaguar": {
-        "XF": { "Petrol": ["Prestige", "R-Dynamic SE"], "Diesel": ["Prestige", "R-Dynamic SE"] },
-        "F-Pace": { "Petrol": ["S", "SE"], "Diesel": ["S", "SE"] }
-    },
-    "Volvo": {
-        "XC40": { "Petrol": ["Ultimate"], "BEV": ["Recharge"] },
-        "XC60": { "Petrol": ["Inscription", "R-Design"] },
-        "XC90": { "Petrol": ["Inscription"] }
-    },
-    "Land Rover": {
-        "Defender": { "Petrol": ["110 HSE", "90 HSE"], "Diesel": ["110 HSE"] },
-        "Range Rover Evoque": { "Petrol": ["S", "SE", "HSE"], "Diesel": ["S", "SE", "HSE"] },
-        "Range Rover Sport": { "Petrol": ["SE", "HSE", "Autobiography"], "Diesel": ["SE", "HSE", "Autobiography"] }
-    }
-};
-
-const makeEl = document.getElementById('make');
-const fuelEl = document.getElementById('fuel');
-const modelEl = document.getElementById('model');
-const variantEl = document.getElementById('variant');
-
-function updateModels() {
-    const make = makeEl.value;
-    const fuel = fuelEl.value;
-    modelEl.innerHTML = '<option value="">Select Model</option>';
-    variantEl.innerHTML = '<option value="">Select Variant</option>';
-    if (make && carData[make]) {
-        Object.keys(carData[make]).forEach(model => {
-            if (!fuel || carData[make][model][fuel]) {
-                modelEl.innerHTML += `<option value="${model}">${model}</option>`;
-            }
-        });
-    }
-}
-
-function updateVariants() {
-    const make = makeEl.value;
-    const model = modelEl.value;
-    const fuel = fuelEl.value;
-    variantEl.innerHTML = '<option value="">Select Variant</option>';
-    if (make && model && fuel && carData[make][model] && carData[make][model][fuel]) {
-        carData[make][model][fuel].forEach(v => {
-            variantEl.innerHTML += `<option value="${v}">${v}</option>`;
-        });
-    }
-}
-
-makeEl.addEventListener('change', updateModels);
-fuelEl.addEventListener('change', updateModels);
-modelEl.addEventListener('change', updateVariants);
-</script>
+{% block extra_head %}
+<style>
+  .seller-wrap { padding: 30px 40px; }
+  .page-title { color: #28a745; font-size: 1.8rem; font-weight: 700; text-align: right; margin: 0; }
+  .form-section { background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px; padding: 30px; }
+  .btn-generate {
+    background: #28a745; color: #fff; border: none; padding: 14px 40px;
+    border-radius: 8px; font-weight: 700; font-size: 1rem; letter-spacing: 0.5px;
+    width: 320px; display: block; margin: 0 auto;
+  }
+  .btn-generate:hover { background: #218838; color: #fff; }
+  .btn-generate .credit-cost { display: block; font-size: 0.85rem; font-weight: 500; margin-top: 3px; opacity: 0.95; }
+</style>
 {% endblock %}
+
+{% block content %}
+<div class="seller-wrap">
+  <div class="form-section">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+      <h2 class="page-title">Sell Your Car: Market Valuation</h2>
+    </div>
+
+    <form method="POST" action="{{ url_for('valuate') }}">
+      <!-- Row 1: 4 filters -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Location</label>
+          <select class="form-select" disabled><option>Bangalore</option></select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Make</label>
+          <select class="form-select" name="make" id="make" required>
+            <option value="">Select Make</option>
+            {% for brand in brands|sort %}
+              <option value="{{ brand }}">{{ brand }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Fuel Type</label>
+          <select class="form-select" name="fuel" id="fuel" required>
+            <option value="">Select Fuel</option>
+            {% for fuel in fuels|sort %}
+              <option value="{{ fuel }}">{
