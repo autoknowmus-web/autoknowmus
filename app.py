@@ -5,7 +5,6 @@ from authlib.integrations.flask_client import OAuth
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Google OAuth Setup
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -56,12 +55,6 @@ def seller():
         return redirect(url_for('index'))
     return render_template('seller.html')
 
-@app.route('/buyer')
-def buyer():
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-    return render_template('buyer.html')
-
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
     get_flashed_messages()
@@ -92,14 +85,12 @@ def dashboard():
     search_data = session.get('last_search', {})
     return render_template('dashboard.html', data=search_data)
 
-# [NEW] Route to show the Submit Deal page
 @app.route('/submit_deal')
 def submit_deal():
     if 'user_name' not in session:
         return redirect(url_for('index'))
     return render_template('submit_deal.html')
 
-# [NEW] Route to process the deal and reward credits
 @app.route('/process_deal', methods=['POST'])
 def process_deal():
     get_flashed_messages()
