@@ -1,54 +1,165 @@
 {% extends "layout.html" %}
+{% block title %}Record Transaction - AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  .deal-wrap { padding: 30px 40px; max-width: 1000px; margin: 0 auto; }
+  .page-title { color: #4eb0ff; font-size: 1.8rem; font-weight: 700; margin: 0; }
+  .form-section { background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px; padding: 30px; }
+  .btn-submit-deal {
+    background: #4e54ff; color: #fff; border: none; padding: 13px 40px;
+    border-radius: 8px; font-weight: 700; width: 320px; display: block; margin: 15px auto 0;
+  }
+  .btn-submit-deal:hover { background: #3a40d9; color: #fff; }
+  .btn-submit-deal .credit-reward { display: block; font-size: 0.85rem; font-weight: 500; margin-top: 3px; }
+  .info-box {
+    background: rgba(78,84,255,0.1); border: 1px solid #4e54ff;
+    color: #b0b8ff; padding: 12px 16px; border-radius: 8px; font-size: 0.9rem;
+    margin-bottom: 20px;
+  }
+  .info-box .credit-inline { font-weight: 700; }
+
+  /* Date field with calendar icon in corner */
+  .date-field-wrap { position: relative; }
+  .date-field-wrap input[type="date"] {
+    background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
+    padding: 8px 40px 8px 12px; border-radius: 6px; width: 100%;
+    color-scheme: dark;
+  }
+  .date-field-wrap input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(0.8); cursor: pointer;
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px; opacity: 0.8;
+  }
+  .date-format-hint { color: #888; font-size: 0.8rem; margin-top: 4px; display: block; }
+
+  .file-upload {
+    background: #1a1d24; border: 1px dashed #4e54ff; border-radius: 8px;
+    padding: 20px; text-align: center; cursor: pointer; color: #b0b0b0;
+  }
+  .file-upload:hover { background: #1f222a; }
+  .file-upload input { display: none; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-10">
-        <div class="card p-4 shadow-lg mt-2" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <a href="/role" class="btn btn-sm btn-outline-secondary rounded-pill px-3">← Back</a>
-                <h3 class="text-green fw-bold mb-0">Submit Real Deal Data</h3>
-            </div>
+<div class="deal-wrap">
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
 
-            <p class="text-white-50 mb-4">
-                AutoKnowMus relies on community data. Contribute verified transaction data to earn <span style="color: #ffa500; font-weight: bold;">100 credits</span> instantly.
-            </p>
-
-            <form action="/submit_deal_post" method="POST" enctype="multipart/form-data" class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label text-white fw-bold small">Actual Sale Price (₹)</label>
-                    <input type="number" name="sale_price" class="form-control bg-dark text-white border-secondary py-2" required placeholder="e.g., 450000">
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label text-white fw-bold small">Date of Transaction</label>
-                    <input type="text" name="transaction_date" class="form-control bg-dark text-white border-secondary py-2" placeholder="e.g., 18 Apr 2026" pattern="[0-9]{1,2}\s[A-Za-z]{3}\s[0-9]{4}" required>
-                    <small class="text-white-50">Format: 18 Apr 2026</small>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label text-white fw-bold small">Buyer Type</label>
-                    <select name="buyer_type" class="form-select bg-dark text-white border-secondary py-2" required>
-                        <option value="">Select Buyer Type</option>
-                        <option value="Individual">Individual Buyer</option>
-                        <option value="Dealer">Dealer / Showroom</option>
-                        <option value="Online Platform">Online Platform (Cars24, Spinny, etc.)</option>
-                        <option value="Broker">Broker / Agent</option>
-                        <option value="Export">Export / Outside City</option>
-                    </select>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label text-white fw-bold small">Purchase Proof (Upload)</label>
-                    <input type="file" name="purchase_proof" class="form-control bg-dark text-white border-secondary py-2" accept=".pdf,.jpg,.jpeg,.png" required>
-                    <small class="text-white-50">Upload RC transfer / sale receipt (PDF, JPG, PNG)</small>
-                </div>
-
-                <div class="col-12 mt-4">
-                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-lg" style="border-radius: 12px;">
-                        SUBMIT & CLAIM 100 CREDITS
-                    </button>
-                </div>
-            </form>
-        </div>
+  <div class="form-section">
+    <div class="text-center mb-3">
+      <h2 class="page-title">Record Actual Transaction Data</h2>
     </div>
+
+    <div class="info-box">
+      <i class="bi bi-info-circle"></i>
+      Submit verified deal details and earn <span class="credit-inline">(100 Credits)</span> instantly.
+      Your contribution helps build Bangalore's most accurate used-car price intelligence.
+    </div>
+
+    <form method="POST" action="{{ url_for('submit_deal') }}" enctype="multipart/form-data">
+      <!-- Row 1 -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label">Make *</label>
+          <select class="form-select" name="make" required>
+            <option value="">Select Make</option>
+            {% for brand in brands|sort %}
+              <option value="{{ brand }}">{{ brand }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Model *</label>
+          <input type="text" class="form-control" name="model" placeholder="e.g. Baleno" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Fuel Type *</label>
+          <select class="form-select" name="fuel" required>
+            <option value="">Select Fuel</option>
+            {% for fuel in fuels|sort %}
+              <option value="{{ fuel }}">{{ fuel }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label">Year *</label>
+          <input type="number" class="form-control" name="year" min="1990" max="2026" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Mileage (KMs) *</label>
+          <input type="number" class="form-control" name="mileage" min="0" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">No. of Owners *</label>
+          <select class="form-select" name="owner" required>
+            {% for owner in owners %}
+              <option value="{{ owner }}">{{ owner }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 3 -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label">Condition *</label>
+          <select class="form-select" name="condition" required>
+            {% for c in conditions %}
+              <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Buyer Type *</label>
+          <select class="form-select" name="buyer_type" required>
+            <option value="">Select Buyer Type</option>
+            {% for bt in buyer_types|sort %}
+              <option value="{{ bt }}">{{ bt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Sale Price (₹) *</label>
+          <input type="number" class="form-control" name="sale_price" min="0" required>
+        </div>
+      </div>
+
+      <!-- Row 4: Date with calendar icon + File upload -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Transaction Date *</label>
+          <div class="date-field-wrap">
+            <input type="date" name="transaction_date" id="txDate" required max="2026-12-31">
+          </div>
+          <small class="date-format-hint">Format: DD-MMM-YYYY (e.g. {{ today }})</small>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Upload Proof (Invoice / RC / Receipt) *</label>
+          <label class="file-upload">
+            <i class="bi bi-cloud-arrow-up"></i> <span id="fileLabel">Click to upload (PDF/JPG/PNG)</span>
+            <input type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png" required
+                   onchange="document.getElementById('fileLabel').textContent = this.files[0].name">
+          </label>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit-deal">
+        SUBMIT DEAL
+        <span class="credit-reward">Earn (100 Credits)</span>
+      </button>
+    </form>
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Set today's date as default
+  document.getElementById('txDate').valueAsDate = new Date();
+</script>
 {% endblock %}
