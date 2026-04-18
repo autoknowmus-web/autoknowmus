@@ -1,123 +1,143 @@
-import os
-from flask import Flask, render_template, request, session, redirect, url_for, flash, get_flashed_messages
-from authlib.integrations.flask_client import OAuth
+{% extends "layout.html" %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-12">
+        <div class="card p-4 shadow-lg mt-2" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <a href="/role" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-arrow-left me-1"></i> Back</a>
+                <h3 class="text-green fw-bold mb-0">Sell Your Car: Market Valuation</h3>
+            </div>
 
-app = Flask(__name__)
-app.secret_key = os.urandom(24)
+            <form action="/generate_report" method="POST" class="row g-3 justify-content-center">
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Location</label>
+                    <select class="form-select bg-dark text-white border-secondary py-2" disabled><option>Bangalore</option></select>
+                    <input type="hidden" name="city" value="Bangalore">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Make</label>
+                    <select id="make" name="make" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="">Select Make</option>
+                        <option value="Honda">Honda</option>
+                        <option value="Hyundai">Hyundai</option>
+                        <option value="Lexus">Lexus</option>
+                        <option value="Maruti Suzuki">Maruti Suzuki</option>
+                        <option value="Toyota">Toyota</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Fuel Type</label>
+                    <select id="fuel" name="fuel" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="">Select Fuel</option>
+                        <option value="Petrol">Petrol</option>
+                        <option value="Diesel">Diesel</option>
+                        <option value="CNG">CNG</option>
+                        <option value="HEV">HEV (Hybrid)</option>
+                        <option value="PHEV">PHEV (Plug-in Hybrid)</option>
+                        <option value="BEV">BEV (Electric)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Model</label>
+                    <select id="model" name="model" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="">Select Model</option>
+                    </select>
+                </div>
 
-# Google OAuth Setup
-oauth = OAuth(app)
-google = oauth.register(
-    name='google',
-    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
-    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'}
-)
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Variant / Suffix</label>
+                    <select id="variant" name="variant" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="">Select Variant</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">No. of Owners</label>
+                    <select name="owners" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="1">1st Owner</option>
+                        <option value="2">2nd Owner</option>
+                        <option value="3">3rd Owner</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Mileage (KMs) <span class="text-danger">*</span></label>
+                    <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary py-2" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Year <span class="text-danger">*</span></label>
+                    <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" min="2000" max="2026" required>
+                </div>
 
-@app.route('/')
-def index():
-    if 'credits' not in session:
-        session['credits'] = 0
-    return render_template('index.html')
+                <div class="col-md-4">
+                    <label class="form-label text-white fw-bold small">Condition</label>
+                    <select name="condition" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="Excellent">Excellent (Showroom like)</option>
+                        <option value="Good">Good (Minor wear & tear)</option>
+                        <option value="Fair">Fair (Dents/Scratches)</option>
+                    </select>
+                </div>
 
-@app.route('/login/google')
-def login():
-    return google.authorize_redirect(url_for('auth', _external=True))
+                <div class="col-12 mt-4 text-center">
+                    <button type="submit" class="btn btn-success px-5 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: #28a745; border: none; width: 320px;">
+                        GENERATE INTELLIGENCE (100 CREDITS)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-@app.route('/auth')
-def auth():
-    get_flashed_messages() # Clear old messages
-    try:
-        token = google.authorize_access_token()
-        user = token.get('userinfo')
-        if user:
-            # Use name if available, otherwise email prefix
-            session['user_name'] = user.get('name') or user.get('email').split('@')[0]
-            session['credits'] = 500 
-            session.modified = True
-            flash("Success! 500 Bonus Credits added to your account.")
-        return redirect(url_for('role'))
-    except Exception:
-        return redirect(url_for('index'))
+<script>
+const carData = {
+    "Maruti Suzuki": { 
+        "Swift": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "Diesel": ["LDi", "VDi", "ZDi", "ZDi+"] },
+        "Brezza": { "Petrol": ["LXi", "VXi", "ZXi", "ZXi+"], "CNG": ["VXi CNG", "ZXi CNG"] },
+        "Baleno": { "Petrol": ["Sigma", "Delta", "Zeta", "Alpha"], "CNG": ["Delta CNG", "Zeta CNG"] },
+        "Invictus": { "HEV": ["Zeta Plus", "Alpha Plus"] },
+        "Ertiga": { "Petrol": ["VXi", "ZXi"], "CNG": ["VXi CNG", "ZXi CNG"], "Diesel": ["VDi", "ZDi"] }
+    },
+    "Toyota": { 
+        "Innova Crysta": { "Diesel": ["G", "GX", "VX", "ZX"], "Petrol": ["GX", "VX"] },
+        "Innova Hycross": { "HEV": ["VX", "ZX", "ZX(O)"], "Petrol": ["G", "GX"] },
+        "Fortuner": { "Diesel": ["4x2 MT", "4x2 AT", "4x4 MT", "4x4 AT", "Legender"], "Petrol": ["2.7L 4x2"] },
+        "Glanza": { "Petrol": ["E", "S", "G", "V"], "CNG": ["S CNG", "G CNG"] }
+    },
+    "Lexus": { "ES": { "HEV": ["300h Exquisite", "300h Luxury"] }, "RX": { "HEV": ["350h Luxury", "500h F-Sport"] } },
+    "Honda": { "City": { "Petrol": ["V", "VX", "ZX"], "HEV": ["e:HEV ZX"] }, "Amaze": { "Petrol": ["S", "VX"], "Diesel": ["S", "VX"] } }
+};
 
-@app.route('/role', methods=['GET', 'POST'])
-def role():
-    if request.method == 'POST':
-        get_flashed_messages()
-        session['user_name'] = request.form.get('name')
-        session['credits'] = 500
-        session.modified = True
-        flash("Success! 500 Bonus Credits added to your account.")
-    
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-        
-    return render_template('role.html', user_name=session.get('user_name'), credits=session.get('credits'))
+const makeEl = document.getElementById('make');
+const fuelEl = document.getElementById('fuel');
+const modelEl = document.getElementById('model');
+const variantEl = document.getElementById('variant');
 
-@app.route('/seller')
-def seller():
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-    return render_template('seller.html')
+function updateModels() {
+    const make = makeEl.value;
+    const fuel = fuelEl.value;
+    modelEl.innerHTML = '<option value="">Select Model</option>';
+    variantEl.innerHTML = '<option value="">Select Variant</option>';
+    if (make && carData[make]) {
+        Object.keys(carData[make]).forEach(model => {
+            if (carData[make][model][fuel]) {
+                modelEl.innerHTML += `<option value="${model}">${model}</option>`;
+            }
+        });
+    }
+}
 
-@app.route('/buyer')
-def buyer():
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-    return render_template('buyer.html')
+function updateVariants() {
+    const make = makeEl.value;
+    const model = modelEl.value;
+    const fuel = fuelEl.value;
+    variantEl.innerHTML = '<option value="">Select Variant</option>';
+    if (make && model && fuel && carData[make][model][fuel]) {
+        carData[make][model][fuel].forEach(v => {
+            variantEl.innerHTML += `<option value="${v}">${v}</option>`;
+        });
+    }
+}
 
-@app.route('/generate_report', methods=['POST'])
-def generate_report():
-    get_flashed_messages()
-    current_credits = session.get('credits', 0)
-    
-    if current_credits >= 100:
-        session['credits'] = current_credits - 100
-        session.modified = True 
-        
-        session['last_search'] = {
-            'make': request.form.get('make'),
-            'model': request.form.get('model'),
-            'variant': request.form.get('variant'),
-            'year': request.form.get('year'),
-            'city': "Bangalore",
-            'fuel': request.form.get('fuel'),
-            'condition': request.form.get('condition'),
-            'mileage': request.form.get('mileage'),
-            'owners': request.form.get('owners')
-        }
-        return redirect(url_for('dashboard'))
-    else:
-        flash("Insufficient credits!")
-        return redirect(url_for('role'))
-
-@app.route('/dashboard')
-def dashboard():
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-    search_data = session.get('last_search', {})
-    return render_template('dashboard.html', data=search_data)
-
-@app.route('/submit_deal')
-def submit_deal():
-    if 'user_name' not in session:
-        return redirect(url_for('index'))
-    return render_template('submit_deal.html')
-
-@app.route('/process_deal', methods=['POST'])
-def process_deal():
-    get_flashed_messages()
-    session['credits'] = session.get('credits', 0) + 200
-    session.modified = True
-    flash("Success! 200 Credits rewarded for your contribution.")
-    return redirect(url_for('role'))
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('index'))
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+makeEl.addEventListener('change', updateModels);
+fuelEl.addEventListener('change', updateModels);
+modelEl.addEventListener('change', updateVariants);
+</script>
+{% endblock %}
