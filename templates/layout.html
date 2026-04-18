@@ -1,119 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}AutoKnowMus - Used Car Price Intelligence{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --neon-green: #28a745;
-            --neon-blue: #4e54ff;
-            --gold: #ffa500;
-        }
-        body {
-            background: linear-gradient(135deg, #0f1419 0%, #1a1f3a 100%);
-            color: #e0e0e0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-        }
-        .navbar {
-            background-color: rgba(15, 20, 25, 0.95);
-            border-bottom: 2px solid var(--neon-green);
-            padding: 0.8rem 2rem;
-        }
-        .navbar-brand {
-            font-size: 1.5rem;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 2px;
-            text-decoration: none;
-        }
-        .navbar-brand svg { width: 40px; height: 40px; margin-right: 0; }
-        .text-white { color: white !important; }
-        .text-blue { color: #4e54ff !important; }
-        .text-green { color: #28a745 !important; }
-        .credit-badge {
-            background-color: rgba(255, 165, 0, 0.2);
-            border: 2px solid #ffa500;
-            color: #ffa500;
-            padding: 0.5rem 1.2rem;
-            border-radius: 25px;
-            font-weight: bold;
-            font-size: 0.95rem;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .credit-badge:hover { color: #ffa500; text-decoration: none; }
-        .navbar-user { color: #b0b0b0; font-weight: 500; margin-right: 1rem; font-size: 0.95rem; }
-        .btn-logout {
-            background-color: #555;
-            border: 1px solid #666;
-            color: #ccc;
-            padding: 0.4rem 0.8rem;
-            border-radius: 5px;
-            font-size: 0.85rem;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .btn-logout:hover { background-color: #666; color: #fff; text-decoration: none; }
-        .alert-orange-custom {
-            background-color: rgba(255, 165, 0, 0.15);
-            border: 1px solid #ffa500;
-            color: #ffa500;
-            border-radius: 8px;
-            padding: 1rem 1.2rem;
-            margin: 1.5rem auto;
-            max-width: 600px;
-            text-align: center;
-            font-weight: 600;
-        }
-        .navbar-nav-right { display: flex; align-items: center; gap: 1rem; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AutoKnowMus - Used Car Price Intelligence{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background: #0e1117; color: #e6e6e6; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+    .navbar-custom { background: #000; border-bottom: 2px solid #28a745; padding: 15px 40px; }
+    .brand-logo { display: flex; align-items: center; text-decoration: none; }
+    .brand-shield { width: 38px; height: 38px; margin-right: 10px; }
+    .brand-text { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
+    .brand-auto { color: #fff; }
+    .brand-know { color: #4e54ff; }
+    .brand-mus { color: #28a745; }
+
+    /* Credit badge — standardized everywhere */
+    .credit-badge {
+      background: transparent; border: 2px solid #ffa500; color: #ffa500;
+      padding: 6px 16px; border-radius: 25px; font-weight: 600;
+      font-size: 0.95rem; text-decoration: none; display: inline-flex;
+      align-items: center; gap: 6px; transition: all 0.2s;
+    }
+    .credit-badge:hover { background: rgba(255,165,0,0.1); color: #ffa500; }
+    .credit-inline { color: #ffa500; font-weight: 600; font-size: 0.95rem; }
+
+    .user-name { color: #b0b0b0; margin: 0 15px; font-size: 0.95rem; }
+    .btn-logout {
+      background: #6c757d; color: #fff; border: none; padding: 7px 18px;
+      border-radius: 6px; font-size: 0.9rem;
+    }
+    .btn-logout:hover { background: #5a6268; color: #fff; }
+
+    /* Standardized back button — used on ALL screens */
+    .btn-back {
+      background: #6c757d !important; color: #fff !important; border: none !important;
+      padding: 7px 18px !important; border-radius: 6px !important; font-size: 0.9rem !important;
+      text-decoration: none !important; display: inline-block; margin-bottom: 20px;
+    }
+    .btn-back:hover { background: #5a6268 !important; color: #fff !important; }
+
+    /* Orange dismissible alert — used EVERYWHERE for success/credit messages */
+    .alert-orange {
+      background: rgba(255,165,0,0.15); border: 1px solid #ffa500;
+      color: #ffa500; border-radius: 8px; padding: 14px 45px 14px 20px;
+      position: relative; text-align: center; font-weight: 500;
+      margin: 20px auto; max-width: 700px;
+    }
+    .alert-orange .btn-close-orange {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: transparent; border: none; color: #ffa500; font-size: 1.4rem;
+      cursor: pointer; padding: 0; width: 28px; height: 28px; line-height: 1;
+      display: flex; align-items: center; justify-content: center; border-radius: 50%;
+    }
+    .btn-close-orange:hover { background: rgba(255,165,0,0.2); }
+
+    .card-dark { background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px; padding: 30px; }
+    .form-control, .form-select {
+      background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
+    }
+    .form-control:focus, .form-select:focus {
+      background: #1a1d24; border-color: #28a745; color: #e6e6e6;
+      box-shadow: 0 0 0 0.2rem rgba(40,167,69,0.25);
+    }
+    .form-label { color: #b0b0b0; font-weight: 500; margin-bottom: 6px; }
+  </style>
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/">
-                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M50 10 L22 22 V50 C22 72 50 85 50 85 C50 85 78 72 78 50 V22 L50 10 Z" fill="#28a745" stroke="#28a745" stroke-width="4"/>
-                    <text x="50" y="66" font-family="Arial" font-size="55" fill="white" font-weight="900" text-anchor="middle">A</text>
-                </svg>
-                <span><span class="text-white">Auto</span><span class="text-blue">Know</span><span class="text-green">Mus</span></span>
-            </a>
-            <div class="ms-auto navbar-nav-right">
-                {% if session.get('user_name') %}
-                    <a href="/credit_history" class="credit-badge">💳 {{ session.get('credits', 0) }} Credits</a>
-                    <span class="navbar-user">👤 {{ session.get('user_name') }}</span>
-                    <a href="/logout" class="btn-logout">Logout</a>
-                {% endif %}
-            </div>
-        </div>
-    </nav>
 
-    <div class="container-fluid py-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    {% if category == 'success' %}
-                        <div class="alert-orange-custom alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" style="float:right;"></button>
-                        </div>
-                    {% else %}
-                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    {% endif %}
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+{% if session.user %}
+<nav class="navbar-custom d-flex align-items-center justify-content-between">
+  <a href="{{ url_for('role') }}" class="brand-logo">
+    <svg class="brand-shield" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20 2 L36 8 V20 C36 29 28 36 20 38 C12 36 4 29 4 20 V8 Z" fill="#28a745"/>
+      <text x="20" y="27" text-anchor="middle" font-family="Segoe UI" font-size="20" font-weight="700" fill="#fff">A</text>
+    </svg>
+    <span class="brand-text">
+      <span class="brand-auto">Auto</span><span class="brand-know">Know</span><span class="brand-mus">Mus</span>
+    </span>
+  </a>
+  <div class="d-flex align-items-center">
+    <a href="{{ url_for('credit_history') }}" class="credit-badge">
+      <i class="bi bi-credit-card-2-front"></i>
+      ({{ session.credits|default(0) }} Credits)
+    </a>
+    <span class="user-name">
+      <i class="bi bi-person-circle"></i> {{ session.user.name }}
+    </span>
+    <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
+  </div>
+</nav>
+{% endif %}
 
-        {% block content %}{% endblock %}
-    </div>
+{# ===== Shared dismissible orange alert macro ===== #}
+{% macro orange_alert(msg) %}
+  {% if msg %}
+  <div class="alert-orange" id="orangeAlert">
+    <span>🎉 {{ msg }}</span>
+    <button class="btn-close-orange" onclick="document.getElementById('orangeAlert').style.display='none'" aria-label="Close">×</button>
+  </div>
+  {% endif %}
+{% endmacro %}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<main>
+  {% block content %}{% endblock %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>
