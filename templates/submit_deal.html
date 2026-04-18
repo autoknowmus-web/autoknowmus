@@ -1,30 +1,50 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-8">
+    <div class="col-lg-10">
         <div class="card p-4 shadow-lg mt-2" style="background: #16181d; border-radius: 24px; border: 1px solid #2d2f34;">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <a href="/role" class="btn btn-sm btn-outline-secondary rounded-pill px-3"><i class="fas fa-arrow-left me-1"></i> Back</a>
+                <a href="/role" class="btn btn-sm btn-outline-secondary rounded-pill px-3">← Back</a>
                 <h3 class="text-green fw-bold mb-0">Submit Real Deal Data</h3>
             </div>
-            
-            <p class="text-white small mb-4 opacity-75">
-                AutoKnowMus relies on community data. Contribute verified transaction data to earn <span class="text-warning fw-bold">200 credits</span> instantly.
+
+            <p class="text-white-50 mb-4">
+                AutoKnowMus relies on community data. Contribute verified transaction data to earn <span style="color: #ffa500; font-weight: bold;">100 credits</span> instantly.
             </p>
 
-            <form action="/process_deal" method="POST" class="row g-3">
+            <form action="/submit_deal_post" method="POST" enctype="multipart/form-data" class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label text-white fw-bold small">Actual Sale Price (₹)</label>
-                    <input type="number" name="sale_price" class="form-control bg-dark text-white border-secondary py-2" placeholder="Enter amount" required>
+                    <input type="number" name="sale_price" class="form-control bg-dark text-white border-secondary py-2" required placeholder="e.g., 450000">
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label text-white fw-bold small">Date of Transaction</label>
-                    <input type="date" name="sale_date" class="form-control bg-dark text-white border-secondary py-2" required>
+                    <input type="text" name="transaction_date" class="form-control bg-dark text-white border-secondary py-2" placeholder="e.g., 18 Apr 2026" pattern="[0-9]{1,2}\s[A-Za-z]{3}\s[0-9]{4}" required>
+                    <small class="text-white-50">Format: 18 Apr 2026</small>
                 </div>
-                
+
+                <div class="col-md-6">
+                    <label class="form-label text-white fw-bold small">Buyer Type</label>
+                    <select name="buyer_type" class="form-select bg-dark text-white border-secondary py-2" required>
+                        <option value="">Select Buyer Type</option>
+                        <option value="Individual">Individual Buyer</option>
+                        <option value="Dealer">Dealer / Showroom</option>
+                        <option value="Online Platform">Online Platform (Cars24, Spinny, etc.)</option>
+                        <option value="Broker">Broker / Agent</option>
+                        <option value="Export">Export / Outside City</option>
+                    </select>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label text-white fw-bold small">Purchase Proof (Upload)</label>
+                    <input type="file" name="purchase_proof" class="form-control bg-dark text-white border-secondary py-2" accept=".pdf,.jpg,.jpeg,.png" required>
+                    <small class="text-white-50">Upload RC transfer / sale receipt (PDF, JPG, PNG)</small>
+                </div>
+
                 <div class="col-12 mt-4">
-                    <button type="submit" class="btn btn-success w-100 fw-bold py-2 shadow-lg" style="border-radius: 12px; background: linear-gradient(45deg, #28a745, #1e7e34); border: none;">
-                        SUBMIT & CLAIM 200 CREDITS
+                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-lg" style="border-radius: 12px;">
+                        SUBMIT & CLAIM 100 CREDITS
                     </button>
                 </div>
             </form>
