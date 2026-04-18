@@ -51,8 +51,9 @@
 {% block content %}
 <div class="role-wrap">
 
+  {# ORIGINAL welcome message — no (500 Credits) suffix #}
   {% if show_welcome %}
-    {{ orange_alert('Welcome! 500 bonus credits added for 5 free searches — (500 Credits)') }}
+    {{ orange_alert('Welcome! 500 bonus credits added for 5 free searches!') }}
   {% endif %}
 
   <h2 class="greeting">Hello {{ session.user.name | firstname }}! Ready to make a smarter decision?</h2>
