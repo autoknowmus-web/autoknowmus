@@ -59,11 +59,11 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Mileage (KMs)</label>
+                    <label class="form-label text-white fw-bold small">Mileage (KMs) <span class="text-danger">*</span></label>
                     <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary py-2" required>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Year</label>
+                    <label class="form-label text-white fw-bold small">Year <span class="text-danger">*</span></label>
                     <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" min="2000" max="2026" required>
                 </div>
 
@@ -77,7 +77,7 @@
                 </div>
 
                 <div class="col-12 mt-4 text-center">
-                    <button type="submit" class="btn btn-success px-5 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: #28a745; border: none; min-width: 320px;">
+                    <button type="submit" class="btn btn-success px-5 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: #28a745; border: none; width: 320px;">
                         GENERATE INTELLIGENCE (100 CREDITS)
                     </button>
                 </div>
@@ -97,8 +97,8 @@ const carData = {
     },
     "Toyota": { 
         "Innova Crysta": { "Diesel": ["G", "GX", "VX", "ZX"], "Petrol": ["GX", "VX"] },
-        "Innova Hycross": { "HEV": ["VX", "VX(O)", "ZX", "ZX(O)"], "Petrol": ["G", "GX"] },
-        "Fortuner": { "Diesel": ["4x2 MT", "4x2 AT", "4x4 MT", "4x4 AT", "Legender"], "Petrol": ["2.7L 4x2"] },
+        "Innova Hycross": { "HEV": ["VX", "ZX", "ZX(O)"], "Petrol": ["G", "GX"] },
+        "Fortuner": { "Diesel": ["4x2", "4x4", "Legender", "GR-S"], "Petrol": ["2.7L 4x2"] },
         "Glanza": { "Petrol": ["E", "S", "G", "V"], "CNG": ["S CNG", "G CNG"] }
     },
     "Lexus": { "ES": { "HEV": ["300h Exquisite", "300h Luxury"] }, "RX": { "HEV": ["350h Luxury", "500h F-Sport"] } },
