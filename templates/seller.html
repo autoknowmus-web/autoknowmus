@@ -45,4 +45,134 @@
           <select class="form-select" name="fuel" id="fuel" required>
             <option value="">Select Fuel</option>
             {% for fuel in fuels|sort %}
-              <option value="{{ fuel }}">{
+              <option value="{{ fuel }}">{{ fuel }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Model</label>
+          <select class="form-select" name="model" id="model" required disabled>
+            <option value="">Select Model</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 2: 4 filters -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Variant / Suffix</label>
+          <select class="form-select" name="variant" id="variant" disabled>
+            <option value="">Select Variant</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">No. of Owners</label>
+          <select class="form-select" name="owner" required>
+            {% for owner in owners %}
+              <option value="{{ owner }}">{{ owner }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Mileage (KMs) *</label>
+          <input type="number" class="form-control" name="mileage" required min="0">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Year *</label>
+          <input type="number" class="form-control" name="year" required min="1990" max="2026">
+        </div>
+      </div>
+
+      <!-- Row 3: 1 filter + centered button -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-6 offset-md-3">
+          <label class="form-label">Condition</label>
+          <select class="form-select" name="condition" required>
+            {% for c in conditions %}
+              <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-generate">
+        GENERATE INTELLIGENCE
+        <span class="credit-cost">(100 Credits)</span>
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Fuel-first filtering: Fuel → Model → Variant (all alphabetical)
+  const MODELS_BY_BRAND = {{ {
+    'Audi': ['A3','A4','A6','Q3','Q5','Q7'],
+    'BMW': ['3 Series','5 Series','X1','X3','X5','X7'],
+    'Ford': ['EcoSport','Endeavour','Figo','Freestyle'],
+    'Honda': ['Amaze','City','Civic','Elevate','Jazz','WR-V'],
+    'Hyundai': ['Alcazar','Aura','Creta','Exter','Grand i10 Nios','i20','Kona Electric','Tucson','Venue','Verna'],
+    'Jaguar': ['F-Pace','XE','XF'],
+    'Kia': ['Carens','Carnival','EV6','Seltos','Sonet'],
+    'Land Rover': ['Defender','Discovery','Range Rover','Range Rover Evoque','Range Rover Sport'],
+    'Lexus': ['ES','LX','NX','RX'],
+    'Mahindra': ['Bolero','Scorpio','Scorpio N','Thar','XUV300','XUV400','XUV700','XUV3XO'],
+    'Maruti Suzuki': ['Alto K10','Baleno','Brezza','Celerio','Dzire','Eeco','Ertiga','Fronx','Grand Vitara','Ignis','Jimny','S-Presso','Swift','Wagon R','XL6'],
+    'Mercedes-Benz': ['A-Class','C-Class','E-Class','GLA','GLC','GLE','S-Class'],
+    'MG': ['Astor','Gloster','Hector','Hector Plus','ZS EV'],
+    'Nissan': ['Kicks','Magnite'],
+    'Renault': ['Kiger','Kwid','Triber'],
+    'Skoda': ['Kushaq','Octavia','Slavia','Superb'],
+    'Tata': ['Altroz','Harrier','Nexon','Nexon EV','Punch','Safari','Tiago','Tigor'],
+    'Toyota': ['Camry','Fortuner','Glanza','Hilux','Hyryder','Innova Crysta','Innova Hycross','Vellfire'],
+    'Volkswagen': ['Taigun','Tiguan','Virtus'],
+    'Volvo': ['XC40','XC60','XC90']
+  }|tojson }};
+
+  const makeEl = document.getElementById('make');
+  const fuelEl = document.getElementById('fuel');
+  const modelEl = document.getElementById('model');
+  const variantEl = document.getElementById('variant');
+
+  function refreshModels() {
+    const make = makeEl.value;
+    const fuel = fuelEl.value;
+    modelEl.innerHTML = '<option value="">Select Model</option>';
+    variantEl.innerHTML = '<option value="">Select Variant</option>';
+    variantEl.disabled = true;
+
+    if (make && fuel && MODELS_BY_BRAND[make]) {
+      // Alphabetical sort enforced
+      const models = [...MODELS_BY_BRAND[make]].sort((a,b)=>a.localeCompare(b));
+      models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m;
+        modelEl.appendChild(opt);
+      });
+      modelEl.disabled = false;
+    } else {
+      modelEl.disabled = true;
+    }
+  }
+
+  function refreshVariants() {
+    variantEl.innerHTML = '<option value="">Select Variant</option>';
+    if (modelEl.value) {
+      // Generic alphabetical variants (can be model-specific later)
+      ['Base','LXi','VXi','ZXi','ZXi Plus'].sort().forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        variantEl.appendChild(opt);
+      });
+      variantEl.disabled = false;
+    } else {
+      variantEl.disabled = true;
+    }
+  }
+
+  makeEl.addEventListener('change', refreshModels);
+  fuelEl.addEventListener('change', refreshModels);
+  modelEl.addEventListener('change', refreshVariants);
+</script>
+{% endblock %}
