@@ -53,9 +53,13 @@ def role():
 def seller():
     if 'user_name' not in session:
         return redirect(url_for('index'))
-    # Pass previous search back to the form if it exists
-    prev_data = session.get('last_search', {})
-    return render_template('seller.html', prev=prev_data)
+    return render_template('seller.html')
+
+@app.route('/buyer')
+def buyer():
+    if 'user_name' not in session:
+        return redirect(url_for('index'))
+    return render_template('buyer.html')
 
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
