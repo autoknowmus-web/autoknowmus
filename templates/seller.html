@@ -8,7 +8,7 @@
                 <h3 class="text-green fw-bold mb-0">Sell Your Car: Market Valuation</h3>
             </div>
 
-            <form action="/generate_report" method="POST" class="row g-3">
+            <form action="/generate_report" method="POST" class="row g-3 justify-content-center">
                 <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Location</label>
                     <select class="form-select bg-dark text-white border-secondary py-2" disabled><option>Bangalore</option></select>
@@ -44,13 +44,13 @@
                     </select>
                 </div>
 
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">Variant / Suffix</label>
                     <select id="variant" name="variant" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="">Select Variant</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label text-white fw-bold small">No. of Owners</label>
                     <select name="owners" class="form-select bg-dark text-white border-secondary py-2" required>
                         <option value="1">1st Owner</option>
@@ -58,6 +58,15 @@
                         <option value="3">3rd Owner</option>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Mileage (KMs)</label>
+                    <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary py-2" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white fw-bold small">Year</label>
+                    <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" min="2000" max="2026" required>
+                </div>
+
                 <div class="col-md-4">
                     <label class="form-label text-white fw-bold small">Condition</label>
                     <select name="condition" class="form-select bg-dark text-white border-secondary py-2" required>
@@ -67,16 +76,8 @@
                     </select>
                 </div>
 
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Mileage (KMs) <span class="text-danger">*</span></label>
-                    <input type="number" name="mileage" class="form-control bg-dark text-white border-secondary py-2" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label text-white fw-bold small">Year <span class="text-danger">*</span></label>
-                    <input type="number" name="year" class="form-control bg-dark text-white border-secondary py-2" min="2000" max="2026" required>
-                </div>
-                <div class="col-md-6 d-flex align-items-end">
-                    <button type="submit" class="btn btn-success w-100 py-2 fw-bold" style="border-radius: 12px; background: #28a745; border: none; font-size: 1rem;">
+                <div class="col-12 mt-4 text-center">
+                    <button type="submit" class="btn btn-success px-5 py-2 fw-bold shadow-lg" style="border-radius: 12px; background: #28a745; border: none; min-width: 300px;">
                         GENERATE INTELLIGENCE (100 CREDITS)
                     </button>
                 </div>
