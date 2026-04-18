@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+{% block title %}Credit History - AutoKnowMus{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-8">
+        <a href="/role" class="btn btn-sm btn-outline-light mb-4">← Back</a>
+        <div class="card p-4" style="background: #16181d; border: 1px solid #2d2f34;">
+            <h2 class="mb-4" style="color: #ffa500;">💳 Credit History</h2>
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card text-center p-3" style="background: #1a1f3a; border: 1px solid #2d2f34;">
+                        <p class="text-white-50 mb-1">Current Balance</p>
+                        <h3 style="color: #ffa500;">{{ credits }} Credits</h3>
+                    </div>
+                </div>
+            </div>
+            <h4 class="text-white mb-3">Transaction History</h4>
+            <div class="table-responsive">
+                <table class="table table-dark">
+                    <thead>
+                        <tr><th>Date</th><th>Type</th><th>Description</th><th class="text-end">Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        {% if history %}
+                            {% for transaction in history %}
+                            <tr>
+                                <td>{{ transaction.date }}</td>
+                                <td>
+                                    {% if transaction.type == 'bonus' %}<span class="badge bg-success">Bonus</span>
+                                    {% elif transaction.type == 'deducted' %}<span class="badge bg-danger">Deducted</span>
+                                    {% elif transaction.type == 'earned' %}<span class="badge bg-info">Earned</span>{% endif %}
+                                </td>
+                                <td>{{ transaction.description }}</td>
+                                <td class="text-end">
+                                    {% if transaction.type == 'deducted' %}<span class="text-danger">-{{ transaction.amount }}</span>
+                                    {% else %}<span class="text-success">+{{ transaction.amount }}</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="4" class="text-center text-white-50">No transactions yet</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
