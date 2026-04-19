@@ -32,7 +32,7 @@ def firstname_filter(full_name):
 
 @app.template_filter('inr')
 def inr_filter(value):
-    """Format an integer as Indian-comma rupee string. 485000 -> '4,85,000'."""
+    """Format integer as Indian-comma rupee string. 485000 -> '4,85,000'."""
     if value is None:
         return '—'
     try:
@@ -45,7 +45,6 @@ def inr_filter(value):
     else:
         last3 = s[-3:]
         rest = s[:-3]
-        # group rest by 2s from the right
         groups = []
         while len(rest) > 2:
             groups.insert(0, rest[-2:])
@@ -65,9 +64,9 @@ def lakh_filter(value):
         n = int(value)
     except (ValueError, TypeError):
         return str(value)
-    if n >= 10000000:  # 1 crore
+    if n >= 10000000:
         return f"{n / 10000000:.2f} Crore"
-    if n >= 100000:  # 1 lakh
+    if n >= 100000:
         return f"{n / 100000:.2f} Lakh"
     if n >= 1000:
         return f"{n / 1000:.1f} K"
@@ -89,7 +88,7 @@ google = oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
-# ========== HELPERS ==========
+# ========== CONSTANTS ==========
 
 EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 PHONE_RE = re.compile(r'^\d{10}$')
@@ -100,11 +99,10 @@ YEAR_START = 2011
 YEAR_END = 2026
 YEARS = list(range(YEAR_END, YEAR_START - 1, -1))
 VALUATION_COST = 100
+CREDIT_REQUEST_AMOUNT = 500
 
-# Brand popularity tiers (drives Demand KPI and Days-to-Sell)
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
-# Luxury brands get lower-volume demand but higher price
 LUXURY_BRANDS = {'Audi', 'BMW', 'Mercedes-Benz', 'Jaguar', 'Land Rover', 'Lexus', 'Volvo'}
 
 
@@ -227,7 +225,6 @@ def log_credit_transaction(user_id, type_, description, amount, balance_after):
         app.logger.error(f"Failed to log transaction: {e}")
 
 def fetch_similar_deals(make, model, year, fuel, window_years=2):
-    """Verified deals for same Make+Model, nearby year, same fuel."""
     try:
         year_low = int(year) - window_years
         year_high = int(year) + window_years
@@ -248,28 +245,21 @@ def fetch_similar_deals(make, model, year, fuel, window_years=2):
 # ---------- Dashboard computations ----------
 
 def compute_demand(make, year):
-    """Return 'HIGH' / 'MEDIUM' / 'LOW' based on brand popularity & age."""
     age = max(0, CURRENT_YEAR - int(year))
     if make in HIGH_DEMAND_BRANDS:
-        if age <= 7:
-            return 'HIGH'
-        elif age <= 12:
-            return 'MEDIUM'
+        if age <= 7:   return 'HIGH'
+        elif age <= 12: return 'MEDIUM'
         return 'LOW'
     if make in MEDIUM_DEMAND_BRANDS:
-        if age <= 5:
-            return 'MEDIUM'
+        if age <= 5: return 'MEDIUM'
         return 'LOW'
     if make in LUXURY_BRANDS:
-        if age <= 6:
-            return 'MEDIUM'
+        if age <= 6: return 'MEDIUM'
         return 'LOW'
     return 'LOW'
 
 
 def compute_days_to_sell(demand, price):
-    """Days-to-sell window based on demand and price tier (15-45 days)."""
-    # Price tier bands in ₹
     if price < 500000:
         price_tier = 'budget'
     elif price < 1500000:
@@ -280,34 +270,21 @@ def compute_days_to_sell(demand, price):
         price_tier = 'luxury'
 
     base_days = {
-        ('HIGH', 'budget'):   15,
-        ('HIGH', 'mid'):      18,
-        ('HIGH', 'premium'):  25,
-        ('HIGH', 'luxury'):   32,
-        ('MEDIUM','budget'):  22,
-        ('MEDIUM','mid'):     28,
-        ('MEDIUM','premium'): 35,
-        ('MEDIUM','luxury'):  40,
-        ('LOW',   'budget'):  30,
-        ('LOW',   'mid'):     35,
-        ('LOW',   'premium'): 40,
-        ('LOW',   'luxury'):  45,
+        ('HIGH', 'budget'):   15, ('HIGH', 'mid'):      18,
+        ('HIGH', 'premium'):  25, ('HIGH', 'luxury'):   32,
+        ('MEDIUM','budget'):  22, ('MEDIUM','mid'):     28,
+        ('MEDIUM','premium'): 35, ('MEDIUM','luxury'):  40,
+        ('LOW',   'budget'):  30, ('LOW',   'mid'):     35,
+        ('LOW',   'premium'): 40, ('LOW',   'luxury'):  45,
     }
     return base_days.get((demand, price_tier), 30)
 
 
 def compute_depreciation_series(current_price, days=90):
-    """
-    Return list of (day_offset, price) tuples for the next `days` days.
-    Uses a gentle logarithmic curve — roughly ~5% over 90 days.
-    Day 0 = current_price. Day `days` ≈ current_price * 0.95.
-    """
     import math
     series = []
     for d in range(0, days + 1):
-        # log-ish gentle decay; at d=90, multiplier ≈ 0.95
         frac = d / days if days else 0
-        # Use a concave curve: faster drop early, slower later
         decay = 1.0 - 0.05 * (1 - math.exp(-2.5 * frac))
         price = int(round(current_price * decay))
         series.append({'day': d, 'price': price})
@@ -315,11 +292,6 @@ def compute_depreciation_series(current_price, days=90):
 
 
 def compute_buyer_distribution(price_low, price_high, confidence):
-    """
-    Return % distribution of buyers across 5 price bands.
-    Bell-shaped curve peaked at the estimated price, wider when confidence is low.
-    """
-    # 5 bands: very_low, low, mid, high, very_high relative to range
     if confidence >= 80:
         distribution = [5, 20, 50, 20, 5]
     elif confidence >= 65:
@@ -329,7 +301,6 @@ def compute_buyer_distribution(price_low, price_high, confidence):
     else:
         distribution = [15, 22, 26, 22, 15]
 
-    # Labels computed from price_low / price_high
     if price_low and price_high and price_low < price_high:
         span = price_high - price_low
         boundaries = [
@@ -343,17 +314,16 @@ def compute_buyer_distribution(price_low, price_high, confidence):
         boundaries = [0, 0, 0, 0, 0]
 
     bands = [
-        {'label': f"Below {boundaries[0]}",                   'pct': distribution[0], 'color': '#6c757d'},
-        {'label': f"{boundaries[0]} – {boundaries[1]}",       'pct': distribution[1], 'color': '#ffa500'},
-        {'label': f"{boundaries[1]} – {boundaries[3]}",       'pct': distribution[2], 'color': '#28a745'},
-        {'label': f"{boundaries[3]} – {boundaries[4]}",       'pct': distribution[3], 'color': '#ffa500'},
-        {'label': f"Above {boundaries[4]}",                   'pct': distribution[4], 'color': '#6c757d'},
+        {'low': None,            'high': boundaries[0],  'pct': distribution[0], 'color': '#6c757d'},
+        {'low': boundaries[0],   'high': boundaries[1],  'pct': distribution[1], 'color': '#ffa500'},
+        {'low': boundaries[1],   'high': boundaries[3],  'pct': distribution[2], 'color': '#28a745'},
+        {'low': boundaries[3],   'high': boundaries[4],  'pct': distribution[3], 'color': '#ffa500'},
+        {'low': boundaries[4],   'high': None,           'pct': distribution[4], 'color': '#6c757d'},
     ]
     return bands
 
 
 def get_market_stats(make, model):
-    """Return (verified_count, buyers_last_30d_est, avg_buyers_per_day_est)."""
     try:
         r = (supabase.table('deals')
              .select('id', count='exact')
@@ -366,11 +336,13 @@ def get_market_stats(make, model):
         app.logger.warning(f"market_stats failed: {e}")
         verified_count = 0
 
-    # Estimate buyers for now (Stage 3B will track real buyer searches)
-    # Rough heuristic: each verified deal implies ~3 buyers who looked
     buyers_last_30d = max(5, verified_count * 3)
-    avg_buyers_per_day = round(buyers_last_30d / 30, 1)
-    return verified_count, buyers_last_30d, avg_buyers_per_day
+    avg_buyers_per_day = buyers_last_30d / 30.0
+    # Return as range e.g. "0-1" or "6-7" buyers/day
+    lo = int(avg_buyers_per_day)
+    hi = lo + 1
+    avg_buyers_range = f"{lo}-{hi}"
+    return verified_count, buyers_last_30d, avg_buyers_range
 
 
 # ========== ROUTES ==========
@@ -555,7 +527,7 @@ def role():
     show_welcome = session.pop('show_welcome', False)
     return render_template('role.html', user=user, first_name=first_name, show_welcome=show_welcome)
 
-# ========== SELLER FLOW (Stage 3A) ==========
+# ========== SELLER FLOW ==========
 
 @app.route('/seller', methods=['GET', 'POST'])
 @login_required
@@ -564,11 +536,12 @@ def seller():
     if not user:
         return redirect(url_for('index'))
 
-    def render_form(form_data, error=''):
+    def render_form(form_data, error='', show_credit_request=False):
         return render_template(
             'seller.html',
             form=form_data,
             error=error,
+            show_credit_request=show_credit_request,
             makes=get_makes(),
             years=YEARS,
             owners=OWNERS,
@@ -589,7 +562,6 @@ def seller():
         }
         return render_form(prefill)
 
-    # ----- POST -----
     form_data = {
         'make':      (request.form.get('make') or '').strip(),
         'fuel':      (request.form.get('fuel') or '').strip(),
@@ -632,7 +604,9 @@ def seller():
 
     current_credits = user.get('credits', 0) or 0
     if current_credits < VALUATION_COST:
-        return render_form(form_data, error=f'Insufficient credits. You need {VALUATION_COST} credits to run a valuation.')
+        return render_form(form_data,
+                           error=f'Insufficient credits. You need {VALUATION_COST} credits to run a valuation.',
+                           show_credit_request=True)
 
     estimated = compute_base_valuation(
         make=form_data['make'], model=form_data['model'], variant=form_data['variant'],
@@ -706,26 +680,22 @@ def seller_dashboard(valuation_id):
         return render_template('placeholder.html', user=user, page_title='Valuation Not Found',
                                message='We could not find that valuation.')
 
-    # Re-compute dashboard metrics from the stored valuation
     estimated  = val['estimated_price']
     price_low  = val['price_low']
     price_high = val['price_high']
 
-    # Re-compute confidence from similar deals (cheap query)
     similar_prices = fetch_similar_deals(
         make=val['make'], model=val['model'],
         year=val['year'], fuel=val['fuel']
     )
     _, confidence = adjust_with_deals(estimated, similar_prices)
 
-    # Demand, days-to-sell, depreciation, buyer distribution, market stats
     demand       = compute_demand(val['make'], val['year'])
     days_to_sell = compute_days_to_sell(demand, estimated)
     depreciation = compute_depreciation_series(estimated, days=90)
     buyer_dist   = compute_buyer_distribution(price_low, price_high, confidence)
-    verified_count, buyers_last_30d, avg_buyers_per_day = get_market_stats(val['make'], val['model'])
+    verified_count, buyers_last_30d, avg_buyers_range = get_market_stats(val['make'], val['model'])
 
-    # Prefill dict for the back button (query string to /seller)
     back_prefill = {
         'make':      val['make'],
         'fuel':      val['fuel'],
@@ -751,12 +721,44 @@ def seller_dashboard(valuation_id):
         buyer_dist=buyer_dist,
         verified_count=verified_count,
         buyers_last_30d=buyers_last_30d,
-        avg_buyers_per_day=avg_buyers_per_day,
+        avg_buyers_range=avg_buyers_range,
         back_prefill=back_prefill,
     )
 
 
-# ---------- Stage 3 stubs (Buyer + Submit Deal + Credit History) ----------
+@app.route('/request-credits', methods=['POST'])
+@login_required
+def request_credits():
+    """Auto-approve a 500-credit top-up request. Redirects back to the referrer."""
+    user = current_user()
+    if not user:
+        return redirect(url_for('index'))
+
+    current = user.get('credits', 0) or 0
+    new_balance = current + CREDIT_REQUEST_AMOUNT
+    try:
+        update_user(user['id'], {'credits': new_balance})
+        log_credit_transaction(
+            user_id=user['id'],
+            type_='credit_request_approved',
+            description=f'Credit top-up request auto-approved ({CREDIT_REQUEST_AMOUNT} credits)',
+            amount=CREDIT_REQUEST_AMOUNT,
+            balance_after=new_balance,
+        )
+        session['credits'] = new_balance
+        if 'user' in session:
+            session['user']['credits'] = new_balance
+        flash(f'{CREDIT_REQUEST_AMOUNT} credits added. Your balance is now {new_balance} credits.', 'success')
+    except Exception as e:
+        app.logger.error(f"Credit request failed: {e}")
+        flash('Could not process credit request. Please try again.', 'error')
+
+    # Return to previous page if possible, otherwise /seller
+    ref = request.referrer or url_for('seller')
+    return redirect(ref)
+
+
+# ---------- Stage 3 stubs ----------
 
 @app.route('/buyer')
 @login_required
@@ -784,7 +786,6 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
-# ---------- DB health check ----------
 @app.route('/db-test')
 def db_test():
     try:
