@@ -18,7 +18,6 @@ from car_data import (
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-change-me')
 
-# ---------- Logging ----------
 logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
 
@@ -32,7 +31,6 @@ def firstname_filter(full_name):
 
 @app.template_filter('inr')
 def inr_filter(value):
-    """Format integer as Indian-comma rupee string. 485000 -> '4,85,000'."""
     if value is None:
         return '—'
     try:
@@ -57,7 +55,6 @@ def inr_filter(value):
 
 @app.template_filter('lakh')
 def lakh_filter(value):
-    """Convert integer to Lakh/Crore shorthand. 485000 -> '4.85 Lakh'."""
     if value is None:
         return '—'
     try:
@@ -73,12 +70,10 @@ def lakh_filter(value):
     return str(n)
 
 
-# ---------- Supabase ----------
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_SECRET_KEY = os.environ.get('SUPABASE_SECRET_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 
-# ---------- Google OAuth ----------
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
@@ -242,12 +237,10 @@ def fetch_similar_deals(make, model, year, fuel, window_years=2):
         app.logger.warning(f"fetch_similar_deals failed: {e}")
         return []
 
-# ---------- Dashboard computations ----------
-
 def compute_demand(make, year):
     age = max(0, CURRENT_YEAR - int(year))
     if make in HIGH_DEMAND_BRANDS:
-        if age <= 7:   return 'HIGH'
+        if age <= 7:    return 'HIGH'
         elif age <= 12: return 'MEDIUM'
         return 'LOW'
     if make in MEDIUM_DEMAND_BRANDS:
@@ -337,12 +330,10 @@ def get_market_stats(make, model):
         verified_count = 0
 
     buyers_last_30d = max(5, verified_count * 3)
-    avg_buyers_per_day = buyers_last_30d / 30.0
-    # Return as range e.g. "0-1" or "6-7" buyers/day
-    lo = int(avg_buyers_per_day)
+    avg = buyers_last_30d / 30.0
+    lo = int(avg)
     hi = lo + 1
-    avg_buyers_range = f"{lo}-{hi}"
-    return verified_count, buyers_last_30d, avg_buyers_range
+    return verified_count, buyers_last_30d, f"{lo}-{hi}"
 
 
 # ========== ROUTES ==========
@@ -729,7 +720,9 @@ def seller_dashboard(valuation_id):
 @app.route('/request-credits', methods=['POST'])
 @login_required
 def request_credits():
-    """Auto-approve a 500-credit top-up request. Redirects back to the referrer."""
+    """Auto-approve a 500-credit top-up.
+    Preserves seller form values when the request came from the seller form,
+    so user doesn't lose the filters they were entering."""
     user = current_user()
     if not user:
         return redirect(url_for('index'))
@@ -753,7 +746,23 @@ def request_credits():
         app.logger.error(f"Credit request failed: {e}")
         flash('Could not process credit request. Please try again.', 'error')
 
-    # Return to previous page if possible, otherwise /seller
+    # If the request came from seller form, preserve all form values
+    return_to = (request.form.get('return_to') or '').strip()
+    if return_to == 'seller':
+        kwargs = {
+            'make':      request.form.get('keep_make') or '',
+            'fuel':      request.form.get('keep_fuel') or '',
+            'model':     request.form.get('keep_model') or '',
+            'variant':   request.form.get('keep_variant') or '',
+            'year':      request.form.get('keep_year') or '',
+            'owner':     request.form.get('keep_owner') or '',
+            'mileage':   request.form.get('keep_mileage') or '',
+            'condition': request.form.get('keep_condition') or '',
+        }
+        # Drop empty values so query string stays clean
+        kwargs = {k: v for k, v in kwargs.items() if v}
+        return redirect(url_for('seller', **kwargs))
+
     ref = request.referrer or url_for('seller')
     return redirect(ref)
 
