@@ -218,4 +218,165 @@ def signup():
         whatsapp_final = form['phone']
     else:
         whatsapp_final = form['whatsapp'] or form['phone']
-        if form['whatsapp'] and not PHONE_RE.match(form['whatsapp'])
+        if form['whatsapp'] and not PHONE_RE.match(form['whatsapp']):
+            return render_template('signup.html', form=form, error='Please enter a valid 10-digit WhatsApp number.')
+
+    # Create user
+    try:
+        new_user = create_user(
+            name=form['name'],
+            email=form['email'],
+            password_hash=hash_password(form['password']),
+            phone=form['phone'],
+            whatsapp_phone=whatsapp_final,
+            is_whatsapp=True,
+            auth_method='manual',
+            credits=500
+        )
+    except Exception as e:
+        app.logger.error(f"Signup insert failed: {e}")
+        return render_template('signup.html', form=form, error='Something went wrong. Please try again.')
+
+    if not new_user:
+        return render_template('signup.html', form=form, error='Could not create account. Please try again.')
+
+    login_user_session(new_user)
+    # Mark this as a fresh signup so role.html shows the welcome alert
+    session['show_welcome'] = True
+    return redirect(url_for('role'))
+
+@app.route('/google-login')
+def google_login():
+    redirect_uri = url_for('google_callback', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/google-callback')
+def google_callback():
+    try:
+        token = google.authorize_access_token()
+        userinfo = token.get('userinfo') or google.parse_id_token(token)
+    except Exception as e:
+        app.logger.error(f"Google OAuth error: {e}")
+        return redirect(url_for('index', error='Google sign-in failed. Please try again.'))
+
+    if not userinfo or not userinfo.get('email'):
+        return redirect(url_for('index', error='Could not retrieve Google profile.'))
+
+    email = userinfo['email'].lower()
+    name = userinfo.get('name') or email.split('@')[0]
+    google_id = userinfo.get('sub')
+
+    existing = get_user_by_email(email)
+    if existing:
+        # Link google_id if missing
+        if not existing.get('google_id'):
+            update_user(existing['id'], {'google_id': google_id})
+        login_user_session(existing)
+        # If profile incomplete, send to /complete-profile
+        if not existing.get('phone'):
+            return redirect(url_for('complete_profile'))
+        return redirect(url_for('role'))
+
+    # New Google user — create row, then force profile completion
+    new_user = create_user(
+        name=name,
+        email=email,
+        google_id=google_id,
+        auth_method='google',
+        credits=500
+    )
+    if not new_user:
+        return redirect(url_for('index', error='Could not create account. Please try again.'))
+
+    login_user_session(new_user)
+    session['show_welcome'] = True
+    return redirect(url_for('complete_profile'))
+
+@app.route('/complete-profile', methods=['GET', 'POST'])
+@login_required
+def complete_profile():
+    user = current_user()
+    if not user:
+        return redirect(url_for('index'))
+
+    if user.get('phone'):
+        return redirect(url_for('role'))
+
+    if request.method == 'GET':
+        return render_template('complete_profile.html', user=user, error='')
+
+    phone = (request.form.get('phone') or '').strip()
+    wa_same = request.form.get('wa_same') == 'on'
+    whatsapp = (request.form.get('whatsapp') or '').strip()
+
+    if not PHONE_RE.match(phone):
+        return render_template('complete_profile.html', user=user, error='Please enter a valid 10-digit phone number.')
+
+    if wa_same:
+        whatsapp_final = phone
+    else:
+        whatsapp_final = whatsapp or phone
+        if whatsapp and not PHONE_RE.match(whatsapp):
+            return render_template('complete_profile.html', user=user, error='Please enter a valid 10-digit WhatsApp number.')
+
+    update_user(user['id'], {
+        'phone': phone,
+        'whatsapp_phone': whatsapp_final,
+        'is_whatsapp': True
+    })
+    return redirect(url_for('role'))
+
+@app.route('/role')
+@login_required
+def role():
+    user = current_user()
+    if not user:
+        return redirect(url_for('index'))
+    if not user.get('phone'):
+        return redirect(url_for('complete_profile'))
+    first_name = firstname_filter(user.get('name'))
+    # Pop the welcome flag so it only shows once
+    show_welcome = session.pop('show_welcome', False)
+    return render_template('role.html', user=user, first_name=first_name, show_welcome=show_welcome)
+
+# ---------- Stage 3 stub routes ----------
+# These exist so url_for() in role.html doesn't throw BuildError.
+# Real logic ships in Stage 3.
+
+@app.route('/seller')
+@login_required
+def seller():
+    user = current_user()
+    return render_template('placeholder.html', user=user, page_title='Seller Dashboard',
+                           message='Seller dashboard is coming in Stage 3.')
+
+@app.route('/buyer')
+@login_required
+def buyer():
+    user = current_user()
+    return render_template('placeholder.html', user=user, page_title='Buyer Dashboard',
+                           message='Buyer dashboard is coming in Stage 3.')
+
+@app.route('/submit-deal')
+@login_required
+def submit_deal():
+    user = current_user()
+    return render_template('placeholder.html', user=user, page_title='Record Transaction',
+                           message='Deal submission form is coming in Stage 3.')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
+# ---------- DB health check (remove before public launch) ----------
+@app.route('/db-test')
+def db_test():
+    try:
+        r = supabase.table('users').select('id').limit(1).execute()
+        return f"✅ Supabase Connected! Users table reachable. Sample rows: {len(r.data)}"
+    except Exception as e:
+        return f"❌ DB error: {e}", 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
