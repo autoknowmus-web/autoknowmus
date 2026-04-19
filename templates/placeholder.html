@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block title %}{{ page_title }} - AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  .placeholder-wrap {
+    padding: 60px 20px;
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .placeholder-wrap h1 {
+    color: #fff;
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+  .placeholder-wrap p {
+    color: #b0b0b0;
+    font-size: 1.05rem;
+    margin-bottom: 2rem;
+  }
+  .btn-back {
+    background: #6c757d; border: none; color: #fff; font-weight: 500;
+    padding: 0.5rem 1.1rem; font-size: 0.95rem; border-radius: 6px;
+    text-decoration: none; display: inline-block;
+  }
+  .btn-back:hover { background: #5a6268; color: #fff; }
+  .back-wrap {
+    max-width: 600px; margin: 1.5rem auto 0; padding: 0 1rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="back-wrap">
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+</div>
+<div class="placeholder-wrap">
+  <h1>{{ page_title }}</h1>
+  <p>{{ message }}</p>
+</div>
+{% endblock %}
