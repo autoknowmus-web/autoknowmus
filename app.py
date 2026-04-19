@@ -3,6 +3,7 @@ from authlib.integrations.flask_client import OAuth
 from datetime import datetime
 import os
 import traceback
+from supabase import create_client, Client
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
@@ -16,6 +17,21 @@ google = oauth.register(
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
+
+# ========== SUPABASE CONNECTION ==========
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_SECRET_KEY = os.environ.get('SUPABASE_SECRET_KEY')
+
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_SECRET_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
+        print('[SUPABASE] Client initialized successfully')
+    except Exception as e:
+        print(f'[SUPABASE INIT ERROR] {str(e)}')
+        traceback.print_exc()
+else:
+    print('[SUPABASE] Missing env vars - running without DB')
 
 # ========== MASTER DATA ==========
 CAR_BRANDS = sorted([
@@ -47,9 +63,7 @@ MODELS_BY_BRAND = {
     'Volvo': sorted(['XC40', 'XC60', 'XC90'])
 }
 
-# ========== REAL PER-MODEL VARIANTS ==========
 VARIANTS_BY_MODEL = {
-    # Maruti Suzuki
     'Alto K10': ['LXi', 'VXi', 'VXi+', 'VXi AGS', 'VXi+ AGS'],
     'Baleno': ['Sigma', 'Delta', 'Zeta', 'Alpha'],
     'Brezza': ['LXi', 'VXi', 'ZXi', 'ZXi+'],
@@ -65,8 +79,6 @@ VARIANTS_BY_MODEL = {
     'Swift': ['LXi', 'VXi', 'ZXi', 'ZXi+'],
     'Wagon R': ['LXi', 'VXi', 'ZXi'],
     'XL6': ['Zeta', 'Alpha', 'Alpha+'],
-
-    # Hyundai
     'Alcazar': ['Prestige', 'Platinum', 'Signature'],
     'Aura': ['E', 'S', 'SX', 'SX+', 'SX(O)'],
     'Creta': ['E', 'EX', 'S', 'S+', 'SX', 'SX(O)'],
@@ -77,8 +89,6 @@ VARIANTS_BY_MODEL = {
     'Tucson': ['Platinum', 'Signature'],
     'Venue': ['E', 'S', 'S+', 'SX', 'SX(O)'],
     'Verna': ['EX', 'S', 'SX', 'SX(O)'],
-
-    # Tata
     'Altroz': ['XE', 'XM+', 'XT', 'XZ', 'XZ+'],
     'Harrier': ['Smart', 'Pure', 'Adventure', 'Fearless', 'Fearless+'],
     'Nexon': ['Smart', 'Pure', 'Creative', 'Fearless', 'Fearless+'],
@@ -87,8 +97,6 @@ VARIANTS_BY_MODEL = {
     'Safari': ['Smart', 'Pure', 'Adventure', 'Accomplished', 'Fearless+'],
     'Tiago': ['XE', 'XM', 'XT', 'XZ+'],
     'Tigor': ['XE', 'XM', 'XZ', 'XZ+'],
-
-    # Mahindra
     'Bolero': ['B4', 'B6', 'B6(O)'],
     'Scorpio': ['S3', 'S5', 'S7', 'S9', 'S11'],
     'Scorpio N': ['Z2', 'Z4', 'Z6', 'Z8', 'Z8L'],
@@ -97,8 +105,6 @@ VARIANTS_BY_MODEL = {
     'XUV400': ['EC', 'EL'],
     'XUV700': ['MX', 'AX3', 'AX5', 'AX7', 'AX7L'],
     'XUV3XO': ['MX1', 'MX2', 'MX3', 'AX5', 'AX7', 'AX7L'],
-
-    # Toyota
     'Camry': ['Hybrid'],
     'Fortuner': ['2.7', '2.8 4x2', '2.8 4x4', 'Legender'],
     'Glanza': ['E', 'S', 'G', 'V'],
@@ -107,56 +113,38 @@ VARIANTS_BY_MODEL = {
     'Innova Crysta': ['GX', 'VX', 'ZX'],
     'Innova Hycross': ['GX', 'VX', 'ZX', 'ZX(O)'],
     'Vellfire': ['Executive Lounge'],
-
-    # Honda
     'Amaze': ['E', 'S', 'VX', 'ZX'],
     'City': ['V', 'VX', 'ZX'],
     'Civic': ['V', 'VX', 'ZX'],
     'Elevate': ['SV', 'V', 'VX', 'ZX'],
     'Jazz': ['V', 'VX', 'ZX'],
     'WR-V': ['S', 'SV', 'VX'],
-
-    # Kia
     'Carens': ['Premium', 'Prestige', 'Prestige+', 'Luxury', 'Luxury+'],
     'Carnival': ['Premium', 'Prestige', 'Limousine'],
     'EV6': ['GT Line'],
     'Seltos': ['HTE', 'HTK', 'HTK+', 'HTX', 'HTX+', 'GTX+'],
     'Sonet': ['HTE', 'HTK', 'HTK+', 'HTX', 'HTX+', 'GTX+'],
-
-    # Volkswagen
     'Taigun': ['Comfortline', 'Highline', 'Topline', 'GT'],
     'Tiguan': ['Elegance'],
     'Virtus': ['Comfortline', 'Highline', 'Topline', 'GT'],
-
-    # Skoda
     'Kushaq': ['Active', 'Ambition', 'Style'],
     'Octavia': ['Style', 'Laurin & Klement'],
     'Slavia': ['Active', 'Ambition', 'Style'],
     'Superb': ['Sportline', 'Laurin & Klement'],
-
-    # Renault
     'Kiger': ['RXE', 'RXL', 'RXT', 'RXZ'],
     'Kwid': ['RXE', 'RXL', 'RXT', 'Climber'],
     'Triber': ['RXE', 'RXL', 'RXT', 'RXZ'],
-
-    # Nissan
     'Kicks': ['XL', 'XV', 'XV Premium'],
     'Magnite': ['XE', 'XL', 'XV', 'XV Premium'],
-
-    # Ford
     'EcoSport': ['Ambiente', 'Trend', 'Titanium', 'Titanium+', 'Sports'],
     'Endeavour': ['Trend', 'Titanium', 'Titanium+', 'Sport'],
     'Figo': ['Ambiente', 'Trend', 'Titanium', 'Titanium+'],
     'Freestyle': ['Ambiente', 'Trend', 'Titanium', 'Titanium+'],
-
-    # MG
     'Astor': ['Style', 'Super', 'Smart', 'Sharp', 'Savvy'],
     'Gloster': ['Super', 'Smart', 'Sharp', 'Savvy'],
     'Hector': ['Style', 'Super', 'Smart', 'Sharp'],
     'Hector Plus': ['Style', 'Super', 'Smart', 'Sharp'],
     'ZS EV': ['Excite', 'Exclusive'],
-
-    # Premium brands — simplified
     'A3': ['Premium', 'Premium Plus', 'Technology'],
     'A4': ['Premium', 'Premium Plus', 'Technology'],
     'A6': ['Premium', 'Premium Plus', 'Technology'],
@@ -194,17 +182,9 @@ VARIANTS_BY_MODEL = {
 }
 
 FUEL_TYPES = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV']
-
-CONDITIONS = [
-    'Excellent (Showroom like)',
-    'Good (Minor wear)',
-    'Fair (Visible wear)'
-]
-
+CONDITIONS = ['Excellent (Showroom like)', 'Good (Minor wear)', 'Fair (Visible wear)']
 OWNERS = ['1st Owner', '2nd Owner', '3rd Owner or more']
-
 BUYER_TYPES = sorted(['Dealer', 'Direct Buyer', 'Exchange at Showroom'])
-
 YEARS = list(range(2026, 2010, -1))
 
 # ========== HELPERS ==========
@@ -258,6 +238,34 @@ def index():
         return redirect(url_for('role'))
     return render_template('index.html')
 
+@app.route('/db-test')
+def db_test():
+    """Temporary route to verify Supabase connection. Remove after testing."""
+    if not supabase:
+        return '❌ Supabase client not initialized. Check env vars.', 500
+    try:
+        result = supabase.table('users').select('id', count='exact').execute()
+        user_count = result.count if hasattr(result, 'count') else len(result.data)
+        return f'''
+        <html><body style="background:#0f1419;color:#e9ecef;font-family:sans-serif;padding:40px;">
+        <h1 style="color:#28a745;">✅ Supabase Connected!</h1>
+        <p>Database connection: <b>OK</b></p>
+        <p>Users table accessible: <b>OK</b></p>
+        <p>Current user count: <b>{user_count}</b></p>
+        <p>Project URL: <code>{SUPABASE_URL}</code></p>
+        <hr>
+        <p style="color:#ffa500;">⚠️ Remember to remove this /db-test route before going to production.</p>
+        <p><a href="/" style="color:#4e54ff;">← Back to home</a></p>
+        </body></html>
+        '''
+    except Exception as e:
+        return f'''
+        <html><body style="background:#0f1419;color:#e9ecef;font-family:sans-serif;padding:40px;">
+        <h1 style="color:#dc3545;">❌ Supabase Connection Failed</h1>
+        <pre style="background:#1a1d24;padding:20px;border-radius:8px;">{str(e)}</pre>
+        </body></html>
+        ''', 500
+
 @app.route('/login')
 def login():
     redirect_uri = url_for('auth', _external=True)
@@ -309,12 +317,9 @@ def role():
 
 @app.route('/seller')
 def seller():
-    """Seller form — accepts query string to pre-fill (used when Back from dashboard)."""
     guard = require_login()
     if guard: return guard
     ensure_session_defaults()
-
-    # Pre-fill from query string (supports ?make=...&fuel=...&year=... etc.)
     prefill = {
         'make': request.args.get('make', ''),
         'fuel': request.args.get('fuel', ''),
@@ -325,7 +330,6 @@ def seller():
         'year': request.args.get('year', ''),
         'condition': request.args.get('condition', '')
     }
-
     return render_template('seller.html',
                            brands=CAR_BRANDS,
                            fuels=FUEL_TYPES,
@@ -366,7 +370,6 @@ def valuate():
         'owner': request.form.get('owner', 'N/A'),
     }
 
-    # Valuation logic
     try:
         year = int(car_data['year'])
         mileage = int(car_data['mileage'])
@@ -378,12 +381,10 @@ def valuate():
     except (ValueError, TypeError):
         estimated = 500000
 
-    # Price range + bands (for dashboard UI)
     car_data['estimated_price'] = estimated
     car_data['price_low'] = int(estimated * 0.97)
     car_data['price_high'] = int(estimated * 1.03)
 
-    # Dashboard metadata
     import random
     car_data['verified_txns'] = random.randint(28, 62)
     car_data['buyers_30d'] = random.randint(140, 260)
@@ -414,13 +415,9 @@ def dashboard():
     guard = require_login()
     if guard: return guard
     ensure_session_defaults()
-
     valuation = session.get('last_valuation')
     message = session.pop('dashboard_message', None)
-
-    return render_template('dashboard.html',
-                           valuation=valuation,
-                           message=message)
+    return render_template('dashboard.html', valuation=valuation, message=message)
 
 @app.route('/submit_deal', methods=['GET', 'POST'])
 def submit_deal():
