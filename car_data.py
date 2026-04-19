@@ -272,4 +272,77 @@ def compute_base_valuation(make, model, variant, fuel, year, mileage, condition,
     price = base * dep_factor
 
     # --- 2. Mileage adjustment (only above expected) ---
-    t
+    try:
+        mileage = int(mileage or 0)
+    except (TypeError, ValueError):
+        mileage = 0
+    expected_km = age * EXPECTED_KM_PER_YEAR
+    excess_km = max(0, mileage - expected_km)
+    mileage_penalty = (excess_km / 10000) * 0.02  # 2% per extra 10k km
+    mileage_penalty = min(mileage_penalty, 0.25)   # cap at -25%
+    price *= (1 - mileage_penalty)
+
+    # --- 3. Condition ---
+    condition_map = {'Excellent': 1.05, 'Good': 1.00, 'Fair': 0.90}
+    price *= condition_map.get(condition, 1.00)
+
+    # --- 4. Owner ---
+    owner_map = {'1st Owner': 1.00, '2nd Owner': 0.95, '3rd Owner or more': 0.90}
+    price *= owner_map.get(owner, 1.00)
+
+    # --- 5. Fuel premium ---
+    fuel_map = {'Petrol': 1.00, 'Diesel': 1.05, 'CNG': 0.97,
+                'HEV': 1.05, 'PHEV': 1.08, 'BEV': 1.10}
+    price *= fuel_map.get(fuel, 1.00)
+
+    # --- 6. Variant offset (position in variant list) ---
+    variants = get_variants(make, model)
+    if variants and variant in variants:
+        idx = variants.index(variant)
+        n = len(variants)
+        if n == 1:
+            variant_adj = 1.00
+        else:
+            # 0 → 0%, middle → +7%, last → +15%
+            pct = (idx / (n - 1)) * 0.15
+            variant_adj = 1.00 + pct
+        price *= variant_adj
+
+    return int(round(price))
+
+
+def compute_price_range(estimated_price):
+    """Given an estimated price, return (low, high) 8% either side."""
+    if estimated_price is None:
+        return (None, None)
+    low = int(round(estimated_price * 0.92))
+    high = int(round(estimated_price * 1.08))
+    return (low, high)
+
+
+def adjust_with_deals(estimated_price, similar_deals):
+    """
+    Hybrid adjustment: blend formula price with the median of similar verified deals.
+    similar_deals: list of sale_price integers from DB (already filtered verified=True).
+    Returns (adjusted_price, confidence_pct).
+    """
+    if not similar_deals or estimated_price is None:
+        return estimated_price, 50  # low confidence without real data
+
+    n = len(similar_deals)
+    sorted_prices = sorted(similar_deals)
+    median = sorted_prices[n // 2] if n % 2 == 1 else (sorted_prices[n // 2 - 1] + sorted_prices[n // 2]) // 2
+
+    # Weight: more real deals → more weight on real data
+    if n >= 20:
+        real_weight = 0.7
+    elif n >= 10:
+        real_weight = 0.55
+    elif n >= 5:
+        real_weight = 0.4
+    else:
+        real_weight = 0.25
+
+    adjusted = int(round(estimated_price * (1 - real_weight) + median * real_weight))
+    confidence = min(95, 50 + n * 2)  # 50% base + 2% per deal, capped at 95%
+    return adjusted, confidence
