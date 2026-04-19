@@ -3,20 +3,20 @@
 
 {% block extra_head %}
 <style>
-  .dashboard-wrap { padding: 20px 30px 40px; }
+  /* Tighter spacing to fit on one screen */
+  .dashboard-wrap { padding: 14px 30px 20px; }
 
-  /* ---------- Header row ---------- */
-  .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px; }
+  .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
   .car-summary { color: #e6e6e6; text-align: right; }
-  .car-summary .car-name { color: #28a745; font-weight: 700; font-size: 1.15rem; line-height: 1.2; }
-  .car-summary .car-meta { color: #b0b0b0; font-size: 0.88rem; margin-top: 2px; }
+  .car-summary .car-name { color: #28a745; font-weight: 700; font-size: 1.05rem; line-height: 1.2; }
+  .car-summary .car-meta { color: #b0b0b0; font-size: 0.82rem; margin-top: 2px; }
 
-  /* ---------- Top row: price hero (left) + graph (right) ---------- */
+  /* ===== TOP ROW: Price+Slider (left) + Graph (right) ===== */
   .top-row {
     display: grid;
-    grid-template-columns: 1fr 1.2fr;
-    gap: 18px;
-    margin-bottom: 18px;
+    grid-template-columns: 1fr 1.25fr;
+    gap: 14px;
+    margin-bottom: 12px;
   }
   @media (max-width: 900px) { .top-row { grid-template-columns: 1fr; } }
 
@@ -24,123 +24,57 @@
     background: #1a1d24;
     border: 1px solid #2a2d34;
     border-radius: 12px;
-    padding: 18px 20px;
+    padding: 14px 18px;
   }
   .card-title {
-    font-size: 1.0rem;
+    font-size: 0.95rem;
     font-weight: 600;
     color: #fff;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
     gap: 6px;
   }
-  .card-title .sub { color: #b0b0b0; font-size: 0.8rem; font-weight: 400; margin-left: 6px; }
+  .card-title .sub { color: #b0b0b0; font-size: 0.75rem; font-weight: 400; margin-left: 6px; }
 
-  /* Hero price */
-  .price-hero { text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 260px; }
-  .price-hero .hero-label { color: #b0b0b0; font-size: 0.82rem; letter-spacing: 0.5px; margin-bottom: 8px; }
-  .price-hero .hero-range {
-    color: #28a745; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1;
-  }
-  .price-hero .hero-dash { color: #28a745; margin: 0 8px; }
-  .price-hero .hero-mid {
-    color: #adb5bd; font-size: 0.95rem; margin-top: 10px;
-  }
+  /* Price + slider combined card */
+  .hero-combined { display: flex; flex-direction: column; gap: 14px; }
+  .price-hero { text-align: center; }
+  .price-hero .hero-label { color: #b0b0b0; font-size: 0.76rem; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .price-hero .hero-range { color: #28a745; font-size: 1.85rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+  .price-hero .hero-dash { color: #28a745; margin: 0 6px; }
+  .price-hero .hero-mid { color: #adb5bd; font-size: 0.85rem; margin-top: 6px; }
   .price-hero .hero-mid strong { color: #ffa500; font-weight: 600; }
+  @media (min-width: 1200px) { .price-hero .hero-range { font-size: 2rem; } }
 
-  /* Graph */
-  .graph-wrap { position: relative; height: 260px; }
-  @media (max-width: 900px) { .graph-wrap { height: 220px; } }
-
-  /* ---------- Middle row: KPIs + market stats ---------- */
-  .kpi-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  .kpi-card {
-    background: #1a1d24;
-    border: 1px solid #2a2d34;
-    border-radius: 12px;
-    padding: 14px 16px;
-    text-align: center;
-    position: relative;
-  }
-  .kpi-card .kpi-label {
-    color: #b0b0b0;
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .kpi-card .kpi-value { font-size: 1.4rem; font-weight: 700; color: #fff; }
-  .kpi-card .kpi-sub   { color: #6c757d; font-size: 0.74rem; margin-top: 2px; }
-  .kpi-card .kpi-value.demand-HIGH   { color: #28a745; }
-  .kpi-card .kpi-value.demand-MEDIUM { color: #ffa500; }
-  .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
-  @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
-
-  .info-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px; height: 14px;
-    background: #2a2d34;
-    color: #adb5bd;
-    border-radius: 50%;
-    font-size: 0.7rem;
-    font-weight: 700;
-    cursor: help;
-    font-style: italic;
-    font-family: Georgia, serif;
-  }
-  .info-icon:hover { background: #ffa500; color: #fff; }
-
-  /* Market stats strip */
-  .market-stats {
-    background: #14171d;
-    border-radius: 10px;
-    padding: 10px 16px;
-    margin-bottom: 18px;
-    color: #adb5bd;
-    font-size: 0.88rem;
-    text-align: center;
-  }
-  .market-stats strong { color: #e9ecef; }
-
-  /* ---------- Slider ---------- */
-  .slider-labels { display: flex; justify-content: space-between; color: #b0b0b0; font-size: 0.82rem; margin-bottom: 6px; }
+  /* Slider */
+  .slider-section { border-top: 1px solid #2a2d34; padding-top: 12px; }
+  .slider-labels { display: flex; justify-content: space-between; color: #b0b0b0; font-size: 0.76rem; margin-bottom: 4px; }
   .slider-labels .left  { color: #ffa500; font-weight: 600; }
   .slider-labels .right { color: #28a745; font-weight: 600; }
-
-  .slider-track-wrap { position: relative; padding-top: 28px; padding-bottom: 4px; }
+  .slider-track-wrap { position: relative; padding-top: 26px; padding-bottom: 3px; }
   #price-slider {
     -webkit-appearance: none; appearance: none;
-    width: 100%; height: 8px;
+    width: 100%; height: 7px;
     background: linear-gradient(to right, #ffa500 0%, #28a745 100%);
     border-radius: 4px; outline: none;
   }
   #price-slider::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
-    width: 22px; height: 22px;
+    width: 20px; height: 20px;
     background: #fff; border: 3px solid #28a745;
     border-radius: 50%; cursor: pointer;
   }
   #price-slider::-moz-range-thumb {
-    width: 22px; height: 22px;
+    width: 20px; height: 20px;
     background: #fff; border: 3px solid #28a745;
     border-radius: 50%; cursor: pointer;
   }
   .slider-bubble {
     position: absolute; top: 0; transform: translateX(-50%);
     background: #28a745; color: #fff;
-    padding: 3px 10px; border-radius: 14px;
-    font-size: 0.82rem; font-weight: 600;
+    padding: 2px 9px; border-radius: 12px;
+    font-size: 0.76rem; font-weight: 600;
     white-space: nowrap; pointer-events: none;
     transition: left 0.05s linear;
   }
@@ -149,60 +83,153 @@
     border-left: 5px solid transparent; border-right: 5px solid transparent;
     border-top: 5px solid #28a745;
   }
-  .slider-info { display: flex; justify-content: space-between; margin-top: 12px; flex-wrap: wrap; gap: 8px; color: #e6e6e6; font-size: 0.9rem; align-items: center; }
-  .slider-info .days-badge { background: #14171d; padding: 5px 11px; border-radius: 8px; }
+  .slider-info { display: flex; justify-content: space-between; margin-top: 8px; flex-wrap: wrap; gap: 6px; color: #e6e6e6; font-size: 0.82rem; align-items: center; }
+  .slider-info .days-badge { background: #14171d; padding: 4px 9px; border-radius: 6px; }
   .slider-info .days-badge .num { color: #28a745; font-weight: 700; }
 
-  /* ---------- Buyer distribution ---------- */
-  .dist-row { display: flex; flex-direction: column; gap: 8px; }
-  .dist-bar {
+  /* Graph */
+  .graph-wrap { position: relative; height: 220px; }
+  @media (max-width: 900px) { .graph-wrap { height: 200px; } }
+
+  /* ===== KPI cards ===== */
+  .kpi-row {
     display: grid;
-    grid-template-columns: 160px 1fr 46px;
-    align-items: center;
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
-    font-size: 0.86rem;
+    margin-bottom: 10px;
   }
-  .dist-bar .dist-label { color: #b0b0b0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .dist-bar .dist-track { background: #14171d; border-radius: 6px; height: 14px; overflow: hidden; }
-  .dist-bar .dist-fill  { height: 100%; border-radius: 6px; transition: width 0.8s ease; }
-  .dist-bar .dist-pct   { color: #e6e6e6; font-weight: 600; text-align: right; }
-  @media (max-width: 600px) {
-    .dist-bar { grid-template-columns: 100px 1fr 40px; gap: 8px; font-size: 0.78rem; }
+  .kpi-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .kpi-card .kpi-label {
+    color: #b0b0b0;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .kpi-card .kpi-value { font-size: 1.2rem; font-weight: 700; color: #fff; line-height: 1.1; }
+  .kpi-card .kpi-sub   { color: #6c757d; font-size: 0.7rem; margin-top: 1px; }
+  .kpi-card .kpi-value.demand-HIGH   { color: #28a745; }
+  .kpi-card .kpi-value.demand-MEDIUM { color: #ffa500; }
+  .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
+  @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
+
+  /* ℹ️ info icon with custom tooltip — 3+ lines, white on black */
+  .info-wrap { position: relative; display: inline-flex; }
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px;
+    background: #2a2d34; color: #adb5bd;
+    border-radius: 50%;
+    font-size: 0.7rem; font-weight: 700;
+    cursor: help; font-style: italic;
+    font-family: Georgia, serif;
+  }
+  .info-icon:hover { background: #ffa500; color: #fff; }
+  .info-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #28a745;
+    font-size: 0.78rem;
+    font-weight: 400;
+    line-height: 1.5;
+    width: 240px;
+    max-width: 280px;
+    text-transform: none;
+    letter-spacing: normal;
+    text-align: left;
+    z-index: 10;
+    transition: opacity 0.15s;
+    white-space: normal;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+  .info-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #000;
+  }
+  .info-wrap:hover .info-tooltip {
+    visibility: visible; opacity: 1;
   }
 
-  /* ---------- Bottom row: slider + distribution side by side ---------- */
+  /* Market stats */
+  .market-stats {
+    background: #14171d;
+    border-radius: 8px;
+    padding: 7px 14px;
+    margin-bottom: 10px;
+    color: #adb5bd;
+    font-size: 0.82rem;
+    text-align: center;
+  }
+  .market-stats strong { color: #e9ecef; }
+
+  /* ===== BOTTOM ROW: Distribution (left) + Verdict (right) ===== */
   .bottom-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 18px;
-    margin-bottom: 18px;
+    gap: 12px;
   }
   @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
 
-  /* ---------- Verdict ---------- */
+  .dist-row { display: flex; flex-direction: column; gap: 5px; }
+  .dist-bar {
+    display: grid;
+    grid-template-columns: 145px 1fr 40px;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+  }
+  .dist-bar .dist-label { color: #b0b0b0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dist-bar .dist-track { background: #14171d; border-radius: 5px; height: 11px; overflow: hidden; }
+  .dist-bar .dist-fill  { height: 100%; border-radius: 5px; transition: width 0.8s ease; }
+  .dist-bar .dist-pct   { color: #e6e6e6; font-weight: 600; text-align: right; font-size: 0.78rem; }
+  @media (max-width: 600px) {
+    .dist-bar { grid-template-columns: 95px 1fr 38px; gap: 6px; font-size: 0.72rem; }
+  }
+
   .verdict-card {
     background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
     border: 1px solid #28a745;
     border-radius: 12px;
-    padding: 20px 24px;
-    margin-top: 6px;
+    padding: 14px 18px;
   }
   .verdict-title {
-    font-size: 1.1rem;
+    font-size: 0.95rem;
     font-weight: 700;
     color: #28a745;
-    margin-bottom: 12px;
-    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
   }
   .verdict-body p {
     color: #e6e6e6;
-    font-size: 0.95rem;
-    line-height: 1.65;
-    margin-bottom: 10px;
+    font-size: 0.83rem;
+    line-height: 1.55;
+    margin-bottom: 6px;
   }
   .verdict-body p:last-child { margin-bottom: 0; }
   .verdict-body .hi { color: #ffa500; font-weight: 600; }
   .verdict-body .ok { color: #28a745; font-weight: 600; }
+  .verdict-body .warn { color: #ff6b6b; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -223,20 +250,48 @@
     </div>
   </div>
 
-  <!-- TOP ROW: Price hero (left) + Depreciation graph (right) -->
+  <!-- TOP ROW: Price+Slider (left) + Graph (right) -->
   <div class="top-row">
-    <div class="card price-hero">
-      <div class="hero-label">ESTIMATED FAIR MARKET VALUE</div>
-      <div class="hero-range">
-        ₹ {{ price_low | lakh }}<span class="hero-dash">—</span>₹ {{ price_high | lakh }}
+    <!-- LEFT: Price hero with slider -->
+    <div class="card hero-combined">
+      <div class="price-hero">
+        <div class="hero-label">ESTIMATED FAIR MARKET VALUE</div>
+        <div class="hero-range">
+          ₹ {{ price_low | lakh }}<span class="hero-dash">—</span>₹ {{ price_high | lakh }}
+        </div>
+        <div class="hero-mid">Most likely: <strong>₹ {{ estimated | lakh }}</strong></div>
       </div>
-      <div class="hero-mid">
-        Most likely: <strong>₹ {{ estimated | lakh }}</strong>
+
+      <div class="slider-section">
+        <div class="slider-labels">
+          <span class="left">← Quick Sale</span>
+          <span class="right">Highest Price →</span>
+        </div>
+        <div class="slider-track-wrap">
+          <div class="slider-bubble" id="slider-bubble">₹ {{ estimated | lakh }}</div>
+          <input type="range" id="price-slider"
+                 min="{{ price_low }}" max="{{ price_high }}"
+                 value="{{ estimated }}" step="1000">
+        </div>
+        <div class="slider-info">
+          <div>Your price: <strong id="slider-price-text">₹ {{ estimated | lakh }}</strong></div>
+          <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
+        </div>
       </div>
     </div>
 
+    <!-- RIGHT: Depreciation graph -->
     <div class="card">
-      <div class="card-title">Depreciation Forecast <span class="sub">next 90 days</span></div>
+      <div class="card-title">
+        Depreciation Forecast
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            How your car's value is expected to drop over the next 90 days if you don't sell now. Cars depreciate continuously — waiting longer usually means accepting a lower price later. Hover on the line to see specific days.
+          </span>
+        </span>
+        <span class="sub">next 90 days</span>
+      </div>
       <div class="graph-wrap">
         <canvas id="dep-chart"></canvas>
       </div>
@@ -248,7 +303,12 @@
     <div class="kpi-card">
       <div class="kpi-label">
         Market Demand
-        <span class="info-icon" title="How many buyers are actively looking for cars like yours. HIGH = sells fast, LOW = takes longer.">i</span>
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            How many buyers are actively looking for cars like yours. HIGH means your car sells fast. LOW means fewer interested buyers — you may need patience or a lower price. Changes with your asking price.
+          </span>
+        </span>
       </div>
       <div class="kpi-value demand-{{ demand }}" id="demand-value">{{ demand }}</div>
       <div class="kpi-sub" id="demand-sub">Based on brand, age & price</div>
@@ -256,7 +316,12 @@
     <div class="kpi-card">
       <div class="kpi-label">
         Data Confidence
-        <span class="info-icon" title="How trustworthy this valuation is, based on real verified deals we have. 50%–95%. More deals = more accurate.">i</span>
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            How accurate this valuation is, based on real verified deals we have for similar cars. Higher is better. Starts at 50% with just our formula, and climbs to 95% as more users submit verified transactions.
+          </span>
+        </span>
       </div>
       <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
       <div class="kpi-sub">Improves with more deals</div>
@@ -264,42 +329,27 @@
     <div class="kpi-card">
       <div class="kpi-label">
         Expected Days to Sell
-        <span class="info-icon" title="How many days we expect it to take to find a buyer at the current asking price. Lower price = faster sale.">i</span>
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            How many days we expect it to take to find a buyer at your current asking price. Lower prices sell faster, higher prices take longer. Move the slider to see how pricing affects selling speed.
+          </span>
+        </span>
       </div>
       <div class="kpi-value" style="color:#ffa500;" id="days-value">{{ days_to_sell }}</div>
       <div class="kpi-sub">days at current price</div>
     </div>
   </div>
 
-  <!-- Market stats strip -->
+  <!-- Market stats -->
   <div class="market-stats">
     <strong>{{ verified_count }}</strong> verified transactions ·
     <strong>{{ buyers_last_30d }}</strong> buyers last 30 days ·
     Average <strong>{{ avg_buyers_range }}</strong> buyers/day
   </div>
 
-  <!-- BOTTOM ROW: Slider (left) + Buyer Distribution (right) -->
+  <!-- BOTTOM ROW: Distribution (left) + Verdict (right) -->
   <div class="bottom-row">
-    <!-- SLIDER -->
-    <div class="card">
-      <div class="card-title">Price vs Time-to-Sell <span class="sub">drag to explore</span></div>
-      <div class="slider-labels">
-        <span class="left">← Quick Sale</span>
-        <span class="right">Highest Price →</span>
-      </div>
-      <div class="slider-track-wrap">
-        <div class="slider-bubble" id="slider-bubble">₹ {{ estimated | lakh }}</div>
-        <input type="range" id="price-slider"
-               min="{{ price_low }}" max="{{ price_high }}"
-               value="{{ estimated }}" step="1000">
-      </div>
-      <div class="slider-info">
-        <div>Your price: <strong id="slider-price-text">₹ {{ estimated | lakh }}</strong></div>
-        <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
-      </div>
-    </div>
-
-    <!-- BUYER DISTRIBUTION -->
     <div class="card">
       <div class="card-title">Buyer Price-Band Distribution <span class="sub">where buyers are concentrated</span></div>
       <div class="dist-row">
@@ -322,13 +372,12 @@
         {% endfor %}
       </div>
     </div>
-  </div>
 
-  <!-- AUTOKNOWMUS VERDICT -->
-  <div class="verdict-card">
-    <div class="verdict-title">🎯 AutoKnowMus Verdict</div>
-    <div class="verdict-body" id="verdict-body">
-      <!-- Populated by JS so it updates with slider -->
+    <div class="verdict-card">
+      <div class="verdict-title">🎯 AutoKnowMus Verdict</div>
+      <div class="verdict-body" id="verdict-body">
+        <!-- JS populated -->
+      </div>
     </div>
   </div>
 
@@ -359,13 +408,18 @@
     return String(n);
   }
 
+  // Depreciation lookup — map a day to a price
+  function priceAtDay(day) {
+    if (day < 0) day = 0;
+    if (day >= DEP_DATA.length) day = DEP_DATA.length - 1;
+    return DEP_DATA[day].price;
+  }
+
   // ======================================================
   // Dynamic demand + days based on slider position
   // ======================================================
   function demandForPrice(price) {
-    // pct = 0 at PRICE_LOW (quick sale), 1 at PRICE_HIGH (premium)
     const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
-    // Shift demand DOWN as price goes UP relative to the base demand
     if (BASE_DEMAND === 'HIGH') {
       if (pct < 0.33) return 'HIGH';
       if (pct < 0.75) return 'MEDIUM';
@@ -376,19 +430,18 @@
       if (pct < 0.75) return 'MEDIUM';
       return 'LOW';
     }
-    // LOW base
     if (pct < 0.33) return 'MEDIUM';
     return 'LOW';
   }
 
   function daysForPrice(price) {
     const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
-    const factor = 0.55 + pct * 0.95; // 0.55..1.5
+    const factor = 0.55 + pct * 0.95;
     return Math.max(5, Math.round(BASE_DAYS * factor));
   }
 
   // ======================================================
-  // Verdict generation (plain English)
+  // Verdict — now includes depreciation guidance
   // ======================================================
   function generateVerdict(price, demand, days) {
     const confidenceWord =
@@ -397,17 +450,17 @@
       CONFIDENCE >= 50 ? 'moderate' : 'preliminary';
 
     const dataNote = VERIFIED_COUNT === 0
-      ? "Our estimate is based on a formula that factors in age, mileage, condition, ownership history, and fuel type. We don't yet have verified real-world deals for this exact car."
-      : `Our estimate blends formula-based pricing with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
+      ? "Our estimate is formula-based using age, mileage, condition, ownership and fuel type. We don't yet have verified real-world deals for this exact car."
+      : `Our estimate blends the formula with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
 
     let pricingStrategy;
     const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
     if (pct < 0.33) {
-      pricingStrategy = `<span class="ok">Priced aggressively for a quick sale.</span> At ₹ ${lakhFormat(price)}, demand is <span class="ok">${demand}</span> — expect serious interest within a week or two.`;
+      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakhFormat(price)}, demand is <span class="ok">${demand}</span> — expect serious interest within a week or two.`;
     } else if (pct < 0.66) {
-      pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakhFormat(price)}, you'll see <span class="ok">${demand}</span> demand. Balanced approach — neither rushed nor greedy.`;
+      pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakhFormat(price)}, you'll see <span class="ok">${demand}</span> demand — balanced approach.`;
     } else {
-      pricingStrategy = `<span class="hi">Priced at the upper end.</span> At ₹ ${lakhFormat(price)}, demand drops to <span class="hi">${demand}</span>. You may wait longer but could fetch top value if you're patient.`;
+      pricingStrategy = `<span class="hi">Priced at the upper end.</span> At ₹ ${lakhFormat(price)}, demand drops to <span class="hi">${demand}</span> — you may wait longer but could fetch top value.`;
     }
 
     const timeGuidance = days <= 20
@@ -416,17 +469,35 @@
       ? `Expect to sell in around <strong>${days} days</strong>.`
       : `This price may take around <strong class="hi">${days} days</strong> to find a buyer.`;
 
-    const actionable = `<strong>What to do:</strong> For a balanced sale, aim for ₹ ${lakhFormat(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. If you need cash fast, list at ₹ ${lakhFormat(PRICE_LOW)}. If you can wait 2+ months, try ₹ ${lakhFormat(PRICE_HIGH)}.`;
+    // Depreciation guidance — if selling takes longer, car loses value
+    const priceAtDay30 = priceAtDay(30);
+    const priceAtDay90 = priceAtDay(90);
+    const loss30  = price - priceAtDay30;
+    const loss90  = price - priceAtDay90;
+    const pctLoss30 = Math.round((loss30 / price) * 100);
+    const pctLoss90 = Math.round((loss90 / price) * 100);
+
+    let depreciationNote;
+    if (days <= 20) {
+      depreciationNote = `<strong>Waiting cost:</strong> Not a concern at this price — you'll sell before depreciation bites.`;
+    } else if (days <= 45) {
+      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakhFormat(loss30)} (${pctLoss30}%)</span> to depreciation. Factor this in.`;
+    } else {
+      depreciationNote = `<strong>Waiting cost:</strong> At this price, selling could stretch past 45 days. Over 90 days, your car could lose <span class="warn">₹ ${lakhFormat(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
+    }
+
+    const actionable = `<strong>Recommendation:</strong> For a balanced sale aim for ₹ ${lakhFormat(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. Need cash fast? List at ₹ ${lakhFormat(PRICE_LOW)}. Can wait 2+ months? Try ₹ ${lakhFormat(PRICE_HIGH)} — but remember depreciation.`;
 
     return `
-      <p>Your <strong>${CAR_NAME}</strong> has a ${confidenceWord} valuation with <strong>${CONFIDENCE}% confidence</strong>. ${dataNote}</p>
+      <p>Your <strong>${CAR_NAME}</strong> has a ${confidenceWord} valuation (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>
       <p>${pricingStrategy} ${timeGuidance}</p>
+      <p>${depreciationNote}</p>
       <p>${actionable}</p>
     `;
   }
 
   // ======================================================
-  // Slider
+  // Slider handlers
   // ======================================================
   const slider       = document.getElementById('price-slider');
   const bubble       = document.getElementById('slider-bubble');
@@ -441,7 +512,7 @@
     const max = Number(slider.max);
     const val = Number(slider.value);
     const pct = ((val - min) / (max - min)) * 100;
-    const thumbOffset = 11 - (pct / 100) * 22;
+    const thumbOffset = 10 - (pct / 100) * 20;
     bubble.style.left = `calc(${pct}% + ${thumbOffset}px)`;
   }
 
@@ -468,17 +539,16 @@
   slider.addEventListener('input', onSliderInput);
   window.addEventListener('resize', positionBubble);
 
-  // Initial render
   requestAnimationFrame(() => {
     positionBubble();
     verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
   });
 
   // ======================================================
-  // Depreciation Chart
+  // Depreciation chart
   // ======================================================
   const ctx = document.getElementById('dep-chart').getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, 0, 240);
+  const grad = ctx.createLinearGradient(0, 0, 0, 220);
   grad.addColorStop(0, 'rgba(40, 167, 69, 0.35)');
   grad.addColorStop(1, 'rgba(40, 167, 69, 0.02)');
 
@@ -533,7 +603,7 @@
         x: {
           ticks: {
             color: '#6c757d',
-            maxTicksLimit: 6,
+            maxTicksLimit: 5,
             callback: function(val, idx) {
               if (idx === 0 || idx === DEP_DATA.length - 1) return labels[idx];
               return (idx % 22 === 0) ? labels[idx] : '';
@@ -542,7 +612,6 @@
           grid: { color: 'rgba(255,255,255,0.04)' }
         },
         y: {
-          // Max 5 ticks on Y axis per your request
           ticks: {
             color: '#6c757d',
             maxTicksLimit: 5,
