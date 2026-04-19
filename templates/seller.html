@@ -31,7 +31,6 @@
     font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
 
-  /* Flash success (for credit request approval) */
   .flash-success {
     background: #28a745; color: #fff; border: none; border-radius: 8px;
     padding: 0.75rem 2.5rem 0.75rem 1rem; margin-bottom: 1.25rem;
@@ -43,7 +42,6 @@
     font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
 
-  /* Credit request card — shown when credits < 100 */
   .credit-request-card {
     background: #14171d; border: 2px solid #ffa500; border-radius: 12px;
     padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; text-align: center;
@@ -61,6 +59,10 @@
     cursor: pointer;
   }
   .btn-request-credits:hover { background: #e69500; color: #1a1d24; }
+
+  /* Location full-width row, muted */
+  .location-row { margin-bottom: 1rem; }
+  .location-row .form-select { max-width: 100%; }
 </style>
 {% endblock %}
 
@@ -72,7 +74,7 @@
       <h2 class="page-title">Sell Your Car: Market Valuation</h2>
     </div>
 
-    {# Flash messages (e.g. "500 credits added") #}
+    {# Flash messages — e.g. "500 credits added" #}
     {% with flash_msgs = get_flashed_messages(category_filter=['success']) %}
       {% if flash_msgs %}
         {% for m in flash_msgs %}
@@ -92,12 +94,21 @@
     </div>
     {% endif %}
 
-    {# Credit request card — shown when user hit the "insufficient credits" error #}
     {% if show_credit_request %}
     <div class="credit-request-card">
       <h4>🎁 Need more credits?</h4>
       <p>Request 500 free credits and keep exploring valuations. Auto-approved instantly.</p>
       <form method="POST" action="{{ url_for('request_credits') }}" style="display:inline;">
+        {# Preserve form values through the credit top-up roundtrip #}
+        <input type="hidden" name="return_to" value="seller">
+        <input type="hidden" name="keep_make"      value="{{ form.make or '' }}">
+        <input type="hidden" name="keep_fuel"      value="{{ form.fuel or '' }}">
+        <input type="hidden" name="keep_model"     value="{{ form.model or '' }}">
+        <input type="hidden" name="keep_variant"   value="{{ form.variant or '' }}">
+        <input type="hidden" name="keep_year"      value="{{ form.year or '' }}">
+        <input type="hidden" name="keep_owner"     value="{{ form.owner or '' }}">
+        <input type="hidden" name="keep_mileage"   value="{{ form.mileage or '' }}">
+        <input type="hidden" name="keep_condition" value="{{ form.condition or '' }}">
         <button type="submit" class="btn-request-credits">
           Request 500 Credits (Free)
         </button>
@@ -107,14 +118,18 @@
 
     <form method="POST" action="{{ url_for('seller') }}">
 
-      <!-- Row 1: Location, Make, Fuel, Model -->
-      <div class="row g-3 mb-3">
-        <div class="col-md-3">
+      <!-- Row 1: LOCATION (full width, locked) -->
+      <div class="row g-3 location-row">
+        <div class="col-12">
           <label class="form-label">Location</label>
           <select class="form-select" disabled>
             <option>Bangalore</option>
           </select>
         </div>
+      </div>
+
+      <!-- Row 2: Make, Fuel, Model, Variant -->
+      <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Make <span style="color:#ff6b6b;">*</span></label>
           <select class="form-select" name="make" id="make" required>
@@ -136,14 +151,23 @@
             <option value="">Select Fuel first</option>
           </select>
         </div>
-      </div>
-
-      <!-- Row 2: Variant, Owner, Mileage, Year -->
-      <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Variant / Suffix <span style="color:#ff6b6b;">*</span></label>
           <select class="form-select" name="variant" id="variant" required disabled>
             <option value="">Select Model first</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 3: Year, Owner, Mileage, Condition -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="year" required>
+            <option value="">Select Year</option>
+            {% for y in years %}
+              <option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
@@ -157,23 +181,12 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
-          <input type="number" class="form-control" name="mileage" required
-                 min="0" max="500000" value="{{ form.mileage or '' }}" placeholder="e.g. 45000">
+          {# Visible field formats as user types; hidden field carries the raw number for POST #}
+          <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
+                 value="{{ form.mileage or '' }}" placeholder="e.g. 45,000">
+          <input type="hidden" name="mileage" id="mileage-raw" value="{{ form.mileage or '' }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
-          <select class="form-select" name="year" required>
-            <option value="">Select Year</option>
-            {% for y in years %}
-              <option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-
-      <!-- Row 3: Condition (centered) -->
-      <div class="row g-3 mb-4">
-        <div class="col-md-6 offset-md-3">
           <label class="form-label">Condition <span style="color:#ff6b6b;">*</span></label>
           <select class="form-select" name="condition" required>
             <option value="">Select Condition</option>
@@ -196,7 +209,6 @@
 
 {% block scripts %}
 <script>
-  // Car master data from Flask
   const CAR_DATA = {{ car_data_json | safe }};
   const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
 
@@ -289,5 +301,45 @@
       }
     }
   })();
+
+  // ======================================================
+  // Mileage: Indian comma formatting as user types
+  // ======================================================
+  const mileageDisplay = document.getElementById('mileage-display');
+  const mileageRaw     = document.getElementById('mileage-raw');
+
+  function inrGroup(n) {
+    const s = String(Math.abs(n));
+    if (s.length <= 3) return s;
+    const last3 = s.slice(-3);
+    let rest = s.slice(0, -3);
+    const groups = [];
+    while (rest.length > 2) {
+      groups.unshift(rest.slice(-2));
+      rest = rest.slice(0, -2);
+    }
+    if (rest) groups.unshift(rest);
+    return groups.join(',') + ',' + last3;
+  }
+
+  function formatMileage() {
+    // Strip all non-digit characters
+    const digits = mileageDisplay.value.replace(/\D+/g, '');
+    if (!digits) {
+      mileageDisplay.value = '';
+      mileageRaw.value = '';
+      return;
+    }
+    // Cap at 500000
+    let n = parseInt(digits, 10);
+    if (n > 500000) n = 500000;
+    mileageRaw.value = n;
+    mileageDisplay.value = inrGroup(n);
+  }
+
+  mileageDisplay.addEventListener('input', formatMileage);
+  mileageDisplay.addEventListener('blur',  formatMileage);
+  // On load, if prefilled as a bare number, format it
+  formatMileage();
 </script>
 {% endblock %}
