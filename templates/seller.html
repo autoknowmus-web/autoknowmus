@@ -12,9 +12,23 @@
     width: 320px; display: block; margin: 0 auto;
   }
   .btn-generate:hover { background: #218838; color: #fff; }
+  .btn-generate:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
   .btn-generate .credit-cost {
     display: block; font-size: 0.85rem; font-weight: 500;
     margin-top: 3px; opacity: 0.95;
+  }
+  .credit-note {
+    text-align: center; color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;
+  }
+  .alert-dismiss {
+    background: #ff8c00; color: #fff; border: none; border-radius: 8px;
+    padding: 0.75rem 2.5rem 0.75rem 1rem; margin-bottom: 1.25rem;
+    position: relative; font-size: 0.92rem;
+  }
+  .alert-dismiss .btn-close-x {
+    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
 </style>
 {% endblock %}
@@ -27,35 +41,42 @@
       <h2 class="page-title">Sell Your Car: Market Valuation</h2>
     </div>
 
-    <form method="POST" action="{{ url_for('valuate') }}">
+    {% if error %}
+    <div class="alert-dismiss" id="err-alert">
+      {{ error }}
+      <button type="button" class="btn-close-x" onclick="document.getElementById('err-alert').remove()">&times;</button>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('seller') }}">
+
       <!-- Row 1: Location, Make, Fuel, Model -->
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Location</label>
-          <select class="form-select" disabled><option>Bangalore</option></select>
+          <select class="form-select" disabled>
+            <option>Bangalore</option>
+          </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Make</label>
+          <label class="form-label">Make <span style="color:#ff6b6b;">*</span></label>
           <select class="form-select" name="make" id="make" required>
             <option value="">Select Make</option>
-            {% for brand in brands|sort %}
-              <option value="{{ brand }}" {% if prefill.make == brand %}selected{% endif %}>{{ brand }}</option>
+            {% for m in makes %}
+              <option value="{{ m }}" {% if form.make == m %}selected{% endif %}>{{ m }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Fuel Type</label>
-          <select class="form-select" name="fuel" id="fuel" required>
-            <option value="">Select Fuel</option>
-            {% for fuel in fuels %}
-              <option value="{{ fuel }}" {% if prefill.fuel == fuel %}selected{% endif %}>{{ fuel }}</option>
-            {% endfor %}
+          <label class="form-label">Fuel Type <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="fuel" id="fuel" required disabled>
+            <option value="">Select Make first</option>
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Model</label>
-          <select class="form-select" name="model" id="model" required {% if not prefill.make %}disabled{% endif %}>
-            <option value="">Select Model</option>
+          <label class="form-label">Model <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="model" id="model" required disabled>
+            <option value="">Select Fuel first</option>
           </select>
         </div>
       </div>
@@ -63,42 +84,44 @@
       <!-- Row 2: Variant, Owner, Mileage, Year -->
       <div class="row g-3 mb-3">
         <div class="col-md-3">
-          <label class="form-label">Variant / Suffix</label>
-          <select class="form-select" name="variant" id="variant" {% if not prefill.model %}disabled{% endif %}>
-            <option value="">Select Variant</option>
+          <label class="form-label">Variant / Suffix <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="variant" id="variant" required disabled>
+            <option value="">Select Model first</option>
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">No. of Owners</label>
+          <label class="form-label">No. of Owners <span style="color:#ff6b6b;">*</span></label>
           <select class="form-select" name="owner" required>
-            {% for owner in owners %}
-              <option value="{{ owner }}" {% if prefill.owner == owner %}selected{% endif %}>{{ owner }}</option>
+            <option value="">Select Owner</option>
+            {% for o in owners %}
+              <option value="{{ o }}" {% if form.owner == o %}selected{% endif %}>{{ o }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Mileage (KMs) *</label>
-          <input type="number" class="form-control" name="mileage" required min="0"
-                 value="{{ prefill.mileage }}" placeholder="e.g. 45000">
+          <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
+          <input type="number" class="form-control" name="mileage" required
+                 min="0" max="500000" value="{{ form.mileage or '' }}" placeholder="e.g. 45000">
         </div>
         <div class="col-md-3">
-          <label class="form-label">Year *</label>
+          <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
           <select class="form-select" name="year" required>
             <option value="">Select Year</option>
             {% for y in years %}
-              <option value="{{ y }}" {% if prefill.year == y|string %}selected{% endif %}>{{ y }}</option>
+              <option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
           </select>
         </div>
       </div>
 
-      <!-- Row 3: Condition + Button -->
+      <!-- Row 3: Condition (centered) -->
       <div class="row g-3 mb-4">
         <div class="col-md-6 offset-md-3">
-          <label class="form-label">Condition</label>
+          <label class="form-label">Condition <span style="color:#ff6b6b;">*</span></label>
           <select class="form-select" name="condition" required>
+            <option value="">Select Condition</option>
             {% for c in conditions %}
-              <option value="{{ c }}" {% if prefill.condition == c %}selected{% endif %}>{{ c }}</option>
+              <option value="{{ c }}" {% if form.condition == c %}selected{% endif %}>{{ c }}</option>
             {% endfor %}
           </select>
         </div>
@@ -108,6 +131,7 @@
         GENERATE INTELLIGENCE
         <span class="credit-cost">(100 Credits)</span>
       </button>
+      <div class="credit-note">You have <strong style="color:#ffa500;">{{ session.credits|default(0) }} Credits</strong></div>
     </form>
   </div>
 </div>
@@ -115,97 +139,101 @@
 
 {% block scripts %}
 <script>
-  // Real per-model variants (injected from Flask)
-  const VARIANTS_BY_MODEL = {{ variants_by_model | tojson }};
+  // Car master data from Flask (single source of truth)
+  const CAR_DATA = {{ car_data_json | safe }};
+  const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
 
-  const MODELS_BY_BRAND = {{ {
-    'Audi': ['A3','A4','A6','Q3','Q5','Q7'],
-    'BMW': ['3 Series','5 Series','X1','X3','X5','X7'],
-    'Ford': ['EcoSport','Endeavour','Figo','Freestyle'],
-    'Honda': ['Amaze','City','Civic','Elevate','Jazz','WR-V'],
-    'Hyundai': ['Alcazar','Aura','Creta','Exter','Grand i10 Nios','i20','Kona Electric','Tucson','Venue','Verna'],
-    'Jaguar': ['F-Pace','XE','XF'],
-    'Kia': ['Carens','Carnival','EV6','Seltos','Sonet'],
-    'Land Rover': ['Defender','Discovery','Range Rover','Range Rover Evoque','Range Rover Sport'],
-    'Lexus': ['ES','LX','NX','RX'],
-    'Mahindra': ['Bolero','Scorpio','Scorpio N','Thar','XUV300','XUV400','XUV700','XUV3XO'],
-    'Maruti Suzuki': ['Alto K10','Baleno','Brezza','Celerio','Dzire','Eeco','Ertiga','Fronx','Grand Vitara','Ignis','Jimny','S-Presso','Swift','Wagon R','XL6'],
-    'Mercedes-Benz': ['A-Class','C-Class','E-Class','GLA','GLC','GLE','S-Class'],
-    'MG': ['Astor','Gloster','Hector','Hector Plus','ZS EV'],
-    'Nissan': ['Kicks','Magnite'],
-    'Renault': ['Kiger','Kwid','Triber'],
-    'Skoda': ['Kushaq','Octavia','Slavia','Superb'],
-    'Tata': ['Altroz','Harrier','Nexon','Nexon EV','Punch','Safari','Tiago','Tigor'],
-    'Toyota': ['Camry','Fortuner','Glanza','Hilux','Hyryder','Innova Crysta','Innova Hycross','Vellfire'],
-    'Volkswagen': ['Taigun','Tiguan','Virtus'],
-    'Volvo': ['XC40','XC60','XC90']
-  }|tojson }};
-
-  const makeEl = document.getElementById('make');
-  const fuelEl = document.getElementById('fuel');
-  const modelEl = document.getElementById('model');
+  const makeEl    = document.getElementById('make');
+  const fuelEl    = document.getElementById('fuel');
+  const modelEl   = document.getElementById('model');
   const variantEl = document.getElementById('variant');
 
-  const PREFILL_MODEL = {{ prefill.model | tojson }};
-  const PREFILL_VARIANT = {{ prefill.variant | tojson }};
+  // Prefill values from server (set when form re-renders or user navigates back)
+  const PREFILL = {
+    make:    {{ (form.make    or '')|tojson }},
+    fuel:    {{ (form.fuel    or '')|tojson }},
+    model:   {{ (form.model   or '')|tojson }},
+    variant: {{ (form.variant or '')|tojson }}
+  };
 
-  function refreshModels(preserveSelection) {
-    const make = makeEl.value;
-    const fuel = fuelEl.value;
-    const currentModel = modelEl.value;
-    modelEl.innerHTML = '<option value="">Select Model</option>';
-
-    if (make && fuel && MODELS_BY_BRAND[make]) {
-      const models = [...MODELS_BY_BRAND[make]].sort((a,b)=>a.localeCompare(b));
-      models.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m; opt.textContent = m;
-        if (preserveSelection && m === currentModel) opt.selected = true;
-        modelEl.appendChild(opt);
-      });
-      modelEl.disabled = false;
-    } else {
-      modelEl.disabled = true;
-      variantEl.innerHTML = '<option value="">Select Variant</option>';
-      variantEl.disabled = true;
-    }
-    refreshVariants(preserveSelection);
+  function resetSelect(el, placeholder) {
+    el.innerHTML = '<option value="">' + placeholder + '</option>';
+    el.disabled = true;
   }
 
-  function refreshVariants(preserveSelection) {
-    const model = modelEl.value;
-    const currentVariant = variantEl.value;
-    variantEl.innerHTML = '<option value="">Select Variant</option>';
-    if (model && VARIANTS_BY_MODEL[model]) {
-      const variants = [...VARIANTS_BY_MODEL[model]].sort((a,b)=>a.localeCompare(b));
-      variants.forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = v; opt.textContent = v;
-        if (preserveSelection && v === currentVariant) opt.selected = true;
-        variantEl.appendChild(opt);
-      });
-      variantEl.disabled = false;
-    } else {
-      variantEl.disabled = true;
-    }
+  function populateFuels(make, preselect) {
+    resetSelect(fuelEl, 'Select Fuel');
+    if (!make || !CAR_DATA[make]) return;
+    const fuelSet = new Set();
+    Object.values(CAR_DATA[make]).forEach(mdl => {
+      (mdl.fuels || []).forEach(f => fuelSet.add(f));
+    });
+    const ordered = FUEL_ORDER.filter(f => fuelSet.has(f));
+    ordered.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f;
+      opt.textContent = f;
+      if (preselect && f === preselect) opt.selected = true;
+      fuelEl.appendChild(opt);
+    });
+    fuelEl.disabled = false;
   }
 
-  makeEl.addEventListener('change', () => refreshModels(false));
-  fuelEl.addEventListener('change', () => refreshModels(false));
-  modelEl.addEventListener('change', () => refreshVariants(false));
+  function populateModels(make, fuel, preselect) {
+    resetSelect(modelEl, 'Select Model');
+    if (!make || !fuel || !CAR_DATA[make]) return;
+    const models = Object.keys(CAR_DATA[make])
+      .filter(m => (CAR_DATA[make][m].fuels || []).includes(fuel))
+      .sort();
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      if (preselect && m === preselect) opt.selected = true;
+      modelEl.appendChild(opt);
+    });
+    modelEl.disabled = false;
+  }
 
-  // On load — if prefilled from dashboard back button, restore cascade
-  window.addEventListener('DOMContentLoaded', () => {
-    if (makeEl.value && fuelEl.value) {
-      refreshModels(false);
-      if (PREFILL_MODEL) {
-        modelEl.value = PREFILL_MODEL;
-        refreshVariants(false);
-        if (PREFILL_VARIANT) {
-          variantEl.value = PREFILL_VARIANT;
+  function populateVariants(make, model, preselect) {
+    resetSelect(variantEl, 'Select Variant');
+    if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
+    const variants = [...(CAR_DATA[make][model].variants || [])].sort();
+    variants.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      if (preselect && v === preselect) opt.selected = true;
+      variantEl.appendChild(opt);
+    });
+    variantEl.disabled = false;
+  }
+
+  // Listeners — cascade resets on each level change
+  makeEl.addEventListener('change', function() {
+    populateFuels(this.value, null);
+    resetSelect(modelEl, 'Select Fuel first');
+    resetSelect(variantEl, 'Select Model first');
+  });
+  fuelEl.addEventListener('change', function() {
+    populateModels(makeEl.value, this.value, null);
+    resetSelect(variantEl, 'Select Model first');
+  });
+  modelEl.addEventListener('change', function() {
+    populateVariants(makeEl.value, this.value, null);
+  });
+
+  // Initialize from prefill (on error re-render or back-button navigation)
+  (function init() {
+    if (PREFILL.make) {
+      populateFuels(PREFILL.make, PREFILL.fuel);
+      if (PREFILL.fuel) {
+        populateModels(PREFILL.make, PREFILL.fuel, PREFILL.model);
+        if (PREFILL.model) {
+          populateVariants(PREFILL.make, PREFILL.model, PREFILL.variant);
         }
       }
     }
-  });
+  })();
 </script>
 {% endblock %}
