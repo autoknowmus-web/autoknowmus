@@ -1,293 +1,470 @@
 {% extends "layout.html" %}
-{% block title %}AutoKnowMus - Used Car Price Intelligence{% endblock %}
 
-{% block extra_head %}
-<style>
-  /* NO top navbar on landing — per UI rule */
-  body { padding: 0; }
+{% block title %}AutoKnowMus - Used Car Price Intelligence for Bangalore{% endblock %}
 
-  .landing-hero { text-align: center; padding: 40px 20px 20px; }
-  .hero-logo { display: inline-flex; align-items: center; margin-bottom: 10px; }
-  .hero-shield { width: 46px; height: 46px; margin-right: 12px; }
-  .hero-title { font-size: 2.3rem; font-weight: 700; letter-spacing: -1px; margin: 0; }
-  .hero-sub { color: #b0b0b0; max-width: 700px; margin: 10px auto 0; font-size: 0.95rem; line-height: 1.5; }
-
-  .landing-grid {
-    display: grid;
-    grid-template-columns: 1fr 400px 1fr;
-    gap: 25px;
-    padding: 15px 40px 40px;
-    max-width: 1400px;
-    margin: 0 auto;
-    align-items: stretch;
-  }
-  @media (max-width: 991px) {
-    .landing-grid { grid-template-columns: 1fr; }
-  }
-
-  .testimonial-col, .login-col {
-    display: flex; flex-direction: column; height: 100%;
-  }
-
-  .testimonial-col-title {
-    text-align: center; font-size: 1rem; font-weight: 600;
-    margin-bottom: 10px;
-  }
-  .testimonial-col-title.seller { color: #28a745; }
-  .testimonial-col-title.buyer { color: #4e54ff; }
-
-  /* Full colored borders per UI rule */
-  .testimonial-card {
-    background: #1a1d24; border-radius: 8px;
-    padding: 14px; margin-bottom: 10px; flex: 1;
-    display: flex; flex-direction: column; justify-content: space-between;
-  }
-  .testimonial-card:last-child { margin-bottom: 0; }
-  .testimonial-card.seller { border: 1.5px solid #28a745; }
-  .testimonial-card.buyer  { border: 1.5px solid #4e54ff; }
-
-  .testimonial-stars { color: #ffa500; font-size: 0.78rem; margin-bottom: 5px; }
-  .testimonial-quote {
-    color: #d0d0d0; font-style: italic; margin: 0 0 10px;
-    line-height: 1.4; font-size: 0.82rem;
-  }
-  .testimonial-author {
-    display: flex; align-items: center; gap: 9px;
-    border-top: 1px solid #2a2d34; padding-top: 8px;
-  }
-  .testimonial-avatar {
-    width: 30px; height: 30px; border-radius: 50%; background: #28a745;
-    display: flex; align-items: center; justify-content: center;
-    color: #fff; font-weight: 700; font-size: 0.75rem; flex-shrink: 0;
-  }
-  .testimonial-avatar.buyer-avatar { background: #4e54ff; }
-  .testimonial-name { font-weight: 600; color: #fff; font-size: 0.82rem; line-height: 1.2; }
-  .testimonial-meta { color: #888; font-size: 0.7rem; line-height: 1.2; }
-
-  /* Login card — stretches full column height */
-  .login-card {
-    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 10px;
-    padding: 22px 24px; height: 100%;
-    display: flex; flex-direction: column; justify-content: center;
-  }
-  .bonus-text {
-    color: #28a745; text-align: center; font-weight: 600;
-    margin-bottom: 16px; font-size: 0.88rem; line-height: 1.3;
-    white-space: normal;
-  }
-  .btn-google {
-    background: #1a1d24; border: 1px solid #444; color: #fff;
-    width: 100%; padding: 10px; border-radius: 6px; font-weight: 500; font-size: 0.9rem;
-  }
-  .btn-google:hover { background: #252830; color: #fff; }
-  .btn-login-primary {
-    background: #28a745; color: #fff; width: 100%; padding: 11px;
-    border-radius: 6px; font-weight: 600; border: none; margin-top: 8px;
-    font-size: 0.95rem;
-  }
-  .btn-login-primary:hover { background: #218838; color: #fff; }
-  .divider-or { text-align: center; color: #666; margin: 12px 0; font-size: 0.8rem; }
-  .divider-or::before, .divider-or::after {
-    content: ''; display: inline-block; width: 45px; height: 1px;
-    background: #444; vertical-align: middle; margin: 0 8px;
-  }
-  .phone-prefix {
-    background: #2a2d34; color: #b0b0b0; border: 1px solid #444;
-    padding: 7px 11px; border-radius: 6px 0 0 6px; font-size: 0.88rem;
-    display: flex; align-items: center;
-  }
-  .form-control-sm-dark {
-    background: #1a1d24 !important; border: 1px solid #444 !important;
-    color: #e6e6e6 !important; padding: 7px 11px; font-size: 0.88rem;
-    border-radius: 6px; width: 100%;
-  }
-  .form-control-sm-dark:focus {
-    outline: none; border-color: #28a745 !important;
-    box-shadow: 0 0 0 0.15rem rgba(40,167,69,0.25);
-  }
-
-  /* WhatsApp checkbox + conditional field (appears BELOW login button) */
-  .whatsapp-check {
-    display: flex; align-items: center; gap: 6px;
-    margin-top: 6px; font-size: 0.8rem; color: #b0b0b0; cursor: pointer;
-  }
-  .whatsapp-check input[type="checkbox"] {
-    accent-color: #25D366; cursor: pointer;
-  }
-  .whatsapp-icon { color: #25D366; font-size: 1rem; }
-
-  .wa-different-wrap {
-    margin-top: 10px; padding-top: 10px; border-top: 1px dashed #333;
-    display: none;
-  }
-  .wa-different-wrap.show { display: block; }
-  .wa-different-wrap label {
-    color: #25D366; font-size: 0.78rem; margin-bottom: 4px; display: block;
-  }
-</style>
-{% endblock %}
+{% block hide_navbar %}true{% endblock %}
 
 {% block content %}
-{# NO top navbar here — per UI rule (only hero logo) #}
+<style>
+  /* ===== LANDING PAGE SCOPED STYLES ===== */
+  body {
+    background: #0f1419;
+    color: #e9ecef;
+  }
 
-<div class="landing-hero">
-  <div class="hero-logo">
-    <svg class="hero-shield" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20 2 L36 8 V20 C36 29 28 36 20 38 C12 36 4 29 4 20 V8 Z" fill="#28a745"/>
-      <text x="20" y="28" text-anchor="middle" font-family="Segoe UI" font-size="22" font-weight="700" fill="#fff">A</text>
-    </svg>
-    <h1 class="hero-title">
-      <span class="brand-auto">Auto</span><span class="brand-know">Know</span><span class="brand-mus">Mus</span>
-    </h1>
-  </div>
-  <p class="hero-sub">
-    Real price transparency for Bangalore's used car market — make confident decisions whether you're buying or selling.
-  </p>
-</div>
+  .landing-wrapper {
+    min-height: 100vh;
+    padding: 40px 20px 60px;
+  }
 
-<div class="landing-grid">
+  /* Hero */
+  .hero-section {
+    text-align: center;
+    margin-bottom: 50px;
+  }
 
-  <!-- LEFT: Seller testimonials -->
-  <div class="testimonial-col">
-    <div class="testimonial-col-title seller">Read what Sellers have to say</div>
+  .hero-logo-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
 
-    <div class="testimonial-card seller">
-      <div class="testimonial-stars">★★★★★</div>
-      <p class="testimonial-quote">
-        "Dealer quoted ₹5.8L for my 2019 Baleno. AutoKnowMus showed real market was ₹6.7L — made an extra ₹85,000."
-      </p>
-      <div class="testimonial-author">
-        <div class="testimonial-avatar">RK</div>
-        <div>
-          <div class="testimonial-name">Rajesh Kumar</div>
-          <div class="testimonial-meta">Whitefield · Maruti Baleno</div>
-        </div>
-      </div>
-    </div>
+  .hero-shield {
+    width: 56px;
+    height: 56px;
+  }
 
-    <div class="testimonial-card seller">
-      <div class="testimonial-stars">★★★★★</div>
-      <p class="testimonial-quote">
-        "Got three different quotes for my Creta. The price report showed me which was fair — negotiated with confidence."
-      </p>
-      <div class="testimonial-author">
-        <div class="testimonial-avatar">PS</div>
-        <div>
-          <div class="testimonial-name">Priya Sharma</div>
-          <div class="testimonial-meta">Koramangala · Hyundai Creta</div>
-        </div>
-      </div>
-    </div>
+  .hero-brand {
+    font-size: 44px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .hero-brand .w { color: #ffffff; }
+  .hero-brand .b { color: #4e54ff; }
+  .hero-brand .g { color: #28a745; }
 
-    <div class="testimonial-card seller">
-      <div class="testimonial-stars">★★★★★</div>
-      <p class="testimonial-quote">
-        "Three dealers lowballed my Innova. AutoKnowMus data gave me leverage — ended up ₹1.1L above the best quote."
-      </p>
-      <div class="testimonial-author">
-        <div class="testimonial-avatar">AM</div>
-        <div>
-          <div class="testimonial-name">Arjun Menon</div>
-          <div class="testimonial-meta">Indiranagar · Toyota Innova</div>
-        </div>
-      </div>
-    </div>
-  </div>
+  .hero-tagline {
+    font-size: 17px;
+    color: #adb5bd;
+    max-width: 760px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
 
-  <!-- CENTER: Login card -->
-  <div class="login-col">
-    <div class="login-card">
-      <div class="bonus-text">Signup &amp; Receive 500 Bonus Credits for 5 Free Searches</div>
-      <a href="{{ url_for('login') }}" class="btn btn-google">
-        <i class="bi bi-google"></i> Continue with Google
-      </a>
-      <div class="divider-or">OR</div>
-      <input type="email" class="form-control-sm-dark mb-2" placeholder="Email">
-      <input type="password" class="form-control-sm-dark mb-2" placeholder="Password">
-      <div class="d-flex mb-1">
-        <span class="phone-prefix">+91</span>
-        <input type="tel" id="phoneNum" class="form-control-sm-dark" style="border-radius: 0 6px 6px 0;" placeholder="Phone number">
-      </div>
-      <label class="whatsapp-check">
-        <input type="checkbox" id="isWhatsapp" checked>
-        <i class="bi bi-whatsapp whatsapp-icon"></i>
-        This number is on WhatsApp
-      </label>
+  /* 3-column layout */
+  .columns-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+    max-width: 1320px;
+    margin: 0 auto;
+  }
 
-      <button class="btn-login-primary mt-2">Login</button>
-
-      <!-- WhatsApp-different field BELOW login button -->
-      <div class="wa-different-wrap" id="waDifferent">
-        <label><i class="bi bi-whatsapp"></i> WhatsApp number (if different)</label>
-        <div class="d-flex">
-          <span class="phone-prefix">+91</span>
-          <input type="tel" class="form-control-sm-dark" style="border-radius: 0 6px 6px 0;" placeholder="WhatsApp number">
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- RIGHT: Buyer testimonials -->
-  <div class="testimonial-col">
-    <div class="testimonial-col-title buyer">Read what Buyers have to say</div>
-
-    <div class="testimonial-card buyer">
-      <div class="testimonial-stars">★★★★★</div>
-      <p class="testimonial-quote">
-        "Seller wanted ₹9.5L for a Honda City. AutoKnowMus showed ₹8.2L was fair — negotiated down, saved over a lakh."
-      </p>
-      <div class="testimonial-author">
-        <div class="testimonial-avatar buyer-avatar">SN</div>
-        <div>
-          <div class="testimonial-name">Sneha Nair</div>
-          <div class="testimonial-meta">HSR Layout · Honda City</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="testimonial-card buyer">
-      <div class="testimonial-stars">★★★★★</div>
-      <p class="testimonial-quote">
-        "Was about to pay ₹12L for a 2018 XUV500 at a showroom. AutoKnowMus said ₹10.5L — walked away."
-      </p>
-      <div class="testimonial-author">
-        <div class="testimonial-avatar buyer-avatar">VR</div>
-        <div>
-          <div class="testimonial-name">Vikram Reddy</div>
-          <div class="testimonial-meta">Jayanagar · Mahindra XUV500</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="testimonial-card buyer">
-      <div class="testimonial-stars">★★★★★</div>
-      <p class="testimonial-quote">
-        "Ran the seller's Swift price through AutoKnowMus. It was ₹40K above market — brought it down before closing."
-      </p>
-      <div class="testimonial-author">
-        <div class="testimonial-avatar buyer-avatar">KI</div>
-        <div>
-          <div class="testimonial-name">Kavya Iyer</div>
-          <div class="testimonial-meta">Electronic City · Maruti Swift</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-  // WhatsApp-different field toggle (appears below Login button)
-  const waCheck = document.getElementById('isWhatsapp');
-  const waWrap = document.getElementById('waDifferent');
-  waCheck.addEventListener('change', () => {
-    if (waCheck.checked) {
-      waWrap.classList.remove('show');
-    } else {
-      waWrap.classList.add('show');
+  @media (max-width: 992px) {
+    .columns-grid {
+      grid-template-columns: 1fr;
     }
-  });
+  }
+
+  .col-panel {
+    border-radius: 14px;
+    padding: 26px 22px;
+    background: transparent;
+  }
+
+  .col-seller {
+    border: 2px solid #28a745;
+  }
+
+  .col-login {
+    border: 2px solid #ffffff;
+    background: #16181d;
+  }
+
+  .col-buyer {
+    border: 2px solid #4e54ff;
+  }
+
+  .col-heading {
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 22px;
+  }
+
+  .col-seller .col-heading { color: #28a745; }
+  .col-buyer  .col-heading { color: #4e54ff; }
+
+  /* Testimonial cards — NO borders per spec */
+  .testimonial {
+    background: transparent;
+    padding: 14px 6px 20px;
+    margin-bottom: 4px;
+    border: none;
+  }
+  .testimonial + .testimonial {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 18px;
+    margin-top: 14px;
+  }
+
+  .stars {
+    color: #ffa500;
+    font-size: 14px;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+
+  .testimonial-quote {
+    color: #e9ecef;
+    font-size: 14px;
+    font-style: italic;
+    line-height: 1.55;
+    margin-bottom: 14px;
+  }
+
+  .testimonial-author {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .col-seller .avatar { background: #28a745; }
+  .col-buyer  .avatar { background: #4e54ff; }
+
+  .author-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .author-meta {
+    font-size: 12px;
+    color: #adb5bd;
+  }
+
+  /* Login column */
+  .login-bonus {
+    color: #ffa500;
+    font-weight: 600;
+    text-align: center;
+    font-size: 15px;
+    margin-bottom: 18px;
+    line-height: 1.5;
+  }
+
+  .btn-google {
+    width: 100%;
+    background: #16181d;
+    color: #fff;
+    border: 1px solid #495057;
+    padding: 11px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-decoration: none;
+    transition: border-color 0.15s ease;
+  }
+  .btn-google:hover {
+    border-color: #fff;
+    color: #fff;
+    text-decoration: none;
+  }
+
+  .divider-or {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: #6c757d;
+    font-size: 13px;
+    margin: 18px 0;
+  }
+  .divider-or::before,
+  .divider-or::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #343a40;
+  }
+
+  .form-label-sm {
+    display: block;
+    font-size: 12px;
+    color: #adb5bd;
+    margin-bottom: 4px;
+    margin-left: 2px;
+  }
+
+  .form-control-dark {
+    width: 100%;
+    background: #0f1419;
+    border: 1px solid #343a40;
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  .form-control-dark:focus {
+    outline: none;
+    border-color: #4e54ff;
+  }
+  .form-control-dark::placeholder {
+    color: #6c757d;
+  }
+
+  /* GLOBAL disabled/readonly styling per standing rule #9 */
+  .form-control-dark:disabled,
+  .form-control-dark[readonly] {
+    background: #1a1d24 !important;
+    color: #6c757d !important;
+    cursor: not-allowed;
+    border-color: #2a2e35;
+  }
+
+  .phone-row {
+    display: flex;
+    gap: 0;
+    margin-bottom: 12px;
+  }
+  .phone-prefix {
+    background: #1a1d24;
+    border: 1px solid #343a40;
+    border-right: none;
+    color: #adb5bd;
+    padding: 10px 12px;
+    border-radius: 6px 0 0 6px;
+    font-size: 14px;
+  }
+  .phone-row .form-control-dark {
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 0;
+  }
+
+  .wa-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0 6px;
+    font-size: 13px;
+    color: #e9ecef;
+  }
+  .wa-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #28a745;
+    cursor: pointer;
+  }
+  .wa-icon {
+    color: #25d366;
+    font-size: 16px;
+  }
+
+  .btn-login {
+    width: 100%;
+    background: #28a745;
+    color: #fff;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    margin-top: 6px;
+    cursor: pointer;
+  }
+  .btn-login:hover {
+    background: #218838;
+  }
+</style>
+
+<div class="landing-wrapper">
+
+  <!-- HERO -->
+  <div class="hero-section">
+    <div class="hero-logo-wrap">
+      <svg class="hero-shield" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <path d="M32 4 L56 14 V32 C56 46 45 56 32 60 C19 56 8 46 8 32 V14 Z"
+              fill="#28a745" stroke="none"/>
+        <text x="32" y="42" text-anchor="middle"
+              font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#ffffff">A</text>
+      </svg>
+      <span class="hero-brand">
+        <span class="w">Auto</span><span class="b">Know</span><span class="g">Mus</span>
+      </span>
+    </div>
+    <div class="hero-tagline">
+      AutoKnowMus cuts through market opacity with real price transparency—helping you avoid overpaying and ensuring you sell at the right price, at the right time
+    </div>
+  </div>
+
+  <!-- 3-COLUMN LAYOUT -->
+  <div class="columns-grid">
+
+    <!-- SELLER TESTIMONIALS -->
+    <div class="col-panel col-seller">
+      <div class="col-heading">Read what Sellers have to say</div>
+
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <div class="testimonial-quote">"Dealer quoted ₹5.8L for my 2019 Baleno. AutoKnowMus showed real market was ₹6.7L — made an extra ₹85,000."</div>
+        <div class="testimonial-author">
+          <div class="avatar">RK</div>
+          <div>
+            <div class="author-name">Rajesh Kumar</div>
+            <div class="author-meta">Whitefield · Maruti Baleno</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <div class="testimonial-quote">"Got three different quotes for my Creta. The price report showed me which was fair — negotiated with confidence."</div>
+        <div class="testimonial-author">
+          <div class="avatar">PS</div>
+          <div>
+            <div class="author-name">Priya Sharma</div>
+            <div class="author-meta">Koramangala · Hyundai Creta</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <div class="testimonial-quote">"Three dealers lowballed my Innova. AutoKnowMus data gave me leverage — ended up ₹1.1L above the best quote."</div>
+        <div class="testimonial-author">
+          <div class="avatar">AM</div>
+          <div>
+            <div class="author-name">Arjun Menon</div>
+            <div class="author-meta">Indiranagar · Toyota Innova</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="col-panel col-login">
+      <div class="login-bonus">Signup &amp; Receive 500 Bonus Credits for 5 Free Searches</div>
+
+      <a href="{{ url_for('login') }}" class="btn-google">
+        <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4c-7.3 0-13.7 4-17.7 10.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.5-4.6 2.4-7.2 2.4-5.3 0-9.7-3.4-11.3-8l-6.5 5C9.4 40 16.1 44 24 44z"/>
+          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.5l6.2 5.2c-.4.4 6.7-4.9 6.7-14.7 0-1.2-.1-2.4-.6-3.5z"/>
+        </svg>
+        Continue with Google
+      </a>
+
+      <div class="divider-or">OR</div>
+
+      <form method="POST" action="{{ url_for('manual_login') }}" id="loginForm">
+        <input type="text" name="name" class="form-control-dark" placeholder="Full name" required>
+        <input type="email" name="email" class="form-control-dark" placeholder="Email" required>
+        <input type="password" name="password" class="form-control-dark" placeholder="Password" required>
+
+        <div class="phone-row">
+          <span class="phone-prefix">+91</span>
+          <input type="tel" name="phone" id="phoneInput" class="form-control-dark" placeholder="Phone number" pattern="[0-9]{10}" maxlength="10" required>
+        </div>
+
+        <label class="wa-row">
+          <input type="checkbox" id="waCheckbox" name="is_whatsapp" value="1" checked>
+          <span class="wa-icon">💬</span>
+          <span>This number is on WhatsApp</span>
+        </label>
+
+        <input type="tel" name="whatsapp_phone" id="waPhoneInput" class="form-control-dark" placeholder="WhatsApp number (if different)" pattern="[0-9]{10}" maxlength="10" disabled>
+
+        <button type="submit" class="btn-login">Login</button>
+      </form>
+    </div>
+
+    <!-- BUYER TESTIMONIALS -->
+    <div class="col-panel col-buyer">
+      <div class="col-heading">Read what Buyers have to say</div>
+
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <div class="testimonial-quote">"Seller wanted ₹9.5L for a Honda City. AutoKnowMus showed ₹8.2L was fair — negotiated down, saved over a lakh."</div>
+        <div class="testimonial-author">
+          <div class="avatar">SN</div>
+          <div>
+            <div class="author-name">Sneha Nair</div>
+            <div class="author-meta">HSR Layout · Honda City</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <div class="testimonial-quote">"Was about to pay ₹12L for a 2018 XUV500 at a showroom. AutoKnowMus said ₹10.5L — walked away."</div>
+        <div class="testimonial-author">
+          <div class="avatar">VR</div>
+          <div>
+            <div class="author-name">Vikram Reddy</div>
+            <div class="author-meta">Jayanagar · Mahindra XUV500</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial">
+        <div class="stars">★★★★★</div>
+        <div class="testimonial-quote">"Ran the seller's Swift price through AutoKnowMus. It was ₹40K above market — brought it down before closing."</div>
+        <div class="testimonial-author">
+          <div class="avatar">KI</div>
+          <div>
+            <div class="author-name">Kavya Iyer</div>
+            <div class="author-meta">Electronic City · Maruti Swift</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // WhatsApp field toggle: checked = disabled/greyed, unchecked = editable
+  (function() {
+    const cb = document.getElementById('waCheckbox');
+    const waField = document.getElementById('waPhoneInput');
+    const phoneField = document.getElementById('phoneInput');
+
+    function syncWaField() {
+      if (cb.checked) {
+        // Mirror the primary phone number into placeholder context
+        waField.value = phoneField.value || '';
+        waField.disabled = true;
+      } else {
+        waField.disabled = false;
+        waField.value = '';
+        waField.focus();
+      }
+    }
+
+    cb.addEventListener('change', syncWaField);
+    phoneField.addEventListener('input', function() {
+      if (cb.checked) waField.value = phoneField.value;
+    });
+
+    // Initial sync
+    syncWaField();
+  })();
 </script>
 {% endblock %}
