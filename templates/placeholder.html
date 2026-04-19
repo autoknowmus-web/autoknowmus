@@ -4,29 +4,28 @@
 {% block extra_head %}
 <style>
   .placeholder-wrap {
-    padding: 60px 20px;
-    max-width: 600px;
+    padding: 40px 20px;
+    max-width: 700px;
     margin: 0 auto;
     text-align: center;
   }
   .placeholder-wrap h1 {
     color: #fff;
-    font-size: 2rem;
+    font-size: 1.8rem;
     margin-bottom: 1rem;
   }
-  .placeholder-wrap p {
-    color: #b0b0b0;
+  .placeholder-wrap .msg {
+    color: #cfd3da;
     font-size: 1.05rem;
-    margin-bottom: 2rem;
+    line-height: 1.65;
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: left;
   }
-  .btn-back {
-    background: #6c757d; border: none; color: #fff; font-weight: 500;
-    padding: 0.5rem 1.1rem; font-size: 0.95rem; border-radius: 6px;
-    text-decoration: none; display: inline-block;
-  }
-  .btn-back:hover { background: #5a6268; color: #fff; }
   .back-wrap {
-    max-width: 600px; margin: 1.5rem auto 0; padding: 0 1rem;
+    max-width: 700px; margin: 1.25rem auto 0; padding: 0 1rem;
   }
 </style>
 {% endblock %}
@@ -37,6 +36,6 @@
 </div>
 <div class="placeholder-wrap">
   <h1>{{ page_title }}</h1>
-  <p>{{ message }}</p>
+  <div class="msg">{{ message | safe }}</div>
 </div>
 {% endblock %}
