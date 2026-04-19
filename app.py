@@ -212,10 +212,11 @@ def signup():
     if not PHONE_RE.match(form['phone']):
         return render_template('signup.html', form=form, error='Please enter a valid 10-digit phone number.')
 
+    # Duplicate email check — single message via URL param, no flash()
     existing = get_user_by_email(form['email'])
     if existing:
-        flash('An account with that email already exists. Please log in.', 'info')
-        return redirect(url_for('index', email=form['email'], error='Account exists. Please log in.'))
+        return redirect(url_for('index', email=form['email'],
+                                error='An account with that email already exists. Please log in.'))
 
     if form['wa_same']:
         whatsapp_final = form['phone']
