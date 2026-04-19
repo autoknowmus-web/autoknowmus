@@ -11,7 +11,8 @@ from supabase import create_client, Client
 
 from car_data import (
     CAR_DATA, get_makes, get_models, get_variants, get_fuels,
-    compute_base_valuation, compute_price_range, adjust_with_deals
+    compute_base_valuation, compute_price_range, adjust_with_deals,
+    get_base_price, CURRENT_YEAR
 )
 
 app = Flask(__name__)
@@ -27,6 +28,51 @@ def firstname_filter(full_name):
     if not full_name:
         return ''
     return str(full_name).split(' ')[0]
+
+
+@app.template_filter('inr')
+def inr_filter(value):
+    """Format an integer as Indian-comma rupee string. 485000 -> '4,85,000'."""
+    if value is None:
+        return '—'
+    try:
+        n = int(value)
+    except (ValueError, TypeError):
+        return str(value)
+    s = str(abs(n))
+    if len(s) <= 3:
+        body = s
+    else:
+        last3 = s[-3:]
+        rest = s[:-3]
+        # group rest by 2s from the right
+        groups = []
+        while len(rest) > 2:
+            groups.insert(0, rest[-2:])
+            rest = rest[:-2]
+        if rest:
+            groups.insert(0, rest)
+        body = ','.join(groups) + ',' + last3
+    return ('-' if n < 0 else '') + body
+
+
+@app.template_filter('lakh')
+def lakh_filter(value):
+    """Convert integer to Lakh/Crore shorthand. 485000 -> '4.85 Lakh'."""
+    if value is None:
+        return '—'
+    try:
+        n = int(value)
+    except (ValueError, TypeError):
+        return str(value)
+    if n >= 10000000:  # 1 crore
+        return f"{n / 10000000:.2f} Crore"
+    if n >= 100000:  # 1 lakh
+        return f"{n / 100000:.2f} Lakh"
+    if n >= 1000:
+        return f"{n / 1000:.1f} K"
+    return str(n)
+
 
 # ---------- Supabase ----------
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
@@ -52,8 +98,14 @@ CONDITIONS = ['Excellent', 'Good', 'Fair']
 OWNERS = ['1st Owner', '2nd Owner', '3rd Owner or more']
 YEAR_START = 2011
 YEAR_END = 2026
-YEARS = list(range(YEAR_END, YEAR_START - 1, -1))  # newest first
+YEARS = list(range(YEAR_END, YEAR_START - 1, -1))
 VALUATION_COST = 100
+
+# Brand popularity tiers (drives Demand KPI and Days-to-Sell)
+HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
+MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
+# Luxury brands get lower-volume demand but higher price
+LUXURY_BRANDS = {'Audi', 'BMW', 'Mercedes-Benz', 'Jaguar', 'Land Rover', 'Lexus', 'Volvo'}
 
 
 def hash_password(plain: str) -> str:
@@ -163,7 +215,6 @@ def login_required(f):
     return decorated
 
 def log_credit_transaction(user_id, type_, description, amount, balance_after):
-    """Record a credit movement in the transactions table."""
     try:
         supabase.table('transactions').insert({
             'user_id': user_id,
@@ -176,8 +227,7 @@ def log_credit_transaction(user_id, type_, description, amount, balance_after):
         app.logger.error(f"Failed to log transaction: {e}")
 
 def fetch_similar_deals(make, model, year, fuel, window_years=2):
-    """Query verified deals for same Make+Model, similar year and same fuel.
-    Returns a list of sale_price integers."""
+    """Verified deals for same Make+Model, nearby year, same fuel."""
     try:
         year_low = int(year) - window_years
         year_high = int(year) + window_years
@@ -194,6 +244,134 @@ def fetch_similar_deals(make, model, year, fuel, window_years=2):
     except Exception as e:
         app.logger.warning(f"fetch_similar_deals failed: {e}")
         return []
+
+# ---------- Dashboard computations ----------
+
+def compute_demand(make, year):
+    """Return 'HIGH' / 'MEDIUM' / 'LOW' based on brand popularity & age."""
+    age = max(0, CURRENT_YEAR - int(year))
+    if make in HIGH_DEMAND_BRANDS:
+        if age <= 7:
+            return 'HIGH'
+        elif age <= 12:
+            return 'MEDIUM'
+        return 'LOW'
+    if make in MEDIUM_DEMAND_BRANDS:
+        if age <= 5:
+            return 'MEDIUM'
+        return 'LOW'
+    if make in LUXURY_BRANDS:
+        if age <= 6:
+            return 'MEDIUM'
+        return 'LOW'
+    return 'LOW'
+
+
+def compute_days_to_sell(demand, price):
+    """Days-to-sell window based on demand and price tier (15-45 days)."""
+    # Price tier bands in ₹
+    if price < 500000:
+        price_tier = 'budget'
+    elif price < 1500000:
+        price_tier = 'mid'
+    elif price < 3500000:
+        price_tier = 'premium'
+    else:
+        price_tier = 'luxury'
+
+    base_days = {
+        ('HIGH', 'budget'):   15,
+        ('HIGH', 'mid'):      18,
+        ('HIGH', 'premium'):  25,
+        ('HIGH', 'luxury'):   32,
+        ('MEDIUM','budget'):  22,
+        ('MEDIUM','mid'):     28,
+        ('MEDIUM','premium'): 35,
+        ('MEDIUM','luxury'):  40,
+        ('LOW',   'budget'):  30,
+        ('LOW',   'mid'):     35,
+        ('LOW',   'premium'): 40,
+        ('LOW',   'luxury'):  45,
+    }
+    return base_days.get((demand, price_tier), 30)
+
+
+def compute_depreciation_series(current_price, days=90):
+    """
+    Return list of (day_offset, price) tuples for the next `days` days.
+    Uses a gentle logarithmic curve — roughly ~5% over 90 days.
+    Day 0 = current_price. Day `days` ≈ current_price * 0.95.
+    """
+    import math
+    series = []
+    for d in range(0, days + 1):
+        # log-ish gentle decay; at d=90, multiplier ≈ 0.95
+        frac = d / days if days else 0
+        # Use a concave curve: faster drop early, slower later
+        decay = 1.0 - 0.05 * (1 - math.exp(-2.5 * frac))
+        price = int(round(current_price * decay))
+        series.append({'day': d, 'price': price})
+    return series
+
+
+def compute_buyer_distribution(price_low, price_high, confidence):
+    """
+    Return % distribution of buyers across 5 price bands.
+    Bell-shaped curve peaked at the estimated price, wider when confidence is low.
+    """
+    # 5 bands: very_low, low, mid, high, very_high relative to range
+    if confidence >= 80:
+        distribution = [5, 20, 50, 20, 5]
+    elif confidence >= 65:
+        distribution = [8, 22, 40, 22, 8]
+    elif confidence >= 50:
+        distribution = [12, 22, 32, 22, 12]
+    else:
+        distribution = [15, 22, 26, 22, 15]
+
+    # Labels computed from price_low / price_high
+    if price_low and price_high and price_low < price_high:
+        span = price_high - price_low
+        boundaries = [
+            price_low,
+            price_low + span // 4,
+            price_low + span // 2,
+            price_low + (3 * span) // 4,
+            price_high,
+        ]
+    else:
+        boundaries = [0, 0, 0, 0, 0]
+
+    bands = [
+        {'label': f"Below {boundaries[0]}",                   'pct': distribution[0], 'color': '#6c757d'},
+        {'label': f"{boundaries[0]} – {boundaries[1]}",       'pct': distribution[1], 'color': '#ffa500'},
+        {'label': f"{boundaries[1]} – {boundaries[3]}",       'pct': distribution[2], 'color': '#28a745'},
+        {'label': f"{boundaries[3]} – {boundaries[4]}",       'pct': distribution[3], 'color': '#ffa500'},
+        {'label': f"Above {boundaries[4]}",                   'pct': distribution[4], 'color': '#6c757d'},
+    ]
+    return bands
+
+
+def get_market_stats(make, model):
+    """Return (verified_count, buyers_last_30d_est, avg_buyers_per_day_est)."""
+    try:
+        r = (supabase.table('deals')
+             .select('id', count='exact')
+             .eq('make', make)
+             .eq('model', model)
+             .eq('verified', True)
+             .execute())
+        verified_count = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"market_stats failed: {e}")
+        verified_count = 0
+
+    # Estimate buyers for now (Stage 3B will track real buyer searches)
+    # Rough heuristic: each verified deal implies ~3 buyers who looked
+    buyers_last_30d = max(5, verified_count * 3)
+    avg_buyers_per_day = round(buyers_last_30d / 30, 1)
+    return verified_count, buyers_last_30d, avg_buyers_per_day
+
 
 # ========== ROUTES ==========
 
@@ -528,16 +706,57 @@ def seller_dashboard(valuation_id):
         return render_template('placeholder.html', user=user, page_title='Valuation Not Found',
                                message='We could not find that valuation.')
 
-    msg = (f"Valuation #{val['id']} computed:<br>"
-           f"<strong>{val['year']} {val['make']} {val['model']} {val['variant']}</strong> "
-           f"({val['fuel']}, {val['mileage']} km, {val['condition']}, {val['owner']})<br><br>"
-           f"Estimated: ₹ {val['estimated_price']:,}<br>"
-           f"Range: ₹ {val['price_low']:,} — ₹ {val['price_high']:,}<br><br>"
-           f"<em>Full dashboard ships in Stage 3A Part 2.</em>")
-    return render_template('placeholder.html', user=user, page_title='Valuation Result', message=msg)
+    # Re-compute dashboard metrics from the stored valuation
+    estimated  = val['estimated_price']
+    price_low  = val['price_low']
+    price_high = val['price_high']
+
+    # Re-compute confidence from similar deals (cheap query)
+    similar_prices = fetch_similar_deals(
+        make=val['make'], model=val['model'],
+        year=val['year'], fuel=val['fuel']
+    )
+    _, confidence = adjust_with_deals(estimated, similar_prices)
+
+    # Demand, days-to-sell, depreciation, buyer distribution, market stats
+    demand       = compute_demand(val['make'], val['year'])
+    days_to_sell = compute_days_to_sell(demand, estimated)
+    depreciation = compute_depreciation_series(estimated, days=90)
+    buyer_dist   = compute_buyer_distribution(price_low, price_high, confidence)
+    verified_count, buyers_last_30d, avg_buyers_per_day = get_market_stats(val['make'], val['model'])
+
+    # Prefill dict for the back button (query string to /seller)
+    back_prefill = {
+        'make':      val['make'],
+        'fuel':      val['fuel'],
+        'model':     val['model'],
+        'variant':   val['variant'],
+        'year':      val['year'],
+        'owner':     val['owner'],
+        'mileage':   val['mileage'],
+        'condition': val['condition'],
+    }
+
+    return render_template(
+        'dashboard.html',
+        user=user,
+        val=val,
+        estimated=estimated,
+        price_low=price_low,
+        price_high=price_high,
+        confidence=confidence,
+        demand=demand,
+        days_to_sell=days_to_sell,
+        depreciation_json=json.dumps(depreciation),
+        buyer_dist=buyer_dist,
+        verified_count=verified_count,
+        buyers_last_30d=buyers_last_30d,
+        avg_buyers_per_day=avg_buyers_per_day,
+        back_prefill=back_prefill,
+    )
 
 
-# ---------- Stage 3 stubs (Buyer + Submit Deal + Credit History — ship in 3B/3C) ----------
+# ---------- Stage 3 stubs (Buyer + Submit Deal + Credit History) ----------
 
 @app.route('/buyer')
 @login_required
@@ -565,7 +784,7 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
-# ---------- DB health check (remove before public launch) ----------
+# ---------- DB health check ----------
 @app.route('/db-test')
 def db_test():
     try:
