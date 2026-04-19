@@ -2,16 +2,9 @@
 
 {% block title %}AutoKnowMus - Used Car Price Intelligence for Bangalore{% endblock %}
 
-{% block hide_navbar %}true{% endblock %}
-
-{% block content %}
+{% block extra_head %}
 <style>
   /* ===== LANDING PAGE SCOPED STYLES ===== */
-  body {
-    background: #0f1419;
-    color: #e9ecef;
-  }
-
   .landing-wrapper {
     min-height: 100vh;
     padding: 40px 20px 60px;
@@ -35,14 +28,14 @@
     height: 56px;
   }
 
-  .hero-brand {
+  .hero-brand-text {
     font-size: 44px;
     font-weight: 700;
     letter-spacing: -0.5px;
   }
-  .hero-brand .w { color: #ffffff; }
-  .hero-brand .b { color: #4e54ff; }
-  .hero-brand .g { color: #28a745; }
+  .hero-brand-text .w { color: #ffffff; }
+  .hero-brand-text .b { color: #4e54ff; }
+  .hero-brand-text .g { color: #28a745; }
 
   .hero-tagline {
     font-size: 17px;
@@ -96,17 +89,15 @@
   .col-seller .col-heading { color: #28a745; }
   .col-buyer  .col-heading { color: #4e54ff; }
 
-  /* Testimonial cards — NO borders per spec */
+  /* Testimonial cards — NO individual borders per standing rule #29 */
   .testimonial {
     background: transparent;
     padding: 14px 6px 20px;
-    margin-bottom: 4px;
     border: none;
   }
   .testimonial + .testimonial {
     border-top: 1px solid rgba(255,255,255,0.06);
     padding-top: 18px;
-    margin-top: 14px;
   }
 
   .stars {
@@ -203,39 +194,8 @@
     background: #343a40;
   }
 
-  .form-label-sm {
-    display: block;
-    font-size: 12px;
-    color: #adb5bd;
-    margin-bottom: 4px;
-    margin-left: 2px;
-  }
-
-  .form-control-dark {
-    width: 100%;
-    background: #0f1419;
-    border: 1px solid #343a40;
-    color: #fff;
-    padding: 10px 12px;
-    border-radius: 6px;
-    font-size: 14px;
+  .landing-form .form-control {
     margin-bottom: 12px;
-  }
-  .form-control-dark:focus {
-    outline: none;
-    border-color: #4e54ff;
-  }
-  .form-control-dark::placeholder {
-    color: #6c757d;
-  }
-
-  /* GLOBAL disabled/readonly styling per standing rule #9 */
-  .form-control-dark:disabled,
-  .form-control-dark[readonly] {
-    background: #1a1d24 !important;
-    color: #6c757d !important;
-    cursor: not-allowed;
-    border-color: #2a2e35;
   }
 
   .phone-row {
@@ -245,14 +205,16 @@
   }
   .phone-prefix {
     background: #1a1d24;
-    border: 1px solid #343a40;
+    border: 1px solid #2a2d34;
     border-right: none;
     color: #adb5bd;
     padding: 10px 12px;
     border-radius: 6px 0 0 6px;
     font-size: 14px;
+    display: flex;
+    align-items: center;
   }
-  .phone-row .form-control-dark {
+  .phone-row .form-control {
     border-radius: 0 6px 6px 0;
     margin-bottom: 0;
   }
@@ -261,22 +223,24 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 10px 0 6px;
+    margin: 8px 0 12px;
     font-size: 13px;
     color: #e9ecef;
+    cursor: pointer;
   }
   .wa-row input[type="checkbox"] {
     width: 18px;
     height: 18px;
     accent-color: #28a745;
     cursor: pointer;
+    margin: 0;
   }
   .wa-icon {
     color: #25d366;
-    font-size: 16px;
+    font-size: 18px;
   }
 
-  .btn-login {
+  .btn-login-primary {
     width: 100%;
     background: #28a745;
     color: #fff;
@@ -288,23 +252,23 @@
     margin-top: 6px;
     cursor: pointer;
   }
-  .btn-login:hover {
+  .btn-login-primary:hover {
     background: #218838;
   }
 </style>
+{% endblock %}
 
+{% block content %}
 <div class="landing-wrapper">
 
   <!-- HERO -->
   <div class="hero-section">
     <div class="hero-logo-wrap">
       <svg class="hero-shield" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-        <path d="M32 4 L56 14 V32 C56 46 45 56 32 60 C19 56 8 46 8 32 V14 Z"
-              fill="#28a745" stroke="none"/>
-        <text x="32" y="42" text-anchor="middle"
-              font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#ffffff">A</text>
+        <path d="M32 4 L56 14 V32 C56 46 45 56 32 60 C19 56 8 46 8 32 V14 Z" fill="#28a745"/>
+        <text x="32" y="42" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#ffffff">A</text>
       </svg>
-      <span class="hero-brand">
+      <span class="hero-brand-text">
         <span class="w">Auto</span><span class="b">Know</span><span class="g">Mus</span>
       </span>
     </div>
@@ -373,25 +337,25 @@
 
       <div class="divider-or">OR</div>
 
-      <form method="POST" action="{{ url_for('manual_login') }}" id="loginForm">
-        <input type="text" name="name" class="form-control-dark" placeholder="Full name" required>
-        <input type="email" name="email" class="form-control-dark" placeholder="Email" required>
-        <input type="password" name="password" class="form-control-dark" placeholder="Password" required>
+      <form method="POST" action="{{ url_for('manual_login') }}" class="landing-form" id="loginForm">
+        <input type="text" name="name" class="form-control" placeholder="Full name" required>
+        <input type="email" name="email" class="form-control" placeholder="Email" required>
+        <input type="password" name="password" class="form-control" placeholder="Password" required>
 
         <div class="phone-row">
           <span class="phone-prefix">+91</span>
-          <input type="tel" name="phone" id="phoneInput" class="form-control-dark" placeholder="Phone number" pattern="[0-9]{10}" maxlength="10" required>
+          <input type="tel" name="phone" id="phoneInput" class="form-control" placeholder="Phone number" pattern="[0-9]{10}" maxlength="10" required>
         </div>
 
         <label class="wa-row">
           <input type="checkbox" id="waCheckbox" name="is_whatsapp" value="1" checked>
-          <span class="wa-icon">💬</span>
+          <span class="wa-icon"><i class="bi bi-whatsapp"></i></span>
           <span>This number is on WhatsApp</span>
         </label>
 
-        <input type="tel" name="whatsapp_phone" id="waPhoneInput" class="form-control-dark" placeholder="WhatsApp number (if different)" pattern="[0-9]{10}" maxlength="10" disabled>
+        <input type="tel" name="whatsapp_phone" id="waPhoneInput" class="form-control" placeholder="WhatsApp number (if different)" pattern="[0-9]{10}" maxlength="10" disabled>
 
-        <button type="submit" class="btn-login">Login</button>
+        <button type="submit" class="btn-login-primary">Login</button>
       </form>
     </div>
 
@@ -438,9 +402,11 @@
 
   </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-  // WhatsApp field toggle: checked = disabled/greyed, unchecked = editable
+  // WhatsApp field toggle: checked (default) = disabled/greyed, unchecked = editable
   (function() {
     const cb = document.getElementById('waCheckbox');
     const waField = document.getElementById('waPhoneInput');
@@ -448,7 +414,6 @@
 
     function syncWaField() {
       if (cb.checked) {
-        // Mirror the primary phone number into placeholder context
         waField.value = phoneField.value || '';
         waField.disabled = true;
       } else {
@@ -463,8 +428,7 @@
       if (cb.checked) waField.value = phoneField.value;
     });
 
-    // Initial sync
-    syncWaField();
+    syncWaField(); // initial state
   })();
 </script>
 {% endblock %}
