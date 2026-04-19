@@ -337,7 +337,7 @@
 
       <div class="divider-or">OR</div>
 
-      <form method="POST" action="{{ url_for('manual_login') }}" class="landing-form" id="loginForm">
+   <form method="GET" action="{{ url_for('login') }}" class="landing-form" id="loginForm">
         <input type="text" name="name" class="form-control" placeholder="Full name" required>
         <input type="email" name="email" class="form-control" placeholder="Email" required>
         <input type="password" name="password" class="form-control" placeholder="Password" required>
