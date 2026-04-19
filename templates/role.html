@@ -45,18 +45,33 @@
     font-weight: 500; text-align: center; margin-bottom: 10px; cursor: not-allowed;
   }
   .btn-disabled-coming .coming-soon { color: #ffa500; font-size: 0.8rem; font-weight: 600; }
+
+  /* Orange dismissible welcome alert (inline in case layout macro is missing) */
+  .welcome-alert {
+    background: #ff8c00; color: #fff; border: none; border-radius: 8px;
+    padding: 0.85rem 2.5rem 0.85rem 1rem; margin: 0 auto 1.5rem;
+    max-width: 900px; position: relative; font-size: 0.95rem; font-weight: 500;
+  }
+  .welcome-alert .btn-close-x {
+    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 0 0.25rem;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="role-wrap">
 
-  {# ORIGINAL welcome message — no (500 Credits) suffix #}
+  {# ORIGINAL welcome message text — no "(500 Credits)" suffix per standing rule #}
   {% if show_welcome %}
-    {{ orange_alert('Welcome! 500 bonus credits added for 5 free searches!') }}
+    <div class="welcome-alert" id="welcome-alert">
+      🎉 Welcome! 500 bonus credits added for 5 free searches!
+      <button type="button" class="btn-close-x" onclick="document.getElementById('welcome-alert').remove()" aria-label="Close">&times;</button>
+    </div>
   {% endif %}
 
-  <h2 class="greeting">Hello {{ session.user.name | firstname }}! Ready to make a smarter decision?</h2>
+  <h2 class="greeting">Hello {{ first_name }}! Ready to make a smarter decision?</h2>
 
   <div class="row g-4">
     <!-- Seller -->
