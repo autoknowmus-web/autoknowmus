@@ -3,7 +3,7 @@ import re
 import bcrypt
 from datetime import datetime
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from authlib.integrations.flask_client import OAuth
 from supabase import create_client, Client
 
@@ -49,7 +49,7 @@ def get_user_by_email(email: str):
         app.logger.error(f"get_user_by_email error: {e}")
         return None
 
-def get_user_by_id(user_id: str):
+def get_user_by_id(user_id):
     try:
         r = supabase.table('users').select('*').eq('id', user_id).limit(1).execute()
         return r.data[0] if r.data else None
@@ -57,31 +57,44 @@ def get_user_by_id(user_id: str):
         app.logger.error(f"get_user_by_id error: {e}")
         return None
 
-def create_user(name, email, password_hash=None, phone=None, whatsapp=None, google_id=None, credits=500):
+def create_user(name, email, password_hash=None, phone=None, whatsapp_phone=None,
+                is_whatsapp=True, google_id=None, auth_method='manual', credits=500):
     payload = {
         'name': name.strip(),
         'email': email.lower().strip(),
         'password_hash': password_hash,
         'phone': phone,
-        'whatsapp': whatsapp,
+        'whatsapp_phone': whatsapp_phone,
+        'is_whatsapp': is_whatsapp,
         'google_id': google_id,
+        'auth_method': auth_method,
         'credits': credits,
-        'created_at': datetime.utcnow().isoformat()
     }
+    # Strip None values so DB defaults kick in where relevant
+    payload = {k: v for k, v in payload.items() if v is not None}
     r = supabase.table('users').insert(payload).execute()
     return r.data[0] if r.data else None
 
-def update_user(user_id: str, fields: dict):
+def update_user(user_id, fields: dict):
     r = supabase.table('users').update(fields).eq('id', user_id).execute()
     return r.data[0] if r.data else None
+
+def touch_last_login(user_id):
+    try:
+        supabase.table('users').update(
+            {'last_login_at': datetime.utcnow().isoformat()}
+        ).eq('id', user_id).execute()
+    except Exception as e:
+        app.logger.warning(f"touch_last_login failed: {e}")
 
 def login_user_session(user: dict):
     session['user_id'] = user['id']
     session['user'] = {
-        'name': user['name'],
-        'email': user['email'],
+        'name': user.get('name'),
+        'email': user.get('email'),
         'credits': user.get('credits', 0)
     }
+    touch_last_login(user['id'])
 
 def current_user():
     """Fetch fresh user row from DB on every call — keeps credits in sync."""
@@ -90,8 +103,11 @@ def current_user():
         return None
     u = get_user_by_id(uid)
     if u:
-        # Refresh cached session display
-        session['user'] = {'name': u['name'], 'email': u['email'], 'credits': u.get('credits', 0)}
+        session['user'] = {
+            'name': u.get('name'),
+            'email': u.get('email'),
+            'credits': u.get('credits', 0)
+        }
     return u
 
 def login_required(f):
@@ -99,7 +115,7 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if not session.get('user_id'):
             # Session-migration path: if old session has 'user' dict but no user_id,
-            # silently create a DB row and log them in.
+            # silently create/link a DB row and log them in.
             legacy = session.get('user')
             if legacy and legacy.get('email'):
                 existing = get_user_by_email(legacy['email'])
@@ -109,7 +125,8 @@ def login_required(f):
                 migrated = create_user(
                     name=legacy.get('name', 'User'),
                     email=legacy['email'],
-                    credits=legacy.get('credits', 500)
+                    credits=legacy.get('credits', 500),
+                    auth_method='manual'
                 )
                 if migrated:
                     login_user_session(migrated)
@@ -141,7 +158,6 @@ def login():
         return redirect(url_for('index', error='No account found. Please sign up first.'))
 
     if not user.get('password_hash'):
-        # This email was registered via Google OAuth
         return redirect(url_for('index', error='This email is linked to Google. Please use "Continue with Google".'))
 
     if not verify_password(password, user['password_hash']):
@@ -178,18 +194,20 @@ def signup():
     if not PHONE_RE.match(form['phone']):
         return render_template('signup.html', form=form, error='Please enter a valid 10-digit phone number.')
 
-    # Duplicate check
+    # Duplicate email check
     existing = get_user_by_email(form['email'])
     if existing:
         flash('An account with that email already exists. Please log in.', 'info')
         return redirect(url_for('index', email=form['email'], error='Account exists. Please log in.'))
 
     # WhatsApp logic
-    whatsapp_final = form['phone'] if form['wa_same'] else form['whatsapp']
-    if not form['wa_same'] and whatsapp_final and not PHONE_RE.match(whatsapp_final):
-        return render_template('signup.html', form=form, error='Please enter a valid 10-digit WhatsApp number.')
-    if not whatsapp_final:
+    is_whatsapp = True  # user ticked "on WhatsApp" by virtue of filling it (we assume yes unless future UI adds a negation)
+    if form['wa_same']:
         whatsapp_final = form['phone']
+    else:
+        whatsapp_final = form['whatsapp'] or form['phone']
+        if form['whatsapp'] and not PHONE_RE.match(form['whatsapp']):
+            return render_template('signup.html', form=form, error='Please enter a valid 10-digit WhatsApp number.')
 
     # Create user
     try:
@@ -198,7 +216,9 @@ def signup():
             email=form['email'],
             password_hash=hash_password(form['password']),
             phone=form['phone'],
-            whatsapp=whatsapp_final,
+            whatsapp_phone=whatsapp_final,
+            is_whatsapp=is_whatsapp,
+            auth_method='manual',
             credits=500
         )
     except Exception as e:
@@ -244,11 +264,12 @@ def google_callback():
             return redirect(url_for('complete_profile'))
         return redirect(url_for('role'))
 
-    # New Google user — create minimal row, then force profile completion
+    # New Google user — create row, then force profile completion
     new_user = create_user(
         name=name,
         email=email,
         google_id=google_id,
+        auth_method='google',
         credits=500
     )
     if not new_user:
@@ -264,7 +285,6 @@ def complete_profile():
     if not user:
         return redirect(url_for('index'))
 
-    # Already complete? skip
     if user.get('phone'):
         return redirect(url_for('role'))
 
@@ -278,13 +298,18 @@ def complete_profile():
     if not PHONE_RE.match(phone):
         return render_template('complete_profile.html', user=user, error='Please enter a valid 10-digit phone number.')
 
-    whatsapp_final = phone if wa_same else whatsapp
-    if not wa_same and whatsapp_final and not PHONE_RE.match(whatsapp_final):
-        return render_template('complete_profile.html', user=user, error='Please enter a valid 10-digit WhatsApp number.')
-    if not whatsapp_final:
+    if wa_same:
         whatsapp_final = phone
+    else:
+        whatsapp_final = whatsapp or phone
+        if whatsapp and not PHONE_RE.match(whatsapp):
+            return render_template('complete_profile.html', user=user, error='Please enter a valid 10-digit WhatsApp number.')
 
-    update_user(user['id'], {'phone': phone, 'whatsapp': whatsapp_final})
+    update_user(user['id'], {
+        'phone': phone,
+        'whatsapp_phone': whatsapp_final,
+        'is_whatsapp': True
+    })
     flash(f"🎉 Welcome {user['name'].split(' ')[0]}! (500 Credits) added to get you started.", 'welcome')
     return redirect(url_for('role'))
 
@@ -304,12 +329,12 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
-# ---------- DB health check (leave for now; remove before public launch) ----------
+# ---------- DB health check (remove before public launch) ----------
 @app.route('/db-test')
 def db_test():
     try:
         r = supabase.table('users').select('id').limit(1).execute()
-        return f"✅ Supabase Connected! Users table reachable. Rows sample: {len(r.data)}"
+        return f"✅ Supabase Connected! Users table reachable. Sample rows: {len(r.data)}"
     except Exception as e:
         return f"❌ DB error: {e}", 500
 
