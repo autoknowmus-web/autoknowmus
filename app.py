@@ -724,7 +724,7 @@ def request_credits():
     return redirect(ref)
 
 
-# ---------- Buyer Search & Dashboard Route ----------
+# ---------- BUYER ROUTE (FIXED) ----------
 
 @app.route('/buyer', methods=['GET', 'POST'])
 @login_required
@@ -747,12 +747,12 @@ def buyer():
 
     if request.method == 'GET':
         prefill = {
-            'make':      request.args.get('make', ''),
-            'fuel':      request.args.get('fuel', ''),
-            'model':     request.args.get('model', ''),
-            'variant':   request.args.get('variant', ''),
-            'year':      request.args.get('year', ''),
-            'condition': request.args.get('condition', ''),
+            'make':        request.args.get('make', ''),
+            'fuel':        request.args.get('fuel', ''),
+            'model':       request.args.get('model', ''),
+            'variant':     request.args.get('variant', ''),
+            'year':        request.args.get('year', ''),
+            'condition':   request.args.get('condition', ''),
             'asking_price': request.args.get('asking_price', ''),
         }
         return render_form(prefill)
@@ -792,11 +792,13 @@ def buyer():
     except (ValueError, TypeError):
         return render_form(form_data, error='Invalid Year.')
 
-    # If asking price is provided, validate it
+    # If asking price is provided, validate and clean it
     asking_price = None
     if form_data['asking_price']:
         try:
-            asking_price = int(form_data['asking_price'])
+            # Remove commas from asking price
+            clean_price = form_data['asking_price'].replace(',', '')
+            asking_price = int(clean_price)
             if asking_price < 100000 or asking_price > 50000000:
                 raise ValueError
         except (ValueError, TypeError):
@@ -811,28 +813,34 @@ def buyer():
 
     # Compute market intelligence
     try:
-        market_stats = get_market_stats(form_data['make'], form_data['model'])
-        
-        # Compute base valuation
+        # Compute base valuation - fixed to handle empty variant
         base_price = compute_base_valuation(
             make=form_data['make'],
             model=form_data['model'],
-            variant=form_data.get('variant', ''),
+            variant=form_data.get('variant') or '',
             fuel=form_data['fuel'],
             year=year_int,
             mileage=50000,
             condition=form_data['condition'],
             owner='2nd Owner',
         )
+        
+        if base_price is None:
+            return render_form(form_data, error='Could not compute a price for this combination. Please check inputs.')
+        
+        # Fetch similar deals and adjust
         similar = fetch_similar_deals(
             make=form_data['make'],
             model=form_data['model'],
             year=year_int,
             fuel=form_data['fuel']
         )
+        
         adjusted, confidence = adjust_with_deals(base_price, similar)
         price_low, price_high = compute_price_range(adjusted)
         demand = compute_demand(form_data['make'], year_int)
+        
+        market_stats = get_market_stats(form_data['make'], form_data['model'])
 
         # Deduct credits (100 per search)
         new_balance = current_credits - VALUATION_COST
@@ -859,7 +867,7 @@ def buyer():
         dashboard_data = {
             'make': form_data['make'],
             'model': form_data['model'],
-            'variant': form_data.get('variant', 'All'),
+            'variant': form_data.get('variant') or '',
             'year': year_int,
             'fuel': form_data['fuel'],
             'condition': form_data['condition'],
@@ -879,7 +887,8 @@ def buyer():
 
     except Exception as e:
         app.logger.error(f"Buyer search failed: {e}")
-        return render_form(form_data, error='Could not fetch market data. Please try again.')
+        app.logger.error(f"Error traceback: {repr(e)}")
+        return render_form(form_data, error=f'Could not fetch market data. Please try again. Error: {str(e)}')
 
 
 @app.route('/submit-deal')
