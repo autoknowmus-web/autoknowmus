@@ -119,7 +119,8 @@
                 </div>
 
                 <!-- Edit Search Button -->
-                <a href="/buyer?make={{ data.make }}&fuel={{ data.fuel }}&model={{ data.model }}&variant={{ data.variant }}&year={{ data.year }}&condition={{ data.condition }}&asking_price={{ data.asking_price or '' }}" class="btn btn-outline-primary w-100 fw-bold">
+                {% set back_url = "/buyer?make=" + (data.make or '') + "&fuel=" + (data.fuel or '') + "&model=" + (data.model or '') + "&variant=" + (data.variant or '') + "&year=" + (data.year|string or '') + "&condition=" + (data.condition or '') + "&asking_price=" + (data.asking_price|string or '') %}
+                <a href="{{ back_url }}" class="btn btn-outline-primary w-100 fw-bold">
                     <i class="fas fa-edit me-2"></i>Modify Search
                 </a>
             </div>
