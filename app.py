@@ -724,7 +724,7 @@ def request_credits():
     return redirect(ref)
 
 
-# ---------- Stage 3 Implementation: Buyer Search & Dashboard ----------
+# ---------- Buyer Search & Dashboard Route ----------
 
 @app.route('/buyer', methods=['GET', 'POST'])
 @login_required
@@ -776,7 +776,7 @@ def buyer():
     required = ['make', 'fuel', 'model', 'year', 'condition']
     for key in required:
         if not form_data[key]:
-            return render_form(form_data, error=f'Please fill in all required fields.')
+            return render_form(form_data, error='Please fill in all required fields.')
 
     # Validate car data
     if form_data['make'] not in CAR_DATA:
@@ -824,16 +824,15 @@ def buyer():
         
         # For discovery mode: show current market range
         if form_data['search_mode'] == 'discovery':
-            # Filter by year and condition in results
             base_price = compute_base_valuation(
                 make=form_data['make'],
                 model=form_data['model'],
                 variant=form_data.get('variant', ''),
                 fuel=form_data['fuel'],
                 year=year_int,
-                mileage=50000,  # Default assumption for market discovery
+                mileage=50000,
                 condition=form_data['condition'],
-                owner='2nd Owner',  # Default for market insights
+                owner='2nd Owner',
             )
             similar = fetch_similar_deals(
                 make=form_data['make'],
@@ -843,14 +842,12 @@ def buyer():
             )
             adjusted, confidence = adjust_with_deals(base_price, similar)
             price_low, price_high = compute_price_range(adjusted)
-            
             demand = compute_demand(form_data['make'], year_int)
             
         else:  # evaluation mode
-            # Find deals within buyer's budget
             base_price = (budget_min + budget_max) / 2
             adjusted = base_price
-            confidence = 65  # Standard confidence for budget eval
+            confidence = 65
             price_low = budget_min
             price_high = budget_max
             demand = compute_demand(form_data['make'], year_int)
@@ -901,6 +898,7 @@ def buyer():
     except Exception as e:
         app.logger.error(f"Buyer search failed: {e}")
         return render_form(form_data, error='Could not fetch market data. Please try again.')
+
 
 @app.route('/submit-deal')
 @login_required
