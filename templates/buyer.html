@@ -1,184 +1,353 @@
 {% extends "layout.html" %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-11">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3 class="text-white fw-bold mb-0">Buy a Car</h3>
-            <div class="text-end">
-                <small class="text-white-50 d-block mb-1">Available Credits</small>
-                <span class="badge bg-success" style="font-size: 14px;">({{ user.credits }} Credits)</span>
-            </div>
-        </div>
+<div class="container" style="max-width: 1100px; margin: 0 auto; padding: 20px;">
 
-        {% if error %}
-        <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert" style="background: #fff3cd; color: #664d03; border: 1px solid #ffecb5;">
-            <strong>⚠️</strong> {{ error }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-        {% endif %}
-
-        {% if show_credit_request %}
-        <div class="alert alert-info alert-dismissible fade show mb-4" role="alert" style="background: #cfe2ff; color: #084298; border: 1px solid #b6d4fe;">
-            <strong>ℹ️ Need Credits?</strong> You can request 500 bonus credits to continue searching.
-            <a href="/request-credits?referrer=buyer" class="btn btn-sm btn-info ms-2">Request Credits</a>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-        {% endif %}
-
-        <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 5px solid #4e54ff;">
-            <form action="/buyer" method="POST" id="buyerForm">
-                <!-- Row 1: City (locked to Bangalore), Make, Fuel, Model -->
-                <div class="row g-3 text-start">
-                    <div class="col-md-3">
-                        <label class="text-white-50 small fw-bold">City</label>
-                        <input type="text" class="form-control bg-dark text-white border-secondary" value="Bangalore" disabled style="background: #1a1d24 !important; color: #6c757d !important;">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="text-white-50 small fw-bold">Make <span class="text-danger">*</span></label>
-                        <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()" required>
-                            <option value="">Select Make</option>
-                            {% for make in makes %}<option value="{{ make }}" {% if form.make == make %}selected{% endif %}>{{ make }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="text-white-50 small fw-bold">Fuel <span class="text-danger">*</span></label>
-                        <select class="form-select bg-dark text-white border-secondary" name="fuel" id="fuel" onchange="updateModels()" required>
-                            <option value="">Select Fuel</option>
-                            <option value="Petrol" {% if form.fuel == 'Petrol' %}selected{% endif %}>Petrol</option>
-                            <option value="Diesel" {% if form.fuel == 'Diesel' %}selected{% endif %}>Diesel</option>
-                            <option value="CNG" {% if form.fuel == 'CNG' %}selected{% endif %}>CNG</option>
-                            <option value="HEV" {% if form.fuel == 'HEV' %}selected{% endif %}>HEV</option>
-                            <option value="PHEV" {% if form.fuel == 'PHEV' %}selected{% endif %}>PHEV</option>
-                            <option value="BEV" {% if form.fuel == 'BEV' %}selected{% endif %}>BEV</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="text-white-50 small fw-bold">Model <span class="text-danger">*</span></label>
-                        <select class="form-select bg-dark text-white border-secondary" id="model" name="model" onchange="updateVariants()" required>
-                            <option value="">Select Model</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Row 2: Variant, Year, Condition, Asking Price (conditional) -->
-                <div class="row g-3 mt-2 text-start">
-                    <div class="col-md-3">
-                        <label class="text-white-50 small fw-bold">Variant</label>
-                        <select class="form-select bg-dark text-white border-secondary" id="variant" name="variant">
-                            <option value="">All Variants</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="text-white-50 small fw-bold">Year <span class="text-danger">*</span></label>
-                        <select class="form-select bg-dark text-white border-secondary" name="year" required>
-                            <option value="">Select Year</option>
-                            {% for y in years %}<option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="text-white-50 small fw-bold">Condition <span class="text-danger">*</span></label>
-                        <select class="form-select bg-dark text-white border-secondary" name="condition" required>
-                            <option value="">Select Condition</option>
-                            {% for cond in conditions %}<option value="{{ cond }}" {% if form.condition == cond %}selected{% endif %}>{{ cond }}</option>{% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="text-white-50 small fw-bold" id="askingPriceLabel" style="display: none;">Asking Price (₹)</label>
-                        <input type="number" class="form-control bg-dark text-white border-secondary" id="asking_price" name="asking_price" placeholder="e.g., 7,50,000" style="display: none;" value="{{ form.asking_price or '' }}">
-                    </div>
-                </div>
-
-                <!-- Submit Button -->
-                <div class="row mt-4 align-items-center">
-                    <div class="col-md-12">
-                        <button type="submit" class="btn btn-primary fw-bold shadow" style="padding: 10px 24px; font-size: 14px;">
-                            <i class="fas fa-search me-2"></i>Analyze Market Intelligence
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
+  {# ===== Header row: Title left, Credits right ===== #}
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="mb-1" style="color: #fff; font-weight: 700;">Buy a Car</h2>
+      <div style="color: #adb5bd; font-size: 14px;">Hello {{ first_name }}! Let's find the right deal for you.</div>
     </div>
+    <div>
+      <span class="badge" style="background:#28a745; color:#fff; font-size:14px; padding:8px 14px; border-radius:6px;">
+        ({{ user.credits }} Credits)
+      </span>
+    </div>
+  </div>
+
+  {# ===== Back button (standing rule: .btn-back, top-left of content area) ===== #}
+  <a href="{{ url_for('role') }}" class="btn-back mb-3">← Back</a>
+
+  {# ===== Flash messages (dismissible orange alerts) ===== #}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+        <div class="alert-orange" role="alert">
+          <span>{{ msg }}</span>
+          <button type="button" class="alert-close" aria-label="Close"
+                  onclick="this.parentElement.style.display='none';">&times;</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {# ===== Search Card ===== #}
+  <div class="search-card">
+    <div class="search-card-header">
+      <h4 style="margin:0; color:#fff; font-weight:600;">Market Intelligence Search</h4>
+      <div style="color:#adb5bd; font-size:13px; margin-top:4px;">
+        Get fair-market pricing, demand trends, and depreciation forecast for any car.
+        <strong style="color:#ffc107;">(100 Credits)</strong> per search.
+      </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('buyer') }}" id="buyerForm" autocomplete="off">
+
+      <div class="row g-3">
+
+        {# City — locked to Bangalore #}
+        <div class="col-md-6 col-lg-3">
+          <label class="form-label">City</label>
+          <input type="text" class="form-control" value="Bangalore" disabled readonly>
+        </div>
+
+        {# Make #}
+        <div class="col-md-6 col-lg-3">
+          <label class="form-label">Make <span class="req">*</span></label>
+          <select name="make" id="make" class="form-select" required>
+            <option value="">Select Make</option>
+            {% for m in makes %}
+              <option value="{{ m }}" {% if prefill.make == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# Fuel #}
+        <div class="col-md-6 col-lg-3">
+          <label class="form-label">Fuel Type <span class="req">*</span></label>
+          <select name="fuel" id="fuel" class="form-select" required disabled>
+            <option value="">Select Fuel</option>
+            {% for f in fuels %}
+              <option value="{{ f }}" {% if prefill.fuel == f %}selected{% endif %}>{{ f }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# Model #}
+        <div class="col-md-6 col-lg-3">
+          <label class="form-label">Model <span class="req">*</span></label>
+          <select name="model" id="model" class="form-select" required disabled>
+            <option value="">Select Model</option>
+          </select>
+        </div>
+
+        {# Variant #}
+        <div class="col-md-6 col-lg-3">
+          <label class="form-label">Variant <span class="req">*</span></label>
+          <select name="variant" id="variant" class="form-select" required disabled>
+            <option value="">Select Variant</option>
+          </select>
+        </div>
+
+        {# Year #}
+        <div class="col-md-6 col-lg-3">
+          <label class="form-label">Year <span class="req">*</span></label>
+          <select name="year" class="form-select" required>
+            <option value="">Select Year</option>
+            {% for y in years %}
+              <option value="{{ y }}" {% if prefill.year == (y|string) %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# Condition #}
+        <div class="col-md-6 col-lg-3">
+          <label class="form-label">Condition <span class="req">*</span></label>
+          <select name="condition" class="form-select" required>
+            <option value="">Select Condition</option>
+            {% for c in conditions %}
+              <option value="{{ c }}" {% if prefill.condition == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {# Asking Price (optional) #}
+        <div class="col-md-6 col-lg-3">
+          <label class="form-label">Asking Price (optional)</label>
+          <div class="input-group">
+            <span class="input-group-text" style="background:#1a1d24; color:#adb5bd; border-color:#3a3f4a;">₹</span>
+            <input type="text" name="asking_price" id="asking_price" class="form-control"
+                   placeholder="e.g. 3,50,000"
+                   value="{{ prefill.asking_price }}"
+                   inputmode="numeric">
+          </div>
+          <small style="color:#6c757d; font-size:11px;">Enter to compare against fair market</small>
+        </div>
+
+      </div>
+
+      <div class="mt-4 d-flex justify-content-end">
+        <button type="submit" class="btn-primary-custom">
+          Analyze Market Intelligence <span style="font-weight:400;">(100 Credits)</span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+
 </div>
 
+{# ===== Styles ===== #}
+<style>
+  .search-card {
+    background: #21252b;
+    border: 1px solid #3a3f4a;
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 10px;
+  }
+  .search-card-header {
+    border-bottom: 1px solid #3a3f4a;
+    padding-bottom: 14px;
+    margin-bottom: 20px;
+  }
+  .form-label {
+    color: #dee2e6;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+  .req { color: #dc3545; }
+  .form-control, .form-select {
+    background: #2c313a !important;
+    border: 1px solid #3a3f4a !important;
+    color: #fff !important;
+    border-radius: 6px;
+  }
+  .form-control:focus, .form-select:focus {
+    background: #2c313a !important;
+    border-color: #4e54ff !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 0.2rem rgba(78,84,255,0.15) !important;
+  }
+  /* Standing rule: disabled/readonly fields — dark bg, grey text */
+  .form-control:disabled, .form-control[readonly],
+  .form-select:disabled {
+    background: #1a1d24 !important;
+    color: #6c757d !important;
+    border-color: #3a3f4a !important;
+    cursor: not-allowed;
+    opacity: 1 !important;
+  }
+  .form-select option { background: #2c313a; color: #fff; }
+  .btn-primary-custom {
+    background: #4e54ff;
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-primary-custom:hover { background: #3a3fd0; }
+  /* Standing rule: .btn-back — grey, top-left */
+  .btn-back {
+    display: inline-block;
+    background: #6c757d;
+    color: #fff !important;
+    padding: 8px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+  }
+  .btn-back:hover { background: #5a6268; color: #fff !important; }
+  /* Standing rule: dismissible orange alerts */
+  .alert-orange {
+    background: #ff9800;
+    color: #fff;
+    padding: 12px 40px 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    position: relative;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .alert-close {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 6px;
+  }
+  .alert-close:hover { color: #f5f5f5; }
+</style>
+
+{# ===== Cascading dropdown + Indian number formatting ===== #}
 <script>
-const carData = {{ car_data_json|safe }};
-let isEvaluateMode = false;
+  const CAR_DATA = {{ car_data_json | safe }};
+  const prefillModel   = {{ (prefill.model or '')   | tojson }};
+  const prefillVariant = {{ (prefill.variant or '') | tojson }};
+  const prefillFuel    = {{ (prefill.fuel or '')    | tojson }};
 
-function updateModels() {
-    const make = document.getElementById('brand').value;
-    const fuel = document.getElementById('fuel').value;
-    const modelSelect = document.getElementById('model');
-    const variantSelect = document.getElementById('variant');
+  const makeSel    = document.getElementById('make');
+  const fuelSel    = document.getElementById('fuel');
+  const modelSel   = document.getElementById('model');
+  const variantSel = document.getElementById('variant');
 
-    modelSelect.innerHTML = '<option value="">Select Model</option>';
-    variantSelect.innerHTML = '<option value="">All Variants</option>';
+  function resetSelect(sel, placeholder) {
+    sel.innerHTML = '';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = placeholder;
+    sel.appendChild(opt);
+  }
 
-    if (!make || !carData[make]) return;
-
-    const makeData = carData[make];
-    const models = Object.keys(makeData).sort();
-
-    models.forEach(model => {
-        const modelData = makeData[model];
-        if (!fuel || !modelData.fuels || modelData.fuels.includes(fuel)) {
-            const opt = document.createElement('option');
-            opt.value = model;
-            opt.textContent = model;
-            modelSelect.appendChild(opt);
-        }
+  function populateFuelsForMake(make, preselect) {
+    resetSelect(fuelSel, 'Select Fuel');
+    if (!make || !CAR_DATA[make]) { fuelSel.disabled = true; return; }
+    const fuelOrder = ['Petrol','Diesel','CNG','HEV','PHEV','BEV'];
+    const fuelsAvail = new Set();
+    Object.values(CAR_DATA[make]).forEach(modelData => {
+      (modelData.fuels || []).forEach(f => fuelsAvail.add(f));
     });
-
-    updateVariants();
-}
-
-function updateVariants() {
-    const make = document.getElementById('brand').value;
-    const model = document.getElementById('model').value;
-    const variantSelect = document.getElementById('variant');
-
-    variantSelect.innerHTML = '<option value="">All Variants</option>';
-
-    if (!make || !model || !carData[make] || !carData[make][model]) return;
-
-    const variants = carData[make][model].variants || [];
-    variants.sort().forEach(variant => {
-        const opt = document.createElement('option');
-        opt.value = variant;
-        opt.textContent = variant;
-        variantSelect.appendChild(opt);
+    fuelOrder.forEach(f => {
+      if (fuelsAvail.has(f)) {
+        const o = document.createElement('option');
+        o.value = f; o.textContent = f;
+        if (preselect && preselect === f) o.selected = true;
+        fuelSel.appendChild(o);
+      }
     });
-}
+    fuelSel.disabled = false;
+  }
 
-function handlePriceInput(event) {
-    let value = event.target.value.replace(/[^\d]/g, '');
-    if (value) {
-        const num = parseInt(value, 10);
-        const formatted = num.toLocaleString('en-IN');
-        event.target.value = formatted;
+  function populateModelsForFuel(make, fuel, preselect) {
+    resetSelect(modelSel, 'Select Model');
+    if (!make || !fuel || !CAR_DATA[make]) { modelSel.disabled = true; return; }
+    const models = Object.keys(CAR_DATA[make])
+      .filter(m => (CAR_DATA[make][m].fuels || []).includes(fuel))
+      .sort();
+    models.forEach(m => {
+      const o = document.createElement('option');
+      o.value = m; o.textContent = m;
+      if (preselect && preselect === m) o.selected = true;
+      modelSel.appendChild(o);
+    });
+    modelSel.disabled = models.length === 0;
+  }
+
+  function populateVariantsForModel(make, model, preselect) {
+    resetSelect(variantSel, 'Select Variant');
+    if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) {
+      variantSel.disabled = true; return;
     }
-}
+    const variants = (CAR_DATA[make][model].variants || []).slice().sort();
+    variants.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      if (preselect && preselect === v) o.selected = true;
+      variantSel.appendChild(o);
+    });
+    variantSel.disabled = variants.length === 0;
+  }
 
-// Check if asking_price field should be visible on page load
-document.addEventListener('DOMContentLoaded', function() {
-    const askingPriceField = document.getElementById('asking_price');
-    const askingPriceLabel = document.getElementById('askingPriceLabel');
-    
-    if (askingPriceField.value) {
-        askingPriceField.style.display = 'block';
-        askingPriceLabel.style.display = 'block';
-        isEvaluateMode = true;
+  makeSel.addEventListener('change', () => {
+    populateFuelsForMake(makeSel.value, null);
+    resetSelect(modelSel, 'Select Model');   modelSel.disabled = true;
+    resetSelect(variantSel, 'Select Variant'); variantSel.disabled = true;
+  });
+  fuelSel.addEventListener('change', () => {
+    populateModelsForFuel(makeSel.value, fuelSel.value, null);
+    resetSelect(variantSel, 'Select Variant'); variantSel.disabled = true;
+  });
+  modelSel.addEventListener('change', () => {
+    populateVariantsForModel(makeSel.value, modelSel.value, null);
+  });
+
+  // Initial rehydration from prefill (e.g. "Modify Search" back-navigation)
+  if (makeSel.value) {
+    populateFuelsForMake(makeSel.value, prefillFuel);
+    if (fuelSel.value) {
+      populateModelsForFuel(makeSel.value, fuelSel.value, prefillModel);
+      if (modelSel.value) {
+        populateVariantsForModel(makeSel.value, modelSel.value, prefillVariant);
+      }
     }
-    
-    askingPriceField.addEventListener('input', handlePriceInput);
-    updateModels();
-});
+  }
 
-// Toggle asking price field when user manually types in it
-document.getElementById('asking_price').addEventListener('focus', function() {
-    this.style.display = 'block';
-    document.getElementById('askingPriceLabel').style.display = 'block';
-    isEvaluateMode = true;
-});
+  // Indian number formatting for asking price
+  function formatIndianNumber(numStr) {
+    const digits = String(numStr).replace(/\D/g, '');
+    if (!digits) return '';
+    const n = digits;
+    if (n.length <= 3) return n;
+    const last3 = n.slice(-3);
+    const rest = n.slice(0, -3);
+    const grouped = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+    return grouped + ',' + last3;
+  }
+  const askingInput = document.getElementById('asking_price');
+  if (askingInput) {
+    // Format initial prefilled value
+    if (askingInput.value) askingInput.value = formatIndianNumber(askingInput.value);
+    askingInput.addEventListener('input', (e) => {
+      const cursor = e.target.selectionStart;
+      const oldLen = e.target.value.length;
+      e.target.value = formatIndianNumber(e.target.value);
+      const newLen = e.target.value.length;
+      e.target.setSelectionRange(cursor + (newLen - oldLen), cursor + (newLen - oldLen));
+    });
+  }
 </script>
 {% endblock %}
