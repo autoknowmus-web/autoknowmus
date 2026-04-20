@@ -215,41 +215,43 @@ def log_credit_transaction(user_id, type_, description, amount, balance_after):
             'description': description,
             'amount': amount,
             'balance_after': balance_after,
+            'created_at': datetime.utcnow().isoformat(),
         }).execute()
     except Exception as e:
-        app.logger.error(f"Failed to log transaction: {e}")
+        app.logger.error(f"log_credit_transaction failed: {e}")
 
 def fetch_similar_deals(make, model, year, fuel, window_years=2):
     try:
-        year_low = int(year) - window_years
-        year_high = int(year) + window_years
+        min_year = max(year - window_years, YEAR_START)
+        max_year = min(year + window_years, YEAR_END)
         r = (supabase.table('deals')
-             .select('sale_price')
+             .select('estimated_price')
              .eq('make', make)
              .eq('model', model)
              .eq('fuel', fuel)
-             .eq('verified', True)
-             .gte('year', year_low)
-             .lte('year', year_high)
+             .gte('year', min_year)
+             .lte('year', max_year)
+             .limit(100)
              .execute())
-        return [row['sale_price'] for row in (r.data or []) if row.get('sale_price')]
+        if r.data:
+            return [d.get('estimated_price') for d in r.data if d.get('estimated_price')]
+        return []
     except Exception as e:
         app.logger.warning(f"fetch_similar_deals failed: {e}")
         return []
 
+
 def compute_demand(make, year):
-    age = max(0, CURRENT_YEAR - int(year))
     if make in HIGH_DEMAND_BRANDS:
-        if age <= 7:    return 'HIGH'
-        elif age <= 12: return 'MEDIUM'
-        return 'LOW'
-    if make in MEDIUM_DEMAND_BRANDS:
-        if age <= 5: return 'MEDIUM'
-        return 'LOW'
-    if make in LUXURY_BRANDS:
-        if age <= 6: return 'MEDIUM'
-        return 'LOW'
-    return 'LOW'
+        base = 75
+    elif make in MEDIUM_DEMAND_BRANDS:
+        base = 55
+    elif make in LUXURY_BRANDS:
+        base = 45
+    else:
+        base = 50
+    age_penalty = max(0, (YEAR_END - year) * 1.5)
+    return max(20, min(100, base - age_penalty))
 
 
 def compute_days_to_sell(demand, price):
@@ -340,185 +342,157 @@ def get_market_stats(make, model):
 
 @app.route('/')
 def index():
-    if session.get('user_id'):
-        return redirect(url_for('role'))
-    prefill_email = request.args.get('email', '')
-    error = request.args.get('error', '')
-    return render_template('index.html', prefill_email=prefill_email, error=error)
+    user = current_user() if session.get('user_id') else None
+    return render_template('index.html', user=user)
+
 
 @app.route('/login', methods=['POST'])
 def login():
     email = (request.form.get('email') or '').strip().lower()
     password = request.form.get('password') or ''
-
+    
     if not email or not password:
-        return redirect(url_for('index', error='Email and password are required.'))
-
+        return render_template('login.html', error='Email and password required.')
+    
     user = get_user_by_email(email)
     if not user:
-        return redirect(url_for('index', error='No account found. Please sign up first.'))
-
-    if not user.get('password_hash'):
-        return redirect(url_for('index', error='This email is linked to Google. Please use "Continue with Google".'))
-
-    if not verify_password(password, user['password_hash']):
-        return redirect(url_for('index', error='Incorrect password. Please try again.'))
-
+        return render_template('login.html', error='User not found.')
+    
+    if not verify_password(password, user.get('password_hash')):
+        return render_template('login.html', error='Incorrect password.')
+    
     login_user_session(user)
     return redirect(url_for('role'))
 
+
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
-    if session.get('user_id'):
-        return redirect(url_for('role'))
-
     if request.method == 'GET':
-        return render_template('signup.html', form={}, error='')
+        return render_template('signup.html')
+    
+    name = (request.form.get('name') or '').strip()
+    email = (request.form.get('email') or '').strip().lower()
+    password = request.form.get('password') or ''
+    phone = (request.form.get('phone') or '').strip()
+    whatsapp_phone = (request.form.get('whatsapp_phone') or '').strip()
+    is_whatsapp = request.form.get('is_whatsapp') == 'on'
+    
+    if not name or not email or not password or not phone:
+        return render_template('signup.html', error='All fields required.')
+    
+    if not EMAIL_RE.match(email):
+        return render_template('signup.html', error='Invalid email format.')
+    
+    if not PHONE_RE.match(phone):
+        return render_template('signup.html', error='Phone must be 10 digits.')
+    
+    if get_user_by_email(email):
+        return render_template('signup.html', error='Email already registered.')
+    
+    pwd_hash = hash_password(password)
+    user = create_user(
+        name=name,
+        email=email,
+        password_hash=pwd_hash,
+        phone=phone,
+        whatsapp_phone=whatsapp_phone if not is_whatsapp else None,
+        is_whatsapp=is_whatsapp,
+        auth_method='manual',
+        credits=500,
+    )
+    
+    if not user:
+        return render_template('signup.html', error='Signup failed. Please try again.')
+    
+    login_user_session(user)
+    return redirect(url_for('complete_profile'))
 
-    form = {
-        'name': (request.form.get('name') or '').strip(),
-        'email': (request.form.get('email') or '').strip().lower(),
-        'password': request.form.get('password') or '',
-        'phone': (request.form.get('phone') or '').strip(),
-        'wa_same': request.form.get('wa_same') == 'on',
-        'whatsapp': (request.form.get('whatsapp') or '').strip(),
-    }
-
-    if not form['name'] or len(form['name']) < 2:
-        return render_template('signup.html', form=form, error='Please enter your full name.')
-    if not EMAIL_RE.match(form['email']):
-        return render_template('signup.html', form=form, error='Please enter a valid email address.')
-    if len(form['password']) < 8:
-        return render_template('signup.html', form=form, error='Password must be at least 8 characters.')
-    if not PHONE_RE.match(form['phone']):
-        return render_template('signup.html', form=form, error='Please enter a valid 10-digit phone number.')
-
-    existing = get_user_by_email(form['email'])
-    if existing:
-        return redirect(url_for('index', email=form['email'],
-                                error='An account with that email already exists. Please log in.'))
-
-    if form['wa_same']:
-        whatsapp_final = form['phone']
-    else:
-        whatsapp_final = form['whatsapp'] or form['phone']
-        if form['whatsapp'] and not PHONE_RE.match(form['whatsapp']):
-            return render_template('signup.html', form=form, error='Please enter a valid 10-digit WhatsApp number.')
-
-    try:
-        new_user = create_user(
-            name=form['name'],
-            email=form['email'],
-            password_hash=hash_password(form['password']),
-            phone=form['phone'],
-            whatsapp_phone=whatsapp_final,
-            is_whatsapp=True,
-            auth_method='manual',
-            credits=500
-        )
-    except Exception as e:
-        app.logger.error(f"Signup insert failed: {e}")
-        return render_template('signup.html', form=form, error='Something went wrong. Please try again.')
-
-    if not new_user:
-        return render_template('signup.html', form=form, error='Could not create account. Please try again.')
-
-    log_credit_transaction(new_user['id'], 'signup_bonus', 'Welcome bonus', 500, 500)
-
-    login_user_session(new_user)
-    session['show_welcome'] = True
-    return redirect(url_for('role'))
 
 @app.route('/google-login')
 def google_login():
     redirect_uri = url_for('google_callback', _external=True)
     return google.authorize_redirect(redirect_uri)
 
+
 @app.route('/google-callback')
 def google_callback():
     try:
         token = google.authorize_access_token()
-        userinfo = token.get('userinfo') or google.parse_id_token(token)
     except Exception as e:
-        app.logger.error(f"Google OAuth error: {e}")
-        return redirect(url_for('index', error='Google sign-in failed. Please try again.'))
-
-    if not userinfo or not userinfo.get('email'):
-        return redirect(url_for('index', error='Could not retrieve Google profile.'))
-
-    email = userinfo['email'].lower()
-    name = userinfo.get('name') or email.split('@')[0]
-    google_id = userinfo.get('sub')
-
+        app.logger.error(f"Google callback error: {e}")
+        return redirect(url_for('index'))
+    
+    user_info = token.get('userinfo')
+    if not user_info:
+        return redirect(url_for('index'))
+    
+    email = user_info.get('email', '').lower()
+    name = user_info.get('name', 'Google User')
+    google_id = user_info.get('sub')
+    
     existing = get_user_by_email(email)
     if existing:
-        if not existing.get('google_id'):
-            update_user(existing['id'], {'google_id': google_id})
         login_user_session(existing)
-        if not existing.get('phone'):
-            return redirect(url_for('complete_profile'))
         return redirect(url_for('role'))
-
-    new_user = create_user(
-        name=name, email=email, google_id=google_id,
-        auth_method='google', credits=500
+    
+    user = create_user(
+        name=name,
+        email=email,
+        google_id=google_id,
+        auth_method='google',
+        credits=500,
     )
-    if not new_user:
-        return redirect(url_for('index', error='Could not create account. Please try again.'))
+    
+    if user:
+        login_user_session(user)
+        return redirect(url_for('complete_profile'))
+    
+    return redirect(url_for('index'))
 
-    log_credit_transaction(new_user['id'], 'signup_bonus', 'Welcome bonus', 500, 500)
-
-    login_user_session(new_user)
-    session['show_welcome'] = True
-    return redirect(url_for('complete_profile'))
 
 @app.route('/complete-profile', methods=['GET', 'POST'])
 @login_required
 def complete_profile():
     user = current_user()
-    if not user:
-        return redirect(url_for('index'))
-
-    if user.get('phone'):
-        return redirect(url_for('role'))
-
+    
     if request.method == 'GET':
-        return render_template('complete_profile.html', user=user, error='')
-
+        return render_template('complete_profile.html', user=user, form=user or {})
+    
     phone = (request.form.get('phone') or '').strip()
-    wa_same = request.form.get('wa_same') == 'on'
-    whatsapp = (request.form.get('whatsapp') or '').strip()
-
+    whatsapp_phone = (request.form.get('whatsapp_phone') or '').strip()
+    is_whatsapp = request.form.get('is_whatsapp') == 'on'
+    
+    if not phone:
+        return render_template('complete_profile.html', user=user, error='Phone number required.')
+    
     if not PHONE_RE.match(phone):
-        return render_template('complete_profile.html', user=user, error='Please enter a valid 10-digit phone number.')
-
-    if wa_same:
-        whatsapp_final = phone
-    else:
-        whatsapp_final = whatsapp or phone
-        if whatsapp and not PHONE_RE.match(whatsapp):
-            return render_template('complete_profile.html', user=user, error='Please enter a valid 10-digit WhatsApp number.')
-
+        return render_template('complete_profile.html', user=user, error='Phone must be 10 digits.')
+    
+    wp_phone = whatsapp_phone if not is_whatsapp else None
     update_user(user['id'], {
         'phone': phone,
-        'whatsapp_phone': whatsapp_final,
-        'is_whatsapp': True
+        'whatsapp_phone': wp_phone,
+        'is_whatsapp': is_whatsapp,
     })
+    
+    user = get_user_by_id(user['id'])
+    if user:
+        refresh_session_user(user)
+    
     return redirect(url_for('role'))
+
 
 @app.route('/role')
 @login_required
 def role():
     user = current_user()
-    if not user:
-        return redirect(url_for('index'))
-    if not user.get('phone'):
-        return redirect(url_for('complete_profile'))
-    first_name = firstname_filter(user.get('name'))
-    show_welcome = session.pop('show_welcome', False)
-    return render_template('role.html', user=user, first_name=first_name, show_welcome=show_welcome)
+    return render_template(
+        'role.html',
+        user=user,
+        page_title='Choose Your Role',
+        message='🎉 Welcome! 500 bonus credits added for 5 free searches!'
+    )
 
-# ========== SELLER FLOW ==========
 
 @app.route('/seller', methods=['GET', 'POST'])
 @login_required
@@ -660,121 +634,273 @@ def seller():
 @login_required
 def seller_dashboard(valuation_id):
     user = current_user()
+    
     try:
         r = supabase.table('valuations').select('*').eq('id', valuation_id).eq('user_id', user['id']).limit(1).execute()
-        val = r.data[0] if r.data else None
+        valuation_row = r.data[0] if r.data else None
     except Exception as e:
-        app.logger.error(f"Load valuation failed: {e}")
-        val = None
-
-    if not val:
-        return render_template('placeholder.html', user=user, page_title='Valuation Not Found',
-                               message='We could not find that valuation.')
-
-    estimated  = val['estimated_price']
-    price_low  = val['price_low']
-    price_high = val['price_high']
-
-    similar_prices = fetch_similar_deals(
-        make=val['make'], model=val['model'],
-        year=val['year'], fuel=val['fuel']
+        app.logger.error(f"Valuation lookup failed: {e}")
+        valuation_row = None
+    
+    if not valuation_row:
+        return render_template('placeholder.html', user=user, page_title='Not Found',
+                               message='Valuation not found or access denied.'), 404
+    
+    deprecation_series = compute_depreciation_series(valuation_row['estimated_price'], days=90)
+    demand = compute_demand(valuation_row['make'], valuation_row['year'])
+    buyer_distribution = compute_buyer_distribution(
+        valuation_row['price_low'],
+        valuation_row['price_high'],
+        valuation_row.get('confidence', 70)
     )
-    _, confidence = adjust_with_deals(estimated, similar_prices)
-
-    demand       = compute_demand(val['make'], val['year'])
-    days_to_sell = compute_days_to_sell(demand, estimated)
-    depreciation = compute_depreciation_series(estimated, days=90)
-    buyer_dist   = compute_buyer_distribution(price_low, price_high, confidence)
-    verified_count, buyers_last_30d, avg_buyers_range = get_market_stats(val['make'], val['model'])
-
-    back_prefill = {
-        'make':      val['make'],
-        'fuel':      val['fuel'],
-        'model':     val['model'],
-        'variant':   val['variant'],
-        'year':      val['year'],
-        'owner':     val['owner'],
-        'mileage':   val['mileage'],
-        'condition': val['condition'],
+    
+    demand_label = 'HIGH' if demand > 70 else 'MEDIUM' if demand > 40 else 'LOW'
+    days_to_sell = compute_days_to_sell(demand_label, valuation_row['estimated_price'])
+    
+    market_stats = get_market_stats(valuation_row['make'], valuation_row['model'])
+    
+    dashboard = {
+        'valuation_id': valuation_id,
+        'make': valuation_row.get('make'),
+        'model': valuation_row.get('model'),
+        'variant': valuation_row.get('variant'),
+        'year': valuation_row.get('year'),
+        'fuel': valuation_row.get('fuel'),
+        'mileage': valuation_row.get('mileage'),
+        'condition': valuation_row.get('condition'),
+        'owner': valuation_row.get('owner'),
+        'estimated_price': valuation_row.get('estimated_price'),
+        'price_low': valuation_row.get('price_low'),
+        'price_high': valuation_row.get('price_high'),
+        'confidence': valuation_row.get('confidence', 70),
+        'demand': demand,
+        'days_to_sell': days_to_sell,
+        'deprecation_series': deprecation_series,
+        'buyer_distribution': buyer_distribution,
+        'market_stats': market_stats,
     }
-
-    return render_template(
-        'dashboard.html',
-        user=user,
-        val=val,
-        estimated=estimated,
-        price_low=price_low,
-        price_high=price_high,
-        confidence=confidence,
-        demand=demand,
-        days_to_sell=days_to_sell,
-        depreciation_json=json.dumps(depreciation),
-        buyer_dist=buyer_dist,
-        verified_count=verified_count,
-        buyers_last_30d=buyers_last_30d,
-        avg_buyers_range=avg_buyers_range,
-        back_prefill=back_prefill,
-    )
+    
+    return render_template('dashboard.html', user=user, data=dashboard)
 
 
 @app.route('/request-credits', methods=['POST'])
 @login_required
 def request_credits():
-    """Auto-approve a 500-credit top-up.
-    Preserves seller form values when the request came from the seller form,
-    so user doesn't lose the filters they were entering."""
     user = current_user()
-    if not user:
-        return redirect(url_for('index'))
-
-    current = user.get('credits', 0) or 0
-    new_balance = current + CREDIT_REQUEST_AMOUNT
+    
+    form_data = {}
+    if request.referrer and '/seller' in request.referrer:
+        form_data = {
+            'make': request.args.get('make', ''),
+            'fuel': request.args.get('fuel', ''),
+            'model': request.args.get('model', ''),
+            'variant': request.args.get('variant', ''),
+            'year': request.args.get('year', ''),
+            'owner': request.args.get('owner', ''),
+            'mileage': request.args.get('mileage', ''),
+            'condition': request.args.get('condition', ''),
+        }
+    
+    new_balance = (user.get('credits') or 0) + CREDIT_REQUEST_AMOUNT
     try:
         update_user(user['id'], {'credits': new_balance})
         log_credit_transaction(
             user_id=user['id'],
-            type_='credit_request_approved',
-            description=f'Credit top-up request auto-approved ({CREDIT_REQUEST_AMOUNT} credits)',
+            type_='credit_top_up',
+            description=f'Auto-approved top-up ({CREDIT_REQUEST_AMOUNT} credits)',
             amount=CREDIT_REQUEST_AMOUNT,
             balance_after=new_balance,
         )
         session['credits'] = new_balance
-        if 'user' in session:
-            session['user']['credits'] = new_balance
-        flash(f'{CREDIT_REQUEST_AMOUNT} credits added. Your balance is now {new_balance} credits.', 'success')
+        session['user']['credits'] = new_balance
     except Exception as e:
-        app.logger.error(f"Credit request failed: {e}")
-        flash('Could not process credit request. Please try again.', 'error')
-
-    # If the request came from seller form, preserve all form values
-    return_to = (request.form.get('return_to') or '').strip()
-    if return_to == 'seller':
-        kwargs = {
-            'make':      request.form.get('keep_make') or '',
-            'fuel':      request.form.get('keep_fuel') or '',
-            'model':     request.form.get('keep_model') or '',
-            'variant':   request.form.get('keep_variant') or '',
-            'year':      request.form.get('keep_year') or '',
-            'owner':     request.form.get('keep_owner') or '',
-            'mileage':   request.form.get('keep_mileage') or '',
-            'condition': request.form.get('keep_condition') or '',
-        }
-        # Drop empty values so query string stays clean
-        kwargs = {k: v for k, v in kwargs.items() if v}
+        app.logger.error(f"Credit top-up failed: {e}")
+    
+    if request.referrer and '/seller' in request.referrer:
+        kwargs = {k: v for k, v in form_data.items() if v}
         return redirect(url_for('seller', **kwargs))
 
     ref = request.referrer or url_for('seller')
     return redirect(ref)
 
 
-# ---------- Stage 3 stubs ----------
+# ---------- Stage 3 Implementation: Buyer Search & Dashboard ----------
 
-@app.route('/buyer')
+@app.route('/buyer', methods=['GET', 'POST'])
 @login_required
 def buyer():
     user = current_user()
-    return render_template('placeholder.html', user=user, page_title='Buyer Dashboard',
-                           message='Buyer dashboard is coming in Stage 3B.')
+    if not user:
+        return redirect(url_for('index'))
+
+    def render_form(form_data, error='', show_credit_request=False):
+        return render_template(
+            'buyer.html',
+            form=form_data,
+            error=error,
+            show_credit_request=show_credit_request,
+            makes=get_makes(),
+            years=YEARS,
+            conditions=CONDITIONS,
+            car_data_json=json.dumps(CAR_DATA),
+        )
+
+    if request.method == 'GET':
+        prefill = {
+            'make':      request.args.get('make', ''),
+            'fuel':      request.args.get('fuel', ''),
+            'model':     request.args.get('model', ''),
+            'variant':   request.args.get('variant', ''),
+            'year':      request.args.get('year', ''),
+            'condition': request.args.get('condition', ''),
+            'budget_min': request.args.get('budget_min', ''),
+            'budget_max': request.args.get('budget_max', ''),
+            'search_mode': request.args.get('search_mode', 'discovery'),
+        }
+        return render_form(prefill)
+
+    # POST: Process buyer search
+    form_data = {
+        'make':        (request.form.get('make') or '').strip(),
+        'fuel':        (request.form.get('fuel') or '').strip(),
+        'model':       (request.form.get('model') or '').strip(),
+        'variant':     (request.form.get('variant') or '').strip(),
+        'year':        (request.form.get('year') or '').strip(),
+        'condition':   (request.form.get('condition') or '').strip(),
+        'budget_min':  (request.form.get('budget_min') or '').strip(),
+        'budget_max':  (request.form.get('budget_max') or '').strip(),
+        'search_mode': (request.form.get('search_mode') or 'discovery').strip(),
+    }
+
+    # Validate required fields
+    required = ['make', 'fuel', 'model', 'year', 'condition']
+    for key in required:
+        if not form_data[key]:
+            return render_form(form_data, error=f'Please fill in all required fields.')
+
+    # Validate car data
+    if form_data['make'] not in CAR_DATA:
+        return render_form(form_data, error='Invalid Make selected.')
+    if form_data['model'] not in CAR_DATA[form_data['make']]:
+        return render_form(form_data, error='Invalid Model selected.')
+    if form_data['fuel'] not in CAR_DATA[form_data['make']][form_data['model']]['fuels']:
+        return render_form(form_data, error='Selected Fuel is not available for this Model.')
+    if form_data['condition'] not in CONDITIONS:
+        return render_form(form_data, error='Invalid Condition selected.')
+
+    # Validate year
+    try:
+        year_int = int(form_data['year'])
+        if year_int < YEAR_START or year_int > YEAR_END:
+            raise ValueError
+    except (ValueError, TypeError):
+        return render_form(form_data, error='Invalid Year.')
+
+    # For "Evaluate a Deal" mode, validate budget
+    if form_data['search_mode'] == 'evaluation':
+        if not form_data['budget_min'] or not form_data['budget_max']:
+            return render_form(form_data, error='Please enter both Min and Max budget for evaluation.')
+        try:
+            budget_min = int(form_data['budget_min'])
+            budget_max = int(form_data['budget_max'])
+            if budget_min < 100000 or budget_max > 50000000 or budget_min >= budget_max:
+                raise ValueError
+        except (ValueError, TypeError):
+            return render_form(form_data, error='Budget must be numeric, min < max.')
+    else:
+        budget_min = None
+        budget_max = None
+
+    # Check credits (100 per search)
+    current_credits = user.get('credits', 0) or 0
+    if current_credits < VALUATION_COST:
+        return render_form(form_data,
+                           error=f'Insufficient credits. You need {VALUATION_COST} credits to run a search.',
+                           show_credit_request=True)
+
+    # Compute market intelligence
+    try:
+        market_stats = get_market_stats(form_data['make'], form_data['model'])
+        
+        # For discovery mode: show current market range
+        if form_data['search_mode'] == 'discovery':
+            # Filter by year and condition in results
+            base_price = compute_base_valuation(
+                make=form_data['make'],
+                model=form_data['model'],
+                variant=form_data.get('variant', ''),
+                fuel=form_data['fuel'],
+                year=year_int,
+                mileage=50000,  # Default assumption for market discovery
+                condition=form_data['condition'],
+                owner='2nd Owner',  # Default for market insights
+            )
+            similar = fetch_similar_deals(
+                make=form_data['make'],
+                model=form_data['model'],
+                year=year_int,
+                fuel=form_data['fuel']
+            )
+            adjusted, confidence = adjust_with_deals(base_price, similar)
+            price_low, price_high = compute_price_range(adjusted)
+            
+            demand = compute_demand(form_data['make'], year_int)
+            
+        else:  # evaluation mode
+            # Find deals within buyer's budget
+            base_price = (budget_min + budget_max) / 2
+            adjusted = base_price
+            confidence = 65  # Standard confidence for budget eval
+            price_low = budget_min
+            price_high = budget_max
+            demand = compute_demand(form_data['make'], year_int)
+
+        # Deduct credits (100 per search)
+        new_balance = current_credits - VALUATION_COST
+        try:
+            update_user(user['id'], {'credits': new_balance})
+            log_credit_transaction(
+                user_id=user['id'],
+                type_='buyer_search',
+                description=f"Buyer Search: {form_data['year']} {form_data['make']} {form_data['model']} ({form_data['search_mode']})",
+                amount=-VALUATION_COST,
+                balance_after=new_balance,
+            )
+            session['credits'] = new_balance
+            session['user']['credits'] = new_balance
+        except Exception as e:
+            app.logger.error(f"Credit deduction failed: {e}")
+
+        # Build dashboard data
+        deprecation_series = compute_depreciation_series(adjusted, days=365)
+        buyer_distribution = compute_buyer_distribution(price_low, price_high, confidence)
+        demand_label = 'HIGH' if demand > 70 else 'MEDIUM' if demand > 40 else 'LOW'
+        days_to_sell = compute_days_to_sell(demand_label, adjusted)
+
+        dashboard_data = {
+            'make': form_data['make'],
+            'model': form_data['model'],
+            'variant': form_data.get('variant', 'All'),
+            'year': year_int,
+            'fuel': form_data['fuel'],
+            'condition': form_data['condition'],
+            'estimated_price': adjusted,
+            'price_low': price_low,
+            'price_high': price_high,
+            'confidence': confidence,
+            'demand': demand,
+            'days_to_sell': days_to_sell,
+            'deprecation_series': deprecation_series,
+            'buyer_distribution': buyer_distribution,
+            'market_stats': market_stats,
+            'search_mode': form_data['search_mode'],
+        }
+
+        return render_template('buyer_dashboard.html', user=user, data=dashboard_data)
+
+    except Exception as e:
+        app.logger.error(f"Buyer search failed: {e}")
+        return render_form(form_data, error='Could not fetch market data. Please try again.')
 
 @app.route('/submit-deal')
 @login_required
