@@ -1,73 +1,179 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-11">
-        <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-top: 5px solid #4e54ff;">
-            <div class="d-flex justify-content-center mb-4">
-                <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25 shadow-sm">
-                    <input type="radio" class="btn-check" name="sm_toggle" id="disc" checked onclick="setMode(false)">
-                    <label class="btn btn-outline-primary rounded-pill px-4" for="disc">Price Discovery</label>
-                    <input type="radio" class="btn-check" name="sm_toggle" id="eval" onclick="setMode(true)">
-                    <label class="btn btn-outline-primary rounded-pill px-4" for="eval">Evaluate a Deal</label>
+<div class="py-4">
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <a href="/role" class="btn-back" style="background: #6c757d; color: white; border: none; padding: 10px 14px; border-radius: 6px; text-decoration: none; font-size: 14px;">← Back</a>
+        <h2 class="text-white fw-bold mb-0">Buyer Search</h2>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert" style="background: #fff3cd; color: #664d03; border: 1px solid #ffecb5;">
+        <strong>⚠️</strong> {{ error }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    {% if show_credit_request %}
+    <div class="alert alert-info alert-dismissible fade show mb-4" role="alert" style="background: #cfe2ff; color: #084298; border: 1px solid #b6d4fe;">
+        <strong>ℹ️ Need Credits?</strong> You can request 500 bonus credits to continue searching.
+        <a href="/request-credits?referrer=buyer" class="btn btn-sm btn-info ms-2">Request Credits</a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 24px;">
+        <!-- Search Mode Toggle -->
+        <div class="d-flex justify-content-center mb-4">
+            <div class="btn-group p-1 bg-dark rounded-pill border border-primary border-opacity-25 shadow-sm">
+                <input type="radio" class="btn-check" name="search_mode_toggle" id="disc" value="discovery" checked onchange="setMode('discovery')">
+                <label class="btn btn-outline-primary rounded-pill px-4" for="disc">Price Discovery</label>
+                <input type="radio" class="btn-check" name="search_mode_toggle" id="eval" value="evaluation" onchange="setMode('evaluation')">
+                <label class="btn btn-outline-primary rounded-pill px-4" for="eval">Evaluate a Deal</label>
+            </div>
+        </div>
+
+        <form action="/buyer" method="POST" id="buyerForm">
+            <input type="hidden" name="search_mode" id="mode_hidden" value="discovery">
+
+            <!-- Row 1: Make, Fuel, Model, Variant, Year, Condition -->
+            <div class="row g-3 text-start">
+                <div class="col-md-2">
+                    <label class="text-white-50 small fw-bold">Make <span class="text-danger">*</span></label>
+                    <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()" required>
+                        <option value="">Select Make</option>
+                        {% for make in makes %}<option value="{{ make }}" {% if form.make == make %}selected{% endif %}>{{ make }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="text-white-50 small fw-bold">Fuel <span class="text-danger">*</span></label>
+                    <select class="form-select bg-dark text-white border-secondary" name="fuel" id="fuel" onchange="updateModels()" required>
+                        <option value="">Select Fuel</option>
+                        <option value="Petrol" {% if form.fuel == 'Petrol' %}selected{% endif %}>Petrol</option>
+                        <option value="Diesel" {% if form.fuel == 'Diesel' %}selected{% endif %}>Diesel</option>
+                        <option value="CNG" {% if form.fuel == 'CNG' %}selected{% endif %}>CNG</option>
+                        <option value="HEV" {% if form.fuel == 'HEV' %}selected{% endif %}>HEV</option>
+                        <option value="PHEV" {% if form.fuel == 'PHEV' %}selected{% endif %}>PHEV</option>
+                        <option value="BEV" {% if form.fuel == 'BEV' %}selected{% endif %}>BEV</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="text-white-50 small fw-bold">Model <span class="text-danger">*</span></label>
+                    <select class="form-select bg-dark text-white border-secondary" id="model" name="model" onchange="updateVariants()" required>
+                        <option value="">Select Model</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="text-white-50 small fw-bold">Variant</label>
+                    <select class="form-select bg-dark text-white border-secondary" id="variant" name="variant">
+                        <option value="">Any Variant</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="text-white-50 small fw-bold">Year <span class="text-danger">*</span></label>
+                    <select class="form-select bg-dark text-white border-secondary" name="year" required>
+                        <option value="">Select Year</option>
+                        {% for y in years %}<option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="text-white-50 small fw-bold">Condition <span class="text-danger">*</span></label>
+                    <select class="form-select bg-dark text-white border-secondary" name="condition" required>
+                        <option value="">Select Condition</option>
+                        {% for cond in conditions %}<option value="{{ cond }}" {% if form.condition == cond %}selected{% endif %}>{{ cond }}</option>{% endfor %}
+                    </select>
                 </div>
             </div>
 
-            <form action="/buyer_dashboard" method="POST">
-                <input type="hidden" name="search_mode" id="mode_hidden" value="discovery">
-                <div class="row g-3 text-start">
-                    <div class="col-md-2"><label class="text-white-50 small">Location (City)</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="city">{% for city in cities %}<option>{{ city }}</option>{% endfor %}</select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Make</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="make" id="brand" onchange="updateModels()">{% for brand in brands %}<option>{{ brand }}</option>{% endfor %}</select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Model</label>
-                        <select class="form-select bg-dark text-white border-secondary" id="model" name="model" onchange="updateVariants()"></select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Variant / Suffix</label>
-                        <select class="form-select bg-dark text-white border-secondary" id="variant" name="variant"></select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Fuel Type</label>
-                        <select class="form-select bg-dark text-white border-secondary"><option>Petrol</option><option>Diesel</option><option>CNG</option><option>EV</option><option>PHEV</option></select>
-                    </div>
-                    <div class="col-md-2"><label class="text-white-50 small">Condition</label>
-                        <select class="form-select bg-dark text-white border-secondary" name="condition">{% for cond in conditions %}<option>{{ cond }}</option>{% endfor %}</select>
-                    </div>
+            <!-- Row 2: Budget (conditional) -->
+            <div class="row g-3 mt-2" id="budgetRow" style="display: none;">
+                <div class="col-md-3">
+                    <label class="text-white-50 small fw-bold">Budget Min (₹) <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control bg-dark text-white border-secondary" name="budget_min" placeholder="e.g., 500000" value="{{ form.budget_min or '' }}">
                 </div>
-                <div class="row mt-4 align-items-center">
-                    <div class="col-md-2"><label class="text-white-50 small">Mileage (KMs)</label><input type="number" class="form-control bg-dark text-white border-secondary"></div>
-                    <div class="col-md-3" id="askingBox" style="display:none;"><label class="text-warning small fw-bold">Asking Price (₹)</label><input type="number" name="asking_price" class="form-control bg-dark text-white border-warning"></div>
-                    <div class="col-md-4"><button type="submit" class="btn btn-primary w-100 py-3 fw-bold shadow">Analyze Market Intelligence</button></div>
-                    <div class="col-md-3">
-                        <small class="text-muted d-block">Coming Soon:</small>
-                        <span class="badge bg-dark border border-secondary text-muted">Price Alerts</span>
-                        <span class="badge bg-dark border border-secondary text-muted">Unlimited Search</span>
-                    </div>
+                <div class="col-md-3">
+                    <label class="text-white-50 small fw-bold">Budget Max (₹) <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control bg-dark text-white border-secondary" name="budget_max" placeholder="e.g., 1500000" value="{{ form.budget_max or '' }}">
                 </div>
-            </form>
-        </div>
+                <div class="col-md-6">
+                    <label class="text-white-50 small fw-bold">&nbsp;</label>
+                    <p class="text-info small mb-0"><i class="fas fa-info-circle"></i> We'll find deals within your budget and highlight the best value.</p>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary w-100 py-3 fw-bold shadow">
+                        <i class="fas fa-search me-2"></i>Analyze Market Intelligence
+                    </button>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
+
 <script>
-const dataMap = {
-    "Toyota": {"Fortuner": ["4x2 AT", "4x4 AT", "Sigma 4"], "Innova": ["GX", "VX", "ZX"], "Glanza": ["S", "G", "V"]},
-    "Maruti Suzuki": {"Swift": ["LXi", "VXi", "ZXi"], "Brezza": ["LXi", "VXi", "ZXi+"], "Baleno": ["Delta", "Zeta", "Alpha"]}
-};
+const carData = {{ car_data_json|safe }};
+
+function setMode(mode) {
+    document.getElementById('mode_hidden').value = mode;
+    document.getElementById('budgetRow').style.display = mode === 'evaluation' ? 'flex' : 'none';
+}
+
 function updateModels() {
-    const b = document.getElementById('brand').value;
-    const m = document.getElementById('model');
-    m.innerHTML = '';
-    Object.keys(dataMap[b] || {}).forEach(x => m.add(new Option(x, x)));
+    const make = document.getElementById('brand').value;
+    const fuel = document.getElementById('fuel').value;
+    const modelSelect = document.getElementById('model');
+    const variantSelect = document.getElementById('variant');
+
+    modelSelect.innerHTML = '<option value="">Select Model</option>';
+    variantSelect.innerHTML = '<option value="">Any Variant</option>';
+
+    if (!make || !carData[make]) return;
+
+    const makeData = carData[make];
+    const models = Object.keys(makeData).sort();
+
+    models.forEach(model => {
+        const modelData = makeData[model];
+        if (!fuel || !modelData.fuels || modelData.fuels.includes(fuel)) {
+            const opt = document.createElement('option');
+            opt.value = model;
+            opt.textContent = model;
+            modelSelect.appendChild(opt);
+        }
+    });
+
     updateVariants();
 }
+
 function updateVariants() {
-    const b = document.getElementById('brand').value;
-    const m = document.getElementById('model').value;
-    const v = document.getElementById('variant');
-    v.innerHTML = '';
-    (dataMap[b][m] || ["Standard"]).forEach(x => v.add(new Option(x, x)));
+    const make = document.getElementById('brand').value;
+    const model = document.getElementById('model').value;
+    const variantSelect = document.getElementById('variant');
+
+    variantSelect.innerHTML = '<option value="">Any Variant</option>';
+
+    if (!make || !model || !carData[make] || !carData[make][model]) return;
+
+    const variants = carData[make][model].variants || [];
+    variants.sort().forEach(variant => {
+        const opt = document.createElement('option');
+        opt.value = variant;
+        opt.textContent = variant;
+        variantSelect.appendChild(opt);
+    });
 }
-function setMode(isEval) { document.getElementById('askingBox').style.display = isEval ? 'block' : 'none'; document.getElementById('mode_hidden').value = isEval ? 'evaluation' : 'discovery'; }
-updateModels();
+
+document.addEventListener('DOMContentLoaded', function() {
+    const mode = document.getElementById('mode_hidden').value;
+    if (mode === 'evaluation') {
+        document.getElementById('eval').checked = true;
+        document.getElementById('budgetRow').style.display = 'flex';
+    } else {
+        document.getElementById('disc').checked = true;
+    }
+    updateModels();
+});
 </script>
 {% endblock %}
