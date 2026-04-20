@@ -1,48 +1,132 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="row g-4 py-3">
-    <div class="col-lg-8">
-        <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 24px; border-left: 5px solid #4e54ff;">
-            <div class="d-flex justify-content-between align-items-start mb-4">
-                <h3 class="text-white fw-bold">Fair Market Range ({{ model }})</h3>
-                <div class="btn-group bg-dark p-1 rounded-3">
-                    <button class="btn btn-sm btn-outline-primary">Excellent</button>
-                    <button class="btn btn-sm btn-primary">Average</button>
-                    <button class="btn btn-sm btn-outline-primary">Fair</button>
-                </div>
-            </div>
-            <h1 class="text-green fw-bold mb-4">₹ {{ "{:,}".format(res.low) }} - {{ "{:,}".format(res.high) }}</h1>
-            <div class="py-3">
-                <div class="progress rounded-pill shadow-sm" style="height: 14px; background: #2d2f34;">
-                    <div class="progress-bar bg-success" style="width: 33%"></div>
-                    <div class="progress-bar bg-warning" style="width: 33%"></div>
-                    <div class="progress-bar bg-danger" style="width: 34%"></div>
-                </div>
-                <div class="d-flex justify-content-between mt-2 small text-white-50 fw-bold"><span>GREAT DEAL</span><span>FAIR PRICE</span><span>OVERPRICED</span></div>
-            </div>
-            <div class="row mt-4 g-3 text-center">
-                <div class="col-6"><div class="p-3 bg-dark rounded-4 border border-primary border-opacity-10 h-100"><small class="text-white-50 d-block mb-1">Dealer Price</small><span class="fw-bold fs-5 text-white">₹ {{ "{:,}".format(res.high) }}</span></div></div>
-                <div class="col-6"><div class="p-3 bg-dark rounded-4 border border-primary border-opacity-10 h-100"><small class="text-white-50 d-block">Private Sale</small><span class="fw-bold fs-5 text-white">₹ {{ "{:,}".format(res.low) }}</span></div></div>
-            </div>
-        </div>
+<div class="py-4">
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <a href="/buyer?make={{ data.make }}&fuel={{ data.fuel }}&model={{ data.model }}&variant={{ data.variant }}&year={{ data.year }}&condition={{ data.condition }}&search_mode={{ data.search_mode }}" class="btn-back" style="background: #6c757d; color: white; border: none; padding: 10px 14px; border-radius: 6px; text-decoration: none; font-size: 14px;">← Back</a>
+        <h2 class="text-white fw-bold mb-0">Market Intelligence</h2>
     </div>
-    <div class="col-lg-4">
-        <div class="card p-4 border-0 shadow-lg mb-4" style="background: #16181d; border-radius: 20px;">
-            <h6 class="text-white-50 mb-4">5-Year Value Forecast</h6>
-            <svg viewBox="0 0 200 135" class="w-100">
-                <path d="M20,20 Q40,95 180,115" fill="none" stroke="#28a745" stroke-width="2.5" stroke-linecap="round" />
-                <circle cx="20" cy="20" r="5" fill="#fff" /><text x="25" y="14" fill="#fff" font-size="7" font-weight="bold">₹{{ (forecast[0]/100000)|round(1) }}L</text>
-                <circle cx="52" cy="65" r="4" fill="#fff" /><text x="58" y="60" fill="#888" font-size="6">₹{{ (forecast[1]/100000)|round(1) }}L</text>
-                <circle cx="180" cy="115" r="5" fill="#fff" /><text x="160" y="128" fill="#888" font-size="6">₹{{ (forecast[5]/100000)|round(1) }}L</text>
-            </svg>
-            <p class="text-center small mt-3 text-white-50">Suggestion: <strong>Buy Now</strong></p>
+
+    <div class="row g-4">
+        <!-- Main Panel: Fair Market Range -->
+        <div class="col-lg-8">
+            <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 24px; border-left: 5px solid #4e54ff;">
+                <div class="d-flex justify-content-between align-items-start mb-4">
+                    <div>
+                        <h3 class="text-white fw-bold mb-0">{{ data.year }} {{ data.make }} {{ data.model }}</h3>
+                        <small class="text-white-50">{{ data.fuel }} · {{ data.condition }} Condition</small>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-white-50 d-block">Confidence</small>
+                        <span class="badge bg-success">{{ data.confidence }}%</span>
+                    </div>
+                </div>
+
+                <!-- Price Range Hero -->
+                <div class="my-4">
+                    <small class="text-white-50 d-block mb-1">Fair Market Range</small>
+                    <h1 class="text-success fw-bold mb-0">₹ {{ "{:,}".format(data.price_low) }} - {{ "{:,}".format(data.price_high) }}</h1>
+                    <small class="text-white-50 mt-1 d-block">Estimated Mid-Point: <strong>{{ data.estimated_price|inr }}</strong></small>
+                </div>
+
+                <!-- Price Band Visualization -->
+                <div class="mt-4">
+                    <div class="progress rounded-pill shadow-sm" style="height: 16px; background: #2d2f34;">
+                        <div class="progress-bar bg-success" style="width: 33%;" title="Great Deal"></div>
+                        <div class="progress-bar bg-warning" style="width: 34%;" title="Fair Price"></div>
+                        <div class="progress-bar bg-danger" style="width: 33%;" title="Overpriced"></div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2 small text-white-50 fw-bold">
+                        <span>🎯 GREAT DEAL</span>
+                        <span>⚖️ FAIR PRICE</span>
+                        <span>⚠️ OVERPRICED</span>
+                    </div>
+                </div>
+
+                <!-- Comparison Cards -->
+                <div class="row mt-4 g-3">
+                    <div class="col-6">
+                        <div class="p-3 bg-dark rounded-3 border border-primary border-opacity-10">
+                            <small class="text-white-50 d-block mb-2">📊 Avg Dealer Price</small>
+                            <span class="fw-bold fs-5 text-white">{{ data.price_high|inr }}</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-3 bg-dark rounded-3 border border-primary border-opacity-10">
+                            <small class="text-white-50 d-block mb-2">👤 Avg Private Sale</small>
+                            <span class="fw-bold fs-5 text-white">{{ data.price_low|inr }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Market KPIs -->
+                <div class="row mt-4 g-3">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-dark rounded-3 border border-primary border-opacity-10 text-center">
+                            <small class="text-white-50 d-block mb-1">📈 Demand</small>
+                            <span class="fw-bold fs-6 text-success">{{ data.demand }}</span>
+                            <small class="text-white-50 d-block mt-1">{{ 'High' if data.demand > 70 else 'Medium' if data.demand > 40 else 'Low' }} Demand</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-dark rounded-3 border border-primary border-opacity-10 text-center">
+                            <small class="text-white-50 d-block mb-1">⏱️ Days to Sell</small>
+                            <span class="fw-bold fs-6 text-info">{{ data.days_to_sell|default(30) }} days</span>
+                            <small class="text-white-50 d-block mt-1">Avg Market Speed</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-dark rounded-3 border border-primary border-opacity-10 text-center">
+                            <small class="text-white-50 d-block mb-1">🔍 Confidence</small>
+                            <span class="fw-bold fs-6 text-warning">{{ data.confidence }}%</span>
+                            <small class="text-white-50 d-block mt-1">Data-backed</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="text-center">
-            <a href="/buyer" class="text-white-50 small text-decoration-none border-bottom border-primary pb-1"><i class="fas fa-edit me-1"></i> Edit Vehicle Details</a>
-        </div>
-        <div class="mt-4 p-3 border border-dashed rounded-4 opacity-50 text-center">
-            <small class="text-white d-block">Coming Soon:</small>
-            <span class="text-white-50 small">Accessory & Detailing Benefits</span>
+
+        <!-- Right Panel: Insights & Recommendations -->
+        <div class="col-lg-4">
+            <!-- Depreciation Forecast -->
+            <div class="card p-4 border-0 shadow-lg mb-4" style="background: #16181d; border-radius: 24px;">
+                <h6 class="text-white-50 mb-3 fw-bold">📉 12-Month Forecast</h6>
+                <svg viewBox="0 0 200 135" class="w-100">
+                    <line x1="20" y1="20" x2="20" y2="120" stroke="#444" stroke-width="1" stroke-dasharray="2,2"/>
+                    <line x1="180" y1="20" x2="180" y2="120" stroke="#444" stroke-width="1" stroke-dasharray="2,2"/>
+                    <path d="M20,25 Q100,50 180,100" fill="none" stroke="#28a745" stroke-width="2.5" stroke-linecap="round"/>
+                    <circle cx="20" cy="25" r="5" fill="#fff"/><text x="25" y="20" fill="#fff" font-size="7" font-weight="bold">₹{{ (data.estimated_price/100000)|round(1) }}L</text>
+                    <circle cx="100" cy="60" r="4" fill="#aaa"/><text x="95" y="75" fill="#aaa" font-size="6">Month 6</text>
+                    <circle cx="180" cy="100" r="5" fill="#888"/><text x="155" y="115" fill="#888" font-size="6">₹{{ (data.estimated_price * 0.95 / 100000)|round(1) }}L</text>
+                </svg>
+                <p class="text-center small text-white-50 mt-2">Typical 5% depreciation over 12 months</p>
+            </div>
+
+            <!-- Recommendation -->
+            <div class="card p-4 border-0 shadow-lg mb-4" style="background: #16181d; border-radius: 24px; border-left: 3px solid #28a745;">
+                <h6 class="text-white-50 mb-3 fw-bold">💡 Buyer Insight</h6>
+                {% if data.search_mode == 'discovery' %}
+                    <p class="text-white mb-3 small">
+                        This {{ data.year }} {{ data.make }} {{ data.model }} is trading at <strong>fair market rates</strong>. 
+                        {% if data.demand > 70 %}
+                        High demand makes quick sales likely.
+                        {% elif data.demand < 40 %}
+                        Lower demand may extend time to sell.
+                        {% else %}
+                        Moderate demand expected.
+                        {% endif %}
+                    </p>
+                    <p class="text-success small mb-0">
+                        <i class="fas fa-check-circle"></i> Use this range to negotiate confidently.
+                    </p>
+                {% endif %}
+            </div>
+
+            <!-- Edit Search -->
+            <div class="text-center">
+                <a href="/buyer?make={{ data.make }}&fuel={{ data.fuel }}&model={{ data.model }}&year={{ data.year }}&condition={{ data.condition }}&search_mode={{ data.search_mode }}" class="text-white-50 small text-decoration-none border-bottom border-primary pb-1">
+                    <i class="fas fa-edit me-1"></i> Modify Search
+                </a>
+            </div>
         </div>
     </div>
 </div>
