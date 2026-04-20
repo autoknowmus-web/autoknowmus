@@ -753,9 +753,7 @@ def buyer():
             'variant':   request.args.get('variant', ''),
             'year':      request.args.get('year', ''),
             'condition': request.args.get('condition', ''),
-            'budget_min': request.args.get('budget_min', ''),
-            'budget_max': request.args.get('budget_max', ''),
-            'search_mode': request.args.get('search_mode', 'discovery'),
+            'asking_price': request.args.get('asking_price', ''),
         }
         return render_form(prefill)
 
@@ -767,9 +765,7 @@ def buyer():
         'variant':     (request.form.get('variant') or '').strip(),
         'year':        (request.form.get('year') or '').strip(),
         'condition':   (request.form.get('condition') or '').strip(),
-        'budget_min':  (request.form.get('budget_min') or '').strip(),
-        'budget_max':  (request.form.get('budget_max') or '').strip(),
-        'search_mode': (request.form.get('search_mode') or 'discovery').strip(),
+        'asking_price': (request.form.get('asking_price') or '').strip(),
     }
 
     # Validate required fields
@@ -796,20 +792,15 @@ def buyer():
     except (ValueError, TypeError):
         return render_form(form_data, error='Invalid Year.')
 
-    # For "Evaluate a Deal" mode, validate budget
-    if form_data['search_mode'] == 'evaluation':
-        if not form_data['budget_min'] or not form_data['budget_max']:
-            return render_form(form_data, error='Please enter both Min and Max budget for evaluation.')
+    # If asking price is provided, validate it
+    asking_price = None
+    if form_data['asking_price']:
         try:
-            budget_min = int(form_data['budget_min'])
-            budget_max = int(form_data['budget_max'])
-            if budget_min < 100000 or budget_max > 50000000 or budget_min >= budget_max:
+            asking_price = int(form_data['asking_price'])
+            if asking_price < 100000 or asking_price > 50000000:
                 raise ValueError
         except (ValueError, TypeError):
-            return render_form(form_data, error='Budget must be numeric, min < max.')
-    else:
-        budget_min = None
-        budget_max = None
+            return render_form(form_data, error='Asking Price must be numeric and between ₹1,00,000 and ₹5,00,00,000.')
 
     # Check credits (100 per search)
     current_credits = user.get('credits', 0) or 0
@@ -822,35 +813,26 @@ def buyer():
     try:
         market_stats = get_market_stats(form_data['make'], form_data['model'])
         
-        # For discovery mode: show current market range
-        if form_data['search_mode'] == 'discovery':
-            base_price = compute_base_valuation(
-                make=form_data['make'],
-                model=form_data['model'],
-                variant=form_data.get('variant', ''),
-                fuel=form_data['fuel'],
-                year=year_int,
-                mileage=50000,
-                condition=form_data['condition'],
-                owner='2nd Owner',
-            )
-            similar = fetch_similar_deals(
-                make=form_data['make'],
-                model=form_data['model'],
-                year=year_int,
-                fuel=form_data['fuel']
-            )
-            adjusted, confidence = adjust_with_deals(base_price, similar)
-            price_low, price_high = compute_price_range(adjusted)
-            demand = compute_demand(form_data['make'], year_int)
-            
-        else:  # evaluation mode
-            base_price = (budget_min + budget_max) / 2
-            adjusted = base_price
-            confidence = 65
-            price_low = budget_min
-            price_high = budget_max
-            demand = compute_demand(form_data['make'], year_int)
+        # Compute base valuation
+        base_price = compute_base_valuation(
+            make=form_data['make'],
+            model=form_data['model'],
+            variant=form_data.get('variant', ''),
+            fuel=form_data['fuel'],
+            year=year_int,
+            mileage=50000,
+            condition=form_data['condition'],
+            owner='2nd Owner',
+        )
+        similar = fetch_similar_deals(
+            make=form_data['make'],
+            model=form_data['model'],
+            year=year_int,
+            fuel=form_data['fuel']
+        )
+        adjusted, confidence = adjust_with_deals(base_price, similar)
+        price_low, price_high = compute_price_range(adjusted)
+        demand = compute_demand(form_data['make'], year_int)
 
         # Deduct credits (100 per search)
         new_balance = current_credits - VALUATION_COST
@@ -859,7 +841,7 @@ def buyer():
             log_credit_transaction(
                 user_id=user['id'],
                 type_='buyer_search',
-                description=f"Buyer Search: {form_data['year']} {form_data['make']} {form_data['model']} ({form_data['search_mode']})",
+                description=f"Buyer Search: {form_data['year']} {form_data['make']} {form_data['model']}",
                 amount=-VALUATION_COST,
                 balance_after=new_balance,
             )
@@ -881,6 +863,7 @@ def buyer():
             'year': year_int,
             'fuel': form_data['fuel'],
             'condition': form_data['condition'],
+            'asking_price': asking_price,
             'estimated_price': adjusted,
             'price_low': price_low,
             'price_high': price_high,
@@ -890,7 +873,6 @@ def buyer():
             'deprecation_series': deprecation_series,
             'buyer_distribution': buyer_distribution,
             'market_stats': market_stats,
-            'search_mode': form_data['search_mode'],
         }
 
         return render_template('buyer_dashboard.html', user=user, data=dashboard_data)
