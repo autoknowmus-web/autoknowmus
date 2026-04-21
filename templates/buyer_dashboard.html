@@ -224,12 +224,13 @@
     <a href="{{ url_for('buyer',
                         make=back_prefill.make, fuel=back_prefill.fuel,
                         model=back_prefill.model, variant=back_prefill.variant,
-                        year=back_prefill.year, condition=back_prefill.condition,
+                        year=back_prefill.year, owner=back_prefill.owner,
+                        mileage=back_prefill.mileage, condition=back_prefill.condition,
                         asking_price=back_prefill.asking_price) }}"
        class="btn-back">← Back</a>
     <div class="car-summary">
       <div class="car-name">{{ year }} {{ make }} {{ model }} {{ variant }}</div>
-      <div class="car-meta">{{ fuel }} · {{ condition }} condition · Bangalore</div>
+      <div class="car-meta">{{ fuel }} · {{ mileage | inr }} km · {{ condition }} · {{ owner }} · Bangalore</div>
     </div>
   </div>
 
@@ -416,19 +417,18 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <script>
-  // ----- Injected from Flask -----
-  const DEP_DATA       = {{ depreciation_json | safe }};
-  const PRICE_LOW      = {{ price_low }};
-  const PRICE_HIGH     = {{ price_high }};
-  const ESTIMATED      = {{ estimated }};
-  const DEALER_PRICE   = {{ dealer_price }};
-  const PRIVATE_PRICE  = {{ private_price }};
-  const DAYS_TO_SELL   = {{ days_to_sell }};
-  const DEMAND         = {{ demand | tojson }};
-  const CONFIDENCE     = {{ confidence }};
-  const CAR_NAME       = {{ (year|string ~ ' ' ~ make ~ ' ' ~ model ~ ' ' ~ variant) | tojson }};
-  const VERIFIED_COUNT = {{ verified_count }};
-  const ASKING_PRICE   = {{ asking_price if asking_price is not none else 'null' }};
+  const DEP_DATA        = {{ depreciation_json | safe }};
+  const PRICE_LOW       = {{ price_low }};
+  const PRICE_HIGH      = {{ price_high }};
+  const ESTIMATED       = {{ estimated }};
+  const DEALER_PRICE    = {{ dealer_price }};
+  const PRIVATE_PRICE   = {{ private_price }};
+  const DAYS_TO_SELL    = {{ days_to_sell }};
+  const DEMAND          = {{ demand | tojson }};
+  const CONFIDENCE      = {{ confidence }};
+  const CAR_NAME        = {{ (year|string ~ ' ' ~ make ~ ' ' ~ model ~ ' ' ~ variant) | tojson }};
+  const VERIFIED_COUNT  = {{ verified_count }};
+  const ASKING_PRICE    = {{ asking_price if asking_price is not none else 'null' }};
   const ASKING_POSITION = {{ asking_position | tojson if asking_position else 'null' }};
   const ASKING_PCT_DIFF = {{ asking_pct_diff if asking_pct_diff is not none else 'null' }};
 
@@ -441,10 +441,6 @@
     return String(n);
   }
 
-  // ======================================================
-  // Month label formatter: 0 => Today, 1 => Month 1, 12 => 1 Year,
-  // 14 => 1 Year 2 Months, 24 => 2 Years, 60 => 5 Years
-  // ======================================================
   function monthLabel(month) {
     if (month === 0) return 'Today';
     if (month < 12)  return 'Month ' + month;
@@ -461,9 +457,6 @@
     return DEP_DATA[idx].price;
   }
 
-  // ======================================================
-  // Buyer verdict
-  // ======================================================
   function generateBuyerVerdict() {
     const confidenceWord =
       CONFIDENCE >= 80 ? 'strong' :
@@ -471,7 +464,7 @@
       CONFIDENCE >= 50 ? 'moderate' : 'preliminary';
 
     const dataNote = VERIFIED_COUNT === 0
-      ? "Our estimate is formula-based using age, condition, and fuel type — we don't yet have verified real-world deals for this exact car."
+      ? "Our estimate is formula-based using age, mileage, condition, ownership and fuel type — we don't yet have verified real-world deals for this exact car."
       : `Our estimate blends the formula with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
 
     let dealVerdict = '';
@@ -504,7 +497,6 @@
     const dealerPremiumPct = Math.round((diff / PRIVATE_PRICE) * 100);
     const dealerVsPrivate = `<p><strong>Where to buy:</strong> Private sellers save you ~<span class="ok">₹ ${lakhFormat(diff)} (${dealerPremiumPct}%)</span> but require more diligence. Dealers cost more but offer warranty & paperwork help — worth it if this is your first used-car purchase.</p>`;
 
-    // 5-year depreciation note
     const priceAt5y = priceAtMonth(DEP_DATA.length - 1);
     const loss5y = ESTIMATED - priceAt5y;
     const pct5y = Math.round((loss5y / ESTIMATED) * 100);
@@ -517,9 +509,6 @@
 
   document.getElementById('verdict-body').innerHTML = generateBuyerVerdict();
 
-  // ======================================================
-  // Depreciation chart (5 years, 60 months)
-  // ======================================================
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 220);
   grad.addColorStop(0, 'rgba(78, 84, 255, 0.35)');
@@ -583,7 +572,6 @@
             autoSkip: false,
             callback: function(val, idx) {
               const m = DEP_DATA[idx] ? DEP_DATA[idx].month : 0;
-              // Show only year markers: 0, 12, 24, 36, 48, 60
               if (m === 0) return 'Today';
               if (m === 12) return '1yr';
               if (m === 24) return '2yr';
