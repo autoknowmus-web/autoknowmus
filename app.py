@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import math
 import logging
 import bcrypt
 from datetime import datetime
@@ -276,13 +277,46 @@ def compute_days_to_sell(demand, price):
 
 
 def compute_depreciation_series(current_price, days=90):
-    import math
+    """Seller dashboard: 90-day gentle depreciation."""
     series = []
     for d in range(0, days + 1):
         frac = d / days if days else 0
         decay = 1.0 - 0.05 * (1 - math.exp(-2.5 * frac))
         price = int(round(current_price * decay))
         series.append({'day': d, 'price': price})
+    return series
+
+
+def compute_depreciation_series_monthly(current_price, months=60):
+    """
+    Buyer dashboard: 5-year (60-month) realistic depreciation curve.
+    Industry-standard depreciation:
+      Year 1: ~15%
+      Year 2: ~12% of prior
+      Year 3: ~10% of prior
+      Year 4: ~8%  of prior
+      Year 5: ~7%  of prior
+    Total ~40% over 5 years.
+    Smoothly spread month-to-month within each year using exponential.
+    Returns list of {month: 0..months, price: int}.
+    """
+    yearly_rates = [0.15, 0.12, 0.10, 0.08, 0.07]  # % lost within each year
+    series = [{'month': 0, 'price': int(round(current_price))}]
+
+    price = float(current_price)
+    for year_idx in range(5):
+        rate = yearly_rates[year_idx]
+        # Monthly multiplier so 12 months compound to (1 - rate)
+        # (1 - m)^12 = (1 - rate) -> m = 1 - (1 - rate)^(1/12)
+        monthly_multiplier = (1 - rate) ** (1 / 12)
+        for m_in_year in range(1, 13):
+            price = price * monthly_multiplier
+            month_num = year_idx * 12 + m_in_year
+            if month_num > months:
+                break
+            series.append({'month': month_num, 'price': int(round(price))})
+        if year_idx * 12 + 12 >= months:
+            break
     return series
 
 
@@ -748,7 +782,6 @@ def request_credits():
         app.logger.error(f"Credit request failed: {e}")
         flash('Could not process credit request. Please try again.', 'error')
 
-    # If the request came from seller form, preserve all form values
     return_to = (request.form.get('return_to') or '').strip()
     if return_to == 'seller':
         kwargs = {
@@ -820,7 +853,6 @@ def buyer():
         }
         return render_form(prefill)
 
-    # POST
     form_data = {
         'make':         (request.form.get('make') or '').strip(),
         'fuel':         (request.form.get('fuel') or '').strip(),
@@ -831,7 +863,6 @@ def buyer():
         'asking_price': (request.form.get('asking_price') or '').strip(),
     }
 
-    # Validate required fields (asking_price is optional)
     for key in ('make', 'fuel', 'model', 'variant', 'year', 'condition'):
         if not form_data[key]:
             return render_form(form_data, error='Please fill in all required fields.')
@@ -853,7 +884,6 @@ def buyer():
     except (ValueError, TypeError):
         return render_form(form_data, error='Invalid Year.')
 
-    # Asking price parsing (optional)
     asking_price_int = None
     if form_data['asking_price']:
         cleaned = form_data['asking_price'].replace(',', '').replace('₹', '').strip()
@@ -864,14 +894,12 @@ def buyer():
         except (ValueError, TypeError):
             return render_form(form_data, error='Asking price must be a valid number.')
 
-    # Credit check
     current_credits = user.get('credits', 0) or 0
     if current_credits < BUYER_SEARCH_COST:
         return render_form(form_data,
                            error=f'Insufficient credits. You need {BUYER_SEARCH_COST} credits to run a search.',
                            show_credit_request=True)
 
-    # Deduct credits
     new_balance = current_credits - BUYER_SEARCH_COST
     try:
         update_user(user['id'], {'credits': new_balance})
@@ -888,7 +916,6 @@ def buyer():
     except Exception as e:
         app.logger.error(f"Buyer credit deduction failed: {e}")
 
-    # Redirect to dashboard with filters as query params
     params = {
         'make':      form_data['make'],
         'fuel':      form_data['fuel'],
@@ -918,7 +945,6 @@ def buyer_dashboard():
     condition = request.args.get('condition', '').strip()
     asking_price_raw = request.args.get('asking_price', '').strip()
 
-    # Basic validation — if core filters missing, redirect back
     if not all([make, fuel, model, variant, year, condition]):
         return redirect(url_for('buyer'))
 
@@ -934,9 +960,7 @@ def buyer_dashboard():
         except (ValueError, TypeError):
             asking_price_int = None
 
-    # Estimate fair market — use seller valuation engine assuming good mileage + 1st owner
-    # (Buyer doesn't supply mileage/owner; we use sensible defaults for estimation)
-    default_mileage = 45000  # reasonable average
+    default_mileage = 45000
     default_owner = '1st Owner'
     estimated = compute_base_valuation(
         make=make, model=model, variant=variant, fuel=fuel,
@@ -953,8 +977,7 @@ def buyer_dashboard():
     adjusted, confidence = adjust_with_deals(estimated, similar_prices)
     price_low, price_high = compute_price_range(adjusted)
 
-    # Asking price position (only if provided)
-    asking_position = None  # 'below' | 'within' | 'above'
+    asking_position = None
     asking_pct_diff = None
     if asking_price_int is not None:
         if asking_price_int < price_low:
@@ -966,13 +989,13 @@ def buyer_dashboard():
         if adjusted:
             asking_pct_diff = round(((asking_price_int - adjusted) / adjusted) * 100, 1)
 
-    # Dealer vs Private estimates
-    dealer_price = int(round(adjusted * 1.12))   # dealers markup ~12%
-    private_price = adjusted                      # private sale = fair market
+    dealer_price = int(round(adjusted * 1.12))
+    private_price = adjusted
 
     demand       = compute_demand(make, year_int)
     days_to_sell = compute_days_to_sell(demand, adjusted)
-    depreciation = compute_depreciation_series(adjusted, days=365)
+    # 5-year (60-month) monthly depreciation
+    depreciation = compute_depreciation_series_monthly(adjusted, months=60)
     verified_count, buyers_last_30d, avg_buyers_range = get_market_stats(make, model)
 
     back_prefill = {
