@@ -4,7 +4,7 @@ import json
 import math
 import logging
 import bcrypt
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from authlib.integrations.flask_client import OAuth
@@ -71,6 +71,24 @@ def lakh_filter(value):
     return str(n)
 
 
+@app.template_filter('ddmmmyyyy')
+def ddmmmyyyy_filter(value):
+    """Format datetime/ISO string as DD-MMM-YYYY."""
+    if not value:
+        return '—'
+    if isinstance(value, str):
+        try:
+            v = value.replace('Z', '+00:00')
+            dt = datetime.fromisoformat(v)
+        except (ValueError, TypeError):
+            return value
+    elif isinstance(value, datetime):
+        dt = value
+    else:
+        return str(value)
+    return dt.strftime('%d-%b-%Y')
+
+
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_SECRET_KEY = os.environ.get('SUPABASE_SECRET_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
@@ -98,6 +116,8 @@ YEARS = list(range(YEAR_END, YEAR_START - 1, -1))
 VALUATION_COST = 100
 BUYER_SEARCH_COST = 100
 CREDIT_REQUEST_AMOUNT = 500
+ALERT_SUBSCRIPTION_COST = 500
+ALERT_SUBSCRIPTION_DAYS = 30
 
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
@@ -288,12 +308,7 @@ def compute_depreciation_series(current_price, days=90):
 
 
 def compute_depreciation_series_monthly(current_price, months=60):
-    """
-    Buyer dashboard: 5-year (60-month) realistic depreciation curve.
-    Industry-standard depreciation:
-      Year 1: ~15%, Year 2: ~12%, Year 3: ~10%, Year 4: ~8%, Year 5: ~7%
-    Total ~40% over 5 years.
-    """
+    """Buyer dashboard: 5-year realistic depreciation curve."""
     yearly_rates = [0.15, 0.12, 0.10, 0.08, 0.07]
     series = [{'month': 0, 'price': int(round(current_price))}]
 
@@ -362,6 +377,25 @@ def get_market_stats(make, model):
     lo = int(avg)
     hi = lo + 1
     return verified_count, buyers_last_30d, f"{lo}-{hi}"
+
+
+def get_active_alert_subscription(user_id, make, model, variant):
+    """Return the user's active alert subscription for this car combo, or None."""
+    try:
+        r = (supabase.table('alert_subscriptions')
+             .select('*')
+             .eq('user_id', user_id)
+             .eq('make', make)
+             .eq('model', model)
+             .eq('variant', variant)
+             .eq('active', True)
+             .gt('expires_at', datetime.utcnow().isoformat())
+             .limit(1)
+             .execute())
+        return r.data[0] if r.data else None
+    except Exception as e:
+        app.logger.warning(f"get_active_alert_subscription failed: {e}")
+        return None
 
 
 # ========== ROUTES ==========
@@ -748,7 +782,7 @@ def seller_dashboard(valuation_id):
 @app.route('/request-credits', methods=['POST'])
 @login_required
 def request_credits():
-    """Auto-approve a 500-credit top-up. Preserves form values for seller/buyer round-trip."""
+    """Auto-approve a 500-credit top-up. Preserves form values for seller/buyer/dashboard round-trip."""
     user = current_user()
     if not user:
         return redirect(url_for('index'))
@@ -802,6 +836,21 @@ def request_credits():
         kwargs = {k: v for k, v in kwargs.items() if v}
         return redirect(url_for('buyer', **kwargs))
 
+    if return_to == 'buyer_dashboard':
+        kwargs = {
+            'make':         request.form.get('keep_make') or '',
+            'fuel':         request.form.get('keep_fuel') or '',
+            'model':        request.form.get('keep_model') or '',
+            'variant':      request.form.get('keep_variant') or '',
+            'year':         request.form.get('keep_year') or '',
+            'owner':        request.form.get('keep_owner') or '',
+            'mileage':      request.form.get('keep_mileage') or '',
+            'condition':    request.form.get('keep_condition') or '',
+            'asking_price': request.form.get('keep_asking_price') or '',
+        }
+        kwargs = {k: v for k, v in kwargs.items() if v}
+        return redirect(url_for('buyer_dashboard', **kwargs))
+
     ref = request.referrer or url_for('seller')
     return redirect(ref)
 
@@ -848,7 +897,6 @@ def buyer():
         }
         return render_form(prefill)
 
-    # POST
     form_data = {
         'make':         (request.form.get('make') or '').strip(),
         'fuel':         (request.form.get('fuel') or '').strip(),
@@ -955,7 +1003,6 @@ def buyer_dashboard():
     condition = request.args.get('condition', '').strip()
     asking_price_raw = request.args.get('asking_price', '').strip()
 
-    # All required
     if not all([make, fuel, model, variant, year, owner, mileage_raw, condition]):
         return redirect(url_for('buyer'))
 
@@ -979,7 +1026,6 @@ def buyer_dashboard():
         except (ValueError, TypeError):
             asking_price_int = None
 
-    # Use ACTUAL mileage + owner the buyer entered
     estimated = compute_base_valuation(
         make=make, model=model, variant=variant, fuel=fuel,
         year=year_int, mileage=mileage_int,
@@ -1015,6 +1061,9 @@ def buyer_dashboard():
     depreciation = compute_depreciation_series_monthly(adjusted, months=60)
     verified_count, buyers_last_30d, avg_buyers_range = get_market_stats(make, model)
 
+    # Check if user already has an active alert subscription for this car
+    active_sub = get_active_alert_subscription(user['id'], make, model, variant)
+
     back_prefill = {
         'make':         make,
         'fuel':         fuel,
@@ -1049,7 +1098,135 @@ def buyer_dashboard():
         buyers_last_30d=buyers_last_30d,
         avg_buyers_range=avg_buyers_range,
         back_prefill=back_prefill,
+        active_sub=active_sub,
+        alert_cost=ALERT_SUBSCRIPTION_COST,
+        alert_days=ALERT_SUBSCRIPTION_DAYS,
     )
+
+
+@app.route('/subscribe-alert', methods=['POST'])
+@login_required
+def subscribe_alert():
+    """Subscribe user to price alerts for a given car combo. Costs 500 credits for 30 days."""
+    user = current_user()
+    if not user:
+        return redirect(url_for('index'))
+
+    # Required inputs
+    make     = (request.form.get('make') or '').strip()
+    model    = (request.form.get('model') or '').strip()
+    variant  = (request.form.get('variant') or '').strip()
+    fuel     = (request.form.get('fuel') or '').strip()
+    year_raw = (request.form.get('year') or '').strip()
+    owner    = (request.form.get('owner') or '').strip()
+    mileage_raw   = (request.form.get('mileage') or '').strip()
+    condition     = (request.form.get('condition') or '').strip()
+    asking_price_raw = (request.form.get('asking_price') or '').strip()
+
+    email_enabled    = request.form.get('email_enabled') == 'on'
+    whatsapp_enabled = request.form.get('whatsapp_enabled') == 'on'
+
+    # Query string kwargs used to return user to the same dashboard view
+    return_kwargs = {
+        'make': make, 'fuel': fuel, 'model': model, 'variant': variant,
+        'year': year_raw, 'owner': owner, 'mileage': mileage_raw,
+        'condition': condition, 'asking_price': asking_price_raw,
+    }
+    return_kwargs = {k: v for k, v in return_kwargs.items() if v}
+
+    if not all([make, model, variant]):
+        flash('Missing car details. Please try again from the dashboard.', 'error')
+        return redirect(url_for('buyer'))
+
+    if not (email_enabled or whatsapp_enabled):
+        flash('Please select at least one alert channel (Email or WhatsApp).', 'error')
+        return redirect(url_for('buyer_dashboard', **return_kwargs))
+
+    # Already have active subscription?
+    existing = get_active_alert_subscription(user['id'], make, model, variant)
+    if existing:
+        flash(f'You already have an active alert subscription for {make} {model} {variant}.', 'success')
+        return redirect(url_for('buyer_dashboard', **return_kwargs))
+
+    # Credit check
+    current_credits = user.get('credits', 0) or 0
+    if current_credits < ALERT_SUBSCRIPTION_COST:
+        flash(f'Insufficient credits. You need {ALERT_SUBSCRIPTION_COST} credits to subscribe. Tap "Get {CREDIT_REQUEST_AMOUNT} Free Credits" below.', 'error')
+        return redirect(url_for('buyer_dashboard', **return_kwargs))
+
+    # Optional fields sanitization
+    try:
+        year_int = int(year_raw) if year_raw else None
+    except (ValueError, TypeError):
+        year_int = None
+    try:
+        mileage_int = int(mileage_raw) if mileage_raw else None
+    except (ValueError, TypeError):
+        mileage_int = None
+    try:
+        asking_price_int = int(asking_price_raw) if asking_price_raw else None
+    except (ValueError, TypeError):
+        asking_price_int = None
+
+    now = datetime.utcnow()
+    expires = now + timedelta(days=ALERT_SUBSCRIPTION_DAYS)
+
+    payload = {
+        'user_id': user['id'],
+        'make': make,
+        'model': model,
+        'variant': variant,
+        'fuel': fuel or None,
+        'year': year_int,
+        'owner': owner or None,
+        'mileage': mileage_int,
+        'condition': condition or None,
+        'reference_asking_price': asking_price_int,
+        'email_enabled': bool(email_enabled),
+        'whatsapp_enabled': bool(whatsapp_enabled),
+        'email_at_subscribe': user.get('email'),
+        'whatsapp_at_subscribe': user.get('whatsapp_phone'),
+        'created_at': now.isoformat(),
+        'expires_at': expires.isoformat(),
+        'active': True,
+        'credits_spent': ALERT_SUBSCRIPTION_COST,
+    }
+
+    try:
+        ins = supabase.table('alert_subscriptions').insert(payload).execute()
+        sub_row = ins.data[0] if ins.data else None
+    except Exception as e:
+        app.logger.error(f"Alert subscription insert failed: {e}")
+        flash('Could not create subscription. Please try again.', 'error')
+        return redirect(url_for('buyer_dashboard', **return_kwargs))
+
+    if not sub_row:
+        flash('Could not create subscription. Please try again.', 'error')
+        return redirect(url_for('buyer_dashboard', **return_kwargs))
+
+    # Deduct credits
+    new_balance = current_credits - ALERT_SUBSCRIPTION_COST
+    try:
+        update_user(user['id'], {'credits': new_balance})
+        log_credit_transaction(
+            user_id=user['id'],
+            type_='alert_subscription',
+            description=f"Alert subscription ({ALERT_SUBSCRIPTION_DAYS} days): {make} {model} {variant}",
+            amount=-ALERT_SUBSCRIPTION_COST,
+            balance_after=new_balance,
+        )
+        session['credits'] = new_balance
+        if 'user' in session:
+            session['user']['credits'] = new_balance
+    except Exception as e:
+        app.logger.error(f"Alert subscription credit deduction failed: {e}")
+
+    channels = []
+    if email_enabled:    channels.append('Email')
+    if whatsapp_enabled: channels.append('WhatsApp')
+    channels_str = ' and '.join(channels)
+    flash(f"✅ Alerts active for {make} {model} {variant} via {channels_str} until {expires.strftime('%d-%b-%Y')}.", 'success')
+    return redirect(url_for('buyer_dashboard', **return_kwargs))
 
 
 # ---------- Stage 3 stubs ----------
