@@ -3,7 +3,6 @@
 
 {% block extra_head %}
 <style>
-  /* Tighter spacing to fit on one screen */
   .dashboard-wrap { padding: 14px 30px 20px; }
 
   .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
@@ -11,7 +10,6 @@
   .car-summary .car-name { color: #4e54ff; font-weight: 700; font-size: 1.05rem; line-height: 1.2; }
   .car-summary .car-meta { color: #b0b0b0; font-size: 0.82rem; margin-top: 2px; }
 
-  /* ===== TOP ROW: Hero+DealAnalysis (left) + Graph (right) ===== */
   .top-row {
     display: grid;
     grid-template-columns: 1fr 1.25fr;
@@ -37,7 +35,6 @@
   }
   .card-title .sub { color: #b0b0b0; font-size: 0.75rem; font-weight: 400; margin-left: 6px; }
 
-  /* Hero price */
   .hero-combined { display: flex; flex-direction: column; gap: 14px; }
   .price-hero { text-align: center; }
   .price-hero .hero-label { color: #b0b0b0; font-size: 0.76rem; letter-spacing: 0.5px; margin-bottom: 4px; }
@@ -47,7 +44,6 @@
   .price-hero .hero-mid strong { color: #ffa500; font-weight: 600; }
   @media (min-width: 1200px) { .price-hero .hero-range { font-size: 2rem; } }
 
-  /* Deal Analysis banner (replaces slider section in seller dashboard) */
   .deal-section { border-top: 1px solid #2a2d34; padding-top: 12px; }
   .deal-banner {
     border-radius: 10px;
@@ -79,11 +75,9 @@
   .deal-unknown .deal-title  { color: #adb5bd; }
   .deal-unknown .deal-body   { color: #adb5bd; }
 
-  /* Graph */
   .graph-wrap { position: relative; height: 220px; }
   @media (max-width: 900px) { .graph-wrap { height: 200px; } }
 
-  /* ===== KPI cards ===== */
   .kpi-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -114,7 +108,6 @@
   .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
   @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
-  /* ℹ️ info icon tooltip */
   .info-wrap { position: relative; display: inline-flex; }
   .info-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -163,7 +156,6 @@
     visibility: visible; opacity: 1;
   }
 
-  /* Market stats */
   .market-stats {
     background: #14171d;
     border-radius: 8px;
@@ -175,7 +167,6 @@
   }
   .market-stats strong { color: #e9ecef; }
 
-  /* ===== BOTTOM ROW: Dealer vs Private (left) + Verdict (right) ===== */
   .bottom-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -183,7 +174,6 @@
   }
   @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
 
-  /* Dealer vs Private comparison card */
   .compare-row { display: flex; flex-direction: column; gap: 10px; }
   .compare-item {
     background: #14171d;
@@ -200,7 +190,6 @@
   .compare-item.dealer .ci-label  { color: #ffa500; }
   .compare-item.private .ci-label { color: #28a745; }
 
-  /* Verdict — buyer-themed blue */
   .verdict-card {
     background: linear-gradient(135deg, #1a2030 0%, #14171d 100%);
     border: 1px solid #4e54ff;
@@ -231,7 +220,6 @@
 {% block content %}
 <div class="dashboard-wrap">
 
-  <!-- HEADER -->
   <div class="dash-header">
     <a href="{{ url_for('buyer',
                         make=back_prefill.make, fuel=back_prefill.fuel,
@@ -245,9 +233,7 @@
     </div>
   </div>
 
-  <!-- TOP ROW: Hero+DealAnalysis (left) + Graph (right) -->
   <div class="top-row">
-    <!-- LEFT: Fair Market hero + Deal Analysis banner -->
     <div class="card hero-combined">
       <div class="price-hero">
         <div class="hero-label">FAIR MARKET PRICE RANGE</div>
@@ -319,17 +305,16 @@
       </div>
     </div>
 
-    <!-- RIGHT: Depreciation graph (365 days) -->
     <div class="card">
       <div class="card-title">
         Depreciation Forecast
         <span class="info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip">
-            How this car's value is expected to drop over the next 12 months. Helps you judge whether waiting for a better deal is worth it, or whether buying now locks in the best value.
+            How this car's value is expected to drop over the next 5 years from today. Hover over the line to see the projected value at any specific month. Helps you judge the long-term cost of buying now vs waiting.
           </span>
         </span>
-        <span class="sub">next 12 months</span>
+        <span class="sub">next 5 years</span>
       </div>
       <div class="graph-wrap">
         <canvas id="dep-chart"></canvas>
@@ -337,7 +322,6 @@
     </div>
   </div>
 
-  <!-- KPIs -->
   <div class="kpi-row">
     <div class="kpi-card">
       <div class="kpi-label">
@@ -375,7 +359,7 @@
         <span class="info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip">
-            Average days this car sits on the market before selling. Longer times mean you can negotiate harder. Shorter times mean decide quickly.
+            Average days a car like this stays listed before being sold. Compare this against how long the car you're evaluating has been on the market — if it's been listed far longer than typical, the seller may be open to negotiation; if it's fresh, move fast.
           </span>
         </span>
       </div>
@@ -384,14 +368,12 @@
     </div>
   </div>
 
-  <!-- Market stats -->
   <div class="market-stats">
     <strong>{{ verified_count }}</strong> verified transactions ·
     <strong>{{ buyers_last_30d }}</strong> buyers last 30 days ·
     Average <strong>{{ avg_buyers_range }}</strong> buyers/day
   </div>
 
-  <!-- BOTTOM ROW: Dealer vs Private (left) + Verdict (right) -->
   <div class="bottom-row">
     <div class="card">
       <div class="card-title">
@@ -431,7 +413,6 @@
 
 </div>
 
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <script>
@@ -451,7 +432,6 @@
   const ASKING_POSITION = {{ asking_position | tojson if asking_position else 'null' }};
   const ASKING_PCT_DIFF = {{ asking_pct_diff if asking_pct_diff is not none else 'null' }};
 
-  // ----- Formatters -----
   function lakhFormat(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
@@ -461,15 +441,28 @@
     return String(n);
   }
 
-  // Depreciation lookup — day → price
-  function priceAtDay(day) {
-    if (day < 0) day = 0;
-    if (day >= DEP_DATA.length) day = DEP_DATA.length - 1;
-    return DEP_DATA[day].price;
+  // ======================================================
+  // Month label formatter: 0 => Today, 1 => Month 1, 12 => 1 Year,
+  // 14 => 1 Year 2 Months, 24 => 2 Years, 60 => 5 Years
+  // ======================================================
+  function monthLabel(month) {
+    if (month === 0) return 'Today';
+    if (month < 12)  return 'Month ' + month;
+    const years = Math.floor(month / 12);
+    const remMonths = month % 12;
+    const yearWord = years === 1 ? 'Year' : 'Years';
+    if (remMonths === 0) return years + ' ' + yearWord;
+    const monthWord = remMonths === 1 ? 'Month' : 'Months';
+    return years + ' ' + yearWord + ' ' + remMonths + ' ' + monthWord;
+  }
+
+  function priceAtMonth(month) {
+    const idx = Math.max(0, Math.min(DEP_DATA.length - 1, month));
+    return DEP_DATA[idx].price;
   }
 
   // ======================================================
-  // Verdict — buyer-oriented
+  // Buyer verdict
   // ======================================================
   function generateBuyerVerdict() {
     const confidenceWord =
@@ -481,7 +474,6 @@
       ? "Our estimate is formula-based using age, condition, and fuel type — we don't yet have verified real-world deals for this exact car."
       : `Our estimate blends the formula with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
 
-    // Deal verdict (if asking price provided)
     let dealVerdict = '';
     if (ASKING_PRICE !== null) {
       if (ASKING_POSITION === 'below' && ASKING_PCT_DIFF <= -15) {
@@ -499,7 +491,6 @@
       dealVerdict = `<p><span class="info">💡 Tip:</span> Go back and enter the seller's asking price to get a specific deal verdict — Great Deal, Fair, Overpriced, or Too Good to Be True.</p>`;
     }
 
-    // Demand-based guidance
     let demandGuidance = '';
     if (DEMAND === 'HIGH') {
       demandGuidance = `<p>Market demand is <span class="hi">HIGH</span> — sellers hold pricing power. Cars move fast, so if you find one in fair range, decide quickly. Don't expect deep discounts.</p>`;
@@ -509,35 +500,32 @@
       demandGuidance = `<p>Market demand is <span class="ok">LOW</span> — you have leverage. Cars sit on the market longer, so sellers are more flexible. Aim for 10–15% below asking.</p>`;
     }
 
-    // Dealer vs Private recommendation
     const diff = DEALER_PRICE - PRIVATE_PRICE;
     const dealerPremiumPct = Math.round((diff / PRIVATE_PRICE) * 100);
     const dealerVsPrivate = `<p><strong>Where to buy:</strong> Private sellers save you ~<span class="ok">₹ ${lakhFormat(diff)} (${dealerPremiumPct}%)</span> but require more diligence. Dealers cost more but offer warranty & paperwork help — worth it if this is your first used-car purchase.</p>`;
 
-    // 1-year depreciation note
-    const priceAt365 = priceAtDay(Math.min(365, DEP_DATA.length - 1));
-    const yearlyLoss = ESTIMATED - priceAt365;
-    const yearlyPct = Math.round((yearlyLoss / ESTIMATED) * 100);
-    const deprecNote = `<p><strong>Future value:</strong> This car will depreciate ~<span class="hi">₹ ${lakhFormat(yearlyLoss)} (${yearlyPct}%)</span> over the next 12 months. Factor this into your long-term cost of ownership.</p>`;
+    // 5-year depreciation note
+    const priceAt5y = priceAtMonth(DEP_DATA.length - 1);
+    const loss5y = ESTIMATED - priceAt5y;
+    const pct5y = Math.round((loss5y / ESTIMATED) * 100);
+    const deprecNote = `<p><strong>Future value:</strong> Over the next 5 years, this car will depreciate ~<span class="hi">₹ ${lakhFormat(loss5y)} (${pct5y}%)</span>. Factor this into your long-term cost of ownership.</p>`;
 
-    // Intro
     const intro = `<p>Your target <strong>${CAR_NAME}</strong> has a ${confidenceWord} market analysis (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>`;
 
     return intro + dealVerdict + demandGuidance + dealerVsPrivate + deprecNote;
   }
 
-  // Populate verdict on load
   document.getElementById('verdict-body').innerHTML = generateBuyerVerdict();
 
   // ======================================================
-  // Depreciation chart (365 days)
+  // Depreciation chart (5 years, 60 months)
   // ======================================================
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 220);
   grad.addColorStop(0, 'rgba(78, 84, 255, 0.35)');
   grad.addColorStop(1, 'rgba(78, 84, 255, 0.02)');
 
-  const labels = DEP_DATA.map(p => 'Day ' + p.day);
+  const labels = DEP_DATA.map(p => monthLabel(p.month));
   const prices = DEP_DATA.map(p => p.price);
 
   new Chart(ctx, {
@@ -577,13 +565,8 @@
           displayColors: false,
           callbacks: {
             title: function(items) {
-              const d = items[0].dataIndex;
-              if (d === 0) return 'Today';
-              if (d === 30) return 'In 1 month';
-              if (d === 90) return 'In 3 months';
-              if (d === 180) return 'In 6 months';
-              if (d === 365) return 'In 1 year';
-              return 'Day ' + d;
+              const m = DEP_DATA[items[0].dataIndex].month;
+              return monthLabel(m);
             },
             label: function(item) {
               const v = item.parsed.y;
@@ -596,13 +579,17 @@
         x: {
           ticks: {
             color: '#6c757d',
-            maxTicksLimit: 5,
+            maxTicksLimit: 6,
+            autoSkip: false,
             callback: function(val, idx) {
-              // Show a few key labels: 0, 90, 180, 365
-              if (idx === 0) return 'Today';
-              if (idx === 90) return '3mo';
-              if (idx === 180) return '6mo';
-              if (idx === DEP_DATA.length - 1) return '1yr';
+              const m = DEP_DATA[idx] ? DEP_DATA[idx].month : 0;
+              // Show only year markers: 0, 12, 24, 36, 48, 60
+              if (m === 0) return 'Today';
+              if (m === 12) return '1yr';
+              if (m === 24) return '2yr';
+              if (m === 36) return '3yr';
+              if (m === 48) return '4yr';
+              if (m === 60) return '5yr';
               return '';
             }
           },
