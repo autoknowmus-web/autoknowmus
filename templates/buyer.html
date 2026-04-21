@@ -1,353 +1,341 @@
 {% extends "layout.html" %}
+{% block title %}Buy a Car - AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  .seller-wrap { padding: 30px 40px; }
+  .page-title { color: #4e54ff; font-size: 1.8rem; font-weight: 700; text-align: right; margin: 0; }
+  .form-section { background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px; padding: 30px; }
+  .btn-generate {
+    background: #4e54ff; color: #fff; border: none; padding: 14px 40px;
+    border-radius: 8px; font-weight: 700; font-size: 1rem; letter-spacing: 0.5px;
+    width: 320px; display: block; margin: 0 auto;
+  }
+  .btn-generate:hover { background: #3a3fd0; color: #fff; }
+  .btn-generate:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
+  .btn-generate .credit-cost {
+    display: block; font-size: 0.85rem; font-weight: 500;
+    margin-top: 3px; opacity: 0.95;
+  }
+  .credit-note {
+    text-align: center; color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;
+  }
+  .alert-dismiss {
+    background: #ff8c00; color: #fff; border: none; border-radius: 8px;
+    padding: 0.75rem 2.5rem 0.75rem 1rem; margin-bottom: 1.25rem;
+    position: relative; font-size: 0.92rem;
+  }
+  .alert-dismiss .btn-close-x {
+    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.3rem; line-height: 1; cursor: pointer;
+  }
+
+  .flash-success {
+    background: #28a745; color: #fff; border: none; border-radius: 8px;
+    padding: 0.75rem 2.5rem 0.75rem 1rem; margin-bottom: 1.25rem;
+    position: relative; font-size: 0.92rem; font-weight: 500;
+  }
+  .flash-success .btn-close-x {
+    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.3rem; line-height: 1; cursor: pointer;
+  }
+
+  .credit-request-card {
+    background: #14171d; border: 2px solid #ffa500; border-radius: 12px;
+    padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; text-align: center;
+  }
+  .credit-request-card h4 {
+    color: #ffa500; font-size: 1.05rem; font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .credit-request-card p {
+    color: #adb5bd; font-size: 0.9rem; margin-bottom: 1rem;
+  }
+  .btn-request-credits {
+    background: #ffa500; color: #1a1d24; border: none; font-weight: 700;
+    padding: 0.65rem 1.5rem; border-radius: 8px; font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .btn-request-credits:hover { background: #e69500; color: #1a1d24; }
+
+  .location-row { margin-bottom: 1rem; }
+  .location-row .form-select { max-width: 100%; }
+
+  /* Asking price field with ₹ prefix */
+  .price-input-wrap { position: relative; }
+  .price-input-wrap .price-prefix {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: #adb5bd; font-weight: 600; pointer-events: none; z-index: 2;
+  }
+  .price-input-wrap .form-control { padding-left: 28px; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 1100px; margin: 0 auto; padding: 20px;">
-
-  {# ===== Header row: Title left, Credits right ===== #}
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <div>
-      <h2 class="mb-1" style="color: #fff; font-weight: 700;">Buy a Car</h2>
-      <div style="color: #adb5bd; font-size: 14px;">Hello {{ first_name }}! Let's find the right deal for you.</div>
+<div class="seller-wrap">
+  <div class="form-section">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+      <h2 class="page-title">Buy a Car: Market Intelligence</h2>
     </div>
-    <div>
-      <span class="badge" style="background:#28a745; color:#fff; font-size:14px; padding:8px 14px; border-radius:6px;">
-        ({{ user.credits }} Credits)
-      </span>
+
+    {# Flash messages — e.g. "500 credits added" #}
+    {% with flash_msgs = get_flashed_messages(category_filter=['success']) %}
+      {% if flash_msgs %}
+        {% for m in flash_msgs %}
+          <div class="flash-success" id="flash-success-{{ loop.index }}">
+            ✅ {{ m }}
+            <button type="button" class="btn-close-x"
+                    onclick="document.getElementById('flash-success-{{ loop.index }}').remove()">&times;</button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if error %}
+    <div class="alert-dismiss" id="err-alert">
+      {{ error }}
+      <button type="button" class="btn-close-x" onclick="document.getElementById('err-alert').remove()">&times;</button>
     </div>
-  </div>
-
-  {# ===== Back button (standing rule: .btn-back, top-left of content area) ===== #}
-  <a href="{{ url_for('role') }}" class="btn-back mb-3">← Back</a>
-
-  {# ===== Flash messages (dismissible orange alerts) ===== #}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, msg in messages %}
-        <div class="alert-orange" role="alert">
-          <span>{{ msg }}</span>
-          <button type="button" class="alert-close" aria-label="Close"
-                  onclick="this.parentElement.style.display='none';">&times;</button>
-        </div>
-      {% endfor %}
     {% endif %}
-  {% endwith %}
 
-  {# ===== Search Card ===== #}
-  <div class="search-card">
-    <div class="search-card-header">
-      <h4 style="margin:0; color:#fff; font-weight:600;">Market Intelligence Search</h4>
-      <div style="color:#adb5bd; font-size:13px; margin-top:4px;">
-        Get fair-market pricing, demand trends, and depreciation forecast for any car.
-        <strong style="color:#ffc107;">(100 Credits)</strong> per search.
-      </div>
+    {% if show_credit_request %}
+    <div class="credit-request-card">
+      <h4>🎁 Need more credits?</h4>
+      <p>Request 500 free credits and keep analyzing market deals. Auto-approved instantly.</p>
+      <form method="POST" action="{{ url_for('request_credits') }}" style="display:inline;">
+        <input type="hidden" name="return_to" value="buyer">
+        <input type="hidden" name="keep_make"         value="{{ form.make or '' }}">
+        <input type="hidden" name="keep_fuel"         value="{{ form.fuel or '' }}">
+        <input type="hidden" name="keep_model"        value="{{ form.model or '' }}">
+        <input type="hidden" name="keep_variant"      value="{{ form.variant or '' }}">
+        <input type="hidden" name="keep_year"         value="{{ form.year or '' }}">
+        <input type="hidden" name="keep_condition"    value="{{ form.condition or '' }}">
+        <input type="hidden" name="keep_asking_price" value="{{ form.asking_price or '' }}">
+        <button type="submit" class="btn-request-credits">
+          Request 500 Credits (Free)
+        </button>
+      </form>
     </div>
+    {% endif %}
 
-    <form method="POST" action="{{ url_for('buyer') }}" id="buyerForm" autocomplete="off">
+    <form method="POST" action="{{ url_for('buyer') }}">
 
-      <div class="row g-3">
-
-        {# City — locked to Bangalore #}
-        <div class="col-md-6 col-lg-3">
-          <label class="form-label">City</label>
-          <input type="text" class="form-control" value="Bangalore" disabled readonly>
+      <!-- Row 1: LOCATION (full width, locked) -->
+      <div class="row g-3 location-row">
+        <div class="col-12">
+          <label class="form-label">Location</label>
+          <select class="form-select" disabled>
+            <option>Bangalore</option>
+          </select>
         </div>
+      </div>
 
-        {# Make #}
-        <div class="col-md-6 col-lg-3">
-          <label class="form-label">Make <span class="req">*</span></label>
-          <select name="make" id="make" class="form-select" required>
+      <!-- Row 2: Make, Fuel, Model, Variant -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Make <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="make" id="make" required>
             <option value="">Select Make</option>
             {% for m in makes %}
-              <option value="{{ m }}" {% if prefill.make == m %}selected{% endif %}>{{ m }}</option>
+              <option value="{{ m }}" {% if form.make == m %}selected{% endif %}>{{ m }}</option>
             {% endfor %}
           </select>
         </div>
-
-        {# Fuel #}
-        <div class="col-md-6 col-lg-3">
-          <label class="form-label">Fuel Type <span class="req">*</span></label>
-          <select name="fuel" id="fuel" class="form-select" required disabled>
-            <option value="">Select Fuel</option>
-            {% for f in fuels %}
-              <option value="{{ f }}" {% if prefill.fuel == f %}selected{% endif %}>{{ f }}</option>
-            {% endfor %}
+        <div class="col-md-3">
+          <label class="form-label">Fuel Type <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="fuel" id="fuel" required disabled>
+            <option value="">Select Make first</option>
           </select>
         </div>
-
-        {# Model #}
-        <div class="col-md-6 col-lg-3">
-          <label class="form-label">Model <span class="req">*</span></label>
-          <select name="model" id="model" class="form-select" required disabled>
-            <option value="">Select Model</option>
+        <div class="col-md-3">
+          <label class="form-label">Model <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="model" id="model" required disabled>
+            <option value="">Select Fuel first</option>
           </select>
         </div>
-
-        {# Variant #}
-        <div class="col-md-6 col-lg-3">
-          <label class="form-label">Variant <span class="req">*</span></label>
-          <select name="variant" id="variant" class="form-select" required disabled>
-            <option value="">Select Variant</option>
+        <div class="col-md-3">
+          <label class="form-label">Variant / Suffix <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="variant" id="variant" required disabled>
+            <option value="">Select Model first</option>
           </select>
         </div>
+      </div>
 
-        {# Year #}
-        <div class="col-md-6 col-lg-3">
-          <label class="form-label">Year <span class="req">*</span></label>
-          <select name="year" class="form-select" required>
+      <!-- Row 3: Year, Condition, Asking Price (optional) -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="year" required>
             <option value="">Select Year</option>
             {% for y in years %}
-              <option value="{{ y }}" {% if prefill.year == (y|string) %}selected{% endif %}>{{ y }}</option>
+              <option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
           </select>
         </div>
-
-        {# Condition #}
-        <div class="col-md-6 col-lg-3">
-          <label class="form-label">Condition <span class="req">*</span></label>
-          <select name="condition" class="form-select" required>
+        <div class="col-md-3">
+          <label class="form-label">Condition <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="condition" required>
             <option value="">Select Condition</option>
             {% for c in conditions %}
-              <option value="{{ c }}" {% if prefill.condition == c %}selected{% endif %}>{{ c }}</option>
+              <option value="{{ c }}" {% if form.condition == c %}selected{% endif %}>{{ c }}</option>
             {% endfor %}
           </select>
         </div>
-
-        {# Asking Price (optional) #}
-        <div class="col-md-6 col-lg-3">
-          <label class="form-label">Asking Price (optional)</label>
-          <div class="input-group">
-            <span class="input-group-text" style="background:#1a1d24; color:#adb5bd; border-color:#3a3f4a;">₹</span>
-            <input type="text" name="asking_price" id="asking_price" class="form-control"
-                   placeholder="e.g. 3,50,000"
-                   value="{{ prefill.asking_price }}"
-                   inputmode="numeric">
+        <div class="col-md-6">
+          <label class="form-label">Asking Price <span style="color:#6c757d; font-weight:400;">(optional — enter to analyze if it's a fair deal)</span></label>
+          <div class="price-input-wrap">
+            <span class="price-prefix">₹</span>
+            <input type="text" class="form-control" id="asking-display" inputmode="numeric"
+                   value="{{ form.asking_price or '' }}" placeholder="e.g. 3,50,000">
+            <input type="hidden" name="asking_price" id="asking-raw" value="{{ form.asking_price or '' }}">
           </div>
-          <small style="color:#6c757d; font-size:11px;">Enter to compare against fair market</small>
         </div>
-
       </div>
 
-      <div class="mt-4 d-flex justify-content-end">
-        <button type="submit" class="btn-primary-custom">
-          Analyze Market Intelligence <span style="font-weight:400;">(100 Credits)</span>
-        </button>
-      </div>
-
+      <button type="submit" class="btn-generate">
+        ANALYZE MARKET INTELLIGENCE
+        <span class="credit-cost">(100 Credits)</span>
+      </button>
+      <div class="credit-note">You have <strong style="color:#ffa500;">{{ session.credits|default(0) }} Credits</strong></div>
     </form>
   </div>
-
 </div>
+{% endblock %}
 
-{# ===== Styles ===== #}
-<style>
-  .search-card {
-    background: #21252b;
-    border: 1px solid #3a3f4a;
-    border-radius: 12px;
-    padding: 24px;
-    margin-top: 10px;
-  }
-  .search-card-header {
-    border-bottom: 1px solid #3a3f4a;
-    padding-bottom: 14px;
-    margin-bottom: 20px;
-  }
-  .form-label {
-    color: #dee2e6;
-    font-size: 13px;
-    font-weight: 500;
-    margin-bottom: 6px;
-  }
-  .req { color: #dc3545; }
-  .form-control, .form-select {
-    background: #2c313a !important;
-    border: 1px solid #3a3f4a !important;
-    color: #fff !important;
-    border-radius: 6px;
-  }
-  .form-control:focus, .form-select:focus {
-    background: #2c313a !important;
-    border-color: #4e54ff !important;
-    color: #fff !important;
-    box-shadow: 0 0 0 0.2rem rgba(78,84,255,0.15) !important;
-  }
-  /* Standing rule: disabled/readonly fields — dark bg, grey text */
-  .form-control:disabled, .form-control[readonly],
-  .form-select:disabled {
-    background: #1a1d24 !important;
-    color: #6c757d !important;
-    border-color: #3a3f4a !important;
-    cursor: not-allowed;
-    opacity: 1 !important;
-  }
-  .form-select option { background: #2c313a; color: #fff; }
-  .btn-primary-custom {
-    background: #4e54ff;
-    color: #fff;
-    border: none;
-    padding: 12px 28px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 15px;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .btn-primary-custom:hover { background: #3a3fd0; }
-  /* Standing rule: .btn-back — grey, top-left */
-  .btn-back {
-    display: inline-block;
-    background: #6c757d;
-    color: #fff !important;
-    padding: 8px 16px;
-    border-radius: 6px;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 500;
-    border: none;
-  }
-  .btn-back:hover { background: #5a6268; color: #fff !important; }
-  /* Standing rule: dismissible orange alerts */
-  .alert-orange {
-    background: #ff9800;
-    color: #fff;
-    padding: 12px 40px 12px 16px;
-    border-radius: 8px;
-    margin-bottom: 14px;
-    position: relative;
-    font-size: 14px;
-    font-weight: 500;
-  }
-  .alert-close {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 22px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 0 6px;
-  }
-  .alert-close:hover { color: #f5f5f5; }
-</style>
-
-{# ===== Cascading dropdown + Indian number formatting ===== #}
+{% block scripts %}
 <script>
   const CAR_DATA = {{ car_data_json | safe }};
-  const prefillModel   = {{ (prefill.model or '')   | tojson }};
-  const prefillVariant = {{ (prefill.variant or '') | tojson }};
-  const prefillFuel    = {{ (prefill.fuel or '')    | tojson }};
+  const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
 
-  const makeSel    = document.getElementById('make');
-  const fuelSel    = document.getElementById('fuel');
-  const modelSel   = document.getElementById('model');
-  const variantSel = document.getElementById('variant');
+  const makeEl    = document.getElementById('make');
+  const fuelEl    = document.getElementById('fuel');
+  const modelEl   = document.getElementById('model');
+  const variantEl = document.getElementById('variant');
 
-  function resetSelect(sel, placeholder) {
-    sel.innerHTML = '';
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = placeholder;
-    sel.appendChild(opt);
+  const PREFILL = {
+    make:    {{ (form.make    or '')|tojson }},
+    fuel:    {{ (form.fuel    or '')|tojson }},
+    model:   {{ (form.model   or '')|tojson }},
+    variant: {{ (form.variant or '')|tojson }}
+  };
+
+  function resetSelect(el, placeholder) {
+    el.innerHTML = '<option value="">' + placeholder + '</option>';
+    el.disabled = true;
   }
 
-  function populateFuelsForMake(make, preselect) {
-    resetSelect(fuelSel, 'Select Fuel');
-    if (!make || !CAR_DATA[make]) { fuelSel.disabled = true; return; }
-    const fuelOrder = ['Petrol','Diesel','CNG','HEV','PHEV','BEV'];
-    const fuelsAvail = new Set();
-    Object.values(CAR_DATA[make]).forEach(modelData => {
-      (modelData.fuels || []).forEach(f => fuelsAvail.add(f));
+  function populateFuels(make, preselect) {
+    resetSelect(fuelEl, 'Select Fuel');
+    if (!make || !CAR_DATA[make]) return;
+    const fuelSet = new Set();
+    Object.values(CAR_DATA[make]).forEach(mdl => {
+      (mdl.fuels || []).forEach(f => fuelSet.add(f));
     });
-    fuelOrder.forEach(f => {
-      if (fuelsAvail.has(f)) {
-        const o = document.createElement('option');
-        o.value = f; o.textContent = f;
-        if (preselect && preselect === f) o.selected = true;
-        fuelSel.appendChild(o);
-      }
+    const ordered = FUEL_ORDER.filter(f => fuelSet.has(f));
+    ordered.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f;
+      opt.textContent = f;
+      if (preselect && f === preselect) opt.selected = true;
+      fuelEl.appendChild(opt);
     });
-    fuelSel.disabled = false;
+    fuelEl.disabled = false;
   }
 
-  function populateModelsForFuel(make, fuel, preselect) {
-    resetSelect(modelSel, 'Select Model');
-    if (!make || !fuel || !CAR_DATA[make]) { modelSel.disabled = true; return; }
+  function populateModels(make, fuel, preselect) {
+    resetSelect(modelEl, 'Select Model');
+    if (!make || !fuel || !CAR_DATA[make]) return;
     const models = Object.keys(CAR_DATA[make])
       .filter(m => (CAR_DATA[make][m].fuels || []).includes(fuel))
       .sort();
     models.forEach(m => {
-      const o = document.createElement('option');
-      o.value = m; o.textContent = m;
-      if (preselect && preselect === m) o.selected = true;
-      modelSel.appendChild(o);
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      if (preselect && m === preselect) opt.selected = true;
+      modelEl.appendChild(opt);
     });
-    modelSel.disabled = models.length === 0;
+    modelEl.disabled = false;
   }
 
-  function populateVariantsForModel(make, model, preselect) {
-    resetSelect(variantSel, 'Select Variant');
-    if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) {
-      variantSel.disabled = true; return;
-    }
-    const variants = (CAR_DATA[make][model].variants || []).slice().sort();
+  function populateVariants(make, model, preselect) {
+    resetSelect(variantEl, 'Select Variant');
+    if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
+    const variants = [...(CAR_DATA[make][model].variants || [])].sort();
     variants.forEach(v => {
-      const o = document.createElement('option');
-      o.value = v; o.textContent = v;
-      if (preselect && preselect === v) o.selected = true;
-      variantSel.appendChild(o);
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      if (preselect && v === preselect) opt.selected = true;
+      variantEl.appendChild(opt);
     });
-    variantSel.disabled = variants.length === 0;
+    variantEl.disabled = false;
   }
 
-  makeSel.addEventListener('change', () => {
-    populateFuelsForMake(makeSel.value, null);
-    resetSelect(modelSel, 'Select Model');   modelSel.disabled = true;
-    resetSelect(variantSel, 'Select Variant'); variantSel.disabled = true;
+  makeEl.addEventListener('change', function() {
+    populateFuels(this.value, null);
+    resetSelect(modelEl, 'Select Fuel first');
+    resetSelect(variantEl, 'Select Model first');
   });
-  fuelSel.addEventListener('change', () => {
-    populateModelsForFuel(makeSel.value, fuelSel.value, null);
-    resetSelect(variantSel, 'Select Variant'); variantSel.disabled = true;
+  fuelEl.addEventListener('change', function() {
+    populateModels(makeEl.value, this.value, null);
+    resetSelect(variantEl, 'Select Model first');
   });
-  modelSel.addEventListener('change', () => {
-    populateVariantsForModel(makeSel.value, modelSel.value, null);
+  modelEl.addEventListener('change', function() {
+    populateVariants(makeEl.value, this.value, null);
   });
 
-  // Initial rehydration from prefill (e.g. "Modify Search" back-navigation)
-  if (makeSel.value) {
-    populateFuelsForMake(makeSel.value, prefillFuel);
-    if (fuelSel.value) {
-      populateModelsForFuel(makeSel.value, fuelSel.value, prefillModel);
-      if (modelSel.value) {
-        populateVariantsForModel(makeSel.value, modelSel.value, prefillVariant);
+  (function init() {
+    if (PREFILL.make) {
+      populateFuels(PREFILL.make, PREFILL.fuel);
+      if (PREFILL.fuel) {
+        populateModels(PREFILL.make, PREFILL.fuel, PREFILL.model);
+        if (PREFILL.model) {
+          populateVariants(PREFILL.make, PREFILL.model, PREFILL.variant);
+        }
       }
     }
+  })();
+
+  // ======================================================
+  // Asking Price: Indian comma formatting as user types
+  // ======================================================
+  const askingDisplay = document.getElementById('asking-display');
+  const askingRaw     = document.getElementById('asking-raw');
+
+  function inrGroup(n) {
+    const s = String(Math.abs(n));
+    if (s.length <= 3) return s;
+    const last3 = s.slice(-3);
+    let rest = s.slice(0, -3);
+    const groups = [];
+    while (rest.length > 2) {
+      groups.unshift(rest.slice(-2));
+      rest = rest.slice(0, -2);
+    }
+    if (rest) groups.unshift(rest);
+    return groups.join(',') + ',' + last3;
   }
 
-  // Indian number formatting for asking price
-  function formatIndianNumber(numStr) {
-    const digits = String(numStr).replace(/\D/g, '');
-    if (!digits) return '';
-    const n = digits;
-    if (n.length <= 3) return n;
-    const last3 = n.slice(-3);
-    const rest = n.slice(0, -3);
-    const grouped = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',');
-    return grouped + ',' + last3;
+  function formatAsking() {
+    const digits = askingDisplay.value.replace(/\D+/g, '');
+    if (!digits) {
+      askingDisplay.value = '';
+      askingRaw.value = '';
+      return;
+    }
+    // Cap at 10 crore (reasonable upper bound)
+    let n = parseInt(digits, 10);
+    if (n > 100000000) n = 100000000;
+    askingRaw.value = n;
+    askingDisplay.value = inrGroup(n);
   }
-  const askingInput = document.getElementById('asking_price');
-  if (askingInput) {
-    // Format initial prefilled value
-    if (askingInput.value) askingInput.value = formatIndianNumber(askingInput.value);
-    askingInput.addEventListener('input', (e) => {
-      const cursor = e.target.selectionStart;
-      const oldLen = e.target.value.length;
-      e.target.value = formatIndianNumber(e.target.value);
-      const newLen = e.target.value.length;
-      e.target.setSelectionRange(cursor + (newLen - oldLen), cursor + (newLen - oldLen));
-    });
-  }
+
+  askingDisplay.addEventListener('input', formatAsking);
+  askingDisplay.addEventListener('blur',  formatAsking);
+  formatAsking();
 </script>
 {% endblock %}
