@@ -30,7 +30,6 @@
     background: transparent; border: none; color: #fff;
     font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
-
   .flash-success {
     background: #28a745; color: #fff; border: none; border-radius: 8px;
     padding: 0.75rem 2.5rem 0.75rem 1rem; margin-bottom: 1.25rem;
@@ -41,7 +40,6 @@
     background: transparent; border: none; color: #fff;
     font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
-
   .credit-request-card {
     background: #14171d; border: 2px solid #ffa500; border-radius: 12px;
     padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; text-align: center;
@@ -81,7 +79,6 @@
       <h2 class="page-title">Buy a Car: Market Intelligence</h2>
     </div>
 
-    {# Flash messages — e.g. "500 credits added" #}
     {% with flash_msgs = get_flashed_messages(category_filter=['success']) %}
       {% if flash_msgs %}
         {% for m in flash_msgs %}
@@ -112,6 +109,8 @@
         <input type="hidden" name="keep_model"        value="{{ form.model or '' }}">
         <input type="hidden" name="keep_variant"      value="{{ form.variant or '' }}">
         <input type="hidden" name="keep_year"         value="{{ form.year or '' }}">
+        <input type="hidden" name="keep_owner"        value="{{ form.owner or '' }}">
+        <input type="hidden" name="keep_mileage"      value="{{ form.mileage or '' }}">
         <input type="hidden" name="keep_condition"    value="{{ form.condition or '' }}">
         <input type="hidden" name="keep_asking_price" value="{{ form.asking_price or '' }}">
         <button type="submit" class="btn-request-credits">
@@ -164,8 +163,8 @@
         </div>
       </div>
 
-      <!-- Row 3: Year, Condition, Asking Price (optional) -->
-      <div class="row g-3 mb-4">
+      <!-- Row 3: Year, Owner, Mileage, Condition -->
+      <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
           <select class="form-select" name="year" required>
@@ -176,6 +175,21 @@
           </select>
         </div>
         <div class="col-md-3">
+          <label class="form-label">No. of Owners <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="owner" required>
+            <option value="">Select Owner</option>
+            {% for o in owners %}
+              <option value="{{ o }}" {% if form.owner == o %}selected{% endif %}>{{ o }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
+          <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
+                 value="{{ form.mileage or '' }}" placeholder="e.g. 45,000">
+          <input type="hidden" name="mileage" id="mileage-raw" value="{{ form.mileage or '' }}">
+        </div>
+        <div class="col-md-3">
           <label class="form-label">Condition <span style="color:#ff6b6b;">*</span></label>
           <select class="form-select" name="condition" required>
             <option value="">Select Condition</option>
@@ -184,7 +198,11 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-6">
+      </div>
+
+      <!-- Row 4: Asking Price (optional, full width) -->
+      <div class="row g-3 mb-4">
+        <div class="col-12">
           <label class="form-label">Asking Price <span style="color:#6c757d; font-weight:400;">(optional — enter to analyze if it's a fair deal)</span></label>
           <div class="price-input-wrap">
             <span class="price-prefix">₹</span>
@@ -301,11 +319,8 @@
   })();
 
   // ======================================================
-  // Asking Price: Indian comma formatting as user types
+  // Indian comma formatter (shared)
   // ======================================================
-  const askingDisplay = document.getElementById('asking-display');
-  const askingRaw     = document.getElementById('asking-raw');
-
   function inrGroup(n) {
     const s = String(Math.abs(n));
     if (s.length <= 3) return s;
@@ -320,6 +335,34 @@
     return groups.join(',') + ',' + last3;
   }
 
+  // ======================================================
+  // Mileage
+  // ======================================================
+  const mileageDisplay = document.getElementById('mileage-display');
+  const mileageRaw     = document.getElementById('mileage-raw');
+
+  function formatMileage() {
+    const digits = mileageDisplay.value.replace(/\D+/g, '');
+    if (!digits) {
+      mileageDisplay.value = '';
+      mileageRaw.value = '';
+      return;
+    }
+    let n = parseInt(digits, 10);
+    if (n > 500000) n = 500000;
+    mileageRaw.value = n;
+    mileageDisplay.value = inrGroup(n);
+  }
+  mileageDisplay.addEventListener('input', formatMileage);
+  mileageDisplay.addEventListener('blur',  formatMileage);
+  formatMileage();
+
+  // ======================================================
+  // Asking Price
+  // ======================================================
+  const askingDisplay = document.getElementById('asking-display');
+  const askingRaw     = document.getElementById('asking-raw');
+
   function formatAsking() {
     const digits = askingDisplay.value.replace(/\D+/g, '');
     if (!digits) {
@@ -327,13 +370,11 @@
       askingRaw.value = '';
       return;
     }
-    // Cap at 10 crore (reasonable upper bound)
     let n = parseInt(digits, 10);
     if (n > 100000000) n = 100000000;
     askingRaw.value = n;
     askingDisplay.value = inrGroup(n);
   }
-
   askingDisplay.addEventListener('input', formatAsking);
   askingDisplay.addEventListener('blur',  formatAsking);
   formatAsking();
