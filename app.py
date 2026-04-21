@@ -118,6 +118,7 @@ BUYER_SEARCH_COST = 100
 CREDIT_REQUEST_AMOUNT = 500
 ALERT_SUBSCRIPTION_COST = 500
 ALERT_SUBSCRIPTION_DAYS = 30
+MAX_ACTIVE_ALERTS = 5
 
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
@@ -396,6 +397,20 @@ def get_active_alert_subscription(user_id, make, model, variant):
     except Exception as e:
         app.logger.warning(f"get_active_alert_subscription failed: {e}")
         return None
+
+def count_active_alert_subscriptions(user_id):
+    """Count how many active (non-expired) alert subscriptions the user has."""
+    try:
+        r = (supabase.table('alert_subscriptions')
+             .select('id', count='exact')
+             .eq('user_id', user_id)
+             .eq('active', True)
+             .gt('expires_at', datetime.utcnow().isoformat())
+             .execute())
+        return r.count or 0
+    except Exception as e:
+        app.logger.warning(f"count_active_alert_subscriptions failed: {e}")
+        return 0
 
 
 # ========== ROUTES ==========
@@ -1147,7 +1162,13 @@ def subscribe_alert():
     if existing:
         flash(f'You already have an active alert subscription for {make} {model} {variant}.', 'success')
         return redirect(url_for('buyer_dashboard', **return_kwargs))
-
+        
+# Cap check: max 5 active alerts per user
+    active_count = count_active_alert_subscriptions(user['id'])
+    if active_count >= MAX_ACTIVE_ALERTS:
+        flash(f'Maximum {MAX_ACTIVE_ALERTS} active alerts reached. Cancel an existing alert or wait for one to expire before subscribing to a new car.', 'error')
+        return redirect(url_for('buyer_dashboard', **return_kwargs))
+        
     # Credit check
     current_credits = user.get('credits', 0) or 0
     if current_credits < ALERT_SUBSCRIPTION_COST:
