@@ -291,23 +291,15 @@ def compute_depreciation_series_monthly(current_price, months=60):
     """
     Buyer dashboard: 5-year (60-month) realistic depreciation curve.
     Industry-standard depreciation:
-      Year 1: ~15%
-      Year 2: ~12% of prior
-      Year 3: ~10% of prior
-      Year 4: ~8%  of prior
-      Year 5: ~7%  of prior
+      Year 1: ~15%, Year 2: ~12%, Year 3: ~10%, Year 4: ~8%, Year 5: ~7%
     Total ~40% over 5 years.
-    Smoothly spread month-to-month within each year using exponential.
-    Returns list of {month: 0..months, price: int}.
     """
-    yearly_rates = [0.15, 0.12, 0.10, 0.08, 0.07]  # % lost within each year
+    yearly_rates = [0.15, 0.12, 0.10, 0.08, 0.07]
     series = [{'month': 0, 'price': int(round(current_price))}]
 
     price = float(current_price)
     for year_idx in range(5):
         rate = yearly_rates[year_idx]
-        # Monthly multiplier so 12 months compound to (1 - rate)
-        # (1 - m)^12 = (1 - rate) -> m = 1 - (1 - rate)^(1/12)
         monthly_multiplier = (1 - rate) ** (1 / 12)
         for m_in_year in range(1, 13):
             price = price * monthly_multiplier
@@ -756,9 +748,7 @@ def seller_dashboard(valuation_id):
 @app.route('/request-credits', methods=['POST'])
 @login_required
 def request_credits():
-    """Auto-approve a 500-credit top-up.
-    Preserves seller form values when the request came from the seller form,
-    so user doesn't lose the filters they were entering."""
+    """Auto-approve a 500-credit top-up. Preserves form values for seller/buyer round-trip."""
     user = current_user()
     if not user:
         return redirect(url_for('index'))
@@ -804,6 +794,8 @@ def request_credits():
             'model':        request.form.get('keep_model') or '',
             'variant':      request.form.get('keep_variant') or '',
             'year':         request.form.get('keep_year') or '',
+            'owner':        request.form.get('keep_owner') or '',
+            'mileage':      request.form.get('keep_mileage') or '',
             'condition':    request.form.get('keep_condition') or '',
             'asking_price': request.form.get('keep_asking_price') or '',
         }
@@ -837,6 +829,7 @@ def buyer():
             makes=get_makes(),
             fuels=FUEL_ORDER,
             years=YEARS,
+            owners=OWNERS,
             conditions=CONDITIONS,
             car_data_json=json.dumps(CAR_DATA),
         )
@@ -848,22 +841,27 @@ def buyer():
             'model':        request.args.get('model', ''),
             'variant':      request.args.get('variant', ''),
             'year':         request.args.get('year', ''),
+            'owner':        request.args.get('owner', ''),
+            'mileage':      request.args.get('mileage', ''),
             'condition':    request.args.get('condition', ''),
             'asking_price': request.args.get('asking_price', ''),
         }
         return render_form(prefill)
 
+    # POST
     form_data = {
         'make':         (request.form.get('make') or '').strip(),
         'fuel':         (request.form.get('fuel') or '').strip(),
         'model':        (request.form.get('model') or '').strip(),
         'variant':      (request.form.get('variant') or '').strip(),
         'year':         (request.form.get('year') or '').strip(),
+        'owner':        (request.form.get('owner') or '').strip(),
+        'mileage':      (request.form.get('mileage') or '').strip(),
         'condition':    (request.form.get('condition') or '').strip(),
         'asking_price': (request.form.get('asking_price') or '').strip(),
     }
 
-    for key in ('make', 'fuel', 'model', 'variant', 'year', 'condition'):
+    for key in ('make', 'fuel', 'model', 'variant', 'year', 'owner', 'mileage', 'condition'):
         if not form_data[key]:
             return render_form(form_data, error='Please fill in all required fields.')
 
@@ -875,6 +873,8 @@ def buyer():
         return render_form(form_data, error='Invalid Variant selected.')
     if form_data['fuel'] not in CAR_DATA[form_data['make']][form_data['model']]['fuels']:
         return render_form(form_data, error='Selected Fuel is not available for this Model.')
+    if form_data['owner'] not in OWNERS:
+        return render_form(form_data, error='Invalid Owner selected.')
     if form_data['condition'] not in CONDITIONS:
         return render_form(form_data, error='Invalid Condition selected.')
     try:
@@ -883,6 +883,12 @@ def buyer():
             raise ValueError
     except (ValueError, TypeError):
         return render_form(form_data, error='Invalid Year.')
+    try:
+        mileage_int = int(form_data['mileage'])
+        if mileage_int < 0 or mileage_int > 500000:
+            raise ValueError
+    except (ValueError, TypeError):
+        return render_form(form_data, error='Mileage must be a number between 0 and 500000.')
 
     asking_price_int = None
     if form_data['asking_price']:
@@ -922,6 +928,8 @@ def buyer():
         'model':     form_data['model'],
         'variant':   form_data['variant'],
         'year':      form_data['year'],
+        'owner':     form_data['owner'],
+        'mileage':   form_data['mileage'],
         'condition': form_data['condition'],
     }
     if asking_price_int is not None:
@@ -942,15 +950,26 @@ def buyer_dashboard():
     model     = request.args.get('model', '').strip()
     variant   = request.args.get('variant', '').strip()
     year      = request.args.get('year', '').strip()
+    owner     = request.args.get('owner', '').strip()
+    mileage_raw = request.args.get('mileage', '').strip()
     condition = request.args.get('condition', '').strip()
     asking_price_raw = request.args.get('asking_price', '').strip()
 
-    if not all([make, fuel, model, variant, year, condition]):
+    # All required
+    if not all([make, fuel, model, variant, year, owner, mileage_raw, condition]):
         return redirect(url_for('buyer'))
 
     try:
         year_int = int(year)
     except (ValueError, TypeError):
+        return redirect(url_for('buyer'))
+
+    try:
+        mileage_int = int(mileage_raw)
+    except (ValueError, TypeError):
+        return redirect(url_for('buyer'))
+
+    if owner not in OWNERS or condition not in CONDITIONS:
         return redirect(url_for('buyer'))
 
     asking_price_int = None
@@ -960,12 +979,11 @@ def buyer_dashboard():
         except (ValueError, TypeError):
             asking_price_int = None
 
-    default_mileage = 45000
-    default_owner = '1st Owner'
+    # Use ACTUAL mileage + owner the buyer entered
     estimated = compute_base_valuation(
         make=make, model=model, variant=variant, fuel=fuel,
-        year=year_int, mileage=default_mileage,
-        condition=condition, owner=default_owner,
+        year=year_int, mileage=mileage_int,
+        condition=condition, owner=owner,
     )
 
     if estimated is None:
@@ -994,7 +1012,6 @@ def buyer_dashboard():
 
     demand       = compute_demand(make, year_int)
     days_to_sell = compute_days_to_sell(demand, adjusted)
-    # 5-year (60-month) monthly depreciation
     depreciation = compute_depreciation_series_monthly(adjusted, months=60)
     verified_count, buyers_last_30d, avg_buyers_range = get_market_stats(make, model)
 
@@ -1004,6 +1021,8 @@ def buyer_dashboard():
         'model':        model,
         'variant':      variant,
         'year':         year,
+        'owner':        owner,
+        'mileage':      mileage_int,
         'condition':    condition,
         'asking_price': asking_price_raw,
     }
@@ -1013,7 +1032,7 @@ def buyer_dashboard():
         user=user,
         first_name=firstname_filter(user.get('name')),
         make=make, fuel=fuel, model=model, variant=variant,
-        year=year_int, condition=condition,
+        year=year_int, owner=owner, mileage=mileage_int, condition=condition,
         asking_price=asking_price_int,
         asking_position=asking_position,
         asking_pct_diff=asking_pct_diff,
