@@ -1,150 +1,623 @@
 {% extends "layout.html" %}
-{% block title %}Market Analysis - AutoKnowMus{% endblock %}
+{% block title %}Market Analysis — AutoKnowMus{% endblock %}
 
 {% block extra_head %}
 <style>
-  .buyer-dash-wrap { padding: 30px 40px; }
-  .dash-section { background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px; padding: 30px; }
-  .page-title-dash { color: #4e54ff; font-size: 1.6rem; font-weight: 700; margin: 0; }
-  .hero-price {
-    text-align: center; padding: 30px 0; border-bottom: 1px solid #2a2d34; margin-bottom: 25px;
-  }
-  .hero-price .range {
-    color: #28a745; font-size: 2rem; font-weight: 700; letter-spacing: 0.5px;
-  }
-  .hero-price .label { color: #adb5bd; font-size: 0.9rem; margin-bottom: 6px; }
-  .hero-price .subtitle { color: #6c757d; font-size: 0.85rem; margin-top: 6px; }
+  /* Tighter spacing to fit on one screen */
+  .dashboard-wrap { padding: 14px 30px 20px; }
 
+  .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
+  .car-summary { color: #e6e6e6; text-align: right; }
+  .car-summary .car-name { color: #4e54ff; font-weight: 700; font-size: 1.05rem; line-height: 1.2; }
+  .car-summary .car-meta { color: #b0b0b0; font-size: 0.82rem; margin-top: 2px; }
+
+  /* ===== TOP ROW: Hero+DealAnalysis (left) + Graph (right) ===== */
+  .top-row {
+    display: grid;
+    grid-template-columns: 1fr 1.25fr;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 900px) { .top-row { grid-template-columns: 1fr; } }
+
+  .card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 14px 18px;
+  }
+  .card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .card-title .sub { color: #b0b0b0; font-size: 0.75rem; font-weight: 400; margin-left: 6px; }
+
+  /* Hero price */
+  .hero-combined { display: flex; flex-direction: column; gap: 14px; }
+  .price-hero { text-align: center; }
+  .price-hero .hero-label { color: #b0b0b0; font-size: 0.76rem; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .price-hero .hero-range { color: #28a745; font-size: 1.85rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+  .price-hero .hero-dash { color: #28a745; margin: 0 6px; }
+  .price-hero .hero-mid { color: #adb5bd; font-size: 0.85rem; margin-top: 6px; }
+  .price-hero .hero-mid strong { color: #ffa500; font-weight: 600; }
+  @media (min-width: 1200px) { .price-hero .hero-range { font-size: 2rem; } }
+
+  /* Deal Analysis banner (replaces slider section in seller dashboard) */
+  .deal-section { border-top: 1px solid #2a2d34; padding-top: 12px; }
   .deal-banner {
-    padding: 16px 20px; border-radius: 10px; margin-bottom: 25px;
-    display: flex; align-items: center; gap: 14px; font-size: 0.95rem;
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex; align-items: flex-start; gap: 12px;
   }
-  .deal-banner.deal-great    { background: rgba(40,167,69,0.12);  border: 1px solid #28a745; color: #c9f0d3; }
-  .deal-banner.deal-fair     { background: rgba(78,84,255,0.12);  border: 1px solid #4e54ff; color: #c9cdf5; }
-  .deal-banner.deal-over     { background: rgba(255,140,0,0.12);  border: 1px solid #ff8c00; color: #f5dcc0; }
-  .deal-banner.deal-toogood  { background: rgba(220,53,69,0.12);  border: 1px solid #dc3545; color: #f5c2c7; }
-  .deal-banner .icon { font-size: 1.6rem; }
-  .deal-banner .title { font-weight: 700; font-size: 1rem; margin-bottom: 2px; }
+  .deal-banner .deal-icon { font-size: 1.6rem; line-height: 1; flex-shrink: 0; }
+  .deal-banner .deal-text { flex: 1; }
+  .deal-banner .deal-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 3px; }
+  .deal-banner .deal-body { font-size: 0.82rem; line-height: 1.45; }
 
-  .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 25px; }
+  .deal-great    { background: rgba(40,167,69,0.12);  border: 1px solid #28a745; }
+  .deal-great .deal-title    { color: #28a745; }
+  .deal-great .deal-body     { color: #c9f0d3; }
+
+  .deal-fair     { background: rgba(78,84,255,0.14);  border: 1px solid #4e54ff; }
+  .deal-fair .deal-title     { color: #8a90ff; }
+  .deal-fair .deal-body      { color: #c9cdf5; }
+
+  .deal-over     { background: rgba(255,140,0,0.12);  border: 1px solid #ff8c00; }
+  .deal-over .deal-title     { color: #ffa500; }
+  .deal-over .deal-body      { color: #f5dcc0; }
+
+  .deal-toogood  { background: rgba(220,53,69,0.12);  border: 1px solid #dc3545; }
+  .deal-toogood .deal-title  { color: #ff6b6b; }
+  .deal-toogood .deal-body   { color: #f5c2c7; }
+
+  .deal-unknown  { background: #14171d;  border: 1px dashed #3a3f4a; }
+  .deal-unknown .deal-title  { color: #adb5bd; }
+  .deal-unknown .deal-body   { color: #adb5bd; }
+
+  /* Graph */
+  .graph-wrap { position: relative; height: 220px; }
+  @media (max-width: 900px) { .graph-wrap { height: 200px; } }
+
+  /* ===== KPI cards ===== */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+  }
   .kpi-card {
-    background: #14171d; border: 1px solid #2a2d34; border-radius: 10px; padding: 18px;
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 10px 12px;
     text-align: center;
   }
-  .kpi-card .label { color: #adb5bd; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-  .kpi-card .value { color: #fff; font-size: 1.4rem; font-weight: 700; }
-
-  .price-card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 25px; }
-  .price-card {
-    background: #14171d; border: 1px solid #2a2d34; border-radius: 10px; padding: 20px;
+  .kpi-card .kpi-label {
+    color: #b0b0b0;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
-  .price-card .label { color: #adb5bd; font-size: 0.85rem; margin-bottom: 6px; }
-  .price-card .value { color: #fff; font-size: 1.5rem; font-weight: 700; }
-  .price-card .hint { color: #6c757d; font-size: 0.8rem; margin-top: 4px; }
+  .kpi-card .kpi-value { font-size: 1.2rem; font-weight: 700; color: #fff; line-height: 1.1; }
+  .kpi-card .kpi-sub   { color: #6c757d; font-size: 0.7rem; margin-top: 1px; }
+  .kpi-card .kpi-value.demand-HIGH   { color: #28a745; }
+  .kpi-card .kpi-value.demand-MEDIUM { color: #ffa500; }
+  .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
+  @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
-  @media (max-width: 768px) {
-    .kpi-row, .price-card-row { grid-template-columns: 1fr; }
+  /* ℹ️ info icon tooltip */
+  .info-wrap { position: relative; display: inline-flex; }
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px;
+    background: #2a2d34; color: #adb5bd;
+    border-radius: 50%;
+    font-size: 0.7rem; font-weight: 700;
+    cursor: help; font-style: italic;
+    font-family: Georgia, serif;
   }
+  .info-icon:hover { background: #4e54ff; color: #fff; }
+  .info-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #4e54ff;
+    font-size: 0.78rem;
+    font-weight: 400;
+    line-height: 1.5;
+    width: 240px;
+    max-width: 280px;
+    text-transform: none;
+    letter-spacing: normal;
+    text-align: left;
+    z-index: 10;
+    transition: opacity 0.15s;
+    white-space: normal;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+  .info-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #000;
+  }
+  .info-wrap:hover .info-tooltip {
+    visibility: visible; opacity: 1;
+  }
+
+  /* Market stats */
+  .market-stats {
+    background: #14171d;
+    border-radius: 8px;
+    padding: 7px 14px;
+    margin-bottom: 10px;
+    color: #adb5bd;
+    font-size: 0.82rem;
+    text-align: center;
+  }
+  .market-stats strong { color: #e9ecef; }
+
+  /* ===== BOTTOM ROW: Dealer vs Private (left) + Verdict (right) ===== */
+  .bottom-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
+
+  /* Dealer vs Private comparison card */
+  .compare-row { display: flex; flex-direction: column; gap: 10px; }
+  .compare-item {
+    background: #14171d;
+    border-radius: 8px;
+    padding: 12px 14px;
+    border-left: 3px solid transparent;
+  }
+  .compare-item.dealer  { border-left-color: #ffa500; }
+  .compare-item.private { border-left-color: #28a745; }
+  .compare-item .ci-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+  .compare-item .ci-label { color: #adb5bd; font-size: 0.82rem; font-weight: 600; }
+  .compare-item .ci-price { color: #fff; font-weight: 700; font-size: 1.1rem; }
+  .compare-item .ci-hint  { color: #6c757d; font-size: 0.75rem; line-height: 1.4; }
+  .compare-item.dealer .ci-label  { color: #ffa500; }
+  .compare-item.private .ci-label { color: #28a745; }
+
+  /* Verdict — buyer-themed blue */
+  .verdict-card {
+    background: linear-gradient(135deg, #1a2030 0%, #14171d 100%);
+    border: 1px solid #4e54ff;
+    border-radius: 12px;
+    padding: 14px 18px;
+  }
+  .verdict-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #8a90ff;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .verdict-body p {
+    color: #e6e6e6;
+    font-size: 0.83rem;
+    line-height: 1.55;
+    margin-bottom: 6px;
+  }
+  .verdict-body p:last-child { margin-bottom: 0; }
+  .verdict-body .hi   { color: #ffa500; font-weight: 600; }
+  .verdict-body .ok   { color: #28a745; font-weight: 600; }
+  .verdict-body .warn { color: #ff6b6b; font-weight: 600; }
+  .verdict-body .info { color: #8a90ff; font-weight: 600; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="buyer-dash-wrap">
-  <div class="dash-section">
-    <div class="d-flex justify-content-between align-items-start mb-4">
-      <a href="{{ url_for('buyer',
-                          make=back_prefill.make,
-                          fuel=back_prefill.fuel,
-                          model=back_prefill.model,
-                          variant=back_prefill.variant,
-                          year=back_prefill.year,
-                          condition=back_prefill.condition,
-                          asking_price=back_prefill.asking_price) }}"
-         class="btn-back">← Modify Search</a>
-      <h2 class="page-title-dash">{{ year }} {{ make }} {{ model }} {{ variant }}</h2>
-    </div>
+<div class="dashboard-wrap">
 
-    {# HERO: fair market price range #}
-    <div class="hero-price">
-      <div class="label">Fair Market Price Range</div>
-      <div class="range">₹ {{ price_low|inr }} – ₹ {{ price_high|inr }}</div>
-      <div class="subtitle">Estimated value: ₹ {{ estimated|inr }} &middot; {{ condition }} condition &middot; {{ fuel }}</div>
-    </div>
-
-    {# DEAL ANALYSIS banner (only if asking_price provided) #}
-    {% if asking_price is not none %}
-      {% set pct = asking_pct_diff or 0 %}
-      {% if asking_position == 'below' and pct <= -15 %}
-        <div class="deal-banner deal-toogood">
-          <div class="icon">⚠️</div>
-          <div>
-            <div class="title">Too Good to Be True</div>
-            <div>Asking price ₹ {{ asking_price|inr }} is {{ (pct * -1)|round(1) }}% below fair market. Verify thoroughly — unusual deals can signal hidden issues (accident history, odometer tampering, unclear ownership).</div>
-          </div>
-        </div>
-      {% elif asking_position == 'below' %}
-        <div class="deal-banner deal-great">
-          <div class="icon">🎯</div>
-          <div>
-            <div class="title">Great Deal</div>
-            <div>Asking price ₹ {{ asking_price|inr }} is {{ (pct * -1)|round(1) }}% below fair market. Worth moving quickly if the car checks out.</div>
-          </div>
-        </div>
-      {% elif asking_position == 'within' %}
-        <div class="deal-banner deal-fair">
-          <div class="icon">✅</div>
-          <div>
-            <div class="title">Fair Price</div>
-            <div>Asking price ₹ {{ asking_price|inr }} is within the fair market range. Negotiate toward the lower end if you can.</div>
-          </div>
-        </div>
-      {% else %}
-        <div class="deal-banner deal-over">
-          <div class="icon">💸</div>
-          <div>
-            <div class="title">Overpriced</div>
-            <div>Asking price ₹ {{ asking_price|inr }} is {{ pct|round(1) }}% above fair market. Counter-offer closer to ₹ {{ estimated|inr }}.</div>
-          </div>
-        </div>
-      {% endif %}
-    {% endif %}
-
-    {# Dealer vs Private comparison #}
-    <div class="price-card-row">
-      <div class="price-card">
-        <div class="label">Typical Dealer Price</div>
-        <div class="value">₹ {{ dealer_price|inr }}</div>
-        <div class="hint">Includes warranty, certification & showroom margin (~12%)</div>
-      </div>
-      <div class="price-card">
-        <div class="label">Typical Private Sale Price</div>
-        <div class="value">₹ {{ private_price|inr }}</div>
-        <div class="hint">Direct from owner — lower price, higher due-diligence</div>
-      </div>
-    </div>
-
-    {# KPIs #}
-    <div class="kpi-row">
-      <div class="kpi-card">
-        <div class="label">Market Demand</div>
-        <div class="value" style="color:
-          {% if demand == 'HIGH' %}#28a745{% elif demand == 'MEDIUM' %}#ffa500{% else %}#6c757d{% endif %};">
-          {{ demand }}
-        </div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Avg. Days to Sell</div>
-        <div class="value">{{ days_to_sell }} days</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Confidence</div>
-        <div class="value">{{ confidence }}%</div>
-      </div>
-    </div>
-
-    <div style="text-align:center; color:#6c757d; font-size:0.85rem; margin-top:20px;">
-      Based on {{ verified_count }} verified transactions &middot; {{ buyers_last_30d }} active buyers in last 30 days &middot; Average {{ avg_buyers_range }} buyers/day
+  <!-- HEADER -->
+  <div class="dash-header">
+    <a href="{{ url_for('buyer',
+                        make=back_prefill.make, fuel=back_prefill.fuel,
+                        model=back_prefill.model, variant=back_prefill.variant,
+                        year=back_prefill.year, condition=back_prefill.condition,
+                        asking_price=back_prefill.asking_price) }}"
+       class="btn-back">← Back</a>
+    <div class="car-summary">
+      <div class="car-name">{{ year }} {{ make }} {{ model }} {{ variant }}</div>
+      <div class="car-meta">{{ fuel }} · {{ condition }} condition · Bangalore</div>
     </div>
   </div>
+
+  <!-- TOP ROW: Hero+DealAnalysis (left) + Graph (right) -->
+  <div class="top-row">
+    <!-- LEFT: Fair Market hero + Deal Analysis banner -->
+    <div class="card hero-combined">
+      <div class="price-hero">
+        <div class="hero-label">FAIR MARKET PRICE RANGE</div>
+        <div class="hero-range">
+          ₹ {{ price_low | lakh }}<span class="hero-dash">—</span>₹ {{ price_high | lakh }}
+        </div>
+        <div class="hero-mid">Most likely value: <strong>₹ {{ estimated | lakh }}</strong></div>
+      </div>
+
+      <div class="deal-section">
+        {% if asking_price is not none %}
+          {% set pct = asking_pct_diff or 0 %}
+          {% if asking_position == 'below' and pct <= -15 %}
+            <div class="deal-banner deal-toogood">
+              <div class="deal-icon">⚠️</div>
+              <div class="deal-text">
+                <div class="deal-title">Too Good to Be True</div>
+                <div class="deal-body">
+                  Asking ₹ {{ asking_price | lakh }} is <strong>{{ (pct * -1) | round(1) }}% below</strong> fair market.
+                  Verify thoroughly — unusual discounts can signal accident history, odometer tampering, or unclear ownership.
+                </div>
+              </div>
+            </div>
+          {% elif asking_position == 'below' %}
+            <div class="deal-banner deal-great">
+              <div class="deal-icon">🎯</div>
+              <div class="deal-text">
+                <div class="deal-title">Great Deal</div>
+                <div class="deal-body">
+                  Asking ₹ {{ asking_price | lakh }} is <strong>{{ (pct * -1) | round(1) }}% below</strong> fair market.
+                  Worth moving fast if the car checks out on inspection.
+                </div>
+              </div>
+            </div>
+          {% elif asking_position == 'within' %}
+            <div class="deal-banner deal-fair">
+              <div class="deal-icon">✅</div>
+              <div class="deal-text">
+                <div class="deal-title">Fair Price</div>
+                <div class="deal-body">
+                  Asking ₹ {{ asking_price | lakh }} sits within fair market range.
+                  Try negotiating toward ₹ {{ price_low | lakh }} to get a better deal.
+                </div>
+              </div>
+            </div>
+          {% else %}
+            <div class="deal-banner deal-over">
+              <div class="deal-icon">💸</div>
+              <div class="deal-text">
+                <div class="deal-title">Overpriced</div>
+                <div class="deal-body">
+                  Asking ₹ {{ asking_price | lakh }} is <strong>{{ pct | round(1) }}% above</strong> fair market.
+                  Counter-offer closer to ₹ {{ estimated | lakh }} or walk away.
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        {% else %}
+          <div class="deal-banner deal-unknown">
+            <div class="deal-icon">💡</div>
+            <div class="deal-text">
+              <div class="deal-title">Enter an asking price to analyze</div>
+              <div class="deal-body">
+                Go back and add the seller's asking price — we'll tell you if it's a Great Deal, Fair, Overpriced, or Too Good to Be True.
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- RIGHT: Depreciation graph (365 days) -->
+    <div class="card">
+      <div class="card-title">
+        Depreciation Forecast
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            How this car's value is expected to drop over the next 12 months. Helps you judge whether waiting for a better deal is worth it, or whether buying now locks in the best value.
+          </span>
+        </span>
+        <span class="sub">next 12 months</span>
+      </div>
+      <div class="graph-wrap">
+        <canvas id="dep-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">
+        Market Demand
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            How in-demand this car is. HIGH means many buyers want this model — expect sellers to hold firm on price. LOW means you have more negotiating leverage.
+          </span>
+        </span>
+      </div>
+      <div class="kpi-value demand-{{ demand }}">{{ demand }}</div>
+      <div class="kpi-sub">
+        {% if demand == 'HIGH' %}Sellers have leverage
+        {% elif demand == 'MEDIUM' %}Balanced market
+        {% else %}Buyers have leverage{% endif %}
+      </div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">
+        Data Confidence
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            How accurate this analysis is, based on verified deals we have for similar cars. Higher is better. Starts at 50% with our formula and climbs to 95% as more users submit verified transactions.
+          </span>
+        </span>
+      </div>
+      <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
+      <div class="kpi-sub">Improves with more deals</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">
+        Typical Listing Time
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            Average days this car sits on the market before selling. Longer times mean you can negotiate harder. Shorter times mean decide quickly.
+          </span>
+        </span>
+      </div>
+      <div class="kpi-value" style="color:#ffa500;">{{ days_to_sell }}</div>
+      <div class="kpi-sub">days on market</div>
+    </div>
+  </div>
+
+  <!-- Market stats -->
+  <div class="market-stats">
+    <strong>{{ verified_count }}</strong> verified transactions ·
+    <strong>{{ buyers_last_30d }}</strong> buyers last 30 days ·
+    Average <strong>{{ avg_buyers_range }}</strong> buyers/day
+  </div>
+
+  <!-- BOTTOM ROW: Dealer vs Private (left) + Verdict (right) -->
+  <div class="bottom-row">
+    <div class="card">
+      <div class="card-title">
+        Dealer vs Private Seller
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            Dealers typically charge more but offer warranty, certification, and paperwork help. Private sellers are cheaper but require more due diligence on your end.
+          </span>
+        </span>
+      </div>
+      <div class="compare-row">
+        <div class="compare-item dealer">
+          <div class="ci-top">
+            <span class="ci-label">🏢 Typical Dealer Price</span>
+            <span class="ci-price">₹ {{ dealer_price | lakh }}</span>
+          </div>
+          <div class="ci-hint">Includes ~12% markup for warranty, certification, showroom costs, and paperwork.</div>
+        </div>
+        <div class="compare-item private">
+          <div class="ci-top">
+            <span class="ci-label">👤 Typical Private Sale</span>
+            <span class="ci-price">₹ {{ private_price | lakh }}</span>
+          </div>
+          <div class="ci-hint">Direct from owner — best value if you're willing to handle inspection and RC transfer yourself.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict-card">
+      <div class="verdict-title">🎯 AutoKnowMus Verdict</div>
+      <div class="verdict-body" id="verdict-body">
+        <!-- JS populated -->
+      </div>
+    </div>
+  </div>
+
 </div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<script>
+  // ----- Injected from Flask -----
+  const DEP_DATA       = {{ depreciation_json | safe }};
+  const PRICE_LOW      = {{ price_low }};
+  const PRICE_HIGH     = {{ price_high }};
+  const ESTIMATED      = {{ estimated }};
+  const DEALER_PRICE   = {{ dealer_price }};
+  const PRIVATE_PRICE  = {{ private_price }};
+  const DAYS_TO_SELL   = {{ days_to_sell }};
+  const DEMAND         = {{ demand | tojson }};
+  const CONFIDENCE     = {{ confidence }};
+  const CAR_NAME       = {{ (year|string ~ ' ' ~ make ~ ' ' ~ model ~ ' ' ~ variant) | tojson }};
+  const VERIFIED_COUNT = {{ verified_count }};
+  const ASKING_PRICE   = {{ asking_price if asking_price is not none else 'null' }};
+  const ASKING_POSITION = {{ asking_position | tojson if asking_position else 'null' }};
+  const ASKING_PCT_DIFF = {{ asking_pct_diff if asking_pct_diff is not none else 'null' }};
+
+  // ----- Formatters -----
+  function lakhFormat(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    n = Math.round(Number(n));
+    if (n >= 10000000) return (n / 10000000).toFixed(2) + ' Crore';
+    if (n >= 100000)   return (n / 100000).toFixed(2) + ' Lakh';
+    if (n >= 1000)     return (n / 1000).toFixed(1) + ' K';
+    return String(n);
+  }
+
+  // Depreciation lookup — day → price
+  function priceAtDay(day) {
+    if (day < 0) day = 0;
+    if (day >= DEP_DATA.length) day = DEP_DATA.length - 1;
+    return DEP_DATA[day].price;
+  }
+
+  // ======================================================
+  // Verdict — buyer-oriented
+  // ======================================================
+  function generateBuyerVerdict() {
+    const confidenceWord =
+      CONFIDENCE >= 80 ? 'strong' :
+      CONFIDENCE >= 65 ? 'fairly strong' :
+      CONFIDENCE >= 50 ? 'moderate' : 'preliminary';
+
+    const dataNote = VERIFIED_COUNT === 0
+      ? "Our estimate is formula-based using age, condition, and fuel type — we don't yet have verified real-world deals for this exact car."
+      : `Our estimate blends the formula with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
+
+    // Deal verdict (if asking price provided)
+    let dealVerdict = '';
+    if (ASKING_PRICE !== null) {
+      if (ASKING_POSITION === 'below' && ASKING_PCT_DIFF <= -15) {
+        dealVerdict = `<p><span class="warn">⚠️ Proceed with extreme caution.</span> At ₹ ${lakhFormat(ASKING_PRICE)} this asking price is <strong>${(ASKING_PCT_DIFF * -1).toFixed(1)}% below</strong> fair market — that's unusually low. Demand a full service history, RC book check, and pre-purchase inspection by a trusted mechanic.</p>`;
+      } else if (ASKING_POSITION === 'below') {
+        dealVerdict = `<p><span class="ok">Strong buying opportunity.</span> Asking ₹ ${lakhFormat(ASKING_PRICE)} gives you a <strong>${(ASKING_PCT_DIFF * -1).toFixed(1)}% saving</strong> vs fair market. Still do a thorough inspection, but this deal warrants fast action.</p>`;
+      } else if (ASKING_POSITION === 'within') {
+        const negotiation = Math.round((ASKING_PRICE - PRICE_LOW) / 2 + PRICE_LOW);
+        dealVerdict = `<p><span class="info">Reasonable asking price.</span> ₹ ${lakhFormat(ASKING_PRICE)} is within fair market range. Open negotiation at <strong>₹ ${lakhFormat(negotiation)}</strong> — sellers often accept 3–5% below asking.</p>`;
+      } else {
+        const fairTarget = ESTIMATED;
+        dealVerdict = `<p><span class="hi">This is overpriced.</span> Asking ₹ ${lakhFormat(ASKING_PRICE)} is <strong>${ASKING_PCT_DIFF.toFixed(1)}% above</strong> fair market. Counter-offer at <strong>₹ ${lakhFormat(fairTarget)}</strong>. If the seller won't budge, there are likely better deals in the market.</p>`;
+      }
+    } else {
+      dealVerdict = `<p><span class="info">💡 Tip:</span> Go back and enter the seller's asking price to get a specific deal verdict — Great Deal, Fair, Overpriced, or Too Good to Be True.</p>`;
+    }
+
+    // Demand-based guidance
+    let demandGuidance = '';
+    if (DEMAND === 'HIGH') {
+      demandGuidance = `<p>Market demand is <span class="hi">HIGH</span> — sellers hold pricing power. Cars move fast, so if you find one in fair range, decide quickly. Don't expect deep discounts.</p>`;
+    } else if (DEMAND === 'MEDIUM') {
+      demandGuidance = `<p>Market demand is <span class="info">MEDIUM</span> — balanced between buyers and sellers. Expect moderate negotiation room (5–8% below asking is realistic).</p>`;
+    } else {
+      demandGuidance = `<p>Market demand is <span class="ok">LOW</span> — you have leverage. Cars sit on the market longer, so sellers are more flexible. Aim for 10–15% below asking.</p>`;
+    }
+
+    // Dealer vs Private recommendation
+    const diff = DEALER_PRICE - PRIVATE_PRICE;
+    const dealerPremiumPct = Math.round((diff / PRIVATE_PRICE) * 100);
+    const dealerVsPrivate = `<p><strong>Where to buy:</strong> Private sellers save you ~<span class="ok">₹ ${lakhFormat(diff)} (${dealerPremiumPct}%)</span> but require more diligence. Dealers cost more but offer warranty & paperwork help — worth it if this is your first used-car purchase.</p>`;
+
+    // 1-year depreciation note
+    const priceAt365 = priceAtDay(Math.min(365, DEP_DATA.length - 1));
+    const yearlyLoss = ESTIMATED - priceAt365;
+    const yearlyPct = Math.round((yearlyLoss / ESTIMATED) * 100);
+    const deprecNote = `<p><strong>Future value:</strong> This car will depreciate ~<span class="hi">₹ ${lakhFormat(yearlyLoss)} (${yearlyPct}%)</span> over the next 12 months. Factor this into your long-term cost of ownership.</p>`;
+
+    // Intro
+    const intro = `<p>Your target <strong>${CAR_NAME}</strong> has a ${confidenceWord} market analysis (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>`;
+
+    return intro + dealVerdict + demandGuidance + dealerVsPrivate + deprecNote;
+  }
+
+  // Populate verdict on load
+  document.getElementById('verdict-body').innerHTML = generateBuyerVerdict();
+
+  // ======================================================
+  // Depreciation chart (365 days)
+  // ======================================================
+  const ctx = document.getElementById('dep-chart').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 220);
+  grad.addColorStop(0, 'rgba(78, 84, 255, 0.35)');
+  grad.addColorStop(1, 'rgba(78, 84, 255, 0.02)');
+
+  const labels = DEP_DATA.map(p => 'Day ' + p.day);
+  const prices = DEP_DATA.map(p => p.price);
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Projected market price',
+        data: prices,
+        borderColor: '#4e54ff',
+        backgroundColor: grad,
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.35,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointHoverBackgroundColor: '#4e54ff',
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0e1117',
+          titleColor: '#ffa500',
+          bodyColor: '#e6e6e6',
+          borderColor: '#4e54ff',
+          borderWidth: 1,
+          padding: 10,
+          titleFont: { weight: '600' },
+          bodyFont: { size: 13 },
+          displayColors: false,
+          callbacks: {
+            title: function(items) {
+              const d = items[0].dataIndex;
+              if (d === 0) return 'Today';
+              if (d === 30) return 'In 1 month';
+              if (d === 90) return 'In 3 months';
+              if (d === 180) return 'In 6 months';
+              if (d === 365) return 'In 1 year';
+              return 'Day ' + d;
+            },
+            label: function(item) {
+              const v = item.parsed.y;
+              return '₹ ' + lakhFormat(v);
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#6c757d',
+            maxTicksLimit: 5,
+            callback: function(val, idx) {
+              // Show a few key labels: 0, 90, 180, 365
+              if (idx === 0) return 'Today';
+              if (idx === 90) return '3mo';
+              if (idx === 180) return '6mo';
+              if (idx === DEP_DATA.length - 1) return '1yr';
+              return '';
+            }
+          },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        },
+        y: {
+          ticks: {
+            color: '#6c757d',
+            maxTicksLimit: 5,
+            callback: function(v) { return '₹ ' + lakhFormat(v); }
+          },
+          grid: { color: 'rgba(255,255,255,0.06)' }
+        }
+      }
+    }
+  });
+</script>
 {% endblock %}
