@@ -1,130 +1,150 @@
 {% extends "layout.html" %}
+{% block title %}Market Analysis - AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  .buyer-dash-wrap { padding: 30px 40px; }
+  .dash-section { background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px; padding: 30px; }
+  .page-title-dash { color: #4e54ff; font-size: 1.6rem; font-weight: 700; margin: 0; }
+  .hero-price {
+    text-align: center; padding: 30px 0; border-bottom: 1px solid #2a2d34; margin-bottom: 25px;
+  }
+  .hero-price .range {
+    color: #28a745; font-size: 2rem; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .hero-price .label { color: #adb5bd; font-size: 0.9rem; margin-bottom: 6px; }
+  .hero-price .subtitle { color: #6c757d; font-size: 0.85rem; margin-top: 6px; }
+
+  .deal-banner {
+    padding: 16px 20px; border-radius: 10px; margin-bottom: 25px;
+    display: flex; align-items: center; gap: 14px; font-size: 0.95rem;
+  }
+  .deal-banner.deal-great    { background: rgba(40,167,69,0.12);  border: 1px solid #28a745; color: #c9f0d3; }
+  .deal-banner.deal-fair     { background: rgba(78,84,255,0.12);  border: 1px solid #4e54ff; color: #c9cdf5; }
+  .deal-banner.deal-over     { background: rgba(255,140,0,0.12);  border: 1px solid #ff8c00; color: #f5dcc0; }
+  .deal-banner.deal-toogood  { background: rgba(220,53,69,0.12);  border: 1px solid #dc3545; color: #f5c2c7; }
+  .deal-banner .icon { font-size: 1.6rem; }
+  .deal-banner .title { font-weight: 700; font-size: 1rem; margin-bottom: 2px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 25px; }
+  .kpi-card {
+    background: #14171d; border: 1px solid #2a2d34; border-radius: 10px; padding: 18px;
+    text-align: center;
+  }
+  .kpi-card .label { color: #adb5bd; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .kpi-card .value { color: #fff; font-size: 1.4rem; font-weight: 700; }
+
+  .price-card-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 25px; }
+  .price-card {
+    background: #14171d; border: 1px solid #2a2d34; border-radius: 10px; padding: 20px;
+  }
+  .price-card .label { color: #adb5bd; font-size: 0.85rem; margin-bottom: 6px; }
+  .price-card .value { color: #fff; font-size: 1.5rem; font-weight: 700; }
+  .price-card .hint { color: #6c757d; font-size: 0.8rem; margin-top: 4px; }
+
+  @media (max-width: 768px) {
+    .kpi-row, .price-card-row { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-11">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3 class="text-white fw-bold mb-0">Market Analysis</h3>
-            <div class="text-end">
-                <small class="text-white-50 d-block mb-1">Available Credits</small>
-                <span class="badge bg-success" style="font-size: 14px;">({{ user.credits }} Credits)</span>
-            </div>
-        </div>
-
-        <div class="row g-4">
-            <!-- Main Card: Price Range -->
-            <div class="col-lg-8">
-                <div class="card p-4 border-0 shadow-lg" style="background: #16181d; border-radius: 28px; border-left: 5px solid #4e54ff;">
-                    <div class="mb-4">
-                        <h5 class="text-white fw-bold mb-1">{{ data.year }} {{ data.make }} {{ data.model }}</h5>
-                        <small class="text-white-50">{{ data.fuel }} · {{ data.condition }} Condition</small>
-                    </div>
-
-                    <!-- Price Range Hero -->
-                    <div class="mb-4">
-                        <small class="text-white-50 d-block mb-2">Fair Market Range</small>
-                        <h1 class="text-success fw-bold mb-0">₹ {{ data.price_low|inr }} - {{ data.price_high|inr }}</h1>
-                    </div>
-
-                    <!-- Asking Price Analysis (if provided) -->
-                    {% if data.asking_price %}
-                    <div class="mb-4 p-3 bg-dark rounded-3 border border-primary border-opacity-10">
-                        <small class="text-white-50 d-block mb-1">Your Asking Price</small>
-                        <h5 class="text-white fw-bold mb-2">₹ {{ data.asking_price|inr }}</h5>
-                        {% if data.asking_price < data.price_low %}
-                        <span class="badge bg-success">Below Market - Good Price ✓</span>
-                        {% elif data.asking_price > data.price_high %}
-                        <span class="badge bg-warning">Above Market - May be challenging</span>
-                        {% else %}
-                        <span class="badge bg-info">Within Market Range</span>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-
-                    <!-- Price Distribution -->
-                    <div class="my-4">
-                        <small class="text-white-50 d-block mb-2">Price Positioning</small>
-                        <div class="progress rounded-pill shadow-sm" style="height: 14px; background: #2d2f34;">
-                            <div class="progress-bar bg-success" style="width: 33%;"></div>
-                            <div class="progress-bar bg-warning" style="width: 33%;"></div>
-                            <div class="progress-bar bg-danger" style="width: 34%;"></div>
-                        </div>
-                        <div class="d-flex justify-content-between mt-2 small text-white-50">
-                            <span>Great Deal</span>
-                            <span>Fair Price</span>
-                            <span>Overpriced</span>
-                        </div>
-                    </div>
-
-                    <!-- Comparison Cards -->
-                    <div class="row mt-4 g-3 text-center">
-                        <div class="col-6">
-                            <div class="p-3 bg-dark rounded-4 border border-primary border-opacity-10 h-100">
-                                <small class="text-white-50 d-block mb-1">Dealer Price</small>
-                                <span class="fw-bold fs-5 text-white">₹ {{ data.price_high|inr }}</span>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="p-3 bg-dark rounded-4 border border-primary border-opacity-10 h-100">
-                                <small class="text-white-50 d-block mb-1">Private Sale</small>
-                                <span class="fw-bold fs-5 text-white">₹ {{ data.price_low|inr }}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right Panel: KPIs & Insights -->
-            <div class="col-lg-4">
-                <!-- KPI Cards -->
-                <div class="card p-4 border-0 shadow-lg mb-4" style="background: #16181d; border-radius: 28px;">
-                    <h6 class="text-white-50 fw-bold mb-3">Market Metrics</h6>
-                    
-                    <div class="mb-3">
-                        <small class="text-white-50 d-block mb-1">Demand</small>
-                        <div class="d-flex align-items-center">
-                            <span class="fw-bold text-success me-2">{{ data.demand }}</span>
-                            <small class="text-white-50">{{ 'High' if data.demand > 70 else 'Medium' if data.demand > 40 else 'Low' }} Demand</small>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <small class="text-white-50 d-block mb-1">Days to Sell</small>
-                        <div class="d-flex align-items-center">
-                            <span class="fw-bold text-info me-2">{{ data.days_to_sell }}</span>
-                            <small class="text-white-50">days (avg)</small>
-                        </div>
-                    </div>
-
-                    <div>
-                        <small class="text-white-50 d-block mb-1">Confidence</small>
-                        <div class="d-flex align-items-center">
-                            <span class="fw-bold text-warning me-2">{{ data.confidence }}%</span>
-                            <small class="text-white-50">Data Quality</small>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Depreciation Forecast -->
-                <div class="card p-4 border-0 shadow-lg mb-4" style="background: #16181d; border-radius: 28px;">
-                    <h6 class="text-white-50 fw-bold mb-3">12-Month Forecast</h6>
-                    <svg viewBox="0 0 200 135" class="w-100">
-                        <line x1="20" y1="20" x2="20" y2="120" stroke="#444" stroke-width="1" stroke-dasharray="2,2"/>
-                        <line x1="180" y1="20" x2="180" y2="120" stroke="#444" stroke-width="1" stroke-dasharray="2,2"/>
-                        <path d="M20,25 Q100,50 180,100" fill="none" stroke="#28a745" stroke-width="2.5" stroke-linecap="round"/>
-                        <circle cx="20" cy="25" r="5" fill="#fff"/><text x="25" y="20" fill="#fff" font-size="7" font-weight="bold">₹{{ (data.estimated_price/100000)|round(1) }}L</text>
-                        <circle cx="100" cy="60" r="4" fill="#aaa"/><text x="95" y="75" fill="#aaa" font-size="6">Month 6</text>
-                        <circle cx="180" cy="100" r="5" fill="#888"/><text x="155" y="115" fill="#888" font-size="6">₹{{ (data.estimated_price * 0.95 / 100000)|round(1) }}L</text>
-                    </svg>
-                    <p class="text-center small text-white-50 mt-2">Typical 5% depreciation over 12 months</p>
-                </div>
-
-                <!-- Edit Search Button -->
-                {% set back_url = "/buyer?make=" + (data.make or '') + "&fuel=" + (data.fuel or '') + "&model=" + (data.model or '') + "&variant=" + (data.variant or '') + "&year=" + (data.year|string or '') + "&condition=" + (data.condition or '') + "&asking_price=" + (data.asking_price|string or '') %}
-                <a href="{{ back_url }}" class="btn btn-outline-primary w-100 fw-bold">
-                    <i class="fas fa-edit me-2"></i>Modify Search
-                </a>
-            </div>
-        </div>
+<div class="buyer-dash-wrap">
+  <div class="dash-section">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <a href="{{ url_for('buyer',
+                          make=back_prefill.make,
+                          fuel=back_prefill.fuel,
+                          model=back_prefill.model,
+                          variant=back_prefill.variant,
+                          year=back_prefill.year,
+                          condition=back_prefill.condition,
+                          asking_price=back_prefill.asking_price) }}"
+         class="btn-back">← Modify Search</a>
+      <h2 class="page-title-dash">{{ year }} {{ make }} {{ model }} {{ variant }}</h2>
     </div>
+
+    {# HERO: fair market price range #}
+    <div class="hero-price">
+      <div class="label">Fair Market Price Range</div>
+      <div class="range">₹ {{ price_low|inr }} – ₹ {{ price_high|inr }}</div>
+      <div class="subtitle">Estimated value: ₹ {{ estimated|inr }} &middot; {{ condition }} condition &middot; {{ fuel }}</div>
+    </div>
+
+    {# DEAL ANALYSIS banner (only if asking_price provided) #}
+    {% if asking_price is not none %}
+      {% set pct = asking_pct_diff or 0 %}
+      {% if asking_position == 'below' and pct <= -15 %}
+        <div class="deal-banner deal-toogood">
+          <div class="icon">⚠️</div>
+          <div>
+            <div class="title">Too Good to Be True</div>
+            <div>Asking price ₹ {{ asking_price|inr }} is {{ (pct * -1)|round(1) }}% below fair market. Verify thoroughly — unusual deals can signal hidden issues (accident history, odometer tampering, unclear ownership).</div>
+          </div>
+        </div>
+      {% elif asking_position == 'below' %}
+        <div class="deal-banner deal-great">
+          <div class="icon">🎯</div>
+          <div>
+            <div class="title">Great Deal</div>
+            <div>Asking price ₹ {{ asking_price|inr }} is {{ (pct * -1)|round(1) }}% below fair market. Worth moving quickly if the car checks out.</div>
+          </div>
+        </div>
+      {% elif asking_position == 'within' %}
+        <div class="deal-banner deal-fair">
+          <div class="icon">✅</div>
+          <div>
+            <div class="title">Fair Price</div>
+            <div>Asking price ₹ {{ asking_price|inr }} is within the fair market range. Negotiate toward the lower end if you can.</div>
+          </div>
+        </div>
+      {% else %}
+        <div class="deal-banner deal-over">
+          <div class="icon">💸</div>
+          <div>
+            <div class="title">Overpriced</div>
+            <div>Asking price ₹ {{ asking_price|inr }} is {{ pct|round(1) }}% above fair market. Counter-offer closer to ₹ {{ estimated|inr }}.</div>
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+
+    {# Dealer vs Private comparison #}
+    <div class="price-card-row">
+      <div class="price-card">
+        <div class="label">Typical Dealer Price</div>
+        <div class="value">₹ {{ dealer_price|inr }}</div>
+        <div class="hint">Includes warranty, certification & showroom margin (~12%)</div>
+      </div>
+      <div class="price-card">
+        <div class="label">Typical Private Sale Price</div>
+        <div class="value">₹ {{ private_price|inr }}</div>
+        <div class="hint">Direct from owner — lower price, higher due-diligence</div>
+      </div>
+    </div>
+
+    {# KPIs #}
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="label">Market Demand</div>
+        <div class="value" style="color:
+          {% if demand == 'HIGH' %}#28a745{% elif demand == 'MEDIUM' %}#ffa500{% else %}#6c757d{% endif %};">
+          {{ demand }}
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Avg. Days to Sell</div>
+        <div class="value">{{ days_to_sell }} days</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Confidence</div>
+        <div class="value">{{ confidence }}%</div>
+      </div>
+    </div>
+
+    <div style="text-align:center; color:#6c757d; font-size:0.85rem; margin-top:20px;">
+      Based on {{ verified_count }} verified transactions &middot; {{ buyers_last_30d }} active buyers in last 30 days &middot; Average {{ avg_buyers_range }} buyers/day
+    </div>
+  </div>
 </div>
 {% endblock %}
