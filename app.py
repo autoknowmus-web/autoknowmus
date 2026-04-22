@@ -1118,7 +1118,17 @@ def buyer_dashboard():
         alert_days=ALERT_SUBSCRIPTION_DAYS,
     )
 
-
+def count_active_alerts(user_id):
+    """Count currently active (not cancelled, not expired) alert subscriptions for a user."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    result = supabase.table('alert_subscriptions') \
+        .select('id', count='exact') \
+        .eq('user_id', user_id) \
+        .eq('active', True) \
+        .gt('expires_at', now_iso) \
+        .execute()
+    return result.count or 0
+    
 @app.route('/subscribe-alert', methods=['POST'])
 @login_required
 def subscribe_alert():
@@ -1126,7 +1136,108 @@ def subscribe_alert():
     user = current_user()
     if not user:
         return redirect(url_for('index'))
+@app.route('/my-alerts')
+def my_alerts():
+    user = current_user()
+    if not user:
+        return redirect(url_for('login'))
 
+    @app.route('/cancel-alert/<alert_id>', methods=['POST'])
+def cancel_alert(alert_id):
+    user = current_user()
+    if not user:
+        return redirect(url_for('login'))
+
+    # Verify ownership + currently active
+    result = supabase.table('alert_subscriptions') \
+        .select('*') \
+        .eq('id', alert_id) \
+        .eq('user_id', user['id']) \
+        .eq('active', True) \
+        .execute()
+
+    subs = result.data or []
+    if not subs:
+        flash('Alert not found or already cancelled.', 'error')
+        return redirect(url_for('my_alerts'))
+
+    sub = subs[0]
+
+    # Flip active to False (frees the slot, no refund)
+    supabase.table('alert_subscriptions') \
+        .update({'active': False}) \
+        .eq('id', alert_id) \
+        .eq('user_id', user['id']) \
+        .execute()
+
+    # Log cancellation for audit trail (amount 0, no credit change)
+    car_label = f"{sub.get('make', '')} {sub.get('model', '')} {sub.get('variant', '')}".strip()
+    supabase.table('transactions').insert({
+        'user_id': user['id'],
+        'type': 'alert_cancelled',
+        'amount': 0,
+        'balance_after': user['credits'],
+        'description': f'Cancelled alert for {car_label} (no refund)'
+    }).execute()
+
+    flash(f'Alert for {car_label} cancelled. Slot freed (no credit refund).', 'success')
+    return redirect(url_for('my_alerts'))
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Fetch all subscriptions for this user, newest first
+    result = supabase.table('alert_subscriptions') \
+        .select('*') \
+        .eq('user_id', user['id']) \
+        .order('created_at', desc=True) \
+        .execute()
+
+    all_subs = result.data or []
+
+    # Split into active vs expired/cancelled
+    active_subs = []
+    expired_subs = []
+
+    for sub in all_subs:
+        is_active_flag = sub.get('active', False)
+        expires_at_str = sub.get('expires_at')
+
+        # Parse expires_at for display + comparison
+        try:
+            expires_dt = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+            created_dt = datetime.fromisoformat(sub['created_at'].replace('Z', '+00:00'))
+        except (ValueError, AttributeError, KeyError):
+            continue
+
+        # Format dates as DD-MMM-YYYY
+        sub['created_display'] = created_dt.strftime('%d-%b-%Y')
+        sub['expires_display'] = expires_dt.strftime('%d-%b-%Y')
+
+        # Compute days remaining (negative if expired)
+        now_dt = datetime.now(timezone.utc)
+        days_remaining = (expires_dt - now_dt).days
+        sub['days_remaining'] = max(days_remaining, 0)
+
+        # Active = active flag True AND not yet expired
+        if is_active_flag and expires_dt > now_dt:
+            active_subs.append(sub)
+        else:
+            # Mark reason for expired display
+            if not is_active_flag:
+                sub['expired_reason'] = 'Cancelled'
+            else:
+                sub['expired_reason'] = 'Expired'
+            expired_subs.append(sub)
+
+    active_count = len(active_subs)
+
+    return render_template(
+        'my_alerts.html',
+        active_subs=active_subs,
+        expired_subs=expired_subs,
+        active_count=active_count,
+        max_alerts=5
+    )
     # Required inputs
     make     = (request.form.get('make') or '').strip()
     model    = (request.form.get('model') or '').strip()
