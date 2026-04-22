@@ -71,6 +71,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 16px;
+    margin-top: 14px;
   }
 
   .alert-card {
@@ -81,6 +82,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    box-sizing: border-box;
   }
   .alert-card.active {
     border-left: 3px solid #4e54ff;
@@ -101,16 +103,20 @@
   .meta-row {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 13px;
     color: #9aa0a6;
+    gap: 8px;
   }
-  .meta-row .label { color: #6c757d; }
-  .meta-row .value { color: #cfd2d6; }
+  .meta-row .label { color: #6c757d; flex-shrink: 0; }
+  .meta-row .value { color: #cfd2d6; text-align: right; }
 
   .channels {
     display: flex;
     gap: 6px;
     font-size: 15px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .channel-badge {
     background: #252830;
@@ -118,6 +124,7 @@
     border-radius: 6px;
     font-size: 13px;
     color: #cfd2d6;
+    white-space: nowrap;
   }
 
   .days-pill {
@@ -176,12 +183,13 @@
     font-weight: 600;
     cursor: pointer;
     padding: 10px 0;
+    margin-top: 30px;
     display: inline-flex;
     align-items: center;
     gap: 8px;
   }
   .expired-toggle:hover { color: #cfd2d6; }
-  .chevron { transition: transform 0.2s; }
+  .chevron { transition: transform 0.2s; display: inline-block; }
   .chevron.open { transform: rotate(90deg); }
 
   .expired-wrap {
@@ -281,21 +289,6 @@
     opacity: 0.7;
   }
   .flash-close:hover { opacity: 1; }
-
-  .debug-box {
-    background: #1a1d24;
-    color: #9aa0a6;
-    padding: 14px;
-    border-radius: 6px;
-    font-size: 11px;
-    overflow: auto;
-    max-height: 400px;
-    border: 1px solid #2a2d34;
-    margin-bottom: 20px;
-    white-space: pre-wrap;
-    word-break: break-all;
-    font-family: monospace;
-  }
 </style>
 
 <div class="alerts-wrap">
@@ -304,28 +297,6 @@
 
   <h1 class="page-title">My Alerts</h1>
   <p class="page-subtitle">Manage your active car price alerts. Alerts notify you when matching deals are submitted.</p>
-
-  <!-- ============================================== -->
-  <!-- DEBUG BLOCK — REMOVE ONCE PAGE IS CONFIRMED OK -->
-  <!-- ============================================== -->
-  <div class="debug-box">
-<strong style="color:#ffa94d;">DEBUG DIAGNOSTIC (remove once working)</strong>
-
-active_count: {{ active_count }}
-max_alerts:   {{ max_alerts }}
-active_subs length: {{ active_subs|length }}
-expired_subs length: {{ expired_subs|length }}
-
---- active_subs[0] (if any) ---
-{% if active_subs %}{{ active_subs[0] }}{% else %}NONE{% endif %}
-
---- all active subs raw ---
-{% for s in active_subs %}[{{ loop.index }}] {{ s.make }} {{ s.model }} {{ s.variant }} | active={{ s.active }} | email_enabled={{ s.email_enabled }} | whatsapp_enabled={{ s.whatsapp_enabled }} | expires={{ s.expires_display }} | days_remaining={{ s.days_remaining }}
-{% endfor %}
-  </div>
-  <!-- ============================================== -->
-  <!-- END DEBUG BLOCK -->
-  <!-- ============================================== -->
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
@@ -347,7 +318,7 @@ expired_subs length: {{ expired_subs|length }}
 
   <div class="section-header">Active Alerts</div>
 
-  {% if active_subs %}
+  {% if active_subs and active_subs|length > 0 %}
     <div class="alerts-grid">
       {% for sub in active_subs %}
         <div class="alert-card active">
@@ -358,6 +329,7 @@ expired_subs length: {{ expired_subs|length }}
             <span class="channels">
               {% if sub.email_enabled %}<span class="channel-badge">📧 Email</span>{% endif %}
               {% if sub.whatsapp_enabled %}<span class="channel-badge">💬 WhatsApp</span>{% endif %}
+              {% if not sub.email_enabled and not sub.whatsapp_enabled %}<span class="channel-badge" style="opacity:0.5;">none</span>{% endif %}
             </span>
           </div>
 
@@ -373,7 +345,7 @@ expired_subs length: {{ expired_subs|length }}
 
           <div class="meta-row">
             <span class="label">Remaining</span>
-            <span>
+            <span class="value">
               {% if sub.days_remaining > 7 %}
                 <span class="days-pill green">{{ sub.days_remaining }} days</span>
               {% elif sub.days_remaining > 2 %}
@@ -399,7 +371,7 @@ expired_subs length: {{ expired_subs|length }}
     </div>
   {% endif %}
 
-  {% if expired_subs %}
+  {% if expired_subs and expired_subs|length > 0 %}
     <button type="button" class="expired-toggle" onclick="toggleExpired()">
       <span class="chevron" id="expiredChevron">▶</span>
       <span>Past alerts ({{ expired_subs|length }})</span>
