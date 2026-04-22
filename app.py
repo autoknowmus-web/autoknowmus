@@ -181,6 +181,20 @@ def touch_last_login(user_id):
     except Exception as e:
         app.logger.warning(f"touch_last_login failed: {e}")
 
+def count_active_alert_subscriptions(user_id):
+    """Count how many active (non-expired) alert subscriptions the user has."""
+    try:
+        r = (supabase.table('alert_subscriptions')
+             .select('id', count='exact')
+             .eq('user_id', user_id)
+             .eq('active', True)
+             .gt('expires_at', datetime.utcnow().isoformat())
+             .execute())
+        return r.count or 0
+    except Exception as e:
+        app.logger.warning(f"count_active_alert_subscriptions failed: {e}")
+        return 0
+
 def login_user_session(user: dict):
     session['user_id'] = user['id']
     session['user'] = {
@@ -189,6 +203,7 @@ def login_user_session(user: dict):
         'credits': user.get('credits', 0)
     }
     session['credits'] = user.get('credits', 0)
+    session['active_alerts_count'] = count_active_alert_subscriptions(user['id'])
     touch_last_login(user['id'])
 
 def refresh_session_user(user: dict):
@@ -198,6 +213,7 @@ def refresh_session_user(user: dict):
         'credits': user.get('credits', 0)
     }
     session['credits'] = user.get('credits', 0)
+    session['active_alerts_count'] = count_active_alert_subscriptions(user['id'])
 
 def current_user():
     uid = session.get('user_id')
@@ -398,20 +414,6 @@ def get_active_alert_subscription(user_id, make, model, variant):
         app.logger.warning(f"get_active_alert_subscription failed: {e}")
         return None
 
-def count_active_alert_subscriptions(user_id):
-    """Count how many active (non-expired) alert subscriptions the user has."""
-    try:
-        r = (supabase.table('alert_subscriptions')
-             .select('id', count='exact')
-             .eq('user_id', user_id)
-             .eq('active', True)
-             .gt('expires_at', datetime.utcnow().isoformat())
-             .execute())
-        return r.count or 0
-    except Exception as e:
-        app.logger.warning(f"count_active_alert_subscriptions failed: {e}")
-        return 0
-
 
 # ========== ROUTES ==========
 
@@ -593,7 +595,10 @@ def role():
         return redirect(url_for('complete_profile'))
     first_name = firstname_filter(user.get('name'))
     show_welcome = session.pop('show_welcome', False)
-    return render_template('role.html', user=user, first_name=first_name, show_welcome=show_welcome)
+    active_alerts_count = count_active_alert_subscriptions(user['id'])
+    return render_template('role.html', user=user, first_name=first_name,
+                           show_welcome=show_welcome,
+                           active_alerts_count=active_alerts_count)
 
 # ========== SELLER FLOW ==========
 
@@ -1078,6 +1083,7 @@ def buyer_dashboard():
 
     # Check if user already has an active alert subscription for this car
     active_sub = get_active_alert_subscription(user['id'], make, model, variant)
+    active_alerts_count = count_active_alert_subscriptions(user['id'])
 
     back_prefill = {
         'make':         make,
@@ -1114,6 +1120,7 @@ def buyer_dashboard():
         avg_buyers_range=avg_buyers_range,
         back_prefill=back_prefill,
         active_sub=active_sub,
+        active_alerts_count=active_alerts_count,
         alert_cost=ALERT_SUBSCRIPTION_COST,
         alert_days=ALERT_SUBSCRIPTION_DAYS,
     )
@@ -1232,6 +1239,7 @@ def subscribe_alert():
         session['credits'] = new_balance
         if 'user' in session:
             session['user']['credits'] = new_balance
+        session['active_alerts_count'] = active_count + 1
     except Exception as e:
         app.logger.error(f"Alert subscription credit deduction failed: {e}")
 
@@ -1296,6 +1304,7 @@ def my_alerts():
             expired_subs.append(sub)
 
     active_count = len(active_subs)
+    session['active_alerts_count'] = active_count
 
     return render_template(
         'my_alerts.html',
@@ -1357,6 +1366,9 @@ def cancel_alert(alert_id):
         }).execute()
     except Exception as e:
         app.logger.warning(f"Log cancel transaction failed: {e}")
+
+    # Refresh slot count in session
+    session['active_alerts_count'] = count_active_alert_subscriptions(user['id'])
 
     flash(f'Alert for {car_label} cancelled. Slot freed (no credit refund).', 'success')
     return redirect(url_for('my_alerts'))
