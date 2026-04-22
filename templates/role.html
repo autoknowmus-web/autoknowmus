@@ -46,6 +46,34 @@
   }
   .btn-disabled-coming .coming-soon { color: #ffa500; font-size: 0.8rem; font-weight: 600; }
 
+  /* My alerts link inside buyer card */
+  .view-alerts-link {
+    display: block;
+    text-align: center;
+    margin-top: 12px;
+    color: #8a90ff;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 6px;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+  .view-alerts-link:hover {
+    background: rgba(78,84,255,0.08);
+    color: #a5abff;
+  }
+  .view-alerts-link .count-pill {
+    display: inline-block;
+    background: rgba(78,84,255,0.2);
+    color: #a5abff;
+    font-size: 0.75rem;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-left: 4px;
+    font-weight: 600;
+  }
+
   /* Orange dismissible welcome alert (inline in case layout macro is missing) */
   .welcome-alert {
     background: #ff8c00; color: #fff; border: none; border-radius: 8px;
@@ -114,6 +142,14 @@
         </div>
         <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
           Record Actual Transaction Data
+        </a>
+
+        {# View my alerts link — shown always, shows count if any #}
+        <a href="{{ url_for('my_alerts') }}" class="view-alerts-link">
+          🔔 View my alerts
+          {% if active_alerts_count and active_alerts_count > 0 %}
+            <span class="count-pill">{{ active_alerts_count }} of 5 active</span>
+          {% endif %}
         </a>
       </div>
     </div>
