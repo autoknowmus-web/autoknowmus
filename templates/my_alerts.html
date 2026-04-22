@@ -10,7 +10,6 @@
     padding: 24px 20px 60px;
   }
 
-  /* Back button — standing rule: .btn-back grey #6c757d, top-left */
   .btn-back {
     display: inline-block;
     background: #6c757d;
@@ -38,7 +37,6 @@
     margin: 0 0 24px 0;
   }
 
-  /* Slot counter pill */
   .slot-pill {
     display: inline-flex;
     align-items: center;
@@ -60,7 +58,6 @@
     border: 1px solid rgba(255, 140, 0, 0.4);
   }
 
-  /* Section headers */
   .section-header {
     color: #fff;
     font-size: 18px;
@@ -70,7 +67,6 @@
     border-bottom: 1px solid #2a2d34;
   }
 
-  /* Alert cards grid */
   .alerts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -152,7 +148,6 @@
     background: rgba(220, 53, 69, 0.12);
   }
 
-  /* Empty state */
   .empty-state {
     background: #1a1d24;
     border: 1px dashed #2a2d34;
@@ -173,7 +168,6 @@
     font-size: 14px;
   }
 
-  /* Expired collapse toggle */
   .expired-toggle {
     background: none;
     border: none;
@@ -196,7 +190,6 @@
   }
   .expired-wrap.open { display: block; }
 
-  /* Modal */
   .modal-overlay {
     display: none;
     position: fixed;
@@ -264,7 +257,6 @@
     cursor: pointer;
   }
 
-  /* Flash messages — standing rule: dismissible with × */
   .flash-wrap { margin-bottom: 20px; }
   .flash {
     position: relative;
@@ -289,6 +281,21 @@
     opacity: 0.7;
   }
   .flash-close:hover { opacity: 1; }
+
+  .debug-box {
+    background: #1a1d24;
+    color: #9aa0a6;
+    padding: 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    overflow: auto;
+    max-height: 400px;
+    border: 1px solid #2a2d34;
+    margin-bottom: 20px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: monospace;
+  }
 </style>
 
 <div class="alerts-wrap">
@@ -298,7 +305,28 @@
   <h1 class="page-title">My Alerts</h1>
   <p class="page-subtitle">Manage your active car price alerts. Alerts notify you when matching deals are submitted.</p>
 
-  {# Flash messages with dismissible × #}
+  <!-- ============================================== -->
+  <!-- DEBUG BLOCK — REMOVE ONCE PAGE IS CONFIRMED OK -->
+  <!-- ============================================== -->
+  <div class="debug-box">
+<strong style="color:#ffa94d;">DEBUG DIAGNOSTIC (remove once working)</strong>
+
+active_count: {{ active_count }}
+max_alerts:   {{ max_alerts }}
+active_subs length: {{ active_subs|length }}
+expired_subs length: {{ expired_subs|length }}
+
+--- active_subs[0] (if any) ---
+{% if active_subs %}{{ active_subs[0] }}{% else %}NONE{% endif %}
+
+--- all active subs raw ---
+{% for s in active_subs %}[{{ loop.index }}] {{ s.make }} {{ s.model }} {{ s.variant }} | active={{ s.active }} | email_enabled={{ s.email_enabled }} | whatsapp_enabled={{ s.whatsapp_enabled }} | expires={{ s.expires_display }} | days_remaining={{ s.days_remaining }}
+{% endfor %}
+  </div>
+  <!-- ============================================== -->
+  <!-- END DEBUG BLOCK -->
+  <!-- ============================================== -->
+
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <div class="flash-wrap">
@@ -312,13 +340,11 @@
     {% endif %}
   {% endwith %}
 
-  {# Slot counter pill — green when capacity, orange when full #}
   <div class="slot-pill {{ 'full' if active_count >= max_alerts else 'ok' }}">
     <span>●</span>
     <span>{{ active_count }} of {{ max_alerts }} active alerts</span>
   </div>
 
-  {# ACTIVE SECTION #}
   <div class="section-header">Active Alerts</div>
 
   {% if active_subs %}
@@ -373,7 +399,6 @@
     </div>
   {% endif %}
 
-  {# EXPIRED SECTION (collapsed by default) #}
   {% if expired_subs %}
     <button type="button" class="expired-toggle" onclick="toggleExpired()">
       <span class="chevron" id="expiredChevron">▶</span>
@@ -418,7 +443,6 @@
 
 </div>
 
-{# CANCEL CONFIRMATION MODAL #}
 <div class="modal-overlay" id="cancelModal">
   <div class="modal-box">
     <h3>Cancel this alert?</h3>
@@ -451,12 +475,10 @@
     document.getElementById('cancelModal').classList.remove('open');
   }
 
-  // Close modal on overlay click (but not on modal-box click)
   document.getElementById('cancelModal').addEventListener('click', function(e) {
     if (e.target === this) closeCancelModal();
   });
 
-  // Close modal on Escape key
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeCancelModal();
   });
