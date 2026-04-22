@@ -1,0 +1,465 @@
+{% extends "layout.html" %}
+
+{% block title %}My Alerts · AutoKnowMus{% endblock %}
+
+{% block content %}
+<style>
+  .alerts-wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 20px 60px;
+  }
+
+  /* Back button — standing rule: .btn-back grey #6c757d, top-left */
+  .btn-back {
+    display: inline-block;
+    background: #6c757d;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 20px;
+    border: none;
+    cursor: pointer;
+  }
+  .btn-back:hover { background: #5a6268; color: #fff; }
+
+  .page-title {
+    color: #fff;
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+  }
+  .page-subtitle {
+    color: #9aa0a6;
+    font-size: 14px;
+    margin: 0 0 24px 0;
+  }
+
+  /* Slot counter pill */
+  .slot-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 28px;
+  }
+  .slot-pill.ok {
+    background: rgba(40, 167, 69, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(40, 167, 69, 0.4);
+  }
+  .slot-pill.full {
+    background: rgba(255, 140, 0, 0.15);
+    color: #ffa94d;
+    border: 1px solid rgba(255, 140, 0, 0.4);
+  }
+
+  /* Section headers */
+  .section-header {
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 28px 0 14px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #2a2d34;
+  }
+
+  /* Alert cards grid */
+  .alerts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  .alert-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .alert-card.active {
+    border-left: 3px solid #4e54ff;
+  }
+  .alert-card.expired {
+    opacity: 0.55;
+    border-left: 3px solid #6c757d;
+  }
+
+  .car-name {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #9aa0a6;
+  }
+  .meta-row .label { color: #6c757d; }
+  .meta-row .value { color: #cfd2d6; }
+
+  .channels {
+    display: flex;
+    gap: 6px;
+    font-size: 15px;
+  }
+  .channel-badge {
+    background: #252830;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #cfd2d6;
+  }
+
+  .days-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .days-pill.green { background: rgba(40, 167, 69, 0.2); color: #4ade80; }
+  .days-pill.amber { background: rgba(255, 193, 7, 0.2); color: #ffd54f; }
+  .days-pill.red   { background: rgba(220, 53, 69, 0.2); color: #ff6b6b; }
+  .days-pill.grey  { background: #2a2d34; color: #9aa0a6; }
+
+  .btn-cancel {
+    background: transparent;
+    border: 1px solid #dc3545;
+    color: #ff6b6b;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    align-self: flex-start;
+    margin-top: 4px;
+  }
+  .btn-cancel:hover {
+    background: rgba(220, 53, 69, 0.12);
+  }
+
+  /* Empty state */
+  .empty-state {
+    background: #1a1d24;
+    border: 1px dashed #2a2d34;
+    border-radius: 10px;
+    padding: 40px 20px;
+    text-align: center;
+    color: #9aa0a6;
+  }
+  .empty-state p { margin: 0 0 14px 0; }
+  .empty-state .btn-go {
+    display: inline-block;
+    background: #4e54ff;
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+  }
+
+  /* Expired collapse toggle */
+  .expired-toggle {
+    background: none;
+    border: none;
+    color: #9aa0a6;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 10px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .expired-toggle:hover { color: #cfd2d6; }
+  .chevron { transition: transform 0.2s; }
+  .chevron.open { transform: rotate(90deg); }
+
+  .expired-wrap {
+    display: none;
+    margin-top: 10px;
+  }
+  .expired-wrap.open { display: block; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal-box {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 28px;
+    max-width: 440px;
+    width: 100%;
+    color: #fff;
+  }
+  .modal-box h3 {
+    margin: 0 0 12px 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .modal-box p {
+    color: #cfd2d6;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0 0 20px 0;
+  }
+  .modal-warning {
+    background: rgba(255, 140, 0, 0.1);
+    border-left: 3px solid #ff8c00;
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #ffa94d;
+    margin-bottom: 20px;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+  .btn-keep {
+    background: #4e54ff;
+    color: #fff;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-confirm-cancel {
+    background: transparent;
+    border: 1px solid #dc3545;
+    color: #ff6b6b;
+    padding: 9px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  /* Flash messages — standing rule: dismissible with × */
+  .flash-wrap { margin-bottom: 20px; }
+  .flash {
+    position: relative;
+    padding: 12px 40px 12px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .flash.success { background: rgba(40, 167, 69, 0.15); color: #4ade80; border: 1px solid rgba(40, 167, 69, 0.4); }
+  .flash.error { background: rgba(255, 140, 0, 0.15); color: #ffa94d; border: 1px solid rgba(255, 140, 0, 0.4); }
+  .flash-close {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    opacity: 0.7;
+  }
+  .flash-close:hover { opacity: 1; }
+</style>
+
+<div class="alerts-wrap">
+
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+
+  <h1 class="page-title">My Alerts</h1>
+  <p class="page-subtitle">Manage your active car price alerts. Alerts notify you when matching deals are submitted.</p>
+
+  {# Flash messages with dismissible × #}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">
+            {{ message }}
+            <button type="button" class="flash-close" onclick="this.parentElement.style.display='none'">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {# Slot counter pill — green when capacity, orange when full #}
+  <div class="slot-pill {{ 'full' if active_count >= max_alerts else 'ok' }}">
+    <span>●</span>
+    <span>{{ active_count }} of {{ max_alerts }} active alerts</span>
+  </div>
+
+  {# ACTIVE SECTION #}
+  <div class="section-header">Active Alerts</div>
+
+  {% if active_subs %}
+    <div class="alerts-grid">
+      {% for sub in active_subs %}
+        <div class="alert-card active">
+          <h3 class="car-name">{{ sub.make }} {{ sub.model }} {{ sub.variant }}</h3>
+
+          <div class="meta-row">
+            <span class="label">Channels</span>
+            <span class="channels">
+              {% if sub.notify_email %}<span class="channel-badge">📧 Email</span>{% endif %}
+              {% if sub.notify_whatsapp %}<span class="channel-badge">💬 WhatsApp</span>{% endif %}
+            </span>
+          </div>
+
+          <div class="meta-row">
+            <span class="label">Created</span>
+            <span class="value">{{ sub.created_display }}</span>
+          </div>
+
+          <div class="meta-row">
+            <span class="label">Expires</span>
+            <span class="value">{{ sub.expires_display }}</span>
+          </div>
+
+          <div class="meta-row">
+            <span class="label">Remaining</span>
+            <span>
+              {% if sub.days_remaining > 7 %}
+                <span class="days-pill green">{{ sub.days_remaining }} days</span>
+              {% elif sub.days_remaining > 2 %}
+                <span class="days-pill amber">{{ sub.days_remaining }} days</span>
+              {% else %}
+                <span class="days-pill red">{{ sub.days_remaining }} day{% if sub.days_remaining != 1 %}s{% endif %}</span>
+              {% endif %}
+            </span>
+          </div>
+
+          <button type="button"
+                  class="btn-cancel"
+                  onclick="openCancelModal('{{ sub.id }}', '{{ sub.make }} {{ sub.model }} {{ sub.variant }}')">
+            Cancel alert
+          </button>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <p>No active alerts yet. Set one up from any buyer search result to be notified when a matching deal is submitted.</p>
+      <a href="{{ url_for('buyer') }}" class="btn-go">Start a buyer search</a>
+    </div>
+  {% endif %}
+
+  {# EXPIRED SECTION (collapsed by default) #}
+  {% if expired_subs %}
+    <button type="button" class="expired-toggle" onclick="toggleExpired()">
+      <span class="chevron" id="expiredChevron">▶</span>
+      <span>Past alerts ({{ expired_subs|length }})</span>
+    </button>
+
+    <div class="expired-wrap" id="expiredWrap">
+      <div class="alerts-grid">
+        {% for sub in expired_subs %}
+          <div class="alert-card expired">
+            <h3 class="car-name">{{ sub.make }} {{ sub.model }} {{ sub.variant }}</h3>
+
+            <div class="meta-row">
+              <span class="label">Status</span>
+              <span class="value">
+                <span class="days-pill grey">{{ sub.expired_reason }}</span>
+              </span>
+            </div>
+
+            <div class="meta-row">
+              <span class="label">Channels</span>
+              <span class="channels">
+                {% if sub.notify_email %}<span class="channel-badge">📧 Email</span>{% endif %}
+                {% if sub.notify_whatsapp %}<span class="channel-badge">💬 WhatsApp</span>{% endif %}
+              </span>
+            </div>
+
+            <div class="meta-row">
+              <span class="label">Created</span>
+              <span class="value">{{ sub.created_display }}</span>
+            </div>
+
+            <div class="meta-row">
+              <span class="label">Expired</span>
+              <span class="value">{{ sub.expires_display }}</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+
+{# CANCEL CONFIRMATION MODAL #}
+<div class="modal-overlay" id="cancelModal">
+  <div class="modal-box">
+    <h3>Cancel this alert?</h3>
+    <p>Cancel alert for <strong id="modalCarName">—</strong>?</p>
+    <div class="modal-warning">
+      ⚠ This frees a slot but does <strong>NOT</strong> refund the 500 credits.
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-keep" onclick="closeCancelModal()">Keep alert</button>
+      <form id="cancelForm" method="POST" style="margin: 0;">
+        <button type="submit" class="btn-confirm-cancel">Yes, cancel</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleExpired() {
+    document.getElementById('expiredWrap').classList.toggle('open');
+    document.getElementById('expiredChevron').classList.toggle('open');
+  }
+
+  function openCancelModal(alertId, carName) {
+    document.getElementById('modalCarName').textContent = carName;
+    document.getElementById('cancelForm').action = '/cancel-alert/' + alertId;
+    document.getElementById('cancelModal').classList.add('open');
+  }
+
+  function closeCancelModal() {
+    document.getElementById('cancelModal').classList.remove('open');
+  }
+
+  // Close modal on overlay click (but not on modal-box click)
+  document.getElementById('cancelModal').addEventListener('click', function(e) {
+    if (e.target === this) closeCancelModal();
+  });
+
+  // Close modal on Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeCancelModal();
+  });
+</script>
+
+{% endblock %}
