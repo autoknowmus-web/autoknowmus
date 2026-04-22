@@ -11,208 +11,102 @@
     border-radius: 8px; font-weight: 700; width: 320px; display: block; margin: 15px auto 0;
   }
   .btn-submit-deal:hover { background: #3a40d9; color: #fff; }
-  .btn-submit-deal .credit-reward {
-    display: block; font-size: 0.85rem; font-weight: 500; margin-top: 3px;
-  }
+  .btn-submit-deal .credit-reward { display: block; font-size: 0.85rem; font-weight: 500; margin-top: 3px; }
   .info-box {
     background: rgba(78,84,255,0.1); border: 1px solid #4e54ff;
-    color: #b0b8ff; padding: 12px 16px; border-radius: 8px; font-size: 0.9rem;
-    margin-bottom: 20px;
+    color: #b0b8ff; padding: 12px 16px; border-radius: 8px; font-size: 0.9rem; margin-bottom: 20px;
   }
-
-  /* Custom date display DD-MMM-YYYY */
   .date-field-wrap { position: relative; }
   .date-display {
     background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
-    padding: 8px 40px 8px 12px; border-radius: 6px; width: 100%;
-    height: 38px; cursor: pointer;
+    padding: 8px 40px 8px 12px; border-radius: 6px; width: 100%; height: 38px; cursor: pointer;
     display: flex; align-items: center; font-size: 0.95rem;
   }
   .date-display.placeholder { color: #6c757d; }
   .date-hidden { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
   .date-calendar-btn {
     position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-    background: transparent; border: none; color: #b0b0b0; cursor: pointer;
-    padding: 4px; border-radius: 4px; font-size: 1rem;
+    background: transparent; border: none; color: #b0b0b0; cursor: pointer; padding: 4px;
   }
-  .date-calendar-btn:hover { color: #28a745; background: rgba(40,167,69,0.1); }
-
-  /* Registration number — 3 fields */
   .reg-wrap { display: flex; gap: 6px; align-items: stretch; }
   .reg-wrap input {
     background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
-    padding: 8px 10px; border-radius: 6px; text-align: center;
-    font-family: monospace; font-size: 0.95rem; text-transform: uppercase;
-    height: 38px;
+    padding: 8px 10px; border-radius: 6px; text-align: center; font-family: monospace; font-size: 0.95rem; text-transform: uppercase; height: 38px;
   }
-  .reg-wrap input:focus {
-    outline: none; border-color: #28a745;
-    box-shadow: 0 0 0 0.15rem rgba(40,167,69,0.25);
-  }
-  .reg-rto { width: 70px; }
-  .reg-series { width: 60px; }
-  .reg-num { flex: 1; }
-
   .file-upload {
     background: #1a1d24; border: 1px dashed #4e54ff; border-radius: 8px;
     padding: 10px 15px; text-align: center; cursor: pointer; color: #b0b0b0;
-    height: 38px; display: flex; align-items: center; justify-content: center;
-    font-size: 0.9rem; margin: 0;
+    height: 38px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
   }
-  .file-upload:hover { background: #1f222a; }
   .file-upload input { display: none; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="deal-wrap">
-
   <div class="d-flex justify-content-between align-items-start mb-3">
-    <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+    <a href="{{ url_for('role') }}" class="btn btn-outline-secondary">← Back</a>
     <h2 class="page-title">Record Actual Transaction Data</h2>
   </div>
 
   <div class="form-section">
-
     <div class="info-box">
-      <i class="bi bi-info-circle"></i>
-      Submit verified deal details and earn <span class="credit-inline">(100 Credits)</span> instantly.
-      Your contribution helps build Bangalore's most accurate used-car price intelligence.
+      <i class="bi bi-info-circle"></i> Submit verified deal details and earn <strong>100 Credits</strong> instantly.
     </div>
 
     <form method="POST" action="{{ url_for('submit_deal') }}" enctype="multipart/form-data">
-      <!-- Row 1: Location, Make, Fuel, Model -->
       <div class="row g-3 mb-3">
-        <div class="col-md-3">
-          <label class="form-label">Location</label>
-          <select class="form-select" disabled><option>Bangalore</option></select>
-        </div>
         <div class="col-md-3">
           <label class="form-label">Make *</label>
           <select class="form-select" name="make" id="make" required>
             <option value="">Select Make</option>
-            {% for brand in brands|sort %}
-              <option value="{{ brand }}">{{ brand }}</option>
-            {% endfor %}
+            {% for brand in brands|sort %}<option value="{{ brand }}">{{ brand }}</option>{% endfor %}
           </select>
         </div>
         <div class="col-md-3">
           <label class="form-label">Fuel Type *</label>
           <select class="form-select" name="fuel" id="fuel" required>
-            <option value="">Select Fuel</option>
-            {% for fuel in fuels %}
-              <option value="{{ fuel }}">{{ fuel }}</option>
-            {% endfor %}
+            {% for f in fuels %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
           </select>
         </div>
         <div class="col-md-3">
           <label class="form-label">Model *</label>
-          <select class="form-select" name="model" id="model" required disabled>
-            <option value="">Select Model</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Row 2: Variant, Owner, Mileage, Year -->
-      <div class="row g-3 mb-3">
-        <div class="col-md-3">
-          <label class="form-label">Variant / Suffix *</label>
-          <select class="form-select" name="variant" id="variant" disabled required>
-            <option value="">Select Variant</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">No. of Owners *</label>
-          <select class="form-select" name="owner" required>
-            {% for owner in owners %}
-              <option value="{{ owner }}">{{ owner }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Mileage (KMs) *</label>
-          <input type="number" class="form-control" name="mileage" min="0" required placeholder="e.g. 45000">
+          <select class="form-select" name="model" id="model" required disabled></select>
         </div>
         <div class="col-md-3">
           <label class="form-label">Year *</label>
           <select class="form-select" name="year" required>
-            <option value="">Select Year</option>
-            {% for y in years %}
-              <option value="{{ y }}">{{ y }}</option>
-            {% endfor %}
+            {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
           </select>
         </div>
       </div>
 
-      <!-- Row 3: Condition, Buyer Type, Sale Price -->
       <div class="row g-3 mb-3">
-        <div class="col-md-4">
-          <label class="form-label">Condition *</label>
-          <select class="form-select" name="condition" required>
-            {% for c in conditions %}
-              <option value="{{ c }}">{{ c }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Buyer Type *</label>
-          <select class="form-select" name="buyer_type" required>
-            <option value="">Select Buyer Type</option>
-            {% for bt in buyer_types|sort %}
-              <option value="{{ bt }}">{{ bt }}</option>
-            {% endfor %}
-          </select>
-        </div>
         <div class="col-md-4">
           <label class="form-label">Sale Price (₹) *</label>
-          <input type="number" class="form-control" name="sale_price" min="0" required placeholder="e.g. 650000">
+          <input type="number" class="form-control" name="sale_price" required placeholder="e.g. 650000">
         </div>
-      </div>
-
-      <!-- Row 4: Vehicle Registration (3 fields) -->
-      <div class="row g-3 mb-3">
         <div class="col-md-8">
-          <label class="form-label">Vehicle Registration Number *</label>
+          <label class="form-label">Vehicle Reg Number *</label>
           <div class="reg-wrap">
-            <input type="text" class="reg-rto" name="reg_rto" placeholder="KA03" maxlength="4" required
-                   pattern="[A-Za-z]{2}[0-9]{1,2}" title="State code + district (e.g. KA03)">
-            <input type="text" class="reg-series" name="reg_series" placeholder="MK" maxlength="3" required
-                   pattern="[A-Za-z]{1,3}" title="Series letters (e.g. MK)">
-            <input type="text" class="reg-num" name="reg_number" placeholder="8201" maxlength="4" required
-                   pattern="[0-9]{1,4}" title="4-digit number">
-          </div>
-          <small style="color: #888; font-size: 0.78rem; margin-top: 3px; display: block;">
-            Format: KA 03 MK 8201
-          </small>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">Transaction Date *</label>
-          <div class="date-field-wrap">
-            <div class="date-display placeholder" id="dateDisplay">Select date</div>
-            <input type="date" class="date-hidden" name="transaction_date" id="txDate" required max="2026-12-31">
-            <button type="button" class="date-calendar-btn" onclick="document.getElementById('txDate').showPicker()">
-              <i class="bi bi-calendar3"></i>
-            </button>
+            <input type="text" name="reg_rto" placeholder="KA03" maxlength="4" required>
+            <input type="text" name="reg_series" placeholder="MK" maxlength="3" required>
+            <input type="text" name="reg_number" placeholder="8201" maxlength="4" required>
           </div>
         </div>
       </div>
 
-      <!-- Row 5: File upload -->
       <div class="row g-3 mb-3">
         <div class="col-md-12">
-          <label class="form-label">Upload Proof (Invoice / RC / Receipt) *</label>
+          <label class="form-label">Upload Proof (Invoice/RC) *</label>
           <label class="file-upload">
-            <span><i class="bi bi-cloud-arrow-up"></i> <span id="fileLabel">Click to upload (PDF/JPG/PNG)</span></span>
-            <input type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png" required
-                   onchange="document.getElementById('fileLabel').textContent = this.files[0].name">
+            <span id="fileLabel">Click to upload (PDF/JPG/PNG)</span>
+            <input type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png" required onchange="document.getElementById('fileLabel').textContent = this.files[0].name">
           </label>
         </div>
       </div>
 
-      <button type="submit" class="btn-submit-deal">
-        SUBMIT DEAL
-        <span class="credit-reward">Earn (100 Credits)</span>
-      </button>
+      <button type="submit" class="btn-submit-deal">SUBMIT DEAL<span class="credit-reward">Earn (100 Credits)</span></button>
     </form>
   </div>
 </div>
@@ -220,78 +114,15 @@
 
 {% block scripts %}
 <script>
-  // === DD-MMM-YYYY date display ===
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const txDate = document.getElementById('txDate');
-  const dateDisplay = document.getElementById('dateDisplay');
-
-  function updateDateDisplay() {
-    if (txDate.value) {
-      const [y, m, d] = txDate.value.split('-');
-      dateDisplay.textContent = `${d}-${MONTHS[parseInt(m,10)-1]}-${y}`;
-      dateDisplay.classList.remove('placeholder');
-    } else {
-      dateDisplay.textContent = 'Select date';
-      dateDisplay.classList.add('placeholder');
-    }
-  }
-
-  txDate.addEventListener('change', updateDateDisplay);
-  dateDisplay.addEventListener('click', () => txDate.showPicker && txDate.showPicker());
-
-  // Default today
-  const today = new Date();
-  txDate.valueAsDate = today;
-  updateDateDisplay();
-
-  // === Reg number auto-uppercase + auto-advance ===
-  document.querySelectorAll('.reg-wrap input').forEach(inp => {
-    inp.addEventListener('input', e => {
-      e.target.value = e.target.value.toUpperCase();
-    });
-  });
-
-  // === Real per-model variants ===
-  const VARIANTS_BY_MODEL = {{ variants_by_model | tojson }};
-
-  const MODELS_BY_BRAND = {{ {
-    'Audi': ['A3','A4','A6','Q3','Q5','Q7'],
-    'BMW': ['3 Series','5 Series','X1','X3','X5','X7'],
-    'Ford': ['EcoSport','Endeavour','Figo','Freestyle'],
-    'Honda': ['Amaze','City','Civic','Elevate','Jazz','WR-V'],
-    'Hyundai': ['Alcazar','Aura','Creta','Exter','Grand i10 Nios','i20','Kona Electric','Tucson','Venue','Verna'],
-    'Jaguar': ['F-Pace','XE','XF'],
-    'Kia': ['Carens','Carnival','EV6','Seltos','Sonet'],
-    'Land Rover': ['Defender','Discovery','Range Rover','Range Rover Evoque','Range Rover Sport'],
-    'Lexus': ['ES','LX','NX','RX'],
-    'Mahindra': ['Bolero','Scorpio','Scorpio N','Thar','XUV300','XUV400','XUV700','XUV3XO'],
-    'Maruti Suzuki': ['Alto K10','Baleno','Brezza','Celerio','Dzire','Eeco','Ertiga','Fronx','Grand Vitara','Ignis','Jimny','S-Presso','Swift','Wagon R','XL6'],
-    'Mercedes-Benz': ['A-Class','C-Class','E-Class','GLA','GLC','GLE','S-Class'],
-    'MG': ['Astor','Gloster','Hector','Hector Plus','ZS EV'],
-    'Nissan': ['Kicks','Magnite'],
-    'Renault': ['Kiger','Kwid','Triber'],
-    'Skoda': ['Kushaq','Octavia','Slavia','Superb'],
-    'Tata': ['Altroz','Harrier','Nexon','Nexon EV','Punch','Safari','Tiago','Tigor'],
-    'Toyota': ['Camry','Fortuner','Glanza','Hilux','Hyryder','Innova Crysta','Innova Hycross','Vellfire'],
-    'Volkswagen': ['Taigun','Tiguan','Virtus'],
-    'Volvo': ['XC40','XC60','XC90']
-  }|tojson }};
-
+  const MODELS_BY_BRAND = {{ models_by_brand|tojson }};
   const makeEl = document.getElementById('make');
-  const fuelEl = document.getElementById('fuel');
   const modelEl = document.getElementById('model');
-  const variantEl = document.getElementById('variant');
 
-  function refreshModels() {
-    const make = makeEl.value;
-    const fuel = fuelEl.value;
+  makeEl.addEventListener('change', () => {
     modelEl.innerHTML = '<option value="">Select Model</option>';
-    variantEl.innerHTML = '<option value="">Select Variant</option>';
-    variantEl.disabled = true;
-    if (make && fuel && MODELS_BY_BRAND[make]) {
-      const models = [...MODELS_BY_BRAND[make]].sort((a,b)=>a.localeCompare(b));
-      models.forEach(m => {
-        const opt = document.createElement('option');
+    if (makeEl.value && MODELS_BY_BRAND[makeEl.value]) {
+      MODELS_BY_BRAND[makeEl.value].forEach(m => {
+        let opt = document.createElement('option');
         opt.value = m; opt.textContent = m;
         modelEl.appendChild(opt);
       });
@@ -299,25 +130,6 @@
     } else {
       modelEl.disabled = true;
     }
-  }
-
-  function refreshVariants() {
-    variantEl.innerHTML = '<option value="">Select Variant</option>';
-    if (modelEl.value && VARIANTS_BY_MODEL[modelEl.value]) {
-      const variants = [...VARIANTS_BY_MODEL[modelEl.value]].sort((a,b)=>a.localeCompare(b));
-      variants.forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = v; opt.textContent = v;
-        variantEl.appendChild(opt);
-      });
-      variantEl.disabled = false;
-    } else {
-      variantEl.disabled = true;
-    }
-  }
-
-  makeEl.addEventListener('change', refreshModels);
-  fuelEl.addEventListener('change', refreshModels);
-  modelEl.addEventListener('change', refreshVariants);
+  });
 </script>
 {% endblock %}
