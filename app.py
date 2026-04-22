@@ -1118,17 +1118,7 @@ def buyer_dashboard():
         alert_days=ALERT_SUBSCRIPTION_DAYS,
     )
 
-def count_active_alerts(user_id):
-    """Count currently active (not cancelled, not expired) alert subscriptions for a user."""
-    now_iso = datetime.now(timezone.utc).isoformat()
-    result = supabase.table('alert_subscriptions') \
-        .select('id', count='exact') \
-        .eq('user_id', user_id) \
-        .eq('active', True) \
-        .gt('expires_at', now_iso) \
-        .execute()
-    return result.count or 0
-    
+
 @app.route('/subscribe-alert', methods=['POST'])
 @login_required
 def subscribe_alert():
@@ -1136,109 +1126,7 @@ def subscribe_alert():
     user = current_user()
     if not user:
         return redirect(url_for('index'))
-@app.route('/my-alerts')
-def my_alerts():
-    user = current_user()
-    if not user:
-        return redirect(url_for('login'))
 
-    @app.route('/cancel-alert/<alert_id>', methods=['POST'])
-def cancel_alert(alert_id):
-    user = current_user()
-    if not user:
-        return redirect(url_for('login'))
-
-    # Verify ownership + currently active
-    result = supabase.table('alert_subscriptions') \
-        .select('*') \
-        .eq('id', alert_id) \
-        .eq('user_id', user['id']) \
-        .eq('active', True) \
-        .execute()
-
-    subs = result.data or []
-    if not subs:
-        flash('Alert not found or already cancelled.', 'error')
-        return redirect(url_for('my_alerts'))
-
-    sub = subs[0]
-
-    # Flip active to False (frees the slot, no refund)
-    supabase.table('alert_subscriptions') \
-        .update({'active': False}) \
-        .eq('id', alert_id) \
-        .eq('user_id', user['id']) \
-        .execute()
-
-    # Log cancellation for audit trail (amount 0, no credit change)
-    car_label = f"{sub.get('make', '')} {sub.get('model', '')} {sub.get('variant', '')}".strip()
-    supabase.table('transactions').insert({
-        'user_id': user['id'],
-        'type': 'alert_cancelled',
-        'amount': 0,
-        'balance_after': user['credits'],
-        'description': f'Cancelled alert for {car_label} (no refund)'
-    }).execute()
-
-    flash(f'Alert for {car_label} cancelled. Slot freed (no credit refund).', 'success')
-    return redirect(url_for('my_alerts'))
-
-    now_iso = datetime.now(timezone.utc).isoformat()
-
-    # Fetch all subscriptions for this user, newest first
-    result = supabase.table('alert_subscriptions') \
-        .select('*') \
-        .eq('user_id', user['id']) \
-        .order('created_at', desc=True) \
-        .execute()
-
-    all_subs = result.data or []
-
-    # Split into active vs expired/cancelled
-    active_subs = []
-    expired_subs = []
-
-    for sub in all_subs:
-        is_active_flag = sub.get('active', False)
-        expires_at_str = sub.get('expires_at')
-
-        # Parse expires_at for display + comparison
-        try:
-            expires_dt = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
-            created_dt = datetime.fromisoformat(sub['created_at'].replace('Z', '+00:00'))
-        except (ValueError, AttributeError, KeyError):
-            continue
-
-        # Format dates as DD-MMM-YYYY
-        sub['created_display'] = created_dt.strftime('%d-%b-%Y')
-        sub['expires_display'] = expires_dt.strftime('%d-%b-%Y')
-
-        # Compute days remaining (negative if expired)
-        now_dt = datetime.now(timezone.utc)
-        days_remaining = (expires_dt - now_dt).days
-        sub['days_remaining'] = max(days_remaining, 0)
-
-        # Active = active flag True AND not yet expired
-        if is_active_flag and expires_dt > now_dt:
-            active_subs.append(sub)
-        else:
-            # Mark reason for expired display
-            if not is_active_flag:
-                sub['expired_reason'] = 'Cancelled'
-            else:
-                sub['expired_reason'] = 'Expired'
-            expired_subs.append(sub)
-
-    active_count = len(active_subs)
-
-    return render_template(
-        'my_alerts.html',
-        active_subs=active_subs,
-        expired_subs=expired_subs,
-        active_count=active_count,
-        max_alerts=5
-    )
-    # Required inputs
     make     = (request.form.get('make') or '').strip()
     model    = (request.form.get('model') or '').strip()
     variant  = (request.form.get('variant') or '').strip()
@@ -1252,7 +1140,6 @@ def cancel_alert(alert_id):
     email_enabled    = request.form.get('email_enabled') == 'on'
     whatsapp_enabled = request.form.get('whatsapp_enabled') == 'on'
 
-    # Query string kwargs used to return user to the same dashboard view
     return_kwargs = {
         'make': make, 'fuel': fuel, 'model': model, 'variant': variant,
         'year': year_raw, 'owner': owner, 'mileage': mileage_raw,
@@ -1268,25 +1155,21 @@ def cancel_alert(alert_id):
         flash('Please select at least one alert channel (Email or WhatsApp).', 'error')
         return redirect(url_for('buyer_dashboard', **return_kwargs))
 
-    # Already have active subscription?
     existing = get_active_alert_subscription(user['id'], make, model, variant)
     if existing:
         flash(f'You already have an active alert subscription for {make} {model} {variant}.', 'success')
         return redirect(url_for('buyer_dashboard', **return_kwargs))
-        
-# Cap check: max 5 active alerts per user
+
     active_count = count_active_alert_subscriptions(user['id'])
     if active_count >= MAX_ACTIVE_ALERTS:
         flash(f'Maximum {MAX_ACTIVE_ALERTS} active alerts reached. Cancel an existing alert or wait for one to expire before subscribing to a new car.', 'error')
         return redirect(url_for('buyer_dashboard', **return_kwargs))
-        
-    # Credit check
+
     current_credits = user.get('credits', 0) or 0
     if current_credits < ALERT_SUBSCRIPTION_COST:
         flash(f'Insufficient credits. You need {ALERT_SUBSCRIPTION_COST} credits to subscribe. Tap "Get {CREDIT_REQUEST_AMOUNT} Free Credits" below.', 'error')
         return redirect(url_for('buyer_dashboard', **return_kwargs))
 
-    # Optional fields sanitization
     try:
         year_int = int(year_raw) if year_raw else None
     except (ValueError, TypeError):
@@ -1336,7 +1219,6 @@ def cancel_alert(alert_id):
         flash('Could not create subscription. Please try again.', 'error')
         return redirect(url_for('buyer_dashboard', **return_kwargs))
 
-    # Deduct credits
     new_balance = current_credits - ALERT_SUBSCRIPTION_COST
     try:
         update_user(user['id'], {'credits': new_balance})
@@ -1359,6 +1241,125 @@ def cancel_alert(alert_id):
     channels_str = ' and '.join(channels)
     flash(f"✅ Alerts active for {make} {model} {variant} via {channels_str} until {expires.strftime('%d-%b-%Y')}.", 'success')
     return redirect(url_for('buyer_dashboard', **return_kwargs))
+
+
+@app.route('/my-alerts')
+@login_required
+def my_alerts():
+    """List user's active and past alert subscriptions."""
+    user = current_user()
+    if not user:
+        return redirect(url_for('index'))
+
+    now = datetime.utcnow()
+
+    try:
+        result = (supabase.table('alert_subscriptions')
+                  .select('*')
+                  .eq('user_id', user['id'])
+                  .order('created_at', desc=True)
+                  .execute())
+        all_subs = result.data or []
+    except Exception as e:
+        app.logger.error(f"Load alerts failed: {e}")
+        all_subs = []
+
+    active_subs = []
+    expired_subs = []
+
+    for sub in all_subs:
+        is_active_flag = sub.get('active', False)
+        expires_at_str = sub.get('expires_at')
+        created_at_str = sub.get('created_at')
+
+        try:
+            exp_clean = (expires_at_str or '').replace('Z', '').split('+')[0].split('.')[0]
+            cre_clean = (created_at_str or '').replace('Z', '').split('+')[0].split('.')[0]
+            expires_dt = datetime.fromisoformat(exp_clean)
+            created_dt = datetime.fromisoformat(cre_clean)
+        except (ValueError, AttributeError, TypeError):
+            continue
+
+        sub['created_display'] = created_dt.strftime('%d-%b-%Y')
+        sub['expires_display'] = expires_dt.strftime('%d-%b-%Y')
+
+        days_remaining = (expires_dt - now).days
+        sub['days_remaining'] = max(days_remaining, 0)
+
+        if is_active_flag and expires_dt > now:
+            active_subs.append(sub)
+        else:
+            if not is_active_flag:
+                sub['expired_reason'] = 'Cancelled'
+            else:
+                sub['expired_reason'] = 'Expired'
+            expired_subs.append(sub)
+
+    active_count = len(active_subs)
+
+    return render_template(
+        'my_alerts.html',
+        user=user,
+        first_name=firstname_filter(user.get('name')),
+        active_subs=active_subs,
+        expired_subs=expired_subs,
+        active_count=active_count,
+        max_alerts=MAX_ACTIVE_ALERTS
+    )
+
+
+@app.route('/cancel-alert/<alert_id>', methods=['POST'])
+@login_required
+def cancel_alert(alert_id):
+    """Cancel an active alert subscription. Frees a slot but does NOT refund credits."""
+    user = current_user()
+    if not user:
+        return redirect(url_for('index'))
+
+    try:
+        result = (supabase.table('alert_subscriptions')
+                  .select('*')
+                  .eq('id', alert_id)
+                  .eq('user_id', user['id'])
+                  .eq('active', True)
+                  .execute())
+        subs = result.data or []
+    except Exception as e:
+        app.logger.error(f"Load alert for cancel failed: {e}")
+        flash('Could not process cancellation. Please try again.', 'error')
+        return redirect(url_for('my_alerts'))
+
+    if not subs:
+        flash('Alert not found or already cancelled.', 'error')
+        return redirect(url_for('my_alerts'))
+
+    sub = subs[0]
+
+    try:
+        supabase.table('alert_subscriptions') \
+            .update({'active': False}) \
+            .eq('id', alert_id) \
+            .eq('user_id', user['id']) \
+            .execute()
+    except Exception as e:
+        app.logger.error(f"Cancel alert update failed: {e}")
+        flash('Could not cancel alert. Please try again.', 'error')
+        return redirect(url_for('my_alerts'))
+
+    car_label = f"{sub.get('make', '')} {sub.get('model', '')} {sub.get('variant', '')}".strip()
+    try:
+        supabase.table('transactions').insert({
+            'user_id': user['id'],
+            'type': 'alert_cancelled',
+            'amount': 0,
+            'balance_after': user.get('credits', 0),
+            'description': f'Cancelled alert for {car_label} (no refund)'
+        }).execute()
+    except Exception as e:
+        app.logger.warning(f"Log cancel transaction failed: {e}")
+
+    flash(f'Alert for {car_label} cancelled. Slot freed (no credit refund).', 'success')
+    return redirect(url_for('my_alerts'))
 
 
 # ---------- Stage 3 stubs ----------
