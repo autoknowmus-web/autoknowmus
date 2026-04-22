@@ -330,8 +330,8 @@
           <div class="meta-row">
             <span class="label">Channels</span>
             <span class="channels">
-              {% if sub.notify_email %}<span class="channel-badge">📧 Email</span>{% endif %}
-              {% if sub.notify_whatsapp %}<span class="channel-badge">💬 WhatsApp</span>{% endif %}
+              {% if sub.email_enabled %}<span class="channel-badge">📧 Email</span>{% endif %}
+              {% if sub.whatsapp_enabled %}<span class="channel-badge">💬 WhatsApp</span>{% endif %}
             </span>
           </div>
 
@@ -396,8 +396,8 @@
             <div class="meta-row">
               <span class="label">Channels</span>
               <span class="channels">
-                {% if sub.notify_email %}<span class="channel-badge">📧 Email</span>{% endif %}
-                {% if sub.notify_whatsapp %}<span class="channel-badge">💬 WhatsApp</span>{% endif %}
+                {% if sub.email_enabled %}<span class="channel-badge">📧 Email</span>{% endif %}
+                {% if sub.whatsapp_enabled %}<span class="channel-badge">💬 WhatsApp</span>{% endif %}
               </span>
             </div>
 
