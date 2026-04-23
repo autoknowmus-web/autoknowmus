@@ -209,6 +209,9 @@
     width: 320px;
     border-color: #4eb0ff;
   }
+  .info-tooltip.wide.demand-tooltip {
+    border-color: #ffa500;
+  }
 
   .conf-mini-row {
     display: grid;
@@ -228,6 +231,11 @@
     border-radius: 4px;
     border-bottom-color: transparent;
   }
+  /* Demand-specific active backgrounds override confidence blue */
+  .conf-mini-row.demand-row.active.high   { background: rgba(40,167,69,0.16); }
+  .conf-mini-row.demand-row.active.medium { background: rgba(255,165,0,0.16); }
+  .conf-mini-row.demand-row.active.low    { background: rgba(255,107,107,0.16); }
+
   .conf-mini-row .mini-benefit {
     display: block;
     color: #adb5bd;
@@ -380,7 +388,7 @@
 {% endblock %}
 
 {% block content %}
-{# 2dp Lakhs formatter — renders as "X.YYL" or "X.YYCr" #}
+{# 2dp Lakhs formatter #}
 {% macro l2dp(v) -%}
   {%- if v is none -%}—
   {%- elif v|int >= 10000000 -%}{{ '%.2f'|format(v / 10000000) }}Cr
@@ -506,10 +514,10 @@
         <span class="info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip">
-            How this car's value is expected to drop over the next 5 years from today. Today / Year 2 / Year 4 values are shown on the chart — hover anywhere to see any month's projected price.
+            How this car's value is expected to drop over the next 5 years from today. Year 1 / Year 3 / Year 5 values are shown on the chart — hover anywhere to see any month's projected price.
           </span>
         </span>
-        <span class="sub">next 5 years · values at Today / 2yr / 4yr</span>
+        <span class="sub">next 5 years · values at 1yr / 3yr / 5yr</span>
       </div>
 
       <div class="chart-caution-chip" id="caution-chip">
@@ -534,10 +542,34 @@
     <div class="kpi-card">
       <div class="kpi-label">
         Market Demand
-        <span class="info-wrap">
+        <span class="info-wrap" id="demand-info-wrap">
           <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            How in-demand this car is. HIGH means many buyers want this model — expect sellers to hold firm on price. LOW means you have more negotiating leverage.
+          <span class="info-tooltip wide demand-tooltip" id="demand-tooltip">
+            <span class="conf-header" style="color:#ffa500; border-bottom-color:rgba(255,165,0,0.25);">Demand levels — what each means for you</span>
+
+            <span class="conf-mini-row demand-row {% if demand == 'HIGH' %}active high{% endif %}">
+              <span class="mini-bracket" style="color:#28a745;">HIGH</span>
+              <span>
+                Many buyers want this car; sellers hold pricing power.
+                <span class="mini-benefit"><strong>Tip:</strong> Expect 2–4% max negotiation. Decide fast on fair listings — delay means losing the car.</span>
+              </span>
+            </span>
+
+            <span class="conf-mini-row demand-row {% if demand == 'MEDIUM' %}active medium{% endif %}">
+              <span class="mini-bracket" style="color:#ffa500;">MEDIUM</span>
+              <span>
+                Balanced market — sellers and buyers have equal leverage.
+                <span class="mini-benefit"><strong>Tip:</strong> Aim for 5–8% below asking. Walk away once to test seller flexibility.</span>
+              </span>
+            </span>
+
+            <span class="conf-mini-row demand-row {% if demand == 'LOW' %}active low{% endif %}">
+              <span class="mini-bracket" style="color:#ff6b6b;">LOW</span>
+              <span>
+                Few buyers; cars sit long on the market.
+                <span class="mini-benefit"><strong>Tip:</strong> Target 10–15% below asking. Leverage listing age — older listings = softer seller.</span>
+              </span>
+            </span>
           </span>
         </span>
       </div>
@@ -776,10 +808,9 @@
   const ASKING_POSITION = {{ asking_position | tojson if asking_position else 'null' }};
   const ASKING_PCT_DIFF = {{ asking_pct_diff if asking_pct_diff is not none else 'null' }};
 
-  // Anchor months on the 5-year chart: Today (0), Year 2 (24), Year 4 (48)
-  const ANCHOR_MONTHS = [0, 24, 48];
+  // Anchor months: Year 1 (12), Year 3 (36), Year 5 (60)
+  const ANCHOR_MONTHS = [12, 36, 60];
 
-  // 2dp Lakhs formatter
   function lakh2dp(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
@@ -804,7 +835,7 @@
   }
 
   // ================================================
-  // Caution chip — show when asking price is in top 20% of fair range or above
+  // Caution chip
   // ================================================
   const cautionChip = document.getElementById('caution-chip');
   const cautionNumbers = document.getElementById('caution-numbers');
@@ -815,16 +846,12 @@
     if (ASKING_POSITION === 'above') {
       shouldShow = true;
     } else {
-      // Within-range: top 20% check
       const pct = (ASKING_PRICE - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
       if (pct >= 0.80) shouldShow = true;
     }
     if (shouldShow) {
-      // Compute projected loss at 3 years for this asking price
-      // We scale the formula-based 5yr depreciation to the user's entry point
       const priceAt3y = priceAtMonth(36);
       const priceAt5y = priceAtMonth(60);
-      // Proportional: if user pays ASKING_PRICE vs ESTIMATED, the resale trajectory scales the same %
       const ratio3y = priceAt3y / ESTIMATED;
       const ratio5y = priceAt5y / ESTIMATED;
       const userValAt3y = Math.round(ASKING_PRICE * ratio3y);
@@ -912,14 +939,14 @@
   }
 
   // ================================================
-  // Confidence tooltip smart-positioning (like seller dashboard)
+  // Smart-positioning for wide tooltips (Confidence + Demand)
   // ================================================
-  const confWrap = document.getElementById('conf-info-wrap');
-  const confTip  = document.getElementById('conf-tooltip');
-  if (confWrap && confTip) {
-    confWrap.addEventListener('mouseenter', function() {
-      const iconRect = confWrap.getBoundingClientRect();
-      const tipWidth = 320;
+  function attachSmartTooltip(wrapId, tipId, tipWidth) {
+    const wrap = document.getElementById(wrapId);
+    const tip  = document.getElementById(tipId);
+    if (!wrap || !tip) return;
+    wrap.addEventListener('mouseenter', function() {
+      const iconRect = wrap.getBoundingClientRect();
       const viewW = window.innerWidth;
       const halfTip = tipWidth / 2;
       const iconCenterX = iconRect.left + iconRect.width / 2;
@@ -927,22 +954,24 @@
       const rightSpace = viewW - iconCenterX;
 
       if (leftSpace < halfTip + 10) {
-        confTip.style.left = '0';
-        confTip.style.transform = 'none';
+        tip.style.left = '0';
+        tip.style.transform = 'none';
       } else if (rightSpace < halfTip + 10) {
-        confTip.style.left = 'auto';
-        confTip.style.right = '0';
-        confTip.style.transform = 'none';
+        tip.style.left = 'auto';
+        tip.style.right = '0';
+        tip.style.transform = 'none';
       } else {
-        confTip.style.left = '50%';
-        confTip.style.right = 'auto';
-        confTip.style.transform = 'translateX(-50%)';
+        tip.style.left = '50%';
+        tip.style.right = 'auto';
+        tip.style.transform = 'translateX(-50%)';
       }
     });
   }
+  attachSmartTooltip('conf-info-wrap',   'conf-tooltip',   320);
+  attachSmartTooltip('demand-info-wrap', 'demand-tooltip', 320);
 
   // ================================================
-  // Depreciation chart with anchor labels at Today / Year 2 / Year 4
+  // Depreciation chart with anchor labels at Year 1 / 3 / 5
   // ================================================
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 185);
@@ -952,12 +981,10 @@
   const labels = DEP_DATA.map(p => monthLabel(p.month));
   const prices = DEP_DATA.map(p => p.price);
 
-  // Point arrays: only anchor months get visible points
   const pointRadiusArr = DEP_DATA.map(p => ANCHOR_MONTHS.includes(p.month) ? 4 : 0);
   const pointBgArr = DEP_DATA.map(p => ANCHOR_MONTHS.includes(p.month) ? '#ffa500' : '#4e54ff');
   const pointBorderArr = DEP_DATA.map(p => ANCHOR_MONTHS.includes(p.month) ? '#fff' : '#4e54ff');
 
-  // Anchor badge plugin — clamps X so badges stay inside chart area
   const anchorLabelsPlugin = {
     id: 'anchorLabels',
     afterDatasetsDraw: function(chart) {
@@ -983,7 +1010,6 @@
         const badgeW = textW + padX*2;
         const badgeH = 16;
 
-        // Clamp badge inside chart area
         let centerX = point.x;
         const minCenter = area.left + badgeW / 2 + 2;
         const maxCenter = area.right - badgeW / 2 - 2;
