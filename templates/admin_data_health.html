@@ -1,0 +1,462 @@
+{% extends "layout.html" %}
+
+{% block title %}Data Health — Admin{% endblock %}
+
+{% block content %}
+<style>
+  .admin-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 18px 20px 60px;
+    color: #e4e6eb;
+  }
+
+  .admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #2a2f3a;
+  }
+
+  .admin-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+    color: #ffa500;
+  }
+
+  .admin-header .meta {
+    font-size: 12px;
+    color: #8b92a5;
+  }
+
+  .admin-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .admin-grid-full {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .card {
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+
+  .card h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffa500;
+    margin: 0 0 12px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #242832;
+    font-size: 13px;
+  }
+
+  .stat-row:last-child { border-bottom: none; }
+
+  .stat-label {
+    color: #b4b8c3;
+  }
+
+  .stat-value {
+    font-weight: 600;
+    color: #e4e6eb;
+  }
+
+  .trend-up   { color: #28a745; font-size: 12px; margin-left: 6px; }
+  .trend-down { color: #dc3545; font-size: 12px; margin-left: 6px; }
+  .trend-flat { color: #8b92a5; font-size: 12px; margin-left: 6px; }
+
+  .phase-bar {
+    display: grid;
+    grid-template-columns: 140px 1fr 80px;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+  }
+
+  .phase-bar-track {
+    background: #0d0f14;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .phase-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+  }
+
+  .phase-4-fill { background: #ffd700; }
+  .phase-3-fill { background: #28a745; }
+  .phase-2-fill { background: #4e54ff; }
+  .phase-1-fill { background: #6c757d; }
+
+  .phase-4-label { color: #ffd700; font-weight: 600; }
+  .phase-3-label { color: #28a745; font-weight: 600; }
+  .phase-2-label { color: #4e54ff; font-weight: 600; }
+  .phase-1-label { color: #6c757d; font-weight: 600; }
+
+  .phase-count { text-align: right; font-variant-numeric: tabular-nums; }
+
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  table.data-table th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b92a5;
+    border-bottom: 1px solid #2a2f3a;
+    padding: 8px 6px;
+    font-weight: 600;
+  }
+
+  table.data-table td {
+    padding: 8px 6px;
+    border-bottom: 1px solid #242832;
+    color: #e4e6eb;
+  }
+
+  table.data-table tr:last-child td { border-bottom: none; }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .pill-phase-4 { background: rgba(255,215,0,0.15);  color: #ffd700; }
+  .pill-phase-3 { background: rgba(40,167,69,0.15);  color: #28a745; }
+  .pill-phase-2 { background: rgba(78,84,255,0.15); color: #4e54ff; }
+  .pill-phase-1 { background: rgba(108,117,125,0.15); color: #8b92a5; }
+
+  .flag-item {
+    padding: 10px 0;
+    border-bottom: 1px solid #242832;
+    font-size: 13px;
+  }
+
+  .flag-item:last-child { border-bottom: none; }
+
+  .flag-title {
+    font-weight: 600;
+    color: #dc3545;
+    margin-bottom: 4px;
+  }
+
+  .flag-detail {
+    color: #b4b8c3;
+    font-size: 12px;
+  }
+
+  .broker-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    padding: 10px 0;
+    border-bottom: 1px solid #242832;
+  }
+
+  .broker-row:last-child { border-bottom: none; }
+
+  .broker-name {
+    font-weight: 600;
+    color: #e4e6eb;
+    font-size: 13px;
+  }
+
+  .broker-email {
+    font-size: 11px;
+    color: #8b92a5;
+    margin-top: 2px;
+  }
+
+  .broker-flags {
+    font-size: 11px;
+    color: #ffa500;
+    margin-top: 4px;
+  }
+
+  .broker-flags .flag-chip {
+    display: inline-block;
+    background: rgba(255,165,0,0.1);
+    border: 1px solid rgba(255,165,0,0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 4px;
+    margin-top: 2px;
+  }
+
+  .btn-flag {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    align-self: center;
+  }
+
+  .btn-flag:hover { background: #b52a39; }
+
+  .btn-back {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 14px;
+  }
+
+  .empty-state {
+    color: #6c757d;
+    font-size: 12px;
+    font-style: italic;
+    padding: 16px 0;
+    text-align: center;
+  }
+
+  .footer-version {
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px solid #2a2f3a;
+    font-size: 11px;
+    color: #6c757d;
+    text-align: center;
+  }
+
+  .upgrade-progress {
+    font-variant-numeric: tabular-nums;
+    color: #8b92a5;
+    font-size: 11px;
+  }
+
+  .upgrade-close {
+    color: #28a745;
+    font-weight: 600;
+  }
+
+  @media (max-width: 768px) {
+    .admin-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="admin-wrap">
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+
+  <div class="admin-header">
+    <h1>🛠️ AutoKnowMus — Data Health</h1>
+    <div class="meta">Updated: {{ now_display }}</div>
+  </div>
+
+  <!-- ROW 1: Phase Distribution + Activity -->
+  <div class="admin-grid">
+
+    <div class="card">
+      <h2>Phase Distribution</h2>
+      <div class="stat-row">
+        <span class="stat-label">Total models in catalog</span>
+        <span class="stat-value">{{ total_models }}</span>
+      </div>
+      {% for p in phase_distribution %}
+      <div class="phase-bar">
+        <span class="phase-{{ p.phase }}-label">Phase {{ p.phase }} · {{ p.label }}</span>
+        <div class="phase-bar-track">
+          <div class="phase-bar-fill phase-{{ p.phase }}-fill" style="width: {{ p.pct }}%;"></div>
+        </div>
+        <span class="phase-count">{{ p.count }} ({{ p.pct }}%)</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="card">
+      <h2>Activity (Verified Deals)</h2>
+      <div class="stat-row">
+        <span class="stat-label">Last 180 days</span>
+        <span class="stat-value">{{ total_verified_180d }}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Last 30 days</span>
+        <span class="stat-value">
+          {{ deals_30d_count }}
+          {% if trend_pct is not none %}
+            {% if trend_pct > 0 %}<span class="trend-up">+{{ trend_pct }}%</span>
+            {% elif trend_pct < 0 %}<span class="trend-down">{{ trend_pct }}%</span>
+            {% else %}<span class="trend-flat">flat</span>{% endif %}
+          {% endif %}
+        </span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Distinct submitters (180d)</span>
+        <span class="stat-value">{{ unique_submitters_180d }}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Stale models (no deals 90d+)</span>
+        <span class="stat-value">{{ stale_count }}</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 2: Top Models + Upgrade Queue -->
+  <div class="admin-grid">
+
+    <div class="card">
+      <h2>Top Models by Data Volume</h2>
+      {% if top_models %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Car</th>
+            <th style="text-align:right;">Deals</th>
+            <th style="text-align:right;">Users</th>
+            <th style="text-align:right;">Phase</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in top_models %}
+          <tr>
+            <td>{{ m.make }} {{ m.model }}</td>
+            <td style="text-align:right;">{{ m.deal_count }}</td>
+            <td style="text-align:right;">{{ m.distinct_users }}</td>
+            <td style="text-align:right;">
+              <span class="pill pill-phase-{{ m.phase }}">P{{ m.phase }}</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">No verified deals yet in the last 180 days.</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Close to Phase Upgrade</h2>
+      {% if upgrade_queue %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Car</th>
+            <th style="text-align:right;">Progress</th>
+            <th style="text-align:right;">Needs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in upgrade_queue %}
+          <tr>
+            <td>{{ m.make }} {{ m.model }}</td>
+            <td style="text-align:right;" class="upgrade-progress">
+              {{ m.deal_count }}/{{ m.threshold_deals }} · {{ m.distinct_users }}/{{ m.threshold_users }}
+            </td>
+            <td style="text-align:right;" class="{% if m.deals_needed <= 2 %}upgrade-close{% endif %}">
+              {% if m.deals_needed == 0 and m.users_needed == 0 %}
+                ready for P{{ m.next_phase }}
+              {% else %}
+                {{ m.deals_needed }}d
+                {% if m.users_needed > 0 %}+{{ m.users_needed }}u{% endif %}
+                → P{{ m.next_phase }}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">No models within striking distance of a phase upgrade.</div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- ROW 3: Guardrail Flags + Broker Signals -->
+  <div class="admin-grid">
+
+    <div class="card">
+      <h2>⚠️ Guardrail Flags (Price Deviation)</h2>
+      {% if guardrail_flags %}
+        {% for f in guardrail_flags %}
+        <div class="flag-item">
+          <div class="flag-title">
+            {{ f.make }} {{ f.model }} —
+            {% if f.deviation_pct > 0 %}+{{ f.deviation_pct }}%{% else %}{{ f.deviation_pct }}%{% endif %}
+            vs formula
+          </div>
+          <div class="flag-detail">
+            {{ f.deal_count }} real deals · median ₹{{ f.median_price|inr }}
+            · formula ~₹{{ f.expected_price|inr }}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="empty-state">No significant price deviations detected. Formula and real-deal medians are well-aligned.</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>🚩 Suspicious Activity (Broker Signals)</h2>
+      {% if broker_signals %}
+        {% for s in broker_signals %}
+        <div class="broker-row">
+          <div>
+            <div class="broker-name">{{ s.name }} · {{ s.deal_count }} deals</div>
+            <div class="broker-email">{{ s.email }}</div>
+            <div class="broker-flags">
+              {% for f in s.flags %}<span class="flag-chip">{{ f }}</span>{% endfor %}
+            </div>
+          </div>
+          <form method="POST" action="{{ url_for('admin_flag_user', user_id=s.user_id) }}"
+                onsubmit="return confirm('Soft-flag {{ s.email }} as suspected broker? (Does not block.)');">
+            <button type="submit" class="btn-flag">Flag</button>
+          </form>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="empty-state">No suspicious patterns detected in the last 60 days.</div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <div class="footer-version">
+    Base price data version: <strong>{{ data_version }}</strong>
+    · last updated {{ last_updated }}
+    · Recalibrate quarterly for best accuracy.
+  </div>
+</div>
+{% endblock %}
