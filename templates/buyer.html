@@ -265,4 +265,193 @@
     Object.values(CAR_DATA[make]).forEach(mdl => {
       (mdl.fuels || []).forEach(f => fuelSet.add(f));
     });
-    co
+    const ordered = FUEL_ORDER.filter(f => fuelSet.has(f));
+    ordered.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f;
+      opt.textContent = f;
+      if (preselect && f === preselect) opt.selected = true;
+      fuelEl.appendChild(opt);
+    });
+    fuelEl.disabled = false;
+  }
+
+  function populateModels(make, fuel, preselect) {
+    resetSelect(modelEl, 'Select Model');
+    if (!make || !fuel || !CAR_DATA[make]) return;
+    const models = Object.keys(CAR_DATA[make])
+      .filter(m => (CAR_DATA[make][m].fuels || []).includes(fuel))
+      .sort();
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      if (preselect && m === preselect) opt.selected = true;
+      modelEl.appendChild(opt);
+    });
+    modelEl.disabled = false;
+  }
+
+  function populateVariants(make, model, preselect) {
+    resetSelect(variantEl, 'Select Variant');
+    if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
+    const variants = [...(CAR_DATA[make][model].variants || [])].sort();
+    variants.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      if (preselect && v === preselect) opt.selected = true;
+      variantEl.appendChild(opt);
+    });
+    variantEl.disabled = false;
+  }
+
+  makeEl.addEventListener('change', function() {
+    populateFuels(this.value, null);
+    resetSelect(modelEl, 'Select Fuel first');
+    resetSelect(variantEl, 'Select Model first');
+  });
+  fuelEl.addEventListener('change', function() {
+    populateModels(makeEl.value, this.value, null);
+    resetSelect(variantEl, 'Select Model first');
+  });
+  modelEl.addEventListener('change', function() {
+    populateVariants(makeEl.value, this.value, null);
+  });
+
+  (function init() {
+    if (PREFILL.make) {
+      populateFuels(PREFILL.make, PREFILL.fuel);
+      if (PREFILL.fuel) {
+        populateModels(PREFILL.make, PREFILL.fuel, PREFILL.model);
+        if (PREFILL.model) {
+          populateVariants(PREFILL.make, PREFILL.model, PREFILL.variant);
+        }
+      }
+    }
+  })();
+
+  // ======================================================
+  // Indian comma formatter (shared)
+  // ======================================================
+  function inrGroup(n) {
+    const s = String(Math.abs(n));
+    if (s.length <= 3) return s;
+    const last3 = s.slice(-3);
+    let rest = s.slice(0, -3);
+    const groups = [];
+    while (rest.length > 2) {
+      groups.unshift(rest.slice(-2));
+      rest = rest.slice(0, -2);
+    }
+    if (rest) groups.unshift(rest);
+    return groups.join(',') + ',' + last3;
+  }
+
+  // ======================================================
+  // Mileage dropdown buckets
+  // ======================================================
+  const MILEAGE_BUCKETS = [
+    0, 10000, 20000, 30000, 40000, 50000,
+    60000, 70000, 80000, 90000, 100000,
+    125000, 150000, 175000, 200000,
+    250000, 300000, 400000, 500000
+  ];
+
+  function buildMileageOptions(selectedVal) {
+    mileageEl.innerHTML = '';
+    MILEAGE_BUCKETS.forEach(km => {
+      const opt = document.createElement('option');
+      opt.value = km;
+      opt.textContent = inrGroup(km) + ' km';
+      if (selectedVal !== null && selectedVal !== undefined && String(selectedVal) === String(km)) {
+        opt.selected = true;
+      }
+      mileageEl.appendChild(opt);
+    });
+  }
+
+  // Snap a raw km value to the nearest bucket >= value (so estimate rounds up a bit)
+  function snapToBucket(km) {
+    for (let i = 0; i < MILEAGE_BUCKETS.length; i++) {
+      if (MILEAGE_BUCKETS[i] >= km) return MILEAGE_BUCKETS[i];
+    }
+    return MILEAGE_BUCKETS[MILEAGE_BUCKETS.length - 1];
+  }
+
+  // Track whether user has manually picked mileage
+  let mileageUserTouched = false;
+
+  function defaultMileageForYear(year) {
+    const y = parseInt(year, 10);
+    if (!y || isNaN(y)) return null;
+    const age = Math.max(0, CURRENT_YEAR - y);
+    // Use 1 year minimum so brand-new cars still get ~10k default
+    const estimated = Math.max(10000, age * 10000);
+    return snapToBucket(estimated);
+  }
+
+  function applyDefaultMileage() {
+    if (mileageUserTouched) return;
+    const def = defaultMileageForYear(yearEl.value);
+    if (def !== null) {
+      mileageEl.value = String(def);
+    }
+  }
+
+  // Init mileage dropdown
+  (function initMileage() {
+    const prefillMileage = PREFILL.mileage;
+    if (prefillMileage) {
+      // User has a previous value — preserve it, mark as touched so defaults don't clobber it
+      const asNum = parseInt(prefillMileage, 10);
+      if (!isNaN(asNum)) {
+        // Make sure the exact value exists as a bucket; if not, snap it
+        const snapped = MILEAGE_BUCKETS.includes(asNum) ? asNum : snapToBucket(asNum);
+        buildMileageOptions(snapped);
+        mileageUserTouched = true;
+      } else {
+        buildMileageOptions(null);
+      }
+    } else {
+      buildMileageOptions(null);
+      // Apply default based on prefilled year if any
+      if (PREFILL.year) {
+        applyDefaultMileage();
+      }
+    }
+  })();
+
+  // User change on mileage = sticky
+  mileageEl.addEventListener('change', function() {
+    mileageUserTouched = true;
+  });
+
+  // Year change = recompute mileage default (unless user has touched it)
+  yearEl.addEventListener('change', function() {
+    applyDefaultMileage();
+  });
+
+  // ======================================================
+  // Asking Price
+  // ======================================================
+  const askingDisplay = document.getElementById('asking-display');
+  const askingRaw     = document.getElementById('asking-raw');
+
+  function formatAsking() {
+    const digits = askingDisplay.value.replace(/\D+/g, '');
+    if (!digits) {
+      askingDisplay.value = '';
+      askingRaw.value = '';
+      return;
+    }
+    let n = parseInt(digits, 10);
+    if (n > 100000000) n = 100000000;
+    askingRaw.value = n;
+    askingDisplay.value = inrGroup(n);
+  }
+  askingDisplay.addEventListener('input', formatAsking);
+  askingDisplay.addEventListener('blur',  formatAsking);
+  formatAsking();
+</script>
+{% endblock %}
