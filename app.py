@@ -1,12 +1,14 @@
 import os
 import re
+import csv
+import io
 import json
 import math
 import logging
 import bcrypt
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 from authlib.integrations.flask_client import OAuth
 from supabase import create_client, Client
 
@@ -140,6 +142,29 @@ MAX_DEALS_PER_WEEK = 3
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
 LUXURY_BRANDS = {'Audi', 'BMW', 'Mercedes-Benz', 'Jaguar', 'Land Rover', 'Lexus', 'Volvo'}
+
+# Transaction type labels for credit history page (alphabetical by label in UI)
+TRANSACTION_TYPE_LABELS = {
+    'signup_bonus': 'Signup Bonus',
+    'valuation_charge': 'Seller Valuation',
+    'buyer_search': 'Buyer Search',
+    'alert_subscription': 'Alert Subscription',
+    'credit_request_approved': 'Credit Top-up',
+    'deal_reward': 'Deal Reward',
+    'alert_cancelled': 'Alert Cancelled',
+}
+
+
+def _format_txn_date(iso_str):
+    """Convert Supabase ISO timestamp to DD-MMM-YYYY HH:MM."""
+    if not iso_str:
+        return ''
+    try:
+        clean = iso_str.replace('Z', '+00:00')
+        dt = datetime.fromisoformat(clean)
+        return dt.strftime('%d-%b-%Y %H:%M')
+    except Exception:
+        return iso_str
 
 
 def hash_password(plain: str) -> str:
@@ -1622,14 +1647,160 @@ def submit_deal():
     return redirect(url_for('role'))
 
 
-# ---------- Stage 3 stubs ----------
+# ========== CREDIT HISTORY (Stage 3C) ==========
 
 @app.route('/credit-history')
 @login_required
 def credit_history():
     user = current_user()
-    return render_template('placeholder.html', user=user, page_title='Credit History',
-                           message='Credit history is coming in Stage 3C.')
+    if not user:
+        return redirect(url_for('index'))
+
+    filter_type = request.args.get('type', 'all').strip()
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 20
+
+    # Fetch ALL user's transactions ASC (for balance computation)
+    try:
+        all_txns_resp = (
+            supabase.table('transactions')
+            .select('*')
+            .eq('user_id', user['id'])
+            .order('created_at', desc=False)
+            .execute()
+        )
+        all_txns = all_txns_resp.data or []
+    except Exception as e:
+        app.logger.error(f"credit_history load failed: {e}")
+        all_txns = []
+
+    # Compute running balance chronologically
+    # Prefer stored balance_after if present, else recompute
+    running = 0
+    for t in all_txns:
+        amt = int(t.get('amount') or 0)
+        running += amt
+        # Use stored balance_after if available (more accurate), else running
+        ba = t.get('balance_after')
+        t['balance_after_display'] = int(ba) if ba is not None else running
+
+    # Reverse for display (newest first)
+    all_txns.reverse()
+
+    # Apply type filter
+    if filter_type != 'all':
+        filtered = [t for t in all_txns if t.get('type') == filter_type]
+    else:
+        filtered = all_txns
+
+    total = len(filtered)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_txns = filtered[start:end]
+
+    # Format display fields
+    for t in page_txns:
+        t['date_display'] = _format_txn_date(t.get('created_at'))
+        t['type_label'] = TRANSACTION_TYPE_LABELS.get(t.get('type'), t.get('type', '—'))
+        amt = int(t.get('amount') or 0)
+        if amt > 0:
+            t['amount_display'] = f'+{amt:,}'
+            t['amount_class'] = 'credit-in'
+        elif amt < 0:
+            t['amount_display'] = f'{amt:,}'
+            t['amount_class'] = 'credit-out'
+        else:
+            t['amount_display'] = '0'
+            t['amount_class'] = 'credit-zero'
+
+    # Alphabetical dropdown options by label
+    type_options = sorted(
+        [{'value': k, 'label': v} for k, v in TRANSACTION_TYPE_LABELS.items()],
+        key=lambda x: x['label']
+    )
+
+    return render_template(
+        'credit_history.html',
+        user=user,
+        first_name=firstname_filter(user.get('name')),
+        txns=page_txns,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+        per_page=per_page,
+        filter_type=filter_type,
+        type_options=type_options,
+        current_credits=user.get('credits', 0),
+    )
+
+
+@app.route('/credit-history/export')
+@login_required
+def credit_history_export():
+    user = current_user()
+    if not user:
+        return redirect(url_for('index'))
+
+    filter_type = request.args.get('type', 'all').strip()
+
+    try:
+        all_txns_resp = (
+            supabase.table('transactions')
+            .select('*')
+            .eq('user_id', user['id'])
+            .order('created_at', desc=False)
+            .execute()
+        )
+        all_txns = all_txns_resp.data or []
+    except Exception as e:
+        app.logger.error(f"credit_history_export load failed: {e}")
+        all_txns = []
+
+    # Running balance
+    running = 0
+    for t in all_txns:
+        amt = int(t.get('amount') or 0)
+        running += amt
+        ba = t.get('balance_after')
+        t['balance_after_display'] = int(ba) if ba is not None else running
+
+    all_txns.reverse()
+
+    if filter_type != 'all':
+        all_txns = [t for t in all_txns if t.get('type') == filter_type]
+
+    # Build CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Date', 'Type', 'Description', 'Amount', 'Balance After'])
+
+    for t in all_txns:
+        writer.writerow([
+            _format_txn_date(t.get('created_at')),
+            TRANSACTION_TYPE_LABELS.get(t.get('type'), t.get('type', '')),
+            t.get('description', '') or '',
+            t.get('amount', 0),
+            t.get('balance_after_display', 0),
+        ])
+
+    csv_data = output.getvalue()
+    output.close()
+
+    filename = f"autoknowmus_credits_{datetime.utcnow().strftime('%d-%b-%Y')}.csv"
+
+    return Response(
+        csv_data,
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'},
+    )
+
+
+# ---------- Misc ----------
 
 @app.route('/logout')
 def logout():
