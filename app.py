@@ -2,13 +2,14 @@ import os
 import re
 import csv
 import io
+import uuid
 import json
 import math
 import logging
 import bcrypt
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, make_response
 from authlib.integrations.flask_client import OAuth
 from supabase import create_client, Client
 
@@ -109,13 +110,11 @@ google = oauth.register(
 EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 PHONE_RE = re.compile(r'^\d{10}$')
 
-# Registration: state is 2 uppercase letters, district is 2 digits (01-99)
 RTO_STATE_RE    = re.compile(r'^[A-Z]{2}$')
 RTO_DISTRICT_RE = re.compile(r'^[0-9]{2}$')
-REG_SERIES_RE   = re.compile(r'^[A-Z]{0,3}$')   # 0-3 letters
-REG_NUMBER_RE   = re.compile(r'^[0-9]{1,4}$')   # 1-4 digits
+REG_SERIES_RE   = re.compile(r'^[A-Z]{0,3}$')
+REG_NUMBER_RE   = re.compile(r'^[0-9]{1,4}$')
 
-# Indian state / UT RTO prefixes (alphabetical)
 RTO_STATES = [
     'AN', 'AP', 'AR', 'AS', 'BR', 'CG', 'CH', 'DD', 'DL', 'DN',
     'GA', 'GJ', 'HP', 'HR', 'JH', 'JK', 'KA', 'KL', 'LA', 'LD',
@@ -139,11 +138,16 @@ MAX_ACTIVE_ALERTS = 5
 DEAL_REWARD_AMOUNT = 100
 MAX_DEALS_PER_WEEK = 3
 
+# Guest access
+GUEST_CREDITS = 100
+GUEST_LOCKOUT_DAYS = 30
+GUEST_COOKIE_NAME = 'ak_guest_token'
+GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * GUEST_LOCKOUT_DAYS  # 30 days
+
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
 LUXURY_BRANDS = {'Audi', 'BMW', 'Mercedes-Benz', 'Jaguar', 'Land Rover', 'Lexus', 'Volvo'}
 
-# Transaction type labels for credit history page (alphabetical by label in UI)
 TRANSACTION_TYPE_LABELS = {
     'signup_bonus': 'Signup Bonus',
     'valuation_charge': 'Seller Valuation',
@@ -156,7 +160,6 @@ TRANSACTION_TYPE_LABELS = {
 
 
 def _format_txn_date(iso_str):
-    """Convert Supabase ISO timestamp to DD-MMM-YYYY HH:MM."""
     if not iso_str:
         return ''
     try:
@@ -249,7 +252,63 @@ def count_recent_deals(user_id, days=7):
         app.logger.warning(f"count_recent_deals failed: {e}")
         return 0
 
+
+# ========== GUEST HELPERS ==========
+
+def has_valid_guest_usage(token: str) -> bool:
+    """Check if a guest token has already consumed its one-time usage (within 30-day lockout window)."""
+    if not token:
+        return False
+    try:
+        now_iso = datetime.utcnow().isoformat()
+        r = (supabase.table('guest_usage')
+             .select('id')
+             .eq('guest_token', token)
+             .gt('expires_at', now_iso)
+             .limit(1)
+             .execute())
+        return bool(r.data)
+    except Exception as e:
+        app.logger.warning(f"has_valid_guest_usage failed: {e}")
+        return False
+
+
+def record_guest_usage(token: str, action_type: str) -> bool:
+    """Record a guest usage event. Called after successful seller/buyer search."""
+    if not token:
+        return False
+    try:
+        now = datetime.utcnow()
+        expires = now + timedelta(days=GUEST_LOCKOUT_DAYS)
+        payload = {
+            'guest_token': token,
+            'ip_address': request.headers.get('X-Forwarded-For', request.remote_addr or ''),
+            'user_agent': (request.user_agent.string or '')[:500],
+            'used_at': now.isoformat(),
+            'expires_at': expires.isoformat(),
+            'action_type': action_type,
+        }
+        supabase.table('guest_usage').insert(payload).execute()
+        return True
+    except Exception as e:
+        app.logger.error(f"record_guest_usage failed: {e}")
+        return False
+
+
+def start_guest_session(token: str):
+    """Initialize session for a fresh guest."""
+    session.clear()
+    session['is_guest'] = True
+    session['guest_token'] = token
+    session['credits'] = GUEST_CREDITS
+    session['active_alerts_count'] = 0
+    session['guest_used'] = False
+
+
+# ==========
+
 def login_user_session(user: dict):
+    session.clear()
     session['user_id'] = user['id']
     session['user'] = {
         'name': user.get('name'),
@@ -258,6 +317,7 @@ def login_user_session(user: dict):
     }
     session['credits'] = user.get('credits', 0)
     session['active_alerts_count'] = count_active_alert_subscriptions(user['id'])
+    session['is_guest'] = False
     touch_last_login(user['id'])
 
 def refresh_session_user(user: dict):
@@ -278,9 +338,13 @@ def current_user():
         refresh_session_user(u)
     return u
 
+
 def login_required(f):
+    """Allows both authenticated users AND active guests."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        if session.get('is_guest'):
+            return f(*args, **kwargs)
         if not session.get('user_id'):
             legacy = session.get('user')
             if legacy and legacy.get('email'):
@@ -300,6 +364,20 @@ def login_required(f):
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated
+
+
+def no_guest(redirect_endpoint='signup', message=None):
+    """Decorator that blocks guests from gated routes with a clean signup redirect."""
+    def outer(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if session.get('is_guest'):
+                flash(message or 'Please sign up to access this feature.', 'error')
+                return redirect(url_for(redirect_endpoint))
+            return f(*args, **kwargs)
+        return decorated
+    return outer
+
 
 def log_credit_transaction(user_id, type_, description, amount, balance_after):
     try:
@@ -470,11 +548,52 @@ def get_active_alert_subscription(user_id, make, model, variant):
 
 @app.route('/')
 def index():
-    if session.get('user_id'):
+    if session.get('user_id') or session.get('is_guest'):
         return redirect(url_for('role'))
     prefill_email = request.args.get('email', '')
     error = request.args.get('error', '')
     return render_template('index.html', prefill_email=prefill_email, error=error)
+
+
+# ========== GUEST ACCESS ==========
+
+@app.route('/guest-access')
+def guest_access():
+    """Start a guest session. Checks cookie for prior use within 30-day window."""
+    if session.get('user_id'):
+        return redirect(url_for('role'))
+
+    existing_token = request.cookies.get(GUEST_COOKIE_NAME)
+
+    if existing_token and has_valid_guest_usage(existing_token):
+        return redirect(url_for('index',
+            error='Your guest trial was already used. Please sign up to continue exploring — it only takes a minute and you get 500 free credits.'))
+
+    # Reuse existing token if present (and not used), else create new
+    token = existing_token or str(uuid.uuid4())
+    start_guest_session(token)
+
+    resp = make_response(redirect(url_for('role')))
+    if not existing_token:
+        resp.set_cookie(
+            GUEST_COOKIE_NAME,
+            token,
+            max_age=GUEST_COOKIE_MAX_AGE,
+            httponly=True,
+            samesite='Lax',
+            secure=request.is_secure,
+        )
+    return resp
+
+
+@app.route('/guest-exit')
+def guest_exit():
+    """Exit guest mode back to landing (preserves cookie for lockout tracking)."""
+    session.clear()
+    return redirect(url_for('index'))
+
+
+# ========== AUTH ==========
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -604,6 +723,7 @@ def google_callback():
 
 @app.route('/complete-profile', methods=['GET', 'POST'])
 @login_required
+@no_guest()
 def complete_profile():
     user = current_user()
     if not user:
@@ -639,6 +759,16 @@ def complete_profile():
 @app.route('/role')
 @login_required
 def role():
+    if session.get('is_guest'):
+        token = session.get('guest_token')
+        guest_used = has_valid_guest_usage(token) or session.get('guest_used', False)
+        return render_template('role.html',
+            user=None,
+            first_name='Guest',
+            show_welcome=False,
+            active_alerts_count=0,
+            guest_used=guest_used)
+
     user = current_user()
     if not user:
         return redirect(url_for('index'))
@@ -649,15 +779,33 @@ def role():
     active_alerts_count = count_active_alert_subscriptions(user['id'])
     return render_template('role.html', user=user, first_name=first_name,
                            show_welcome=show_welcome,
-                           active_alerts_count=active_alerts_count)
+                           active_alerts_count=active_alerts_count,
+                           guest_used=False)
+
 
 # ========== SELLER FLOW ==========
+
+def _guest_block_if_used():
+    """If guest has already used their 1 search, redirect to signup."""
+    if session.get('is_guest'):
+        token = session.get('guest_token')
+        if has_valid_guest_usage(token) or session.get('guest_used', False):
+            flash('Your guest trial was used. Please sign up to continue — get 500 free credits.', 'error')
+            return redirect(url_for('signup'))
+    return None
+
 
 @app.route('/seller', methods=['GET', 'POST'])
 @login_required
 def seller():
-    user = current_user()
-    if not user:
+    # Guest: block if already used
+    block = _guest_block_if_used()
+    if block:
+        return block
+
+    is_guest = session.get('is_guest', False)
+    user = None if is_guest else current_user()
+    if not is_guest and not user:
         return redirect(url_for('index'))
 
     def render_form(form_data, error='', show_credit_request=False):
@@ -697,7 +845,6 @@ def seller():
         'condition': (request.form.get('condition') or '').strip(),
     }
 
-    # Required: make, fuel, model, variant, year.  Optional: owner, mileage, condition (with defaults).
     for key in ('make', 'fuel', 'model', 'variant', 'year'):
         if not form_data[key]:
             return render_form(form_data, error='Please fill in all required fields.')
@@ -711,7 +858,6 @@ def seller():
     if form_data['fuel'] not in CAR_DATA[form_data['make']][form_data['model']]['fuels']:
         return render_form(form_data, error='Selected Fuel is not available for this Model.')
 
-    # Optional fields — apply safe defaults if missing
     if not form_data['owner']:
         form_data['owner'] = '1st Owner'
     if not form_data['condition']:
@@ -729,7 +875,6 @@ def seller():
     except (ValueError, TypeError):
         return render_form(form_data, error='Invalid Year.')
 
-    # Mileage optional — default to (YEAR_END - year) * 10000, min 10000
     if not form_data['mileage']:
         age = max(1, YEAR_END - year_int)
         form_data['mileage'] = str(age * 10000)
@@ -741,11 +886,11 @@ def seller():
     except (ValueError, TypeError):
         return render_form(form_data, error='Mileage must be a number between 0 and 500000.')
 
-    current_credits = user.get('credits', 0) or 0
+    current_credits = session.get('credits', 0) if is_guest else (user.get('credits', 0) or 0)
     if current_credits < VALUATION_COST:
         return render_form(form_data,
                            error=f'Insufficient credits. You need {VALUATION_COST} credits to run a valuation.',
-                           show_credit_request=True)
+                           show_credit_request=not is_guest)
 
     estimated = compute_base_valuation(
         make=form_data['make'], model=form_data['model'], variant=form_data['variant'],
@@ -762,62 +907,81 @@ def seller():
     adjusted, confidence = adjust_with_deals(estimated, similar_prices)
     price_low, price_high = compute_price_range(adjusted)
 
-    try:
-        val_payload = {
-            'user_id': user['id'],
-            'make': form_data['make'],
-            'model': form_data['model'],
-            'variant': form_data['variant'],
-            'fuel': form_data['fuel'],
-            'year': year_int,
-            'mileage': mileage_int,
-            'condition': form_data['condition'],
-            'owner': form_data['owner'],
-            'estimated_price': adjusted,
-            'price_low': price_low,
-            'price_high': price_high,
-        }
-        ins = supabase.table('valuations').insert(val_payload).execute()
-        valuation_row = ins.data[0] if ins.data else None
-    except Exception as e:
-        app.logger.error(f"Valuation insert failed: {e}")
-        return render_form(form_data, error='Something went wrong saving your valuation. Please try again.')
+    val_payload = {
+        'make': form_data['make'],
+        'model': form_data['model'],
+        'variant': form_data['variant'],
+        'fuel': form_data['fuel'],
+        'year': year_int,
+        'mileage': mileage_int,
+        'condition': form_data['condition'],
+        'owner': form_data['owner'],
+        'estimated_price': adjusted,
+        'price_low': price_low,
+        'price_high': price_high,
+    }
+    # Only persist for registered users (valuations.user_id is NOT NULL)
+    if not is_guest:
+        val_payload['user_id'] = user['id']
+        try:
+            ins = supabase.table('valuations').insert(val_payload).execute()
+            valuation_row = ins.data[0] if ins.data else None
+        except Exception as e:
+            app.logger.error(f"Valuation insert failed: {e}")
+            return render_form(form_data, error='Something went wrong saving your valuation. Please try again.')
+        if not valuation_row:
+            return render_form(form_data, error='Could not save valuation. Please try again.')
 
-    if not valuation_row:
-        return render_form(form_data, error='Could not save valuation. Please try again.')
+        new_balance = current_credits - VALUATION_COST
+        try:
+            update_user(user['id'], {'credits': new_balance})
+            log_credit_transaction(
+                user_id=user['id'],
+                type_='valuation_charge',
+                description=f"Valuation: {form_data['year']} {form_data['make']} {form_data['model']} {form_data['variant']}",
+                amount=-VALUATION_COST,
+                balance_after=new_balance,
+            )
+            session['credits'] = new_balance
+            session['user']['credits'] = new_balance
+        except Exception as e:
+            app.logger.error(f"Credit deduction failed: {e}")
 
-    new_balance = current_credits - VALUATION_COST
-    try:
-        update_user(user['id'], {'credits': new_balance})
-        log_credit_transaction(
-            user_id=user['id'],
-            type_='valuation_charge',
-            description=f"Valuation: {form_data['year']} {form_data['make']} {form_data['model']} {form_data['variant']}",
-            amount=-VALUATION_COST,
-            balance_after=new_balance,
-        )
-        session['credits'] = new_balance
-        session['user']['credits'] = new_balance
-    except Exception as e:
-        app.logger.error(f"Credit deduction failed: {e}")
+        return redirect(url_for('seller_dashboard', valuation_id=valuation_row['id']))
 
-    return redirect(url_for('seller_dashboard', valuation_id=valuation_row['id']))
+    # GUEST path: stash valuation in session, deduct credits in session, record usage
+    session['credits'] = current_credits - VALUATION_COST
+    session['guest_used'] = True
+    record_guest_usage(session.get('guest_token'), 'seller')
+    # Stash for guest dashboard render
+    guest_val = dict(val_payload)
+    guest_val['id'] = 'guest'
+    session['guest_valuation'] = guest_val
+    return redirect(url_for('seller_dashboard', valuation_id=0))
 
 
 @app.route('/seller-dashboard/<int:valuation_id>')
 @login_required
 def seller_dashboard(valuation_id):
-    user = current_user()
-    try:
-        r = supabase.table('valuations').select('*').eq('id', valuation_id).eq('user_id', user['id']).limit(1).execute()
-        val = r.data[0] if r.data else None
-    except Exception as e:
-        app.logger.error(f"Load valuation failed: {e}")
-        val = None
+    is_guest = session.get('is_guest', False)
 
-    if not val:
-        return render_template('placeholder.html', user=user, page_title='Valuation Not Found',
-                               message='We could not find that valuation.')
+    if is_guest:
+        val = session.get('guest_valuation')
+        if not val:
+            return redirect(url_for('seller'))
+        user = None
+    else:
+        user = current_user()
+        try:
+            r = supabase.table('valuations').select('*').eq('id', valuation_id).eq('user_id', user['id']).limit(1).execute()
+            val = r.data[0] if r.data else None
+        except Exception as e:
+            app.logger.error(f"Load valuation failed: {e}")
+            val = None
+
+        if not val:
+            return render_template('placeholder.html', user=user, page_title='Valuation Not Found',
+                                   message='We could not find that valuation.')
 
     estimated  = val['estimated_price']
     price_low  = val['price_low']
@@ -867,6 +1031,7 @@ def seller_dashboard(valuation_id):
 
 @app.route('/request-credits', methods=['POST'])
 @login_required
+@no_guest(message='Sign up to request free credits — 500 credits on signup.')
 def request_credits():
     user = current_user()
     if not user:
@@ -945,11 +1110,16 @@ def request_credits():
 @app.route('/buyer', methods=['GET', 'POST'])
 @login_required
 def buyer():
-    user = current_user()
-    if not user:
+    block = _guest_block_if_used()
+    if block:
+        return block
+
+    is_guest = session.get('is_guest', False)
+    user = None if is_guest else current_user()
+    if not is_guest and not user:
         return redirect(url_for('index'))
 
-    first_name = firstname_filter(user.get('name'))
+    first_name = 'Guest' if is_guest else firstname_filter(user.get('name'))
 
     def render_form(form_data, error='', show_credit_request=False):
         return render_template(
@@ -994,7 +1164,6 @@ def buyer():
         'asking_price': (request.form.get('asking_price') or '').strip(),
     }
 
-    # Required: make, fuel, model, variant, year.  Optional: owner, mileage, condition (with defaults).
     for key in ('make', 'fuel', 'model', 'variant', 'year'):
         if not form_data[key]:
             return render_form(form_data, error='Please fill in all required fields.')
@@ -1008,7 +1177,6 @@ def buyer():
     if form_data['fuel'] not in CAR_DATA[form_data['make']][form_data['model']]['fuels']:
         return render_form(form_data, error='Selected Fuel is not available for this Model.')
 
-    # Optional fields — apply safe defaults if missing
     if not form_data['owner']:
         form_data['owner'] = '1st Owner'
     if not form_data['condition']:
@@ -1026,7 +1194,6 @@ def buyer():
     except (ValueError, TypeError):
         return render_form(form_data, error='Invalid Year.')
 
-    # Mileage optional — default to (current_year - year) * 10000, min 10000
     if not form_data['mileage']:
         age = max(1, YEAR_END - year_int)
         form_data['mileage'] = str(age * 10000)
@@ -1048,27 +1215,32 @@ def buyer():
         except (ValueError, TypeError):
             return render_form(form_data, error='Asking price must be a valid number.')
 
-    current_credits = user.get('credits', 0) or 0
+    current_credits = session.get('credits', 0) if is_guest else (user.get('credits', 0) or 0)
     if current_credits < BUYER_SEARCH_COST:
         return render_form(form_data,
                            error=f'Insufficient credits. You need {BUYER_SEARCH_COST} credits to run a search.',
-                           show_credit_request=True)
+                           show_credit_request=not is_guest)
 
     new_balance = current_credits - BUYER_SEARCH_COST
-    try:
-        update_user(user['id'], {'credits': new_balance})
-        log_credit_transaction(
-            user_id=user['id'],
-            type_='buyer_search',
-            description=f"Buyer search: {form_data['year']} {form_data['make']} {form_data['model']} {form_data['variant']}",
-            amount=-BUYER_SEARCH_COST,
-            balance_after=new_balance,
-        )
+    if is_guest:
         session['credits'] = new_balance
-        if 'user' in session:
-            session['user']['credits'] = new_balance
-    except Exception as e:
-        app.logger.error(f"Buyer credit deduction failed: {e}")
+        session['guest_used'] = True
+        record_guest_usage(session.get('guest_token'), 'buyer')
+    else:
+        try:
+            update_user(user['id'], {'credits': new_balance})
+            log_credit_transaction(
+                user_id=user['id'],
+                type_='buyer_search',
+                description=f"Buyer search: {form_data['year']} {form_data['make']} {form_data['model']} {form_data['variant']}",
+                amount=-BUYER_SEARCH_COST,
+                balance_after=new_balance,
+            )
+            session['credits'] = new_balance
+            if 'user' in session:
+                session['user']['credits'] = new_balance
+        except Exception as e:
+            app.logger.error(f"Buyer credit deduction failed: {e}")
 
     params = {
         'make':      form_data['make'],
@@ -1089,8 +1261,9 @@ def buyer():
 @app.route('/buyer-dashboard')
 @login_required
 def buyer_dashboard():
-    user = current_user()
-    if not user:
+    is_guest = session.get('is_guest', False)
+    user = None if is_guest else current_user()
+    if not is_guest and not user:
         return redirect(url_for('index'))
 
     make      = request.args.get('make', '').strip()
@@ -1161,8 +1334,12 @@ def buyer_dashboard():
     depreciation = compute_depreciation_series_monthly(adjusted, months=60)
     verified_count, buyers_last_30d, avg_buyers_range = get_market_stats(make, model)
 
-    active_sub = get_active_alert_subscription(user['id'], make, model, variant)
-    active_alerts_count = count_active_alert_subscriptions(user['id'])
+    if is_guest:
+        active_sub = None
+        active_alerts_count = 0
+    else:
+        active_sub = get_active_alert_subscription(user['id'], make, model, variant)
+        active_alerts_count = count_active_alert_subscriptions(user['id'])
 
     back_prefill = {
         'make':         make,
@@ -1179,7 +1356,7 @@ def buyer_dashboard():
     return render_template(
         'buyer_dashboard.html',
         user=user,
-        first_name=firstname_filter(user.get('name')),
+        first_name='Guest' if is_guest else firstname_filter(user.get('name')),
         make=make, fuel=fuel, model=model, variant=variant,
         year=year_int, owner=owner, mileage=mileage_int, condition=condition,
         asking_price=asking_price_int,
@@ -1207,6 +1384,7 @@ def buyer_dashboard():
 
 @app.route('/subscribe-alert', methods=['POST'])
 @login_required
+@no_guest(message='Sign up to set alert subscriptions on cars — free with 500 signup credits.')
 def subscribe_alert():
     user = current_user()
     if not user:
@@ -1331,6 +1509,7 @@ def subscribe_alert():
 
 @app.route('/my-alerts')
 @login_required
+@no_guest(message='Sign up to manage alert subscriptions.')
 def my_alerts():
     user = current_user()
     if not user:
@@ -1396,6 +1575,7 @@ def my_alerts():
 
 @app.route('/cancel-alert/<alert_id>', methods=['POST'])
 @login_required
+@no_guest(message='Sign up to manage alerts.')
 def cancel_alert(alert_id):
     user = current_user()
     if not user:
@@ -1453,8 +1633,8 @@ def cancel_alert(alert_id):
 
 @app.route('/submit-deal', methods=['GET', 'POST'])
 @login_required
+@no_guest(message='Sign up to submit verified deals and earn 100 credits per deal.')
 def submit_deal():
-    """Submit a verified car transaction. Awards 100 credits on approval."""
     user = current_user()
     if not user:
         return redirect(url_for('index'))
@@ -1500,7 +1680,6 @@ def submit_deal():
         }
         return render_form(prefill)
 
-    # ==== POST ====
     form_data = {
         'make':              (request.form.get('make') or '').strip(),
         'fuel':              (request.form.get('fuel') or '').strip(),
@@ -1521,7 +1700,6 @@ def submit_deal():
         'has_proof':         request.form.get('has_proof') == 'on',
     }
 
-    # Rate limit: max 3 deals per 7 days (rule still enforced, banner not shown unless reached)
     weekly_count = count_recent_deals(user['id'], 7)
     if weekly_count >= MAX_DEALS_PER_WEEK:
         return render_form(
@@ -1567,7 +1745,6 @@ def submit_deal():
     except (ValueError, TypeError):
         return render_form(form_data, error='Mileage must be a number between 0 and 500000.')
 
-    # Registration validation
     if form_data['reg_state'] not in RTO_STATES:
         return render_form(form_data, error='Invalid State RTO code.')
     if not RTO_DISTRICT_RE.match(form_data['reg_district']):
@@ -1579,10 +1756,8 @@ def submit_deal():
     if not REG_NUMBER_RE.match(form_data['reg_number']):
         return render_form(form_data, error='Registration number must be 1-4 digits.')
 
-    # Combined RTO code stored in DB: reg_state + reg_district (e.g. "KA03")
     rto_code_combined = form_data['reg_state'] + form_data['reg_district']
 
-    # Transaction date
     try:
         tx_date = datetime.strptime(form_data['transaction_date'], '%Y-%m-%d').date()
         today = datetime.utcnow().date()
@@ -1593,7 +1768,6 @@ def submit_deal():
     except (ValueError, TypeError):
         return render_form(form_data, error='Invalid transaction date.')
 
-    # Sale price (required)
     cleaned_sale = form_data['sale_price'].replace(',', '').replace('₹', '').strip()
     try:
         sale_price_int = int(cleaned_sale)
@@ -1602,7 +1776,6 @@ def submit_deal():
     except (ValueError, TypeError):
         return render_form(form_data, error='Sale price must be a positive number up to ₹10 Crore.')
 
-    # Asking price (optional)
     asking_price_int = None
     if form_data['asking_price']:
         cleaned_ask = form_data['asking_price'].replace(',', '').replace('₹', '').strip()
@@ -1613,11 +1786,9 @@ def submit_deal():
         except (ValueError, TypeError):
             return render_form(form_data, error='Asking price, if provided, must be a positive number.')
 
-    # Dealer must have proof
     if form_data['buyer_type'] == 'Dealer' and not form_data['has_proof']:
         return render_form(form_data, error='Dealer transactions require proof of sale. Please confirm you have proof.')
 
-    # verified: True if proof provided, False for private sales without proof
     verified_flag = form_data['has_proof']
 
     payload = {
@@ -1651,7 +1822,6 @@ def submit_deal():
     if not deal_row:
         return render_form(form_data, error='Could not save your deal. Please try again.')
 
-    # Award credits
     current_credits = user.get('credits', 0) or 0
     new_balance = current_credits + DEAL_REWARD_AMOUNT
     try:
@@ -1677,10 +1847,11 @@ def submit_deal():
     return redirect(url_for('role'))
 
 
-# ========== CREDIT HISTORY (Stage 3C) ==========
+# ========== CREDIT HISTORY ==========
 
 @app.route('/credit-history')
 @login_required
+@no_guest(message='Sign up to view credit history.')
 def credit_history():
     user = current_user()
     if not user:
@@ -1693,7 +1864,6 @@ def credit_history():
         page = 1
     per_page = 20
 
-    # Fetch ALL user's transactions ASC (for balance computation)
     try:
         all_txns_resp = (
             supabase.table('transactions')
@@ -1707,8 +1877,6 @@ def credit_history():
         app.logger.error(f"credit_history load failed: {e}")
         all_txns = []
 
-    # Compute running balance chronologically
-    # Prefer stored balance_after if present, else recompute
     running = 0
     for t in all_txns:
         amt = int(t.get('amount') or 0)
@@ -1716,10 +1884,8 @@ def credit_history():
         ba = t.get('balance_after')
         t['balance_after_display'] = int(ba) if ba is not None else running
 
-    # Reverse for display (newest first)
     all_txns.reverse()
 
-    # Apply type filter
     if filter_type != 'all':
         filtered = [t for t in all_txns if t.get('type') == filter_type]
     else:
@@ -1732,7 +1898,6 @@ def credit_history():
     end = start + per_page
     page_txns = filtered[start:end]
 
-    # Format display fields
     for t in page_txns:
         t['date_display'] = _format_txn_date(t.get('created_at'))
         t['type_label'] = TRANSACTION_TYPE_LABELS.get(t.get('type'), t.get('type', '—'))
@@ -1747,7 +1912,6 @@ def credit_history():
             t['amount_display'] = '0'
             t['amount_class'] = 'credit-zero'
 
-    # Alphabetical dropdown options by label
     type_options = sorted(
         [{'value': k, 'label': v} for k, v in TRANSACTION_TYPE_LABELS.items()],
         key=lambda x: x['label']
@@ -1770,6 +1934,7 @@ def credit_history():
 
 @app.route('/credit-history/export')
 @login_required
+@no_guest(message='Sign up to export credit history.')
 def credit_history_export():
     user = current_user()
     if not user:
@@ -1790,7 +1955,6 @@ def credit_history_export():
         app.logger.error(f"credit_history_export load failed: {e}")
         all_txns = []
 
-    # Running balance
     running = 0
     for t in all_txns:
         amt = int(t.get('amount') or 0)
@@ -1803,7 +1967,6 @@ def credit_history_export():
     if filter_type != 'all':
         all_txns = [t for t in all_txns if t.get('type') == filter_type]
 
-    # Build CSV
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Date', 'Type', 'Description', 'Amount', 'Balance After'])
