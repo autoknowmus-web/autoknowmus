@@ -33,15 +33,12 @@
     font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
 
-  .rate-limit-banner {
-    background: rgba(78, 176, 255, 0.1); border: 1px solid #4eb0ff;
+  .rate-limit-full {
+    background: rgba(255, 140, 0, 0.12); border: 1px solid #ff8c00;
     border-radius: 8px; padding: 10px 14px; margin-bottom: 1.25rem;
-    color: #8dcfff; font-size: 0.88rem;
+    color: #ffa94d; font-size: 0.9rem;
   }
-  .rate-limit-banner strong { color: #fff; }
-  .rate-limit-banner.full {
-    background: rgba(255, 140, 0, 0.12); border-color: #ff8c00; color: #ffa94d;
-  }
+  .rate-limit-full strong { color: #fff; }
 
   .section-label {
     color: #4eb0ff; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.5px;
@@ -52,29 +49,37 @@
   .location-row { margin-bottom: 1rem; }
   .location-row .form-select { max-width: 100%; }
 
-  /* Registration number 3-field group */
+  /* Registration number group: State + District + Series + Number */
   .reg-group {
-    display: flex; gap: 8px; align-items: center;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
   }
-  .reg-group .form-control { text-align: center; font-weight: 600; letter-spacing: 1px; }
-  .reg-group .reg-rto    { flex: 0 0 80px; }
-  .reg-group .reg-series { flex: 0 0 70px; }
-  .reg-group .reg-number { flex: 1; }
+  .reg-group .form-control,
+  .reg-group .form-select {
+    text-align: center; font-weight: 600; letter-spacing: 1px;
+  }
+  .reg-group .reg-state    { flex: 0 0 80px; }
+  .reg-group .reg-district { flex: 0 0 80px; }
+  .reg-group .reg-series   { flex: 0 0 80px; }
+  .reg-group .reg-number   { flex: 1; min-width: 120px; }
   .reg-preview {
     font-size: 0.8rem; color: #6c757d; margin-top: 4px; font-family: monospace;
   }
   .reg-preview strong { color: #4eb0ff; letter-spacing: 1px; }
 
-  /* Date input with calendar icon */
+  /* Date: visible formatted field + hidden native picker */
   .date-wrap { position: relative; }
-  .date-wrap .form-control { padding-right: 42px; }
+  .date-wrap .date-display {
+    padding-right: 42px; cursor: pointer;
+    background: #1a1d24; color: #e6e6e6;
+  }
+  .date-wrap .date-display::placeholder { color: #6c757d; }
   .date-wrap .calendar-icon {
     position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-    color: #4eb0ff; pointer-events: none; font-size: 1.1rem;
+    color: #4eb0ff; font-size: 1.1rem; pointer-events: none;
   }
-  /* Hide browser's native calendar icon so our custom one shows */
-  input[type="date"]::-webkit-calendar-picker-indicator {
-    opacity: 0; position: absolute; right: 0; width: 42px; height: 100%; cursor: pointer;
+  .date-wrap .native-date {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    opacity: 0; cursor: pointer; border: none; padding: 0;
   }
 
   /* Price fields */
@@ -88,7 +93,7 @@
     font-size: 0.78rem; color: #6c757d; margin-top: 3px; font-family: monospace;
   }
 
-  /* Buyer type radio-style pills */
+  /* Buyer type pills */
   .buyer-type-group { display: flex; gap: 10px; flex-wrap: wrap; }
   .buyer-type-pill {
     flex: 1; min-width: 140px;
@@ -121,7 +126,7 @@
   .proof-required-note { color: #ffa500; font-size: 0.82rem; margin-top: 8px; display: none; }
   .proof-required-note.visible { display: block; }
 
-  /* Disabled coming-soon section (testimonial) */
+  /* Testimonial coming-soon section */
   .coming-soon-section {
     background: #14171d; border: 1px dashed #3a3f4a; border-radius: 10px;
     padding: 18px 20px; position: relative;
@@ -174,14 +179,10 @@
       <strong style="color:#28a745;">{{ deal_reward }} credits</strong> and improve price intelligence for everyone.
     </p>
 
-    {# Rate limit banner #}
+    {# Rate limit banner — only shown when LIMIT IS REACHED (not the under-limit informational version) #}
     {% if weekly_count >= max_per_week %}
-      <div class="rate-limit-banner full">
-        ⚠️ <strong>Weekly limit reached.</strong> You've submitted {{ weekly_count }} of {{ max_per_week }} deals allowed per 7 days. Please come back in a few days.
-      </div>
-    {% else %}
-      <div class="rate-limit-banner">
-        ℹ️ You've submitted <strong>{{ weekly_count }} of {{ max_per_week }}</strong> deals in the past 7 days. Remaining: <strong>{{ max_per_week - weekly_count }}</strong>.
+      <div class="rate-limit-full">
+        ⚠️ <strong>Weekly limit reached.</strong> You've submitted the maximum number of deals allowed per 7 days. Please come back in a few days.
       </div>
     {% endif %}
 
@@ -197,7 +198,6 @@
       <!-- ============ CAR DETAILS ============ -->
       <div class="section-label">Car Details</div>
 
-      <!-- Location (locked) -->
       <div class="row g-3 location-row">
         <div class="col-12">
           <label class="form-label">Location</label>
@@ -207,7 +207,6 @@
         </div>
       </div>
 
-      <!-- Make / Fuel / Model / Variant -->
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Make <span style="color:#ff6b6b;">*</span></label>
@@ -238,7 +237,6 @@
         </div>
       </div>
 
-      <!-- Year / Owner / Mileage / Condition -->
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
@@ -275,14 +273,24 @@
         </div>
       </div>
 
-      <!-- Registration Number -->
+      <!-- Registration Number: State dropdown + District dropdown + Series + Number -->
       <div class="row g-3 mb-3">
-        <div class="col-md-6">
+        <div class="col-md-7">
           <label class="form-label">Registration Number <span style="color:#ff6b6b;">*</span></label>
           <div class="reg-group">
-            <input type="text" class="form-control reg-rto" name="rto_code" id="rto_code"
-                   maxlength="4" placeholder="KA03" value="{{ form.rto_code or '' }}"
-                   required style="text-transform:uppercase;">
+            <select class="form-select reg-state" name="reg_state" id="reg_state" required>
+              <option value="">State</option>
+              {% for code in rto_states %}
+                <option value="{{ code }}" {% if form.reg_state == code %}selected{% endif %}>{{ code }}</option>
+              {% endfor %}
+            </select>
+            <select class="form-select reg-district" name="reg_district" id="reg_district" required>
+              <option value="">District</option>
+              {% for n in range(1, 100) %}
+                {% set nn = '%02d' % n %}
+                <option value="{{ nn }}" {% if form.reg_district == nn %}selected{% endif %}>{{ nn }}</option>
+              {% endfor %}
+            </select>
             <input type="text" class="form-control reg-series" name="reg_series" id="reg_series"
                    maxlength="3" placeholder="MK" value="{{ form.reg_series or '' }}"
                    required style="text-transform:uppercase;">
@@ -292,21 +300,21 @@
           </div>
           <div class="reg-preview">Preview: <strong id="reg-preview-text">KA 03 MK 8201</strong></div>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-5">
           <label class="form-label">Transaction Date <span style="color:#ff6b6b;">*</span></label>
           <div class="date-wrap">
-            <input type="date" class="form-control" name="transaction_date" id="transaction_date"
-                   value="{{ form.transaction_date or '' }}" required max="{{ today_iso }}">
+            <input type="text" class="form-control date-display" id="date-display"
+                   placeholder="Click to pick a date" readonly>
             <span class="calendar-icon">📅</span>
+            <input type="date" class="native-date" id="transaction_date" name="transaction_date"
+                   value="{{ form.transaction_date or '' }}" required>
           </div>
-          <div class="price-hint" id="date-display-hint"></div>
         </div>
       </div>
 
       <!-- ============ TRANSACTION DETAILS ============ -->
       <div class="section-label">Transaction Details</div>
 
-      <!-- Buyer Type -->
       <div class="row g-3 mb-3">
         <div class="col-12">
           <label class="form-label">Transaction Type <span style="color:#ff6b6b;">*</span></label>
@@ -322,7 +330,6 @@
         </div>
       </div>
 
-      <!-- Asking Price / Sale Price -->
       <div class="row g-3 mb-3">
         <div class="col-md-6">
           <label class="form-label">Seller's Asking Price <span style="color:#6c757d;">(Optional)</span></label>
@@ -346,7 +353,6 @@
         </div>
       </div>
 
-      <!-- Proof checkbox -->
       <div class="row g-3 mb-3">
         <div class="col-12">
           <div class="proof-box">
@@ -376,7 +382,6 @@
         <h4>💬 Share your experience</h4>
         <p class="cs-description">
           Soon you'll be able to write a testimonial about your transaction — what went well, any advice for others, or the value you got from AutoKnowMus.
-          Testimonials will appear on buyer and seller pages with the most recent on top.
         </p>
         <textarea class="form-control" rows="3"
                   placeholder="Write your experience here... (feature launching soon)"
@@ -387,7 +392,7 @@
         </div>
       </div>
 
-      <!-- ============ SUBMIT ============ -->
+      <!-- SUBMIT -->
       <div style="margin-top: 28px;">
         <button type="submit" class="btn-generate" id="submit-btn"
                 {% if weekly_count >= max_per_week %}disabled{% endif %}>
@@ -545,7 +550,7 @@
   formatMileage();
 
   // ======================================================
-  // Price field formatting (asking + sale)
+  // Price field formatting
   // ======================================================
   function bindPriceField(displayId, rawId, hintId, maxVal) {
     const disp = document.getElementById(displayId);
@@ -572,60 +577,69 @@
   bindPriceField('sale-display',   'sale-raw',   'sale-hint',   100000000);
 
   // ======================================================
-  // Registration number live preview + uppercase
+  // Registration number live preview
   // ======================================================
-  const rtoEl    = document.getElementById('rto_code');
-  const seriesEl = document.getElementById('reg_series');
-  const numEl    = document.getElementById('reg_number');
-  const previewEl = document.getElementById('reg-preview-text');
+  const stateEl    = document.getElementById('reg_state');
+  const districtEl = document.getElementById('reg_district');
+  const seriesEl   = document.getElementById('reg_series');
+  const numEl      = document.getElementById('reg_number');
+  const previewEl  = document.getElementById('reg-preview-text');
 
   function formatReg() {
-    rtoEl.value    = rtoEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     seriesEl.value = seriesEl.value.toUpperCase().replace(/[^A-Z]/g, '');
     numEl.value    = numEl.value.replace(/[^0-9]/g, '');
 
-    // Format as "XX NN AA NNNN" (split RTO letters+digits)
-    const rto = rtoEl.value;
-    const rtoLetters = rto.match(/^[A-Z]{0,2}/)?.[0] || '';
-    const rtoDigits  = rto.slice(rtoLetters.length);
-    const parts = [rtoLetters, rtoDigits, seriesEl.value, numEl.value].filter(Boolean);
+    const parts = [stateEl.value, districtEl.value, seriesEl.value, numEl.value].filter(Boolean);
     previewEl.textContent = parts.length ? parts.join(' ') : 'KA 03 MK 8201';
   }
-  [rtoEl, seriesEl, numEl].forEach(el => {
+  [stateEl, districtEl, seriesEl, numEl].forEach(el => {
     el.addEventListener('input', formatReg);
+    el.addEventListener('change', formatReg);
   });
   formatReg();
 
   // ======================================================
-  // Transaction date DD-MMM-YYYY display hint
+  // Transaction date: visible DD-MMM-YYYY + hidden native picker
   // ======================================================
-  const dateEl = document.getElementById('transaction_date');
-  const dateHint = document.getElementById('date-display-hint');
+  const nativeDate = document.getElementById('transaction_date');
+  const dateDisplay = document.getElementById('date-display');
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  function updateDateHint() {
-    if (!dateEl.value) { dateHint.textContent = ''; return; }
-    const parts = dateEl.value.split('-');
-    if (parts.length !== 3) { dateHint.textContent = ''; return; }
+
+  function formatDateDisplay() {
+    if (!nativeDate.value) { dateDisplay.value = ''; return; }
+    const parts = nativeDate.value.split('-');
+    if (parts.length !== 3) { dateDisplay.value = ''; return; }
     const [y, m, d] = parts;
     const mi = parseInt(m, 10) - 1;
-    if (mi < 0 || mi > 11) return;
-    dateHint.textContent = `Selected: ${d.padStart(2,'0')}-${MONTHS[mi]}-${y}`;
+    if (mi < 0 || mi > 11) { dateDisplay.value = ''; return; }
+    dateDisplay.value = `${d.padStart(2,'0')}-${MONTHS[mi]}-${y}`;
   }
-  dateEl.addEventListener('input', updateDateHint);
-  dateEl.addEventListener('change', updateDateHint);
-  updateDateHint();
 
-  // Set max=today so future dates can't be picked (UI-side)
+  nativeDate.addEventListener('input', formatDateDisplay);
+  nativeDate.addEventListener('change', formatDateDisplay);
+  formatDateDisplay();
+
+  // Set max=today (prevents future dates in picker)
   (function setMaxDate() {
     const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
-    dateEl.setAttribute('max', `${yyyy}-${mm}-${dd}`);
+    nativeDate.setAttribute('max', `${yyyy}-${mm}-${dd}`);
   })();
 
+  // Clicking the visible field opens the native picker
+  dateDisplay.addEventListener('click', function() {
+    try {
+      if (typeof nativeDate.showPicker === 'function') nativeDate.showPicker();
+      else nativeDate.focus();
+    } catch (e) {
+      nativeDate.focus();
+    }
+  });
+
   // ======================================================
-  // Buyer type pill selection + proof requirement
+  // Buyer type pills + proof guard
   // ======================================================
   const pills = document.querySelectorAll('.buyer-type-pill');
   const proofCheck = document.getElementById('has_proof');
@@ -637,7 +651,6 @@
       if (radio.checked) p.classList.add('selected');
       else p.classList.remove('selected');
     });
-    // Show required-proof note if Dealer selected and proof unchecked
     const dealerRadio = document.querySelector('input[name="buyer_type"][value="Dealer"]');
     if (dealerRadio && dealerRadio.checked && !proofCheck.checked) {
       proofNote.classList.add('visible');
@@ -656,7 +669,7 @@
   syncPills();
 
   // ======================================================
-  // Form submission guard (client-side)
+  // Submit guard
   // ======================================================
   document.getElementById('deal-form').addEventListener('submit', function(e) {
     const dealerSelected = document.querySelector('input[name="buyer_type"][value="Dealer"]')?.checked;
