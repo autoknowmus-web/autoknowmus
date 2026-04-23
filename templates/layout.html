@@ -23,6 +23,8 @@
       align-items: center; gap: 6px; transition: all 0.2s;
     }
     .credit-badge:hover { background: rgba(255,165,0,0.1); color: #ffa500; }
+    .credit-badge.guest { border-color: #ffa500; color: #ffa500; cursor: default; }
+    .credit-badge.guest:hover { background: transparent; }
     .credit-inline { color: #ffa500; font-weight: 700; font-size: 0.95rem; }
 
     .alerts-badge {
@@ -43,12 +45,30 @@
     }
     .alerts-badge.full .alerts-count { background: #ffa500; }
 
+    .guest-pill {
+      background: rgba(255,165,0,0.15);
+      border: 1px solid #ffa500;
+      color: #ffa500;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-left: 10px;
+    }
+
     .user-name { color: #b0b0b0; margin: 0 15px; font-size: 0.95rem; }
     .btn-logout {
       background: #6c757d; color: #fff; border: none; padding: 7px 18px;
       border-radius: 6px; font-size: 0.9rem;
     }
     .btn-logout:hover { background: #5a6268; color: #fff; }
+    .btn-signup-nav {
+      background: #4e54ff; color: #fff; border: none; padding: 7px 18px;
+      border-radius: 6px; font-size: 0.9rem; font-weight: 600;
+      text-decoration: none;
+    }
+    .btn-signup-nav:hover { background: #3a3fd0; color: #fff; }
 
     .btn-back {
       background: #6c757d !important; color: #fff !important; border: none !important;
@@ -91,19 +111,19 @@
       cursor: not-allowed;
     }
 
-    /* Responsive navbar: stack on small screens */
     @media (max-width: 768px) {
       .navbar-custom { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
       .navbar-custom .nav-actions { gap: 6px !important; flex-wrap: wrap; }
       .alerts-badge, .credit-badge { padding: 5px 10px; font-size: 0.85rem; margin-left: 0; }
       .user-name { margin: 0 8px; font-size: 0.85rem; }
+      .guest-pill { margin-left: 0; font-size: 0.7rem; }
     }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
 <body>
 
-{% if session.user %}
+{% if session.user or session.is_guest %}
 <nav class="navbar-custom d-flex align-items-center justify-content-between">
   <a href="{{ url_for('role') }}" class="brand-logo">
     <svg class="brand-shield" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
@@ -114,22 +134,35 @@
       <span class="brand-auto">Auto</span><span class="brand-know">Know</span><span class="brand-mus">Mus</span>
     </span>
   </a>
+
   <div class="d-flex align-items-center nav-actions">
-    <a href="{{ url_for('credit_history') }}" class="credit-badge">
-      <i class="bi bi-credit-card-2-front"></i>
-      ({{ session.credits|default(0) }} Credits)
-    </a>
-    <a href="{{ url_for('my_alerts') }}" class="alerts-badge {{ 'full' if (session.active_alerts_count|default(0)) >= 5 else '' }}">
-      <i class="bi bi-bell"></i>
-      My Alerts
-      {% if (session.active_alerts_count|default(0)) > 0 %}
-        <span class="alerts-count">{{ session.active_alerts_count }}/5</span>
-      {% endif %}
-    </a>
-    <span class="user-name">
-      <i class="bi bi-person-circle"></i> {{ session.user.name | firstname }}
-    </span>
-    <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
+    {% if session.is_guest %}
+      {# ===== GUEST NAVBAR ===== #}
+      <span class="credit-badge guest">
+        <i class="bi bi-credit-card-2-front"></i>
+        ({{ session.credits|default(0) }} Credits)
+      </span>
+      <span class="guest-pill">GUEST</span>
+      <a href="{{ url_for('signup') }}" class="btn-signup-nav" style="margin-left:10px;">Sign Up</a>
+      <a href="{{ url_for('guest_exit') }}" class="btn btn-logout" style="margin-left:8px;">Exit</a>
+    {% else %}
+      {# ===== REGULAR USER NAVBAR ===== #}
+      <a href="{{ url_for('credit_history') }}" class="credit-badge">
+        <i class="bi bi-credit-card-2-front"></i>
+        ({{ session.credits|default(0) }} Credits)
+      </a>
+      <a href="{{ url_for('my_alerts') }}" class="alerts-badge {{ 'full' if (session.active_alerts_count|default(0)) >= 5 else '' }}">
+        <i class="bi bi-bell"></i>
+        My Alerts
+        {% if (session.active_alerts_count|default(0)) > 0 %}
+          <span class="alerts-count">{{ session.active_alerts_count }}/5</span>
+        {% endif %}
+      </a>
+      <span class="user-name">
+        <i class="bi bi-person-circle"></i> {{ session.user.name | firstname }}
+      </span>
+      <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
+    {% endif %}
   </div>
 </nav>
 {% endif %}
