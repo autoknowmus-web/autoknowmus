@@ -3,74 +3,75 @@
 
 {% block extra_head %}
 <style>
-  .dashboard-wrap { padding: 14px 30px 20px; }
+  /* ===== Ultra-compact single-viewport layout ===== */
+  .dashboard-wrap { padding: 10px 24px 14px; }
 
-  .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
+  .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
   .car-summary { color: #e6e6e6; text-align: right; }
-  .car-summary .car-name { color: #28a745; font-weight: 700; font-size: 1.05rem; line-height: 1.2; }
-  .car-summary .car-meta { color: #b0b0b0; font-size: 0.82rem; margin-top: 2px; }
+  .car-summary .car-name { color: #28a745; font-weight: 700; font-size: 1rem; line-height: 1.15; }
+  .car-summary .car-meta { color: #b0b0b0; font-size: 0.78rem; margin-top: 1px; }
 
   .top-row {
     display: grid;
     grid-template-columns: 1fr 1.25fr;
-    gap: 14px;
-    margin-bottom: 12px;
+    gap: 10px;
+    margin-bottom: 8px;
   }
   @media (max-width: 900px) { .top-row { grid-template-columns: 1fr; } }
 
   .card {
     background: #1a1d24;
     border: 1px solid #2a2d34;
-    border-radius: 12px;
-    padding: 14px 18px;
+    border-radius: 10px;
+    padding: 10px 14px;
   }
   .card-title {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
     color: #fff;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     display: flex;
     align-items: center;
     gap: 6px;
   }
-  .card-title .sub { color: #b0b0b0; font-size: 0.75rem; font-weight: 400; margin-left: 6px; }
+  .card-title .sub { color: #b0b0b0; font-size: 0.72rem; font-weight: 400; margin-left: 6px; }
 
-  .hero-combined { display: flex; flex-direction: column; gap: 14px; }
+  .hero-combined { display: flex; flex-direction: column; gap: 10px; }
   .price-hero { text-align: center; }
-  .price-hero .hero-label { color: #b0b0b0; font-size: 0.76rem; letter-spacing: 0.5px; margin-bottom: 4px; }
-  .price-hero .hero-range { color: #28a745; font-size: 1.85rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+  .price-hero .hero-label { color: #b0b0b0; font-size: 0.72rem; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .price-hero .hero-range { color: #28a745; font-size: 1.7rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
   .price-hero .hero-dash { color: #28a745; margin: 0 6px; }
-  .price-hero .hero-mid { color: #adb5bd; font-size: 0.85rem; margin-top: 6px; }
+  .price-hero .hero-mid { color: #adb5bd; font-size: 0.8rem; margin-top: 4px; }
   .price-hero .hero-mid strong { color: #ffa500; font-weight: 600; }
-  @media (min-width: 1200px) { .price-hero .hero-range { font-size: 2rem; } }
+  @media (min-width: 1200px) { .price-hero .hero-range { font-size: 1.85rem; } }
 
-  .slider-section { border-top: 1px solid #2a2d34; padding-top: 12px; }
-  .slider-labels { display: flex; justify-content: space-between; color: #b0b0b0; font-size: 0.76rem; margin-bottom: 4px; }
+  .slider-section { border-top: 1px solid #2a2d34; padding-top: 8px; }
+  .slider-labels { display: flex; justify-content: space-between; color: #b0b0b0; font-size: 0.72rem; margin-bottom: 3px; }
   .slider-labels .left  { color: #ffa500; font-weight: 600; }
   .slider-labels .right { color: #28a745; font-weight: 600; }
-  .slider-track-wrap { position: relative; padding-top: 26px; padding-bottom: 3px; }
+  .slider-track-wrap { position: relative; padding-top: 24px; padding-bottom: 2px; }
   #price-slider {
     -webkit-appearance: none; appearance: none;
-    width: 100%; height: 7px;
+    width: 100%; height: 6px;
     background: linear-gradient(to right, #ffa500 0%, #28a745 100%);
     border-radius: 4px; outline: none;
   }
   #price-slider::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
-    width: 20px; height: 20px;
+    width: 18px; height: 18px;
     background: #fff; border: 3px solid #28a745;
     border-radius: 50%; cursor: pointer;
   }
   #price-slider::-moz-range-thumb {
-    width: 20px; height: 20px;
+    width: 18px; height: 18px;
     background: #fff; border: 3px solid #28a745;
     border-radius: 50%; cursor: pointer;
   }
   .slider-bubble {
     position: absolute; top: 0; transform: translateX(-50%);
     background: #28a745; color: #fff;
-    padding: 2px 9px; border-radius: 12px;
-    font-size: 0.76rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 11px;
+    font-size: 0.73rem; font-weight: 600;
     white-space: nowrap; pointer-events: none;
     transition: left 0.05s linear;
   }
@@ -79,26 +80,27 @@
     border-left: 5px solid transparent; border-right: 5px solid transparent;
     border-top: 5px solid #28a745;
   }
-  .slider-info { display: flex; justify-content: space-between; margin-top: 8px; flex-wrap: wrap; gap: 6px; color: #e6e6e6; font-size: 0.82rem; align-items: center; }
-  .slider-info .days-badge { background: #14171d; padding: 4px 9px; border-radius: 6px; }
+  .slider-info { display: flex; justify-content: space-between; margin-top: 6px; flex-wrap: wrap; gap: 6px; color: #e6e6e6; font-size: 0.78rem; align-items: center; }
+  .slider-info .days-badge { background: #14171d; padding: 3px 8px; border-radius: 5px; }
   .slider-info .days-badge .num { color: #28a745; font-weight: 700; }
 
-  .graph-wrap { position: relative; height: 220px; }
-  @media (max-width: 900px) { .graph-wrap { height: 200px; } }
+  /* Slightly taller graph area so Day 90 badge has room to the right */
+  .graph-wrap { position: relative; height: 185px; }
+  @media (max-width: 900px) { .graph-wrap { height: 180px; } }
 
   .chart-card { position: relative; }
   .chart-caution-chip {
     position: absolute;
-    top: 10px;
-    right: 12px;
+    top: 8px;
+    right: 10px;
     background: rgba(255, 140, 0, 0.95);
     color: #1a1d24;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    padding: 4px 9px;
-    border-radius: 12px;
-    max-width: 280px;
-    line-height: 1.35;
+    padding: 3px 8px;
+    border-radius: 11px;
+    max-width: 260px;
+    line-height: 1.3;
     z-index: 5;
     cursor: help;
     box-shadow: 0 2px 8px rgba(0,0,0,0.4);
@@ -107,21 +109,21 @@
     gap: 4px;
   }
   .chart-caution-chip.show { display: inline-flex; }
-  .chart-caution-chip .chip-icon { font-size: 0.85rem; }
+  .chart-caution-chip .chip-icon { font-size: 0.8rem; }
   .chart-caution-tooltip {
     visibility: hidden; opacity: 0;
     position: absolute;
-    top: calc(100% + 8px);
+    top: calc(100% + 6px);
     right: 0;
     background: #000;
     color: #fff;
-    padding: 10px 12px;
+    padding: 9px 11px;
     border-radius: 8px;
     border: 1px solid #ff8c00;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 400;
-    line-height: 1.5;
-    width: 280px;
+    line-height: 1.45;
+    width: 260px;
     text-align: left;
     z-index: 20;
     transition: opacity 0.15s;
@@ -135,29 +137,29 @@
   .kpi-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 8px;
   }
   .kpi-card {
     background: #1a1d24;
     border: 1px solid #2a2d34;
-    border-radius: 10px;
-    padding: 10px 12px;
+    border-radius: 9px;
+    padding: 8px 10px;
     text-align: center;
     position: relative;
   }
   .kpi-card .kpi-label {
     color: #b0b0b0;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
     display: inline-flex;
     align-items: center;
     gap: 4px;
   }
-  .kpi-card .kpi-value { font-size: 1.2rem; font-weight: 700; color: #fff; line-height: 1.1; }
-  .kpi-card .kpi-sub   { color: #6c757d; font-size: 0.7rem; margin-top: 1px; }
+  .kpi-card .kpi-value { font-size: 1.1rem; font-weight: 700; color: #fff; line-height: 1.05; }
+  .kpi-card .kpi-sub   { color: #6c757d; font-size: 0.66rem; margin-top: 1px; }
   .kpi-card .kpi-value.demand-HIGH   { color: #28a745; }
   .kpi-card .kpi-value.demand-MEDIUM { color: #ffa500; }
   .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
@@ -166,31 +168,30 @@
   .info-wrap { position: relative; display: inline-flex; }
   .info-icon {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 14px; height: 14px;
+    width: 13px; height: 13px;
     background: #2a2d34; color: #adb5bd;
     border-radius: 50%;
-    font-size: 0.7rem; font-weight: 700;
+    font-size: 0.65rem; font-weight: 700;
     cursor: help; font-style: italic;
     font-family: Georgia, serif;
   }
   .info-icon:hover { background: #ffa500; color: #fff; }
 
-  /* Standard tooltip — narrower, centered above icon */
   .info-tooltip {
     visibility: hidden; opacity: 0;
     position: absolute;
-    bottom: calc(100% + 10px);
+    bottom: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
     background: #000;
     color: #fff;
-    padding: 10px 12px;
+    padding: 9px 11px;
     border-radius: 8px;
     border: 1px solid #28a745;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 400;
-    line-height: 1.5;
-    width: 240px;
+    line-height: 1.45;
+    width: 230px;
     text-transform: none;
     letter-spacing: normal;
     text-align: left;
@@ -212,25 +213,20 @@
     visibility: visible; opacity: 1;
   }
 
-  /* Wide confidence tooltip — anchored to CENTER of info icon but with override for KPI positioning */
   .info-tooltip.wide {
     width: 320px;
     border-color: #4eb0ff;
-    /* keep default centering; JS below will adjust if it overflows */
-  }
-  .info-tooltip.wide::after {
-    border-top-color: #000;
   }
 
   .conf-mini-row {
     display: grid;
     grid-template-columns: 62px 1fr;
     gap: 8px;
-    padding: 5px 6px;
+    padding: 4px 6px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
     align-items: start;
-    font-size: 0.72rem;
-    line-height: 1.4;
+    font-size: 0.7rem;
+    line-height: 1.35;
   }
   .conf-mini-row:last-child { border-bottom: none; }
   .conf-mini-row .mini-bracket { font-weight: 700; color: #b0b0b0; white-space: nowrap; }
@@ -243,26 +239,26 @@
   .conf-mini-row .mini-benefit {
     display: block;
     color: #adb5bd;
-    font-size: 0.68rem;
-    margin-top: 2px;
+    font-size: 0.66rem;
+    margin-top: 1px;
   }
   .conf-header {
     color: #4eb0ff;
     font-weight: 700;
-    font-size: 0.78rem;
-    margin-bottom: 6px;
-    padding-bottom: 4px;
+    font-size: 0.75rem;
+    margin-bottom: 5px;
+    padding-bottom: 3px;
     border-bottom: 1px solid rgba(255,255,255,0.15);
     display: block;
   }
 
   .market-stats {
     background: #14171d;
-    border-radius: 8px;
-    padding: 7px 14px;
-    margin-bottom: 10px;
+    border-radius: 7px;
+    padding: 5px 12px;
+    margin-bottom: 8px;
     color: #adb5bd;
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     text-align: center;
   }
   .market-stats strong { color: #e9ecef; }
@@ -270,30 +266,42 @@
   .bottom-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 10px;
   }
   @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
 
-  .dist-row { display: flex; flex-direction: column; gap: 5px; }
+  .dist-row { display: flex; flex-direction: column; gap: 4px; }
+
+  /* Right-aligned label + tight bar spacing so the two sit close together */
   .dist-bar {
     display: grid;
-    grid-template-columns: 160px 1fr 40px;
+    grid-template-columns: max-content 1fr 36px;
     align-items: center;
-    gap: 8px;
-    font-size: 0.78rem;
+    column-gap: 10px;
+    font-size: 0.74rem;
   }
-  .dist-bar .dist-label { color: #b0b0b0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .dist-bar .dist-track { background: #14171d; border-radius: 5px; height: 11px; overflow: hidden; }
+  .dist-bar .dist-label {
+    color: #b0b0b0;
+    white-space: nowrap;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .dist-bar .dist-track {
+    background: #14171d;
+    border-radius: 5px;
+    height: 10px;
+    overflow: hidden;
+  }
   .dist-bar .dist-fill  { height: 100%; border-radius: 5px; transition: width 0.8s ease; }
-  .dist-bar .dist-pct   { color: #e6e6e6; font-weight: 600; text-align: right; font-size: 0.78rem; }
+  .dist-bar .dist-pct   { color: #e6e6e6; font-weight: 600; text-align: right; font-size: 0.74rem; font-variant-numeric: tabular-nums; }
   @media (max-width: 600px) {
-    .dist-bar { grid-template-columns: 110px 1fr 38px; gap: 6px; font-size: 0.72rem; }
+    .dist-bar { column-gap: 8px; font-size: 0.7rem; }
   }
 
   .dist-footnote {
-    margin-top: 8px;
+    margin-top: 5px;
     color: #6c757d;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     text-align: right;
     font-style: italic;
   }
@@ -301,21 +309,21 @@
   .verdict-card {
     background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
     border: 1px solid #28a745;
-    border-radius: 12px;
-    padding: 14px 18px;
+    border-radius: 10px;
+    padding: 10px 14px;
   }
   .verdict-title {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: #28a745;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     display: flex; align-items: center; gap: 6px;
   }
   .verdict-body p {
     color: #e6e6e6;
-    font-size: 0.83rem;
-    line-height: 1.55;
-    margin-bottom: 6px;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin-bottom: 4px;
   }
   .verdict-body p:last-child { margin-bottom: 0; }
   .verdict-body .hi { color: #ffa500; font-weight: 600; }
@@ -325,7 +333,6 @@
 {% endblock %}
 
 {% block content %}
-{# Reusable macro: render Indian price as "X.YYL" (2dp Lakhs) #}
 {% macro l2dp(v) -%}
   {%- if v is none -%}—
   {%- elif v|int >= 10000000 -%}{{ '%.2f'|format(v / 10000000) }}Cr
@@ -534,7 +541,6 @@
 
   const ANCHOR_DAYS = [30, 60, 90];
 
-  // 2dp Lakhs formatter
   function lakh2dp(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
@@ -583,7 +589,7 @@
     let pricingStrategy;
     const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
     if (pct < 0.33) {
-      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakh2dp(price)}, demand is <span class="ok">${demand}</span> — expect serious interest within a week or two.`;
+      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakh2dp(price)}, demand is <span class="ok">${demand}</span> — expect interest within a week or two.`;
     } else if (pct < 0.66) {
       pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakh2dp(price)}, you'll see <span class="ok">${demand}</span> demand — balanced approach.`;
     } else {
@@ -607,9 +613,9 @@
     if (days <= 20) {
       depreciationNote = `<strong>Waiting cost:</strong> Not a concern at this price — you'll sell before depreciation bites.`;
     } else if (days <= 45) {
-      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakh2dp(loss30)} (${pctLoss30}%)</span> to depreciation. Factor this in.`;
+      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakh2dp(loss30)} (${pctLoss30}%)</span> to depreciation.`;
     } else {
-      depreciationNote = `<strong>Waiting cost:</strong> At this price, selling could stretch past 45 days. Over 90 days, your car could lose <span class="warn">₹ ${lakh2dp(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
+      depreciationNote = `<strong>Waiting cost:</strong> Over 90 days, your car could lose <span class="warn">₹ ${lakh2dp(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
     }
 
     const actionable = `<strong>Recommendation:</strong> For a balanced sale aim for ₹ ${lakh2dp(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. Need cash fast? List at ₹ ${lakh2dp(PRICE_LOW)}. Can wait 2+ months? Try ₹ ${lakh2dp(PRICE_HIGH)} — but remember depreciation.`;
@@ -642,7 +648,7 @@
     const max = Number(slider.max);
     const val = Number(slider.value);
     const pct = ((val - min) / (max - min)) * 100;
-    const thumbOffset = 10 - (pct / 100) * 20;
+    const thumbOffset = 9 - (pct / 100) * 18;
     bubble.style.left = `calc(${pct}% + ${thumbOffset}px)`;
   }
 
@@ -677,36 +683,26 @@
   });
 
   // ====== Confidence tooltip smart-positioning ======
-  // Because the tooltip is 320px wide and the `i` icon sits near the edge of the
-  // KPI card, the default transform: translateX(-50%) can push the tooltip off-screen
-  // or misalign it. We compute the correct offset dynamically on hover.
   const confWrap = document.getElementById('conf-info-wrap');
   const confTip  = document.getElementById('conf-tooltip');
-
   if (confWrap && confTip) {
     confWrap.addEventListener('mouseenter', function() {
-      // Measure available space to the left and right of the icon
       const iconRect = confWrap.getBoundingClientRect();
       const tipWidth = 320;
       const viewW = window.innerWidth;
       const halfTip = tipWidth / 2;
       const iconCenterX = iconRect.left + iconRect.width / 2;
-
       const leftSpace  = iconCenterX;
       const rightSpace = viewW - iconCenterX;
 
-      // Default: centered. If not enough space, shift.
       if (leftSpace < halfTip + 10) {
-        // Not enough room on left -> anchor left edge to icon's left
         confTip.style.left = '0';
         confTip.style.transform = 'none';
       } else if (rightSpace < halfTip + 10) {
-        // Not enough room on right -> anchor right edge to icon's right
         confTip.style.left = 'auto';
         confTip.style.right = '0';
         confTip.style.transform = 'none';
       } else {
-        // Center
         confTip.style.left = '50%';
         confTip.style.right = 'auto';
         confTip.style.transform = 'translateX(-50%)';
@@ -715,23 +711,25 @@
   }
 
   const ctx = document.getElementById('dep-chart').getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, 0, 220);
+  const grad = ctx.createLinearGradient(0, 0, 0, 180);
   grad.addColorStop(0, 'rgba(40, 167, 69, 0.35)');
   grad.addColorStop(1, 'rgba(40, 167, 69, 0.02)');
 
   const labels = DEP_DATA.map(p => 'Day ' + p.day);
   const prices = DEP_DATA.map(p => p.price);
 
-  const pointRadiusArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? 5 : 0);
+  const pointRadiusArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? 4 : 0);
   const pointBgArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? '#ffa500' : '#28a745');
   const pointBorderArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? '#fff' : '#28a745');
 
+  // Anchor labels plugin — clamps badge X so Day 90 badge never overflows the chart
   const anchorLabelsPlugin = {
     id: 'anchorLabels',
     afterDatasetsDraw: function(chart) {
       const ctx = chart.ctx;
+      const area = chart.chartArea;
       ctx.save();
-      ctx.font = '600 11px system-ui, -apple-system, sans-serif';
+      ctx.font = '600 10px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
 
@@ -745,16 +743,24 @@
         const price = DEP_DATA[idx].price;
         const label = '₹' + lakh2dp(price);
 
-        const padX = 6, padY = 3;
+        const padX = 5, padY = 3;
         const textW = ctx.measureText(label).width;
-        const badgeX = point.x - (textW/2 + padX);
-        const badgeY = point.y - 26;
         const badgeW = textW + padX*2;
-        const badgeH = 18;
+        const badgeH = 16;
+
+        // Clamp so the badge stays inside the chart area
+        let centerX = point.x;
+        const minCenter = area.left + badgeW / 2 + 2;
+        const maxCenter = area.right - badgeW / 2 - 2;
+        if (centerX < minCenter) centerX = minCenter;
+        if (centerX > maxCenter) centerX = maxCenter;
+
+        const badgeX = centerX - badgeW / 2;
+        const badgeY = point.y - 22;
 
         ctx.fillStyle = 'rgba(255,165,0,0.95)';
         ctx.beginPath();
-        const r = 9;
+        const r = 8;
         ctx.moveTo(badgeX + r, badgeY);
         ctx.lineTo(badgeX + badgeW - r, badgeY);
         ctx.quadraticCurveTo(badgeX + badgeW, badgeY, badgeX + badgeW, badgeY + r);
@@ -768,7 +774,7 @@
         ctx.fill();
 
         ctx.fillStyle = '#1a1d24';
-        ctx.fillText(label, point.x, badgeY + badgeH - padY);
+        ctx.fillText(label, centerX, badgeY + badgeH - padY);
       });
 
       ctx.restore();
@@ -791,7 +797,7 @@
         pointBackgroundColor: pointBgArr,
         pointBorderColor: pointBorderArr,
         pointBorderWidth: 2,
-        pointHoverRadius: 6,
+        pointHoverRadius: 5,
         pointHoverBackgroundColor: '#28a745',
         pointHoverBorderColor: '#fff',
         pointHoverBorderWidth: 2,
@@ -802,7 +808,8 @@
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       layout: {
-        padding: { top: 24 }
+        /* Right padding gives Day 90 badge breathing room inside chartArea */
+        padding: { top: 22, right: 36, left: 4, bottom: 0 }
       },
       plugins: {
         legend: { display: false },
@@ -812,9 +819,9 @@
           bodyColor: '#e6e6e6',
           borderColor: '#28a745',
           borderWidth: 1,
-          padding: 10,
+          padding: 8,
           titleFont: { weight: '600' },
-          bodyFont: { size: 13 },
+          bodyFont: { size: 12 },
           displayColors: false,
           callbacks: {
             title: function(items) { return 'Day ' + items[0].dataIndex; },
@@ -834,15 +841,17 @@
               const dayNum = DEP_DATA[idx] ? DEP_DATA[idx].day : idx;
               if (ANCHOR_DAYS.includes(dayNum) || dayNum === 0) return 'Day ' + dayNum;
               return '';
-            }
+            },
+            font: { size: 10 }
           },
           grid: { color: 'rgba(255,255,255,0.04)' }
         },
         y: {
           ticks: {
             color: '#6c757d',
-            maxTicksLimit: 5,
-            callback: function(v) { return '₹ ' + lakh2dp(v); }
+            maxTicksLimit: 4,
+            callback: function(v) { return '₹ ' + lakh2dp(v); },
+            font: { size: 10 }
           },
           grid: { color: 'rgba(255,255,255,0.06)' }
         }
