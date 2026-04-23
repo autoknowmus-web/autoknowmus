@@ -63,6 +63,10 @@
   /* Location full-width row, muted */
   .location-row { margin-bottom: 1rem; }
   .location-row .form-select { max-width: 100%; }
+
+  .optional-hint {
+    color: #6c757d; font-weight: 400; font-size: 0.82rem;
+  }
 </style>
 {% endblock %}
 
@@ -159,7 +163,7 @@
         </div>
       </div>
 
-      <!-- Row 3: Year, Owner, Mileage, Condition -->
+      <!-- Row 3: Year, Owner (optional), Mileage (optional), Condition (optional) -->
       <div class="row g-3 mb-4">
         <div class="col-md-3">
           <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
@@ -171,27 +175,31 @@
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">No. of Owners <span style="color:#ff6b6b;">*</span></label>
-          <select class="form-select" name="owner" required>
-            <option value="">Select Owner</option>
+          <label class="form-label">No. of Owners <span class="optional-hint">(optional)</span></label>
+          <select class="form-select" name="owner">
             {% for o in owners %}
-              <option value="{{ o }}" {% if form.owner == o %}selected{% endif %}>{{ o }}</option>
+              <option value="{{ o }}"
+                {% if form.owner == o %}selected
+                {% elif not form.owner and o == '1st Owner' %}selected
+                {% endif %}>{{ o }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
+          <label class="form-label">Mileage (KMs) <span class="optional-hint">(optional)</span></label>
           {# Visible field formats as user types; hidden field carries the raw number for POST #}
           <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
                  value="{{ form.mileage or '' }}" placeholder="e.g. 45,000">
           <input type="hidden" name="mileage" id="mileage-raw" value="{{ form.mileage or '' }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label">Condition <span style="color:#ff6b6b;">*</span></label>
-          <select class="form-select" name="condition" required>
-            <option value="">Select Condition</option>
+          <label class="form-label">Condition <span class="optional-hint">(optional)</span></label>
+          <select class="form-select" name="condition">
             {% for c in conditions %}
-              <option value="{{ c }}" {% if form.condition == c %}selected{% endif %}>{{ c }}</option>
+              <option value="{{ c }}"
+                {% if form.condition == c %}selected
+                {% elif not form.condition and c == 'Good' %}selected
+                {% endif %}>{{ c }}</option>
             {% endfor %}
           </select>
         </div>
