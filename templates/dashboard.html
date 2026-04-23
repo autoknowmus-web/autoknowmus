@@ -144,6 +144,7 @@
     border-radius: 10px;
     padding: 10px 12px;
     text-align: center;
+    position: relative;
   }
   .kpi-card .kpi-label {
     color: #b0b0b0;
@@ -173,6 +174,8 @@
     font-family: Georgia, serif;
   }
   .info-icon:hover { background: #ffa500; color: #fff; }
+
+  /* Standard tooltip — narrower, centered above icon */
   .info-tooltip {
     visibility: hidden; opacity: 0;
     position: absolute;
@@ -188,7 +191,6 @@
     font-weight: 400;
     line-height: 1.5;
     width: 240px;
-    max-width: 280px;
     text-transform: none;
     letter-spacing: normal;
     text-align: left;
@@ -197,11 +199,6 @@
     white-space: normal;
     pointer-events: none;
     box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-  }
-  .info-tooltip.wide {
-    width: 300px;
-    max-width: 320px;
-    border-color: #4eb0ff;
   }
   .info-tooltip::after {
     content: '';
@@ -215,21 +212,40 @@
     visibility: visible; opacity: 1;
   }
 
+  /* Wide confidence tooltip — anchored to CENTER of info icon but with override for KPI positioning */
+  .info-tooltip.wide {
+    width: 320px;
+    border-color: #4eb0ff;
+    /* keep default centering; JS below will adjust if it overflows */
+  }
+  .info-tooltip.wide::after {
+    border-top-color: #000;
+  }
+
   .conf-mini-row {
     display: grid;
-    grid-template-columns: 58px 1fr;
-    gap: 6px;
-    padding: 4px 0;
+    grid-template-columns: 62px 1fr;
+    gap: 8px;
+    padding: 5px 6px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
     align-items: start;
     font-size: 0.72rem;
-    line-height: 1.35;
+    line-height: 1.4;
   }
   .conf-mini-row:last-child { border-bottom: none; }
-  .conf-mini-row .mini-bracket { font-weight: 700; color: #b0b0b0; }
+  .conf-mini-row .mini-bracket { font-weight: 700; color: #b0b0b0; white-space: nowrap; }
   .conf-mini-row.active .mini-bracket { color: #4eb0ff; }
-  .conf-mini-row.active { background: rgba(78,176,255,0.1); border-radius: 4px; padding: 4px 6px; }
-  .conf-mini-row .mini-benefit { display: block; color: #adb5bd; font-size: 0.68rem; margin-top: 1px; }
+  .conf-mini-row.active {
+    background: rgba(78,176,255,0.12);
+    border-radius: 4px;
+    border-bottom-color: transparent;
+  }
+  .conf-mini-row .mini-benefit {
+    display: block;
+    color: #adb5bd;
+    font-size: 0.68rem;
+    margin-top: 2px;
+  }
   .conf-header {
     color: #4eb0ff;
     font-weight: 700;
@@ -237,6 +253,7 @@
     margin-bottom: 6px;
     padding-bottom: 4px;
     border-bottom: 1px solid rgba(255,255,255,0.15);
+    display: block;
   }
 
   .market-stats {
@@ -260,7 +277,7 @@
   .dist-row { display: flex; flex-direction: column; gap: 5px; }
   .dist-bar {
     display: grid;
-    grid-template-columns: 145px 1fr 40px;
+    grid-template-columns: 160px 1fr 40px;
     align-items: center;
     gap: 8px;
     font-size: 0.78rem;
@@ -270,7 +287,7 @@
   .dist-bar .dist-fill  { height: 100%; border-radius: 5px; transition: width 0.8s ease; }
   .dist-bar .dist-pct   { color: #e6e6e6; font-weight: 600; text-align: right; font-size: 0.78rem; }
   @media (max-width: 600px) {
-    .dist-bar { grid-template-columns: 95px 1fr 38px; gap: 6px; font-size: 0.72rem; }
+    .dist-bar { grid-template-columns: 110px 1fr 38px; gap: 6px; font-size: 0.72rem; }
   }
 
   .dist-footnote {
@@ -308,10 +325,11 @@
 {% endblock %}
 
 {% block content %}
-{% macro l1dp(v) -%}
+{# Reusable macro: render Indian price as "X.YYL" (2dp Lakhs) #}
+{% macro l2dp(v) -%}
   {%- if v is none -%}—
-  {%- elif v|int >= 10000000 -%}{{ '%.1f'|format(v / 10000000) }}Cr
-  {%- else -%}{{ '%.1f'|format(v / 100000) }}L
+  {%- elif v|int >= 10000000 -%}{{ '%.2f'|format(v / 10000000) }}Cr
+  {%- else -%}{{ '%.2f'|format(v / 100000) }}L
   {%- endif %}
 {%- endmacro %}
 
@@ -335,9 +353,9 @@
       <div class="price-hero">
         <div class="hero-label">ESTIMATED FAIR MARKET VALUE</div>
         <div class="hero-range">
-          ₹ {{ l1dp(price_low) }}<span class="hero-dash">—</span>₹ {{ l1dp(price_high) }}
+          ₹ {{ l2dp(price_low) }}<span class="hero-dash">—</span>₹ {{ l2dp(price_high) }}
         </div>
-        <div class="hero-mid">Most likely: <strong>₹ {{ l1dp(estimated) }}</strong></div>
+        <div class="hero-mid">Most likely: <strong>₹ {{ l2dp(estimated) }}</strong></div>
       </div>
 
       <div class="slider-section">
@@ -346,13 +364,13 @@
           <span class="right">Highest Price →</span>
         </div>
         <div class="slider-track-wrap">
-          <div class="slider-bubble" id="slider-bubble">₹ {{ l1dp(estimated) }}</div>
+          <div class="slider-bubble" id="slider-bubble">₹ {{ l2dp(estimated) }}</div>
           <input type="range" id="price-slider"
                  min="{{ price_low }}" max="{{ price_high }}"
                  value="{{ estimated }}" step="1000">
         </div>
         <div class="slider-info">
-          <div>Your price: <strong id="slider-price-text">₹ {{ l1dp(estimated) }}</strong></div>
+          <div>Your price: <strong id="slider-price-text">₹ {{ l2dp(estimated) }}</strong></div>
           <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
         </div>
       </div>
@@ -407,33 +425,33 @@
     <div class="kpi-card">
       <div class="kpi-label">
         Data Confidence
-        <span class="info-wrap">
+        <span class="info-wrap" id="conf-info-wrap">
           <span class="info-icon">i</span>
-          <span class="info-tooltip wide">
+          <span class="info-tooltip wide" id="conf-tooltip">
             <span class="conf-header">Confidence levels — what each means</span>
             {% set c = confidence | int %}
-            <span class="conf-mini-row {% if c >= 90 %}active{% endif %}" style="display:grid;">
+            <span class="conf-mini-row {% if c >= 90 %}active{% endif %}">
               <span class="mini-bracket">90–95%</span>
               <span>
                 Strong match with many verified deals.
                 <span class="mini-benefit">List confidently, minimal haggling room.</span>
               </span>
             </span>
-            <span class="conf-mini-row {% if c >= 75 and c < 90 %}active{% endif %}" style="display:grid;">
+            <span class="conf-mini-row {% if c >= 75 and c < 90 %}active{% endif %}">
               <span class="mini-bracket">75–89%</span>
               <span>
                 Good match with several similar deals.
                 <span class="mini-benefit">Small negotiation buffer is safe.</span>
               </span>
             </span>
-            <span class="conf-mini-row {% if c >= 60 and c < 75 %}active{% endif %}" style="display:grid;">
+            <span class="conf-mini-row {% if c >= 60 and c < 75 %}active{% endif %}">
               <span class="mini-bracket">60–74%</span>
               <span>
                 Moderate match, limited data.
                 <span class="mini-benefit">Use as guideline — expect 5–8% swing.</span>
               </span>
             </span>
-            <span class="conf-mini-row {% if c < 60 %}active{% endif %}" style="display:grid;">
+            <span class="conf-mini-row {% if c < 60 %}active{% endif %}">
               <span class="mini-bracket">50–59%</span>
               <span>
                 Baseline estimate, few comparable deals.
@@ -475,11 +493,11 @@
         <div class="dist-bar">
           <div class="dist-label">
             {% if band.low is none %}
-              Below ₹ {{ l1dp(band.high) }}
+              Below ₹ {{ l2dp(band.high) }}
             {% elif band.high is none %}
-              Above ₹ {{ l1dp(band.low) }}
+              Above ₹ {{ l2dp(band.low) }}
             {% else %}
-              ₹ {{ l1dp(band.low) }} – ₹ {{ l1dp(band.high) }}
+              ₹ {{ l2dp(band.low) }} – ₹ {{ l2dp(band.high) }}
             {% endif %}
           </div>
           <div class="dist-track">
@@ -516,11 +534,12 @@
 
   const ANCHOR_DAYS = [30, 60, 90];
 
-  function lakh1dp(n) {
+  // 2dp Lakhs formatter
+  function lakh2dp(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
-    if (n >= 10000000) return (n / 10000000).toFixed(1) + 'Cr';
-    return (n / 100000).toFixed(1) + 'L';
+    if (n >= 10000000) return (n / 10000000).toFixed(2) + 'Cr';
+    return (n / 100000).toFixed(2) + 'L';
   }
 
   function priceAtDay(day) {
@@ -564,11 +583,11 @@
     let pricingStrategy;
     const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
     if (pct < 0.33) {
-      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakh1dp(price)}, demand is <span class="ok">${demand}</span> — expect serious interest within a week or two.`;
+      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakh2dp(price)}, demand is <span class="ok">${demand}</span> — expect serious interest within a week or two.`;
     } else if (pct < 0.66) {
-      pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakh1dp(price)}, you'll see <span class="ok">${demand}</span> demand — balanced approach.`;
+      pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakh2dp(price)}, you'll see <span class="ok">${demand}</span> demand — balanced approach.`;
     } else {
-      pricingStrategy = `<span class="hi">Priced at the upper end.</span> At ₹ ${lakh1dp(price)}, demand drops to <span class="hi">${demand}</span> — you may wait longer but could fetch top value.`;
+      pricingStrategy = `<span class="hi">Priced at the upper end.</span> At ₹ ${lakh2dp(price)}, demand drops to <span class="hi">${demand}</span> — you may wait longer but could fetch top value.`;
     }
 
     const timeGuidance = days <= 20
@@ -588,12 +607,12 @@
     if (days <= 20) {
       depreciationNote = `<strong>Waiting cost:</strong> Not a concern at this price — you'll sell before depreciation bites.`;
     } else if (days <= 45) {
-      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakh1dp(loss30)} (${pctLoss30}%)</span> to depreciation. Factor this in.`;
+      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakh2dp(loss30)} (${pctLoss30}%)</span> to depreciation. Factor this in.`;
     } else {
-      depreciationNote = `<strong>Waiting cost:</strong> At this price, selling could stretch past 45 days. Over 90 days, your car could lose <span class="warn">₹ ${lakh1dp(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
+      depreciationNote = `<strong>Waiting cost:</strong> At this price, selling could stretch past 45 days. Over 90 days, your car could lose <span class="warn">₹ ${lakh2dp(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
     }
 
-    const actionable = `<strong>Recommendation:</strong> For a balanced sale aim for ₹ ${lakh1dp(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. Need cash fast? List at ₹ ${lakh1dp(PRICE_LOW)}. Can wait 2+ months? Try ₹ ${lakh1dp(PRICE_HIGH)} — but remember depreciation.`;
+    const actionable = `<strong>Recommendation:</strong> For a balanced sale aim for ₹ ${lakh2dp(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. Need cash fast? List at ₹ ${lakh2dp(PRICE_LOW)}. Can wait 2+ months? Try ₹ ${lakh2dp(PRICE_HIGH)} — but remember depreciation.`;
 
     return `
       <p>Your <strong>${CAR_NAME}</strong> has a ${confidenceWord} valuation (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>
@@ -638,8 +657,8 @@
     const demand = demandForPrice(val);
     const days = daysForPrice(val);
 
-    bubble.textContent = '₹ ' + lakh1dp(val);
-    priceText.textContent = '₹ ' + lakh1dp(val);
+    bubble.textContent = '₹ ' + lakh2dp(val);
+    priceText.textContent = '₹ ' + lakh2dp(val);
     daysEl.textContent = days;
     daysKpiEl.textContent = days;
     updateDemandClass(demand);
@@ -656,6 +675,44 @@
     verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
     updateCaution(ESTIMATED);
   });
+
+  // ====== Confidence tooltip smart-positioning ======
+  // Because the tooltip is 320px wide and the `i` icon sits near the edge of the
+  // KPI card, the default transform: translateX(-50%) can push the tooltip off-screen
+  // or misalign it. We compute the correct offset dynamically on hover.
+  const confWrap = document.getElementById('conf-info-wrap');
+  const confTip  = document.getElementById('conf-tooltip');
+
+  if (confWrap && confTip) {
+    confWrap.addEventListener('mouseenter', function() {
+      // Measure available space to the left and right of the icon
+      const iconRect = confWrap.getBoundingClientRect();
+      const tipWidth = 320;
+      const viewW = window.innerWidth;
+      const halfTip = tipWidth / 2;
+      const iconCenterX = iconRect.left + iconRect.width / 2;
+
+      const leftSpace  = iconCenterX;
+      const rightSpace = viewW - iconCenterX;
+
+      // Default: centered. If not enough space, shift.
+      if (leftSpace < halfTip + 10) {
+        // Not enough room on left -> anchor left edge to icon's left
+        confTip.style.left = '0';
+        confTip.style.transform = 'none';
+      } else if (rightSpace < halfTip + 10) {
+        // Not enough room on right -> anchor right edge to icon's right
+        confTip.style.left = 'auto';
+        confTip.style.right = '0';
+        confTip.style.transform = 'none';
+      } else {
+        // Center
+        confTip.style.left = '50%';
+        confTip.style.right = 'auto';
+        confTip.style.transform = 'translateX(-50%)';
+      }
+    });
+  }
 
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 220);
@@ -686,7 +743,7 @@
         if (!point) return;
 
         const price = DEP_DATA[idx].price;
-        const label = '₹' + lakh1dp(price);
+        const label = '₹' + lakh2dp(price);
 
         const padX = 6, padY = 3;
         const textW = ctx.measureText(label).width;
@@ -762,7 +819,7 @@
           callbacks: {
             title: function(items) { return 'Day ' + items[0].dataIndex; },
             label: function(item) {
-              return '₹ ' + lakh1dp(item.parsed.y);
+              return '₹ ' + lakh2dp(item.parsed.y);
             }
           }
         }
@@ -785,7 +842,7 @@
           ticks: {
             color: '#6c757d',
             maxTicksLimit: 5,
-            callback: function(v) { return '₹ ' + lakh1dp(v); }
+            callback: function(v) { return '₹ ' + lakh2dp(v); }
           },
           grid: { color: 'rgba(255,255,255,0.06)' }
         }
