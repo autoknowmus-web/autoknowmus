@@ -1,863 +1,817 @@
 {% extends "layout.html" %}
-{% block title %}Valuation Result — AutoKnowMus{% endblock %}
 
-{% block extra_head %}
+{% block title %}Seller Dashboard — AutoKnowMus{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
 <style>
-  /* ===== Ultra-compact single-viewport layout ===== */
-  .dashboard-wrap { padding: 10px 24px 14px; }
-
-  .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
-  .car-summary { color: #e6e6e6; text-align: right; }
-  .car-summary .car-name { color: #28a745; font-weight: 700; font-size: 1rem; line-height: 1.15; }
-  .car-summary .car-meta { color: #b0b0b0; font-size: 0.78rem; margin-top: 1px; }
-
-  .top-row {
-    display: grid;
-    grid-template-columns: 1fr 1.25fr;
-    gap: 10px;
-    margin-bottom: 8px;
+  :root {
+    --bg-card: #1a1d24;
+    --bg-card-2: #15181f;
+    --border: #2a2f3a;
+    --border-soft: #242832;
+    --text: #e4e6eb;
+    --text-dim: #b4b8c3;
+    --text-mute: #8b92a5;
+    --text-disabled: #6c757d;
+    --green: #28a745;
+    --green-dim: #5bd47b;
+    --orange: #ffa500;
+    --red: #dc3545;
+    --blue: #4e54ff;
+    --gold: #ffd700;
   }
-  @media (max-width: 900px) { .top-row { grid-template-columns: 1fr; } }
 
-  .card {
-    background: #1a1d24;
-    border: 1px solid #2a2d34;
-    border-radius: 10px;
-    padding: 10px 14px;
+  .sd-wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 12px 16px 40px;
+    color: var(--text);
   }
-  .card-title {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 6px;
+
+  .sd-top {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 6px;
-  }
-  .card-title .sub { color: #b0b0b0; font-size: 0.72rem; font-weight: 400; margin-left: 6px; }
-
-  .hero-combined { display: flex; flex-direction: column; gap: 10px; }
-  .price-hero { text-align: center; }
-  .price-hero .hero-label { color: #b0b0b0; font-size: 0.72rem; letter-spacing: 0.5px; margin-bottom: 2px; }
-  .price-hero .hero-range { color: #28a745; font-size: 1.7rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
-  .price-hero .hero-dash { color: #28a745; margin: 0 6px; }
-  .price-hero .hero-mid { color: #adb5bd; font-size: 0.8rem; margin-top: 4px; }
-  .price-hero .hero-mid strong { color: #ffa500; font-weight: 600; }
-  @media (min-width: 1200px) { .price-hero .hero-range { font-size: 1.85rem; } }
-
-  .slider-section { border-top: 1px solid #2a2d34; padding-top: 8px; }
-  .slider-labels { display: flex; justify-content: space-between; color: #b0b0b0; font-size: 0.72rem; margin-bottom: 3px; }
-  .slider-labels .left  { color: #ffa500; font-weight: 600; }
-  .slider-labels .right { color: #28a745; font-weight: 600; }
-  .slider-track-wrap { position: relative; padding-top: 24px; padding-bottom: 2px; }
-  #price-slider {
-    -webkit-appearance: none; appearance: none;
-    width: 100%; height: 6px;
-    background: linear-gradient(to right, #ffa500 0%, #28a745 100%);
-    border-radius: 4px; outline: none;
-  }
-  #price-slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 18px; height: 18px;
-    background: #fff; border: 3px solid #28a745;
-    border-radius: 50%; cursor: pointer;
-  }
-  #price-slider::-moz-range-thumb {
-    width: 18px; height: 18px;
-    background: #fff; border: 3px solid #28a745;
-    border-radius: 50%; cursor: pointer;
-  }
-  .slider-bubble {
-    position: absolute; top: 0; transform: translateX(-50%);
-    background: #28a745; color: #fff;
-    padding: 2px 8px; border-radius: 11px;
-    font-size: 0.73rem; font-weight: 600;
-    white-space: nowrap; pointer-events: none;
-    transition: left 0.05s linear;
-  }
-  .slider-bubble::after {
-    content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
-    border-left: 5px solid transparent; border-right: 5px solid transparent;
-    border-top: 5px solid #28a745;
-  }
-  .slider-info { display: flex; justify-content: space-between; margin-top: 6px; flex-wrap: wrap; gap: 6px; color: #e6e6e6; font-size: 0.78rem; align-items: center; }
-  .slider-info .days-badge { background: #14171d; padding: 3px 8px; border-radius: 5px; }
-  .slider-info .days-badge .num { color: #28a745; font-weight: 700; }
-
-  /* Slightly taller graph area so Day 90 badge has room to the right */
-  .graph-wrap { position: relative; height: 185px; }
-  @media (max-width: 900px) { .graph-wrap { height: 180px; } }
-
-  .chart-card { position: relative; }
-  .chart-caution-chip {
-    position: absolute;
-    top: 8px;
-    right: 10px;
-    background: rgba(255, 140, 0, 0.95);
-    color: #1a1d24;
-    font-size: 0.68rem;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 11px;
-    max-width: 260px;
-    line-height: 1.3;
-    z-index: 5;
-    cursor: help;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-    display: none;
-    align-items: center;
-    gap: 4px;
-  }
-  .chart-caution-chip.show { display: inline-flex; }
-  .chart-caution-chip .chip-icon { font-size: 0.8rem; }
-  .chart-caution-tooltip {
-    visibility: hidden; opacity: 0;
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    background: #000;
-    color: #fff;
-    padding: 9px 11px;
-    border-radius: 8px;
-    border: 1px solid #ff8c00;
-    font-size: 0.72rem;
-    font-weight: 400;
-    line-height: 1.45;
-    width: 260px;
-    text-align: left;
-    z-index: 20;
-    transition: opacity 0.15s;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
-    pointer-events: none;
-  }
-  .chart-caution-chip:hover .chart-caution-tooltip {
-    visibility: visible; opacity: 1;
+    margin-bottom: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
-  .kpi-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 8px;
+  .btn-back {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
   }
-  .kpi-card {
-    background: #1a1d24;
-    border: 1px solid #2a2d34;
-    border-radius: 9px;
-    padding: 8px 10px;
-    text-align: center;
+
+  .btn-back:hover { background: #5a6168; }
+
+  .sd-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin: 0;
+  }
+
+  .sd-title strong { color: var(--text); font-weight: 700; }
+
+  .flash-alert {
+    background: rgba(255,165,0,0.1);
+    border: 1px solid rgba(255,165,0,0.5);
+    border-radius: 6px;
+    padding: 10px 40px 10px 14px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #ffc77d;
     position: relative;
   }
-  .kpi-card .kpi-label {
-    color: #b0b0b0;
-    font-size: 0.68rem;
+
+  .flash-alert.success {
+    background: rgba(40,167,69,0.1);
+    border-color: rgba(40,167,69,0.5);
+    color: var(--green-dim);
+  }
+
+  .flash-alert .close-x {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  /* ---- HERO CARD ---- */
+  .hero {
+    background: var(--bg-card);
+    border: 1.5px solid var(--green);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+
+  .hero-price-label {
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 2px;
+    letter-spacing: 0.8px;
+    color: var(--text-mute);
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 4px;
+  }
+
+  .hero-price {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--green-dim);
+    text-align: center;
+    line-height: 1.1;
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hero-price .dash { color: var(--text-mute); margin: 0 6px; font-weight: 400; }
+
+  .phase-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+
+  .phase-badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-  }
-  .kpi-card .kpi-value { font-size: 1.1rem; font-weight: 700; color: #fff; line-height: 1.05; }
-  .kpi-card .kpi-sub   { color: #6c757d; font-size: 0.66rem; margin-top: 1px; }
-  .kpi-card .kpi-value.demand-HIGH   { color: #28a745; }
-  .kpi-card .kpi-value.demand-MEDIUM { color: #ffa500; }
-  .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
-  @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
-
-  .info-wrap { position: relative; display: inline-flex; }
-  .info-icon {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 13px; height: 13px;
-    background: #2a2d34; color: #adb5bd;
-    border-radius: 50%;
-    font-size: 0.65rem; font-weight: 700;
-    cursor: help; font-style: italic;
-    font-family: Georgia, serif;
-  }
-  .info-icon:hover { background: #ffa500; color: #fff; }
-
-  .info-tooltip {
-    visibility: hidden; opacity: 0;
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: #000;
-    color: #fff;
-    padding: 9px 11px;
-    border-radius: 8px;
-    border: 1px solid #28a745;
-    font-size: 0.74rem;
-    font-weight: 400;
-    line-height: 1.45;
-    width: 230px;
-    text-transform: none;
-    letter-spacing: normal;
-    text-align: left;
-    z-index: 10;
-    transition: opacity 0.15s;
-    white-space: normal;
-    pointer-events: none;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-  }
-  .info-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%; left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: #000;
-  }
-  .info-wrap:hover .info-tooltip {
-    visibility: visible; opacity: 1;
-  }
-
-  .info-tooltip.wide {
-    width: 320px;
-    border-color: #4eb0ff;
-  }
-
-  .conf-mini-row {
-    display: grid;
-    grid-template-columns: 62px 1fr;
-    gap: 8px;
-    padding: 4px 6px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    align-items: start;
-    font-size: 0.7rem;
-    line-height: 1.35;
-  }
-  .conf-mini-row:last-child { border-bottom: none; }
-  .conf-mini-row .mini-bracket { font-weight: 700; color: #b0b0b0; white-space: nowrap; }
-  .conf-mini-row.active .mini-bracket { color: #4eb0ff; }
-  .conf-mini-row.active {
-    background: rgba(78,176,255,0.12);
-    border-radius: 4px;
-    border-bottom-color: transparent;
-  }
-  .conf-mini-row .mini-benefit {
-    display: block;
-    color: #adb5bd;
-    font-size: 0.66rem;
-    margin-top: 1px;
-  }
-  .conf-header {
-    color: #4eb0ff;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
     font-weight: 700;
-    font-size: 0.75rem;
-    margin-bottom: 5px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid rgba(255,255,255,0.15);
-    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: help;
+  }
+
+  .phase-badge-4 { background: rgba(255,215,0,0.15); color: var(--gold); border: 1px solid rgba(255,215,0,0.4); }
+  .phase-badge-3 { background: rgba(40,167,69,0.2); color: var(--green); border: 1px solid rgba(40,167,69,0.5); }
+  .phase-badge-2 { background: rgba(40,167,69,0.1); color: var(--green-dim); border: 1px solid rgba(40,167,69,0.3); }
+  .phase-badge-1 { background: rgba(108,117,125,0.15); color: var(--text-mute); border: 1px solid rgba(108,117,125,0.4); }
+
+  .phase-detail {
+    font-size: 11px;
+    color: var(--text-mute);
   }
 
   .market-stats {
-    background: #14171d;
-    border-radius: 7px;
-    padding: 5px 12px;
-    margin-bottom: 8px;
-    color: #adb5bd;
-    font-size: 0.78rem;
     text-align: center;
+    font-size: 11px;
+    color: var(--text-mute);
+    margin-top: 6px;
   }
-  .market-stats strong { color: #e9ecef; }
 
-  .bottom-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-  @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
-
-  .dist-row { display: flex; flex-direction: column; gap: 4px; }
-
-  /* Right-aligned label + tight bar spacing so the two sit close together */
-  .dist-bar {
-    display: grid;
-    grid-template-columns: max-content 1fr 36px;
-    align-items: center;
-    column-gap: 10px;
-    font-size: 0.74rem;
-  }
-  .dist-bar .dist-label {
-    color: #b0b0b0;
-    white-space: nowrap;
+  /* ---- Caution chip ---- */
+  .caution-chip {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255,165,0,0.15);
+    border: 1px solid rgba(255,165,0,0.5);
+    color: var(--orange);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 10px;
+    display: none;
+    cursor: help;
+    max-width: 180px;
     text-align: right;
+    line-height: 1.3;
+  }
+
+  .caution-chip.active { display: block; }
+
+  /* ---- KPI ROW ---- */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .kpi {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+    position: relative;
+  }
+
+  .kpi-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-mute);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .kpi-value {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .kpi-sub {
+    font-size: 10px;
+    color: var(--text-mute);
+    margin-top: 2px;
+  }
+
+  .kpi-value.hi  { color: var(--green-dim); }
+  .kpi-value.md  { color: var(--orange); }
+  .kpi-value.lo  { color: var(--text-mute); }
+
+  .kpi.clickable { cursor: help; }
+
+  /* ---- SLIDER CARD ---- */
+  .slider-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+  }
+
+  .slider-card h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-mute);
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-mute);
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  .slider-track-wrap {
+    position: relative;
+    padding-top: 22px;
+  }
+
+  .slider-bubble {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    background: var(--green);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }
-  .dist-bar .dist-track {
-    background: #14171d;
-    border-radius: 5px;
-    height: 10px;
-    overflow: hidden;
+
+  .slider-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid var(--green);
   }
-  .dist-bar .dist-fill  { height: 100%; border-radius: 5px; transition: width 0.8s ease; }
-  .dist-bar .dist-pct   { color: #e6e6e6; font-weight: 600; text-align: right; font-size: 0.74rem; font-variant-numeric: tabular-nums; }
-  @media (max-width: 600px) {
-    .dist-bar { column-gap: 8px; font-size: 0.7rem; }
+
+  input[type="range"].price-slider {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(to right, var(--green) 0%, var(--orange) 70%, var(--red) 100%);
+    border-radius: 3px;
+    outline: none;
+  }
+
+  input[type="range"].price-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px; height: 18px;
+    background: white;
+    border: 2px solid var(--green);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  input[type="range"].price-slider::-moz-range-thumb {
+    width: 18px; height: 18px;
+    background: white;
+    border: 2px solid var(--green);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  .slider-days {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .slider-days strong { color: var(--text); font-weight: 700; }
+
+  /* ---- CHART CARD ---- */
+  .chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+  }
+
+  .chart-card h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-mute);
+    font-weight: 600;
+    margin: 0 0 6px 0;
+  }
+
+  .chart-wrap {
+    position: relative;
+    height: 185px;
+  }
+
+  /* ---- DISTRIBUTION CARD ---- */
+  .dist-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+  }
+
+  .dist-card h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-mute);
+    font-weight: 600;
+    margin: 0 0 10px 0;
+  }
+
+  .dist-row {
+    display: grid;
+    grid-template-columns: 1fr max-content;
+    gap: 10px;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 11px;
+  }
+
+  .dist-bar-track {
+    background: var(--bg-card-2);
+    height: 16px;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .dist-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.25s ease;
+  }
+
+  .dist-label {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-dim);
+    font-weight: 600;
+    white-space: nowrap;
   }
 
   .dist-footnote {
-    margin-top: 5px;
-    color: #6c757d;
-    font-size: 0.68rem;
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--text-mute);
     text-align: right;
     font-style: italic;
   }
 
-  .verdict-card {
-    background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
-    border: 1px solid #28a745;
-    border-radius: 10px;
-    padding: 10px 14px;
+  /* ---- FOOTER ---- */
+  .data-footer {
+    margin-top: 16px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 10px;
+    color: var(--text-mute);
+    text-align: center;
   }
-  .verdict-title {
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: #28a745;
-    margin-bottom: 6px;
-    display: flex; align-items: center; gap: 6px;
+
+  /* ---- TOOLTIPS (shared) ---- */
+  .smart-tooltip {
+    position: absolute;
+    z-index: 50;
+    background: #0d0f14;
+    border: 1px solid var(--orange);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 11px;
+    color: var(--text);
+    min-width: 240px;
+    max-width: 300px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    display: none;
+    line-height: 1.5;
   }
-  .verdict-body p {
-    color: #e6e6e6;
-    font-size: 0.78rem;
-    line-height: 1.45;
-    margin-bottom: 4px;
+
+  .smart-tooltip.show { display: block; }
+
+  .smart-tooltip h4 {
+    color: var(--orange);
+    font-size: 11px;
+    margin: 0 0 6px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
-  .verdict-body p:last-child { margin-bottom: 0; }
-  .verdict-body .hi { color: #ffa500; font-weight: 600; }
-  .verdict-body .ok { color: #28a745; font-weight: 600; }
-  .verdict-body .warn { color: #ff6b6b; font-weight: 600; }
+
+  .conf-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+    font-size: 11px;
+  }
+
+  .conf-table td {
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .conf-table tr:last-child td { border-bottom: none; }
+
+  .conf-table tr.highlight {
+    background: rgba(255,165,0,0.12);
+  }
+
+  .conf-table tr.highlight td {
+    color: var(--orange);
+    font-weight: 600;
+  }
+
+  .conf-table td:first-child {
+    color: var(--text-mute);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    .hero-price { font-size: 24px; }
+    .kpi-value { font-size: 15px; }
+    .chart-wrap { height: 160px; }
+    .caution-chip { position: static; margin-top: 6px; max-width: 100%; text-align: center; }
+  }
 </style>
-{% endblock %}
 
-{% block content %}
-{% macro l2dp(v) -%}
-  {%- if v is none -%}—
-  {%- elif v|int >= 10000000 -%}{{ '%.2f'|format(v / 10000000) }}Cr
-  {%- else -%}{{ '%.2f'|format(v / 100000) }}L
-  {%- endif %}
-{%- endmacro %}
+<div class="sd-wrap">
 
-<div class="dashboard-wrap">
+  <!-- Top bar -->
+  <div class="sd-top">
+    <a href="{{ url_for('seller', **back_prefill) }}" class="btn-back">← Back</a>
+    <p class="sd-title">
+      <strong>{{ val.year }} {{ val.make }} {{ val.model }} {{ val.variant }}</strong>
+      · {{ val.fuel }} · {{ val.mileage|inr }} km · {{ val.condition }} · {{ val.owner }}
+    </p>
+  </div>
 
-  <div class="dash-header">
-    <a href="{{ url_for('seller',
-                        make=back_prefill.make, fuel=back_prefill.fuel,
-                        model=back_prefill.model, variant=back_prefill.variant,
-                        year=back_prefill.year, owner=back_prefill.owner,
-                        mileage=back_prefill.mileage, condition=back_prefill.condition) }}"
-       class="btn-back">← Back</a>
-    <div class="car-summary">
-      <div class="car-name">{{ val.year }} {{ val.make }} {{ val.model }} {{ val.variant }}</div>
-      <div class="car-meta">{{ val.fuel }} · {{ val.mileage | inr }} km · {{ val.condition }} · {{ val.owner }}</div>
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="flash-alert {{ category }}">
+      {{ message }}
+      <button type="button" class="close-x" onclick="this.parentElement.style.display='none';">&times;</button>
+    </div>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="caution-chip" id="cautionChip" title="Premium pricing — preparation matters. Ensure full service history, no scratches/dents. Buyers at top of range expect showroom-like quality.">
+      ⚠ Premium pricing — preparation matters
+    </div>
+
+    <div class="hero-price-label">Estimated Fair Price Range</div>
+    <div class="hero-price">
+      ₹<span id="priceLowDisplay">{{ "%.2f"|format(price_low / 100000) }}</span> L
+      <span class="dash">–</span>
+      ₹<span id="priceHighDisplay">{{ "%.2f"|format(price_high / 100000) }}</span> L
+    </div>
+
+    <div class="phase-row">
+      <span class="phase-badge phase-badge-{{ phase_data.phase }}" title="{{ phase_data.display.tooltip }}">
+        {% if phase_data.phase == 4 %}⭐{% elif phase_data.phase == 3 %}✓{% elif phase_data.phase == 2 %}📈{% else %}📊{% endif %}
+        {{ phase_data.display.badge }}
+      </span>
+      <span class="phase-detail">{{ phase_data.display.detail }}</span>
+    </div>
+
+    <div class="market-stats">
+      {{ verified_180d }} Verified transactions in last 6 months{% if verified_all_time > verified_180d %} · {{ verified_all_time }} all-time{% endif %}
     </div>
   </div>
 
-  <div class="top-row">
-    <div class="card hero-combined">
-      <div class="price-hero">
-        <div class="hero-label">ESTIMATED FAIR MARKET VALUE</div>
-        <div class="hero-range">
-          ₹ {{ l2dp(price_low) }}<span class="hero-dash">—</span>₹ {{ l2dp(price_high) }}
-        </div>
-        <div class="hero-mid">Most likely: <strong>₹ {{ l2dp(estimated) }}</strong></div>
-      </div>
-
-      <div class="slider-section">
-        <div class="slider-labels">
-          <span class="left">← Quick Sale</span>
-          <span class="right">Highest Price →</span>
-        </div>
-        <div class="slider-track-wrap">
-          <div class="slider-bubble" id="slider-bubble">₹ {{ l2dp(estimated) }}</div>
-          <input type="range" id="price-slider"
-                 min="{{ price_low }}" max="{{ price_high }}"
-                 value="{{ estimated }}" step="1000">
-        </div>
-        <div class="slider-info">
-          <div>Your price: <strong id="slider-price-text">₹ {{ l2dp(estimated) }}</strong></div>
-          <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card chart-card">
-      <div class="card-title">
-        Depreciation Forecast
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            How your car's value is expected to drop over the next 90 days if you don't sell now. Cars depreciate continuously — waiting longer usually means accepting a lower price later. Hover on the line to see any day's value.
-          </span>
-        </span>
-        <span class="sub">next 90 days · values at 30 / 60 / 90</span>
-      </div>
-
-      <div class="chart-caution-chip" id="caution-chip">
-        <span class="chip-icon">⚠️</span>
-        <span>Premium pricing — preparation matters</span>
-        <div class="chart-caution-tooltip">
-          <strong style="color:#ffa500;">Buyers will scrutinize at this price.</strong><br><br>
-          To justify the higher ask, make sure:<br>
-          • <strong>Full service history</strong> is available (stamped book or dealer records)<br>
-          • Car is <strong>scratch-free</strong> — fix visible dents/scratches before listing<br>
-          • Interior is spotless and detailed<br><br>
-          Without these, buyers will push the price down fast.
-        </div>
-      </div>
-
-      <div class="graph-wrap">
-        <canvas id="dep-chart"></canvas>
-      </div>
-    </div>
-  </div>
-
+  <!-- KPI Row -->
   <div class="kpi-row">
-    <div class="kpi-card">
-      <div class="kpi-label">
-        Market Demand
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            How many buyers are actively looking for cars like yours. HIGH means your car sells fast. LOW means fewer interested buyers — you may need patience or a lower price. Changes with your asking price.
-          </span>
-        </span>
-      </div>
-      <div class="kpi-value demand-{{ demand }}" id="demand-value">{{ demand }}</div>
-      <div class="kpi-sub" id="demand-sub">Based on brand, age & price</div>
+    <div class="kpi">
+      <div class="kpi-label">Market Demand</div>
+      <div class="kpi-value {% if demand == 'HIGH' %}hi{% elif demand == 'MEDIUM' %}md{% else %}lo{% endif %}">{{ demand }}</div>
     </div>
 
-    <div class="kpi-card">
-      <div class="kpi-label">
-        Data Confidence
-        <span class="info-wrap" id="conf-info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip wide" id="conf-tooltip">
-            <span class="conf-header">Confidence levels — what each means</span>
-            {% set c = confidence | int %}
-            <span class="conf-mini-row {% if c >= 90 %}active{% endif %}">
-              <span class="mini-bracket">90–95%</span>
-              <span>
-                Strong match with many verified deals.
-                <span class="mini-benefit">List confidently, minimal haggling room.</span>
-              </span>
-            </span>
-            <span class="conf-mini-row {% if c >= 75 and c < 90 %}active{% endif %}">
-              <span class="mini-bracket">75–89%</span>
-              <span>
-                Good match with several similar deals.
-                <span class="mini-benefit">Small negotiation buffer is safe.</span>
-              </span>
-            </span>
-            <span class="conf-mini-row {% if c >= 60 and c < 75 %}active{% endif %}">
-              <span class="mini-bracket">60–74%</span>
-              <span>
-                Moderate match, limited data.
-                <span class="mini-benefit">Use as guideline — expect 5–8% swing.</span>
-              </span>
-            </span>
-            <span class="conf-mini-row {% if c < 60 %}active{% endif %}">
-              <span class="mini-bracket">50–59%</span>
-              <span>
-                Baseline estimate, few comparable deals.
-                <span class="mini-benefit">Verify with other sources.</span>
-              </span>
-            </span>
-          </span>
-        </span>
+    <div class="kpi clickable" id="confKpi">
+      <div class="kpi-label">Data Confidence</div>
+      <div class="kpi-value {% if confidence >= 75 %}hi{% elif confidence >= 60 %}md{% else %}lo{% endif %}">{{ confidence }}%</div>
+      <div class="kpi-sub">Tap for details</div>
+      <div class="smart-tooltip" id="confTooltip">
+        <h4>Data Confidence</h4>
+        <table class="conf-table">
+          <tr class="{% if confidence >= 90 %}highlight{% endif %}"><td>90–95</td><td>Very high · price within range</td></tr>
+          <tr class="{% if confidence >= 75 and confidence < 90 %}highlight{% endif %}"><td>75–89</td><td>High · small buffer OK</td></tr>
+          <tr class="{% if confidence >= 60 and confidence < 75 %}highlight{% endif %}"><td>60–74</td><td>Moderate · price flexibly</td></tr>
+          <tr class="{% if confidence < 60 %}highlight{% endif %}"><td>50–59</td><td>Emerging · test the market</td></tr>
+        </table>
       </div>
-      <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
-      <div class="kpi-sub">Based on verified deals</div>
     </div>
 
-    <div class="kpi-card">
-      <div class="kpi-label">
-        Expected Days to Sell
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            How many days we expect it to take to find a buyer at your current asking price. Lower prices sell faster, higher prices take longer. Move the slider to see how pricing affects selling speed.
-          </span>
-        </span>
-      </div>
-      <div class="kpi-value" style="color:#ffa500;" id="days-value">{{ days_to_sell }}</div>
-      <div class="kpi-sub">days at current price</div>
+    <div class="kpi">
+      <div class="kpi-label">Avg Days to Sell</div>
+      <div class="kpi-value">{{ days_to_sell }}</div>
+      <div class="kpi-sub">at fair price</div>
     </div>
   </div>
 
-  <div class="market-stats">
-    <strong>{{ verified_count }}</strong> Verified transactions ·
-    <strong>{{ buyers_last_30d }}</strong> Buyers last 30 days
+  <!-- Slider: Price vs Time to Sell -->
+  <div class="slider-card">
+    <h3>
+      <span>Price vs Time-to-Sell</span>
+    </h3>
+    <div class="slider-labels">
+      <span>Quick Sale</span>
+      <span>Highest Price</span>
+    </div>
+    <div class="slider-track-wrap">
+      <div class="slider-bubble" id="sliderBubble" style="left: 50%;">
+        ₹<span id="sliderPrice">{{ "%.2f"|format(estimated / 100000) }}</span> L
+      </div>
+      <input type="range" class="price-slider" id="priceSlider"
+             min="0" max="100" value="50"
+             data-low="{{ price_low }}" data-high="{{ price_high }}"
+             data-days-low="{{ (days_to_sell * 0.55)|round|int }}"
+             data-days-high="{{ (days_to_sell * 1.8)|round|int }}">
+    </div>
+    <div class="slider-days">
+      Estimated time to sell: <strong id="sliderDays">{{ days_to_sell }}</strong> days
+    </div>
   </div>
 
-  <div class="bottom-row">
-    <div class="card">
-      <div class="card-title">Buyer Price-Band Distribution <span class="sub">where buyers are concentrated</span></div>
-      <div class="dist-row">
-        {% for band in buyer_dist %}
-        <div class="dist-bar">
-          <div class="dist-label">
-            {% if band.low is none %}
-              Below ₹ {{ l2dp(band.high) }}
-            {% elif band.high is none %}
-              Above ₹ {{ l2dp(band.low) }}
-            {% else %}
-              ₹ {{ l2dp(band.low) }} – ₹ {{ l2dp(band.high) }}
-            {% endif %}
-          </div>
-          <div class="dist-track">
-            <div class="dist-fill" style="width: {{ band.pct }}%; background: {{ band.color }};"></div>
-          </div>
-          <div class="dist-pct">{{ band.pct }}%</div>
-        </div>
-        {% endfor %}
-      </div>
-      <div class="dist-footnote">L = Lakhs (₹1L = ₹1,00,000)</div>
+  <!-- Depreciation chart -->
+  <div class="chart-card">
+    <h3>Depreciation — Next 90 Days</h3>
+    <div class="chart-wrap">
+      <canvas id="depChart"></canvas>
     </div>
+  </div>
 
-    <div class="verdict-card">
-      <div class="verdict-title">🎯 AutoKnowMus Verdict</div>
-      <div class="verdict-body" id="verdict-body">
+  <!-- Buyer Distribution -->
+  <div class="dist-card">
+    <h3>Buyer Price Distribution</h3>
+    {% for b in buyer_dist %}
+    <div class="dist-row">
+      <div class="dist-bar-track">
+        <div class="dist-bar-fill" style="width: {{ b.pct }}%; background: {{ b.color }};"></div>
+      </div>
+      <div class="dist-label">
+        {% if b.low is none %}&lt; ₹{{ "%.2f"|format(b.high / 100000) }}L
+        {% elif b.high is none %}&gt; ₹{{ "%.2f"|format(b.low / 100000) }}L
+        {% else %}₹{{ "%.2f"|format(b.low / 100000) }}–{{ "%.2f"|format(b.high / 100000) }}L{% endif %}
+        · {{ b.pct }}%
       </div>
     </div>
+    {% endfor %}
+    <div class="dist-footnote">L = Lakhs. % of buyers at each band.</div>
+  </div>
+
+  <div class="data-footer">
+    Prices calibrated {{ data_version }}
   </div>
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
 <script>
-  const DEP_DATA      = {{ depreciation_json | safe }};
-  const PRICE_LOW     = {{ price_low }};
-  const PRICE_HIGH    = {{ price_high }};
-  const ESTIMATED     = {{ estimated }};
-  const BASE_DAYS     = {{ days_to_sell }};
-  const BASE_DEMAND   = {{ demand | tojson }};
-  const CONFIDENCE    = {{ confidence }};
-  const CAR_NAME      = {{ (val.year ~ ' ' ~ val.make ~ ' ' ~ val.model ~ ' ' ~ val.variant) | tojson }};
-  const VERIFIED_COUNT = {{ verified_count }};
+(function(){
+  // ---- Slider interactivity ----
+  var slider   = document.getElementById('priceSlider');
+  var bubble   = document.getElementById('sliderBubble');
+  var priceLbl = document.getElementById('sliderPrice');
+  var daysLbl  = document.getElementById('sliderDays');
+  var caution  = document.getElementById('cautionChip');
 
-  const ANCHOR_DAYS = [30, 60, 90];
+  if (slider) {
+    var lo = parseInt(slider.dataset.low, 10);
+    var hi = parseInt(slider.dataset.high, 10);
+    var daysLo = parseInt(slider.dataset.daysLow, 10);
+    var daysHi = parseInt(slider.dataset.daysHigh, 10);
 
-  function lakh2dp(n) {
-    if (n === null || n === undefined || isNaN(n)) return '—';
-    n = Math.round(Number(n));
-    if (n >= 10000000) return (n / 10000000).toFixed(2) + 'Cr';
-    return (n / 100000).toFixed(2) + 'L';
-  }
+    function updateSlider() {
+      var v = parseInt(slider.value, 10);
+      var price = lo + ((hi - lo) * v) / 100;
+      var days  = daysLo + ((daysHi - daysLo) * v) / 100;
 
-  function priceAtDay(day) {
-    if (day < 0) day = 0;
-    if (day >= DEP_DATA.length) day = DEP_DATA.length - 1;
-    return DEP_DATA[day].price;
-  }
+      priceLbl.textContent = (price / 100000).toFixed(2);
+      daysLbl.textContent  = Math.round(days);
 
-  function demandForPrice(price) {
-    const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
-    if (BASE_DEMAND === 'HIGH') {
-      if (pct < 0.33) return 'HIGH';
-      if (pct < 0.75) return 'MEDIUM';
-      return 'LOW';
-    }
-    if (BASE_DEMAND === 'MEDIUM') {
-      if (pct < 0.33) return 'HIGH';
-      if (pct < 0.75) return 'MEDIUM';
-      return 'LOW';
-    }
-    if (pct < 0.33) return 'MEDIUM';
-    return 'LOW';
-  }
+      // Position bubble over thumb
+      var thumbW = 18;
+      var rect   = slider.getBoundingClientRect();
+      var pct    = v / 100;
+      var offset = thumbW/2 + (rect.width - thumbW) * pct;
+      bubble.style.left = offset + 'px';
 
-  function daysForPrice(price) {
-    const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
-    const factor = 0.55 + pct * 0.95;
-    return Math.max(5, Math.round(BASE_DAYS * factor));
-  }
-
-  function generateVerdict(price, demand, days) {
-    const confidenceWord =
-      CONFIDENCE >= 90 ? 'strong' :
-      CONFIDENCE >= 75 ? 'good' :
-      CONFIDENCE >= 60 ? 'moderate' : 'preliminary';
-
-    const dataNote = VERIFIED_COUNT === 0
-      ? "Our estimate is formula-based using age, mileage, condition, ownership and fuel type. We don't yet have verified real-world deals for this exact car."
-      : `Our estimate blends the formula with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
-
-    let pricingStrategy;
-    const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
-    if (pct < 0.33) {
-      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakh2dp(price)}, demand is <span class="ok">${demand}</span> — expect interest within a week or two.`;
-    } else if (pct < 0.66) {
-      pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakh2dp(price)}, you'll see <span class="ok">${demand}</span> demand — balanced approach.`;
-    } else {
-      pricingStrategy = `<span class="hi">Priced at the upper end.</span> At ₹ ${lakh2dp(price)}, demand drops to <span class="hi">${demand}</span> — you may wait longer but could fetch top value.`;
-    }
-
-    const timeGuidance = days <= 20
-      ? `Expect to sell in around <strong class="ok">${days} days</strong>.`
-      : days <= 35
-      ? `Expect to sell in around <strong>${days} days</strong>.`
-      : `This price may take around <strong class="hi">${days} days</strong> to find a buyer.`;
-
-    const priceAtDay30 = priceAtDay(30);
-    const priceAtDay90 = priceAtDay(90);
-    const loss30  = price - priceAtDay30;
-    const loss90  = price - priceAtDay90;
-    const pctLoss30 = Math.round((loss30 / price) * 100);
-    const pctLoss90 = Math.round((loss90 / price) * 100);
-
-    let depreciationNote;
-    if (days <= 20) {
-      depreciationNote = `<strong>Waiting cost:</strong> Not a concern at this price — you'll sell before depreciation bites.`;
-    } else if (days <= 45) {
-      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakh2dp(loss30)} (${pctLoss30}%)</span> to depreciation.`;
-    } else {
-      depreciationNote = `<strong>Waiting cost:</strong> Over 90 days, your car could lose <span class="warn">₹ ${lakh2dp(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
-    }
-
-    const actionable = `<strong>Recommendation:</strong> For a balanced sale aim for ₹ ${lakh2dp(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. Need cash fast? List at ₹ ${lakh2dp(PRICE_LOW)}. Can wait 2+ months? Try ₹ ${lakh2dp(PRICE_HIGH)} — but remember depreciation.`;
-
-    return `
-      <p>Your <strong>${CAR_NAME}</strong> has a ${confidenceWord} valuation (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>
-      <p>${pricingStrategy} ${timeGuidance}</p>
-      <p>${depreciationNote}</p>
-      <p>${actionable}</p>
-    `;
-  }
-
-  const cautionChip = document.getElementById('caution-chip');
-  function updateCaution(price) {
-    const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
-    if (pct >= 0.80) cautionChip.classList.add('show');
-    else cautionChip.classList.remove('show');
-  }
-
-  const slider       = document.getElementById('price-slider');
-  const bubble       = document.getElementById('slider-bubble');
-  const priceText    = document.getElementById('slider-price-text');
-  const daysEl       = document.getElementById('slider-days');
-  const demandEl     = document.getElementById('demand-value');
-  const daysKpiEl    = document.getElementById('days-value');
-  const verdictEl    = document.getElementById('verdict-body');
-
-  function positionBubble() {
-    const min = Number(slider.min);
-    const max = Number(slider.max);
-    const val = Number(slider.value);
-    const pct = ((val - min) / (max - min)) * 100;
-    const thumbOffset = 9 - (pct / 100) * 18;
-    bubble.style.left = `calc(${pct}% + ${thumbOffset}px)`;
-  }
-
-  function updateDemandClass(demand) {
-    demandEl.classList.remove('demand-HIGH', 'demand-MEDIUM', 'demand-LOW');
-    demandEl.classList.add('demand-' + demand);
-    demandEl.textContent = demand;
-  }
-
-  function onSliderInput() {
-    const val = Number(slider.value);
-    const demand = demandForPrice(val);
-    const days = daysForPrice(val);
-
-    bubble.textContent = '₹ ' + lakh2dp(val);
-    priceText.textContent = '₹ ' + lakh2dp(val);
-    daysEl.textContent = days;
-    daysKpiEl.textContent = days;
-    updateDemandClass(demand);
-    verdictEl.innerHTML = generateVerdict(val, demand, days);
-    updateCaution(val);
-    positionBubble();
-  }
-
-  slider.addEventListener('input', onSliderInput);
-  window.addEventListener('resize', positionBubble);
-
-  requestAnimationFrame(() => {
-    positionBubble();
-    verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
-    updateCaution(ESTIMATED);
-  });
-
-  // ====== Confidence tooltip smart-positioning ======
-  const confWrap = document.getElementById('conf-info-wrap');
-  const confTip  = document.getElementById('conf-tooltip');
-  if (confWrap && confTip) {
-    confWrap.addEventListener('mouseenter', function() {
-      const iconRect = confWrap.getBoundingClientRect();
-      const tipWidth = 320;
-      const viewW = window.innerWidth;
-      const halfTip = tipWidth / 2;
-      const iconCenterX = iconRect.left + iconRect.width / 2;
-      const leftSpace  = iconCenterX;
-      const rightSpace = viewW - iconCenterX;
-
-      if (leftSpace < halfTip + 10) {
-        confTip.style.left = '0';
-        confTip.style.transform = 'none';
-      } else if (rightSpace < halfTip + 10) {
-        confTip.style.left = 'auto';
-        confTip.style.right = '0';
-        confTip.style.transform = 'none';
+      // Caution chip: top 20% of range
+      if (v >= 80) {
+        caution.classList.add('active');
       } else {
-        confTip.style.left = '50%';
-        confTip.style.right = 'auto';
-        confTip.style.transform = 'translateX(-50%)';
+        caution.classList.remove('active');
       }
-    });
+    }
+
+    slider.addEventListener('input', updateSlider);
+    window.addEventListener('resize', updateSlider);
+    updateSlider();
   }
 
-  const ctx = document.getElementById('dep-chart').getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, 0, 180);
-  grad.addColorStop(0, 'rgba(40, 167, 69, 0.35)');
-  grad.addColorStop(1, 'rgba(40, 167, 69, 0.02)');
-
-  const labels = DEP_DATA.map(p => 'Day ' + p.day);
-  const prices = DEP_DATA.map(p => p.price);
-
-  const pointRadiusArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? 4 : 0);
-  const pointBgArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? '#ffa500' : '#28a745');
-  const pointBorderArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? '#fff' : '#28a745');
-
-  // Anchor labels plugin — clamps badge X so Day 90 badge never overflows the chart
-  const anchorLabelsPlugin = {
-    id: 'anchorLabels',
-    afterDatasetsDraw: function(chart) {
-      const ctx = chart.ctx;
-      const area = chart.chartArea;
-      ctx.save();
-      ctx.font = '600 10px system-ui, -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-
-      ANCHOR_DAYS.forEach(day => {
-        const idx = DEP_DATA.findIndex(p => p.day === day);
-        if (idx < 0) return;
-        const meta = chart.getDatasetMeta(0);
-        const point = meta.data[idx];
-        if (!point) return;
-
-        const price = DEP_DATA[idx].price;
-        const label = '₹' + lakh2dp(price);
-
-        const padX = 5, padY = 3;
-        const textW = ctx.measureText(label).width;
-        const badgeW = textW + padX*2;
-        const badgeH = 16;
-
-        // Clamp so the badge stays inside the chart area
-        let centerX = point.x;
-        const minCenter = area.left + badgeW / 2 + 2;
-        const maxCenter = area.right - badgeW / 2 - 2;
-        if (centerX < minCenter) centerX = minCenter;
-        if (centerX > maxCenter) centerX = maxCenter;
-
-        const badgeX = centerX - badgeW / 2;
-        const badgeY = point.y - 22;
-
-        ctx.fillStyle = 'rgba(255,165,0,0.95)';
-        ctx.beginPath();
-        const r = 8;
-        ctx.moveTo(badgeX + r, badgeY);
-        ctx.lineTo(badgeX + badgeW - r, badgeY);
-        ctx.quadraticCurveTo(badgeX + badgeW, badgeY, badgeX + badgeW, badgeY + r);
-        ctx.lineTo(badgeX + badgeW, badgeY + badgeH - r);
-        ctx.quadraticCurveTo(badgeX + badgeW, badgeY + badgeH, badgeX + badgeW - r, badgeY + badgeH);
-        ctx.lineTo(badgeX + r, badgeY + badgeH);
-        ctx.quadraticCurveTo(badgeX, badgeY + badgeH, badgeX, badgeY + badgeH - r);
-        ctx.lineTo(badgeX, badgeY + r);
-        ctx.quadraticCurveTo(badgeX, badgeY, badgeX + r, badgeY);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = '#1a1d24';
-        ctx.fillText(label, centerX, badgeY + badgeH - padY);
-      });
-
-      ctx.restore();
+  // ---- Confidence tooltip: smart positioning ----
+  var confKpi = document.getElementById('confKpi');
+  var confTip = document.getElementById('confTooltip');
+  if (confKpi && confTip) {
+    function toggleTip(show) {
+      if (show) {
+        confTip.classList.add('show');
+        // Position: default below, flip up if near bottom
+        var rect = confKpi.getBoundingClientRect();
+        var tipH = confTip.offsetHeight;
+        var viewportH = window.innerHeight;
+        if (rect.bottom + tipH + 10 > viewportH) {
+          confTip.style.top = 'auto';
+          confTip.style.bottom = '100%';
+          confTip.style.marginBottom = '6px';
+          confTip.style.marginTop = '0';
+        } else {
+          confTip.style.top = '100%';
+          confTip.style.bottom = 'auto';
+          confTip.style.marginTop = '6px';
+          confTip.style.marginBottom = '0';
+        }
+        // Horizontal: center, clip to viewport
+        confTip.style.left = '50%';
+        confTip.style.transform = 'translateX(-50%)';
+      } else {
+        confTip.classList.remove('show');
+      }
     }
-  };
+    confKpi.addEventListener('click', function(e){
+      e.stopPropagation();
+      toggleTip(!confTip.classList.contains('show'));
+    });
+    document.addEventListener('click', function(){ toggleTip(false); });
+    confTip.addEventListener('click', function(e){ e.stopPropagation(); });
+  }
 
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Projected price',
-        data: prices,
-        borderColor: '#28a745',
-        backgroundColor: grad,
-        borderWidth: 2.5,
-        fill: true,
-        tension: 0.35,
-        pointRadius: pointRadiusArr,
-        pointBackgroundColor: pointBgArr,
-        pointBorderColor: pointBorderArr,
-        pointBorderWidth: 2,
-        pointHoverRadius: 5,
-        pointHoverBackgroundColor: '#28a745',
-        pointHoverBorderColor: '#fff',
-        pointHoverBorderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      layout: {
-        /* Right padding gives Day 90 badge breathing room inside chartArea */
-        padding: { top: 22, right: 36, left: 4, bottom: 0 }
+  // ---- Depreciation chart ----
+  var depData = {{ depreciation_json|safe }};
+  var ctx = document.getElementById('depChart');
+  if (ctx && window.Chart) {
+    var labels = depData.map(function(d){ return d.day; });
+    var prices = depData.map(function(d){ return d.price; });
+
+    // Anchor badges at Day 30, 60, 90
+    var anchorPoints = [30, 60, 90];
+
+    var anchorPlugin = {
+      id: 'anchorBadges',
+      afterDatasetsDraw: function(chart) {
+        var ctx = chart.ctx;
+        var meta = chart.getDatasetMeta(0);
+        var points = meta.data;
+        ctx.save();
+        anchorPoints.forEach(function(d){
+          if (d >= points.length) return;
+          var p = points[d];
+          if (!p) return;
+          var priceLakh = (prices[d] / 100000).toFixed(2);
+          var label = 'D' + d + ' · ₹' + priceLakh + 'L';
+          ctx.font = 'bold 10px sans-serif';
+          var textW = ctx.measureText(label).width;
+          var padX = 6, padY = 3;
+          var boxW = textW + padX * 2;
+          var boxH = 16;
+          var x = p.x;
+          var y = p.y - 20;
+          // Clamp X so badge doesn't clip
+          var chartArea = chart.chartArea;
+          if (x + boxW/2 > chartArea.right) x = chartArea.right - boxW/2;
+          if (x - boxW/2 < chartArea.left)  x = chartArea.left + boxW/2;
+          // Pill background
+          ctx.fillStyle = '#ffa500';
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(x - boxW/2, y - boxH/2, boxW, boxH, 8);
+          } else {
+            ctx.rect(x - boxW/2, y - boxH/2, boxW, boxH);
+          }
+          ctx.fill();
+          ctx.fillStyle = 'white';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, x, y);
+          // Connector line to curve
+          ctx.strokeStyle = '#ffa500';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, y + boxH/2);
+          ctx.lineTo(p.x, p.y - 2);
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+    };
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: prices,
+          borderColor: '#5bd47b',
+          backgroundColor: 'rgba(91,212,123,0.08)',
+          borderWidth: 2,
+          fill: true,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#5bd47b',
+          tension: 0.3
+        }]
       },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#0e1117',
-          titleColor: '#ffa500',
-          bodyColor: '#e6e6e6',
-          borderColor: '#28a745',
-          borderWidth: 1,
-          padding: 8,
-          titleFont: { weight: '600' },
-          bodyFont: { size: 12 },
-          displayColors: false,
-          callbacks: {
-            title: function(items) { return 'Day ' + items[0].dataIndex; },
-            label: function(item) {
-              return '₹ ' + lakh2dp(item.parsed.y);
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 22, right: 36, left: 4, bottom: 0 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: function(items){ return 'Day ' + items[0].label; },
+              label: function(ctx){ return '₹' + (ctx.parsed.y / 100000).toFixed(2) + ' L'; }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: {
+              color: '#8b92a5',
+              font: { size: 10 },
+              autoSkip: true,
+              maxTicksLimit: 6,
+              callback: function(val, idx){
+                var d = this.getLabelForValue(val);
+                return 'D' + d;
+              }
+            }
+          },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: {
+              color: '#8b92a5',
+              font: { size: 10 },
+              callback: function(v){ return '₹' + (v/100000).toFixed(1) + 'L'; }
             }
           }
         }
       },
-      scales: {
-        x: {
-          ticks: {
-            color: '#6c757d',
-            maxTicksLimit: 5,
-            autoSkip: false,
-            callback: function(val, idx) {
-              const dayNum = DEP_DATA[idx] ? DEP_DATA[idx].day : idx;
-              if (ANCHOR_DAYS.includes(dayNum) || dayNum === 0) return 'Day ' + dayNum;
-              return '';
-            },
-            font: { size: 10 }
-          },
-          grid: { color: 'rgba(255,255,255,0.04)' }
-        },
-        y: {
-          ticks: {
-            color: '#6c757d',
-            maxTicksLimit: 4,
-            callback: function(v) { return '₹ ' + lakh2dp(v); },
-            font: { size: 10 }
-          },
-          grid: { color: 'rgba(255,255,255,0.06)' }
-        }
-      }
-    },
-    plugins: [anchorLabelsPlugin]
-  });
+      plugins: [anchorPlugin]
+    });
+  }
+})();
 </script>
+
 {% endblock %}
