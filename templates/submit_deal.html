@@ -3,110 +3,404 @@
 
 {% block extra_head %}
 <style>
-  .deal-wrap { padding: 30px 40px; max-width: 1100px; margin: 0 auto; }
-  .page-title { color: #4eb0ff; font-size: 1.8rem; font-weight: 700; margin: 0; }
+  .submit-wrap { padding: 30px 40px; }
+  .page-title { color: #4eb0ff; font-size: 1.8rem; font-weight: 700; text-align: right; margin: 0; }
   .form-section { background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px; padding: 30px; }
-  .btn-submit-deal {
-    background: #4e54ff; color: #fff; border: none; padding: 13px 40px;
-    border-radius: 8px; font-weight: 700; width: 320px; display: block; margin: 15px auto 0;
+
+  .btn-generate {
+    background: #4eb0ff; color: #0e1117; border: none; padding: 14px 40px;
+    border-radius: 8px; font-weight: 700; font-size: 1rem; letter-spacing: 0.5px;
+    width: 360px; display: block; margin: 0 auto;
   }
-  .btn-submit-deal:hover { background: #3a40d9; color: #fff; }
-  .btn-submit-deal .credit-reward { display: block; font-size: 0.85rem; font-weight: 500; margin-top: 3px; }
-  .info-box {
-    background: rgba(78,84,255,0.1); border: 1px solid #4e54ff;
-    color: #b0b8ff; padding: 12px 16px; border-radius: 8px; font-size: 0.9rem; margin-bottom: 20px;
+  .btn-generate:hover { background: #3a9de0; color: #0e1117; }
+  .btn-generate:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
+  .btn-generate .credit-cost {
+    display: block; font-size: 0.85rem; font-weight: 500;
+    margin-top: 3px; opacity: 0.95;
   }
-  .date-field-wrap { position: relative; }
-  .date-display {
-    background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
-    padding: 8px 40px 8px 12px; border-radius: 6px; width: 100%; height: 38px; cursor: pointer;
-    display: flex; align-items: center; font-size: 0.95rem;
+  .credit-note {
+    text-align: center; color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;
   }
-  .date-display.placeholder { color: #6c757d; }
-  .date-hidden { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
-  .date-calendar-btn {
-    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-    background: transparent; border: none; color: #b0b0b0; cursor: pointer; padding: 4px;
+
+  .alert-dismiss {
+    background: #ff8c00; color: #fff; border: none; border-radius: 8px;
+    padding: 0.75rem 2.5rem 0.75rem 1rem; margin-bottom: 1.25rem;
+    position: relative; font-size: 0.92rem;
   }
-  .reg-wrap { display: flex; gap: 6px; align-items: stretch; }
-  .reg-wrap input {
-    background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
-    padding: 8px 10px; border-radius: 6px; text-align: center; font-family: monospace; font-size: 0.95rem; text-transform: uppercase; height: 38px;
+  .alert-dismiss .btn-close-x {
+    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
-  .file-upload {
-    background: #1a1d24; border: 1px dashed #4e54ff; border-radius: 8px;
-    padding: 10px 15px; text-align: center; cursor: pointer; color: #b0b0b0;
-    height: 38px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
+
+  .rate-limit-banner {
+    background: rgba(78, 176, 255, 0.1); border: 1px solid #4eb0ff;
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 1.25rem;
+    color: #8dcfff; font-size: 0.88rem;
   }
-  .file-upload input { display: none; }
+  .rate-limit-banner strong { color: #fff; }
+  .rate-limit-banner.full {
+    background: rgba(255, 140, 0, 0.12); border-color: #ff8c00; color: #ffa94d;
+  }
+
+  .section-label {
+    color: #4eb0ff; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.5px;
+    margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #2a2d34;
+    text-transform: uppercase;
+  }
+
+  .location-row { margin-bottom: 1rem; }
+  .location-row .form-select { max-width: 100%; }
+
+  /* Registration number 3-field group */
+  .reg-group {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .reg-group .form-control { text-align: center; font-weight: 600; letter-spacing: 1px; }
+  .reg-group .reg-rto    { flex: 0 0 80px; }
+  .reg-group .reg-series { flex: 0 0 70px; }
+  .reg-group .reg-number { flex: 1; }
+  .reg-preview {
+    font-size: 0.8rem; color: #6c757d; margin-top: 4px; font-family: monospace;
+  }
+  .reg-preview strong { color: #4eb0ff; letter-spacing: 1px; }
+
+  /* Date input with calendar icon */
+  .date-wrap { position: relative; }
+  .date-wrap .form-control { padding-right: 42px; }
+  .date-wrap .calendar-icon {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    color: #4eb0ff; pointer-events: none; font-size: 1.1rem;
+  }
+  /* Hide browser's native calendar icon so our custom one shows */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0; position: absolute; right: 0; width: 42px; height: 100%; cursor: pointer;
+  }
+
+  /* Price fields */
+  .price-wrap { position: relative; }
+  .price-wrap .form-control { padding-left: 32px; }
+  .price-wrap .rupee-prefix {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: #ffa500; font-weight: 600; pointer-events: none;
+  }
+  .price-hint {
+    font-size: 0.78rem; color: #6c757d; margin-top: 3px; font-family: monospace;
+  }
+
+  /* Buyer type radio-style pills */
+  .buyer-type-group { display: flex; gap: 10px; flex-wrap: wrap; }
+  .buyer-type-pill {
+    flex: 1; min-width: 140px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px; border: 2px solid #2a2d34; border-radius: 8px;
+    background: #14171d; cursor: pointer; transition: all 0.15s;
+    color: #e6e6e6; font-weight: 500;
+  }
+  .buyer-type-pill:hover { border-color: #4eb0ff; }
+  .buyer-type-pill input[type="radio"] {
+    accent-color: #4eb0ff; margin-right: 8px;
+  }
+  .buyer-type-pill.selected {
+    background: rgba(78, 176, 255, 0.1); border-color: #4eb0ff; color: #fff;
+  }
+
+  /* Proof checkbox box */
+  .proof-box {
+    background: #14171d; border: 1px solid #2a2d34; border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .proof-box label {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    color: #e6e6e6; font-size: 0.92rem;
+  }
+  .proof-box input[type="checkbox"] {
+    width: 17px; height: 17px; accent-color: #4eb0ff; margin-top: 2px; cursor: pointer;
+  }
+  .proof-box .proof-hint { color: #9aa0a6; font-size: 0.82rem; margin-top: 6px; display: block; }
+  .proof-required-note { color: #ffa500; font-size: 0.82rem; margin-top: 8px; display: none; }
+  .proof-required-note.visible { display: block; }
+
+  /* Disabled coming-soon section (testimonial) */
+  .coming-soon-section {
+    background: #14171d; border: 1px dashed #3a3f4a; border-radius: 10px;
+    padding: 18px 20px; position: relative;
+    opacity: 0.65;
+  }
+  .coming-soon-section .cs-badge {
+    position: absolute; top: 12px; right: 14px;
+    background: #ffa500; color: #1a1d24; padding: 3px 10px;
+    border-radius: 12px; font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .coming-soon-section h4 {
+    color: #adb5bd; font-size: 1rem; font-weight: 600; margin-bottom: 10px;
+  }
+  .coming-soon-section .form-control,
+  .coming-soon-section .form-check-input {
+    cursor: not-allowed;
+  }
+  .coming-soon-section textarea.form-control {
+    min-height: 100px; resize: vertical;
+  }
+  .cs-description {
+    color: #6c757d; font-size: 0.82rem; line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  .anonymous-check {
+    display: flex; align-items: center; gap: 8px;
+    color: #6c757d; font-size: 0.88rem; margin-top: 10px;
+  }
+  .anonymous-check input[type="checkbox"] { accent-color: #4eb0ff; }
+
+  .reward-note {
+    text-align: center; color: #28a745; font-size: 0.92rem;
+    font-weight: 600; margin-top: 10px;
+  }
+  .reward-note .emoji { font-size: 1rem; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="deal-wrap">
-  <div class="d-flex justify-content-between align-items-start mb-3">
-    <a href="{{ url_for('role') }}" class="btn btn-outline-secondary">← Back</a>
-    <h2 class="page-title">Record Actual Transaction Data</h2>
-  </div>
-
+<div class="submit-wrap">
   <div class="form-section">
-    <div class="info-box">
-      <i class="bi bi-info-circle"></i> Submit verified deal details and earn <strong>100 Credits</strong> instantly.
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+      <h2 class="page-title">Record Your Transaction</h2>
     </div>
 
-    <form method="POST" action="{{ url_for('submit_deal') }}" enctype="multipart/form-data">
-      <div class="row g-3 mb-3">
-        <div class="col-md-3">
-          <label class="form-label">Make *</label>
-          <select class="form-select" name="make" id="make" required>
-            <option value="">Select Make</option>
-            {% for brand in brands|sort %}<option value="{{ brand }}">{{ brand }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Fuel Type *</label>
-          <select class="form-select" name="fuel" id="fuel" required>
-            {% for f in fuels %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Model *</label>
-          <select class="form-select" name="model" id="model" required disabled></select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Year *</label>
-          <select class="form-select" name="year" required>
-            {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+    <p style="color:#adb5bd; font-size:0.92rem; margin-bottom: 20px;">
+      Help build accurate market data. Share your recent buy/sell transaction to earn
+      <strong style="color:#28a745;">{{ deal_reward }} credits</strong> and improve price intelligence for everyone.
+    </p>
+
+    {# Rate limit banner #}
+    {% if weekly_count >= max_per_week %}
+      <div class="rate-limit-banner full">
+        ⚠️ <strong>Weekly limit reached.</strong> You've submitted {{ weekly_count }} of {{ max_per_week }} deals allowed per 7 days. Please come back in a few days.
+      </div>
+    {% else %}
+      <div class="rate-limit-banner">
+        ℹ️ You've submitted <strong>{{ weekly_count }} of {{ max_per_week }}</strong> deals in the past 7 days. Remaining: <strong>{{ max_per_week - weekly_count }}</strong>.
+      </div>
+    {% endif %}
+
+    {% if error %}
+      <div class="alert-dismiss" id="err-alert">
+        {{ error }}
+        <button type="button" class="btn-close-x" onclick="document.getElementById('err-alert').remove()">&times;</button>
+      </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('submit_deal') }}" id="deal-form">
+
+      <!-- ============ CAR DETAILS ============ -->
+      <div class="section-label">Car Details</div>
+
+      <!-- Location (locked) -->
+      <div class="row g-3 location-row">
+        <div class="col-12">
+          <label class="form-label">Location</label>
+          <select class="form-select" disabled>
+            <option>Bangalore</option>
           </select>
         </div>
       </div>
 
+      <!-- Make / Fuel / Model / Variant -->
       <div class="row g-3 mb-3">
-        <div class="col-md-4">
-          <label class="form-label">Sale Price (₹) *</label>
-          <input type="number" class="form-control" name="sale_price" required placeholder="e.g. 650000">
+        <div class="col-md-3">
+          <label class="form-label">Make <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="make" id="make" required>
+            <option value="">Select Make</option>
+            {% for m in makes %}
+              <option value="{{ m }}" {% if form.make == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
         </div>
-        <div class="col-md-8">
-          <label class="form-label">Vehicle Reg Number *</label>
-          <div class="reg-wrap">
-            <input type="text" name="reg_rto" placeholder="KA03" maxlength="4" required>
-            <input type="text" name="reg_series" placeholder="MK" maxlength="3" required>
-            <input type="text" name="reg_number" placeholder="8201" maxlength="4" required>
+        <div class="col-md-3">
+          <label class="form-label">Fuel Type <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="fuel" id="fuel" required disabled>
+            <option value="">Select Make first</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Model <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="model" id="model" required disabled>
+            <option value="">Select Fuel first</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Variant / Suffix <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="variant" id="variant" required disabled>
+            <option value="">Select Model first</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Year / Owner / Mileage / Condition -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="year" required>
+            <option value="">Select Year</option>
+            {% for y in years %}
+              <option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">No. of Owners <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="owner" required>
+            <option value="">Select Owner</option>
+            {% for o in owners %}
+              <option value="{{ o }}" {% if form.owner == o %}selected{% endif %}>{{ o }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
+          <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
+                 value="{{ form.mileage or '' }}" placeholder="e.g. 45,000">
+          <input type="hidden" name="mileage" id="mileage-raw" value="{{ form.mileage or '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Condition <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="condition" required>
+            <option value="">Select Condition</option>
+            {% for c in conditions %}
+              <option value="{{ c }}" {% if form.condition == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Registration Number -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Registration Number <span style="color:#ff6b6b;">*</span></label>
+          <div class="reg-group">
+            <input type="text" class="form-control reg-rto" name="rto_code" id="rto_code"
+                   maxlength="4" placeholder="KA03" value="{{ form.rto_code or '' }}"
+                   required style="text-transform:uppercase;">
+            <input type="text" class="form-control reg-series" name="reg_series" id="reg_series"
+                   maxlength="3" placeholder="MK" value="{{ form.reg_series or '' }}"
+                   required style="text-transform:uppercase;">
+            <input type="text" class="form-control reg-number" name="reg_number" id="reg_number"
+                   maxlength="4" inputmode="numeric" placeholder="8201"
+                   value="{{ form.reg_number or '' }}" required>
+          </div>
+          <div class="reg-preview">Preview: <strong id="reg-preview-text">KA 03 MK 8201</strong></div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Transaction Date <span style="color:#ff6b6b;">*</span></label>
+          <div class="date-wrap">
+            <input type="date" class="form-control" name="transaction_date" id="transaction_date"
+                   value="{{ form.transaction_date or '' }}" required max="{{ today_iso }}">
+            <span class="calendar-icon">📅</span>
+          </div>
+          <div class="price-hint" id="date-display-hint"></div>
+        </div>
+      </div>
+
+      <!-- ============ TRANSACTION DETAILS ============ -->
+      <div class="section-label">Transaction Details</div>
+
+      <!-- Buyer Type -->
+      <div class="row g-3 mb-3">
+        <div class="col-12">
+          <label class="form-label">Transaction Type <span style="color:#ff6b6b;">*</span></label>
+          <div class="buyer-type-group">
+            {% for bt in buyer_types %}
+              <label class="buyer-type-pill {% if form.buyer_type == bt %}selected{% endif %}" data-value="{{ bt }}">
+                <input type="radio" name="buyer_type" value="{{ bt }}"
+                       {% if form.buyer_type == bt %}checked{% endif %} required>
+                {% if bt == 'Dealer' %}🏢{% else %}👤{% endif %} {{ bt }}
+              </label>
+            {% endfor %}
           </div>
         </div>
       </div>
 
+      <!-- Asking Price / Sale Price -->
       <div class="row g-3 mb-3">
-        <div class="col-md-12">
-          <label class="form-label">Upload Proof (Invoice/RC) *</label>
-          <label class="file-upload">
-            <span id="fileLabel">Click to upload (PDF/JPG/PNG)</span>
-            <input type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png" required onchange="document.getElementById('fileLabel').textContent = this.files[0].name">
-          </label>
+        <div class="col-md-6">
+          <label class="form-label">Seller's Asking Price <span style="color:#6c757d;">(Optional)</span></label>
+          <div class="price-wrap">
+            <span class="rupee-prefix">₹</span>
+            <input type="text" class="form-control price-input" id="asking-display" inputmode="numeric"
+                   value="{{ form.asking_price or '' }}" placeholder="e.g. 6,50,000">
+            <input type="hidden" name="asking_price" id="asking-raw" value="{{ form.asking_price or '' }}">
+          </div>
+          <div class="price-hint" id="asking-hint"></div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Final Negotiated Price <span style="color:#ff6b6b;">*</span></label>
+          <div class="price-wrap">
+            <span class="rupee-prefix">₹</span>
+            <input type="text" class="form-control price-input" id="sale-display" inputmode="numeric"
+                   value="{{ form.sale_price or '' }}" placeholder="e.g. 6,25,000" required>
+            <input type="hidden" name="sale_price" id="sale-raw" value="{{ form.sale_price or '' }}">
+          </div>
+          <div class="price-hint" id="sale-hint"></div>
         </div>
       </div>
 
-      <button type="submit" class="btn-submit-deal">SUBMIT DEAL<span class="credit-reward">Earn (100 Credits)</span></button>
+      <!-- Proof checkbox -->
+      <div class="row g-3 mb-3">
+        <div class="col-12">
+          <div class="proof-box">
+            <label>
+              <input type="checkbox" name="has_proof" id="has_proof"
+                     {% if form.has_proof %}checked{% endif %}>
+              <span>
+                <strong>I have proof of this transaction</strong> (invoice, receipt, or RC copy)
+                <span class="proof-hint">
+                  Image upload coming soon. For now, check this box to confirm you have documentation.
+                  Dealer transactions require proof. Private sales without proof will be flagged unverified.
+                </span>
+              </span>
+            </label>
+            <div class="proof-required-note" id="proof-required-note">
+              ⚠️ Dealer transactions require proof. Please check the box above.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ TESTIMONIAL (COMING SOON) ============ -->
+      <div class="section-label">Your Experience <span style="color:#6c757d; font-weight:400; text-transform:none; letter-spacing:0;">— share your thoughts</span></div>
+
+      <div class="coming-soon-section">
+        <span class="cs-badge">Coming Soon</span>
+        <h4>💬 Share your experience</h4>
+        <p class="cs-description">
+          Soon you'll be able to write a testimonial about your transaction — what went well, any advice for others, or the value you got from AutoKnowMus.
+          Testimonials will appear on buyer and seller pages with the most recent on top.
+        </p>
+        <textarea class="form-control" rows="3"
+                  placeholder="Write your experience here... (feature launching soon)"
+                  spellcheck="true" disabled></textarea>
+        <div class="anonymous-check">
+          <input type="checkbox" id="anonymous-cs" disabled>
+          <label for="anonymous-cs">Post anonymously</label>
+        </div>
+      </div>
+
+      <!-- ============ SUBMIT ============ -->
+      <div style="margin-top: 28px;">
+        <button type="submit" class="btn-generate" id="submit-btn"
+                {% if weekly_count >= max_per_week %}disabled{% endif %}>
+          SUBMIT DEAL
+          <span class="credit-cost">(Earn {{ deal_reward }} Credits)</span>
+        </button>
+        <div class="reward-note">
+          <span class="emoji">🎁</span> Auto-approved on submit · {{ deal_reward }} credits added instantly
+        </div>
+        <div class="credit-note">
+          Current balance: <strong style="color:#ffa500;">{{ session.credits|default(0) }} Credits</strong>
+        </div>
+      </div>
     </form>
   </div>
 </div>
@@ -114,21 +408,263 @@
 
 {% block scripts %}
 <script>
-  const MODELS_BY_BRAND = {{ models_by_brand|tojson }};
-  const makeEl = document.getElementById('make');
-  const modelEl = document.getElementById('model');
+  const CAR_DATA = {{ car_data_json | safe }};
+  const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
 
-  makeEl.addEventListener('change', () => {
-    modelEl.innerHTML = '<option value="">Select Model</option>';
-    if (makeEl.value && MODELS_BY_BRAND[makeEl.value]) {
-      MODELS_BY_BRAND[makeEl.value].forEach(m => {
-        let opt = document.createElement('option');
-        opt.value = m; opt.textContent = m;
-        modelEl.appendChild(opt);
-      });
-      modelEl.disabled = false;
+  const makeEl    = document.getElementById('make');
+  const fuelEl    = document.getElementById('fuel');
+  const modelEl   = document.getElementById('model');
+  const variantEl = document.getElementById('variant');
+
+  const PREFILL = {
+    make:    {{ (form.make    or '')|tojson }},
+    fuel:    {{ (form.fuel    or '')|tojson }},
+    model:   {{ (form.model   or '')|tojson }},
+    variant: {{ (form.variant or '')|tojson }}
+  };
+
+  function resetSelect(el, placeholder) {
+    el.innerHTML = '<option value="">' + placeholder + '</option>';
+    el.disabled = true;
+  }
+
+  function populateFuels(make, preselect) {
+    resetSelect(fuelEl, 'Select Fuel');
+    if (!make || !CAR_DATA[make]) return;
+    const fuelSet = new Set();
+    Object.values(CAR_DATA[make]).forEach(mdl => {
+      (mdl.fuels || []).forEach(f => fuelSet.add(f));
+    });
+    const ordered = FUEL_ORDER.filter(f => fuelSet.has(f));
+    ordered.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f; opt.textContent = f;
+      if (preselect && f === preselect) opt.selected = true;
+      fuelEl.appendChild(opt);
+    });
+    fuelEl.disabled = false;
+  }
+
+  function populateModels(make, fuel, preselect) {
+    resetSelect(modelEl, 'Select Model');
+    if (!make || !fuel || !CAR_DATA[make]) return;
+    const models = Object.keys(CAR_DATA[make])
+      .filter(m => (CAR_DATA[make][m].fuels || []).includes(fuel))
+      .sort();
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      if (preselect && m === preselect) opt.selected = true;
+      modelEl.appendChild(opt);
+    });
+    modelEl.disabled = false;
+  }
+
+  function populateVariants(make, model, preselect) {
+    resetSelect(variantEl, 'Select Variant');
+    if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
+    const variants = [...(CAR_DATA[make][model].variants || [])].sort();
+    variants.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      if (preselect && v === preselect) opt.selected = true;
+      variantEl.appendChild(opt);
+    });
+    variantEl.disabled = false;
+  }
+
+  makeEl.addEventListener('change', function() {
+    populateFuels(this.value, null);
+    resetSelect(modelEl, 'Select Fuel first');
+    resetSelect(variantEl, 'Select Model first');
+  });
+  fuelEl.addEventListener('change', function() {
+    populateModels(makeEl.value, this.value, null);
+    resetSelect(variantEl, 'Select Model first');
+  });
+  modelEl.addEventListener('change', function() {
+    populateVariants(makeEl.value, this.value, null);
+  });
+
+  (function init() {
+    if (PREFILL.make) {
+      populateFuels(PREFILL.make, PREFILL.fuel);
+      if (PREFILL.fuel) {
+        populateModels(PREFILL.make, PREFILL.fuel, PREFILL.model);
+        if (PREFILL.model) {
+          populateVariants(PREFILL.make, PREFILL.model, PREFILL.variant);
+        }
+      }
+    }
+  })();
+
+  // ======================================================
+  // Indian comma formatting helper
+  // ======================================================
+  function inrGroup(n) {
+    const s = String(Math.abs(n));
+    if (s.length <= 3) return s;
+    const last3 = s.slice(-3);
+    let rest = s.slice(0, -3);
+    const groups = [];
+    while (rest.length > 2) {
+      groups.unshift(rest.slice(-2));
+      rest = rest.slice(0, -2);
+    }
+    if (rest) groups.unshift(rest);
+    return groups.join(',') + ',' + last3;
+  }
+
+  function lakhFormat(n) {
+    if (!n || isNaN(n)) return '';
+    n = Math.round(Number(n));
+    if (n >= 10000000) return (n / 10000000).toFixed(2) + ' Crore';
+    if (n >= 100000)   return (n / 100000).toFixed(2) + ' Lakh';
+    if (n >= 1000)     return (n / 1000).toFixed(1) + ' K';
+    return String(n);
+  }
+
+  // ======================================================
+  // Mileage formatting
+  // ======================================================
+  const mileageDisplay = document.getElementById('mileage-display');
+  const mileageRaw     = document.getElementById('mileage-raw');
+
+  function formatMileage() {
+    const digits = mileageDisplay.value.replace(/\D+/g, '');
+    if (!digits) {
+      mileageDisplay.value = ''; mileageRaw.value = ''; return;
+    }
+    let n = parseInt(digits, 10);
+    if (n > 500000) n = 500000;
+    mileageRaw.value = n;
+    mileageDisplay.value = inrGroup(n);
+  }
+  mileageDisplay.addEventListener('input', formatMileage);
+  mileageDisplay.addEventListener('blur',  formatMileage);
+  formatMileage();
+
+  // ======================================================
+  // Price field formatting (asking + sale)
+  // ======================================================
+  function bindPriceField(displayId, rawId, hintId, maxVal) {
+    const disp = document.getElementById(displayId);
+    const raw  = document.getElementById(rawId);
+    const hint = document.getElementById(hintId);
+    function format() {
+      const digits = disp.value.replace(/\D+/g, '');
+      if (!digits) {
+        disp.value = ''; raw.value = '';
+        if (hint) hint.textContent = '';
+        return;
+      }
+      let n = parseInt(digits, 10);
+      if (n > maxVal) n = maxVal;
+      raw.value = n;
+      disp.value = inrGroup(n);
+      if (hint) hint.textContent = n >= 1000 ? '≈ ' + lakhFormat(n) : '';
+    }
+    disp.addEventListener('input', format);
+    disp.addEventListener('blur',  format);
+    format();
+  }
+  bindPriceField('asking-display', 'asking-raw', 'asking-hint', 100000000);
+  bindPriceField('sale-display',   'sale-raw',   'sale-hint',   100000000);
+
+  // ======================================================
+  // Registration number live preview + uppercase
+  // ======================================================
+  const rtoEl    = document.getElementById('rto_code');
+  const seriesEl = document.getElementById('reg_series');
+  const numEl    = document.getElementById('reg_number');
+  const previewEl = document.getElementById('reg-preview-text');
+
+  function formatReg() {
+    rtoEl.value    = rtoEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    seriesEl.value = seriesEl.value.toUpperCase().replace(/[^A-Z]/g, '');
+    numEl.value    = numEl.value.replace(/[^0-9]/g, '');
+
+    // Format as "XX NN AA NNNN" (split RTO letters+digits)
+    const rto = rtoEl.value;
+    const rtoLetters = rto.match(/^[A-Z]{0,2}/)?.[0] || '';
+    const rtoDigits  = rto.slice(rtoLetters.length);
+    const parts = [rtoLetters, rtoDigits, seriesEl.value, numEl.value].filter(Boolean);
+    previewEl.textContent = parts.length ? parts.join(' ') : 'KA 03 MK 8201';
+  }
+  [rtoEl, seriesEl, numEl].forEach(el => {
+    el.addEventListener('input', formatReg);
+  });
+  formatReg();
+
+  // ======================================================
+  // Transaction date DD-MMM-YYYY display hint
+  // ======================================================
+  const dateEl = document.getElementById('transaction_date');
+  const dateHint = document.getElementById('date-display-hint');
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function updateDateHint() {
+    if (!dateEl.value) { dateHint.textContent = ''; return; }
+    const parts = dateEl.value.split('-');
+    if (parts.length !== 3) { dateHint.textContent = ''; return; }
+    const [y, m, d] = parts;
+    const mi = parseInt(m, 10) - 1;
+    if (mi < 0 || mi > 11) return;
+    dateHint.textContent = `Selected: ${d.padStart(2,'0')}-${MONTHS[mi]}-${y}`;
+  }
+  dateEl.addEventListener('input', updateDateHint);
+  dateEl.addEventListener('change', updateDateHint);
+  updateDateHint();
+
+  // Set max=today so future dates can't be picked (UI-side)
+  (function setMaxDate() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    dateEl.setAttribute('max', `${yyyy}-${mm}-${dd}`);
+  })();
+
+  // ======================================================
+  // Buyer type pill selection + proof requirement
+  // ======================================================
+  const pills = document.querySelectorAll('.buyer-type-pill');
+  const proofCheck = document.getElementById('has_proof');
+  const proofNote  = document.getElementById('proof-required-note');
+
+  function syncPills() {
+    pills.forEach(p => {
+      const radio = p.querySelector('input[type="radio"]');
+      if (radio.checked) p.classList.add('selected');
+      else p.classList.remove('selected');
+    });
+    // Show required-proof note if Dealer selected and proof unchecked
+    const dealerRadio = document.querySelector('input[name="buyer_type"][value="Dealer"]');
+    if (dealerRadio && dealerRadio.checked && !proofCheck.checked) {
+      proofNote.classList.add('visible');
     } else {
-      modelEl.disabled = true;
+      proofNote.classList.remove('visible');
+    }
+  }
+  pills.forEach(pill => {
+    pill.addEventListener('click', function(e) {
+      const radio = this.querySelector('input[type="radio"]');
+      if (e.target !== radio) radio.checked = true;
+      syncPills();
+    });
+  });
+  proofCheck.addEventListener('change', syncPills);
+  syncPills();
+
+  // ======================================================
+  // Form submission guard (client-side)
+  // ======================================================
+  document.getElementById('deal-form').addEventListener('submit', function(e) {
+    const dealerSelected = document.querySelector('input[name="buyer_type"][value="Dealer"]')?.checked;
+    if (dealerSelected && !proofCheck.checked) {
+      e.preventDefault();
+      proofNote.classList.add('visible');
+      proofCheck.focus();
+      alert('Dealer transactions require proof of sale. Please check the box confirming you have proof.');
     }
   });
 </script>
