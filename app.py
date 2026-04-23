@@ -979,7 +979,8 @@ def buyer():
         'asking_price': (request.form.get('asking_price') or '').strip(),
     }
 
-    for key in ('make', 'fuel', 'model', 'variant', 'year', 'owner', 'mileage', 'condition'):
+    # Required: make, fuel, model, variant, year.  Optional: owner, mileage, condition (with defaults).
+    for key in ('make', 'fuel', 'model', 'variant', 'year'):
         if not form_data[key]:
             return render_form(form_data, error='Please fill in all required fields.')
 
@@ -991,16 +992,30 @@ def buyer():
         return render_form(form_data, error='Invalid Variant selected.')
     if form_data['fuel'] not in CAR_DATA[form_data['make']][form_data['model']]['fuels']:
         return render_form(form_data, error='Selected Fuel is not available for this Model.')
+
+    # Optional fields — apply safe defaults if missing
+    if not form_data['owner']:
+        form_data['owner'] = '1st Owner'
+    if not form_data['condition']:
+        form_data['condition'] = 'Good'
+
     if form_data['owner'] not in OWNERS:
         return render_form(form_data, error='Invalid Owner selected.')
     if form_data['condition'] not in CONDITIONS:
         return render_form(form_data, error='Invalid Condition selected.')
+
     try:
         year_int = int(form_data['year'])
         if year_int < YEAR_START or year_int > YEAR_END:
             raise ValueError
     except (ValueError, TypeError):
         return render_form(form_data, error='Invalid Year.')
+
+    # Mileage optional — default to (current_year - year) * 10000, min 10000
+    if not form_data['mileage']:
+        age = max(1, YEAR_END - year_int)
+        form_data['mileage'] = str(age * 10000)
+
     try:
         mileage_int = int(form_data['mileage'])
         if mileage_int < 0 or mileage_int > 500000:
@@ -1683,7 +1698,6 @@ def credit_history():
     for t in all_txns:
         amt = int(t.get('amount') or 0)
         running += amt
-        # Use stored balance_after if available (more accurate), else running
         ba = t.get('balance_after')
         t['balance_after_display'] = int(ba) if ba is not None else running
 
