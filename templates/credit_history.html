@@ -1,107 +1,331 @@
 {% extends "layout.html" %}
-{% block title %}Credit History - AutoKnowMus{% endblock %}
 
-{% block extra_head %}
-<style>
-  .credit-wrap { padding: 30px 40px; max-width: 1000px; margin: 0 auto; }
-  .page-title { color: #ffa500; font-size: 1.6rem; font-weight: 700; margin: 0 0 25px; }
-
-  .balance-card {
-    background: #1a1d24; border: 1px solid #ffa500; border-radius: 12px;
-    padding: 25px; text-align: center; margin-bottom: 25px;
-  }
-  .balance-label { color: #b0b0b0; font-size: 0.9rem; margin-bottom: 6px; }
-  .balance-value { color: #ffa500; font-size: 2.4rem; font-weight: 700; }
-
-  .history-card {
-    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px;
-    padding: 25px;
-  }
-  .history-title {
-    color: #fff; font-size: 1.15rem; font-weight: 600; margin-bottom: 18px;
-  }
-  .txn-table { width: 100%; color: #e6e6e6; }
-  .txn-table thead {
-    background: #0e1117; color: #b0b0b0;
-    font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  .txn-table th { padding: 12px 15px; font-weight: 600; text-align: left; }
-  .txn-table tbody tr { border-bottom: 1px solid #2a2d34; }
-  .txn-table tbody tr:last-child { border-bottom: none; }
-  .txn-table td { padding: 14px 15px; font-size: 0.92rem; vertical-align: middle; }
-
-  .txn-type-badge {
-    display: inline-block; padding: 3px 10px; border-radius: 12px;
-    font-size: 0.78rem; font-weight: 600;
-  }
-  .badge-signup { background: rgba(255,165,0,0.15); color: #ffa500; }
-  .badge-deal   { background: rgba(40,167,69,0.15); color: #28a745; }
-  .badge-val    { background: rgba(78,84,255,0.15); color: #8a90ff; }
-
-  .amount-pos { color: #28a745; font-weight: 600; }
-  .amount-neg { color: #e74c3c; font-weight: 600; }
-
-  .empty-state { text-align: center; padding: 40px 20px; color: #888; }
-</style>
-{% endblock %}
+{% block title %}Credit History — AutoKnowMus{% endblock %}
 
 {% block content %}
-<div class="credit-wrap">
+<style>
+  .ch-wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .btn-back {
+    display: inline-block;
+    background: #6c757d;
+    color: #fff !important;
+    padding: 8px 18px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 20px;
+    border: none;
+    cursor: pointer;
+  }
+  .btn-back:hover { background: #5a6268; }
+
+  .ch-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+  .ch-title {
+    color: #fff;
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .ch-balance-pill {
+    background: #28a745;
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  .ch-controls {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+  .ch-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .ch-filter-group label {
+    color: #adb5bd;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .ch-filter-group select {
+    background: #0f1115;
+    color: #fff;
+    border: 1px solid #2a2d34;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    min-width: 200px;
+    cursor: pointer;
+  }
+  .btn-export {
+    background: #4e54ff;
+    color: #fff;
+    padding: 9px 18px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-export:hover { background: #3f45d9; }
+
+  .ch-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .ch-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .ch-table thead {
+    background: #0f1115;
+  }
+  .ch-table th {
+    color: #adb5bd;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    padding: 14px 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .ch-table td {
+    padding: 14px 16px;
+    color: #e9ecef;
+    font-size: 14px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .ch-table tbody tr:last-child td { border-bottom: none; }
+  .ch-table tbody tr:hover { background: #20232b; }
+
+  .ch-type-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #2a2d34;
+    color: #e9ecef;
+  }
+
+  .credit-in { color: #28a745; font-weight: 600; }
+  .credit-out { color: #dc3545; font-weight: 600; }
+  .credit-zero { color: #6c757d; font-weight: 600; }
+
+  .ch-empty {
+    padding: 60px 20px;
+    text-align: center;
+    color: #6c757d;
+  }
+  .ch-empty h3 {
+    color: #adb5bd;
+    margin-bottom: 8px;
+  }
+
+  .ch-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px;
+    background: #0f1115;
+    border-top: 1px solid #2a2d34;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ch-pagination-info {
+    color: #adb5bd;
+    font-size: 13px;
+  }
+  .ch-pagination-links {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .ch-page-btn {
+    background: #2a2d34;
+    color: #e9ecef;
+    padding: 6px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 13px;
+    border: 1px solid #3a3d44;
+  }
+  .ch-page-btn:hover { background: #3a3d44; }
+  .ch-page-btn.active {
+    background: #4e54ff;
+    border-color: #4e54ff;
+    color: #fff;
+  }
+  .ch-page-btn.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .ch-desc {
+    color: #adb5bd;
+    font-size: 13px;
+  }
+
+  @media (max-width: 768px) {
+    .ch-table th:nth-child(3),
+    .ch-table td:nth-child(3) { display: none; }
+    .ch-controls { flex-direction: column; align-items: stretch; }
+    .ch-filter-group select { width: 100%; }
+  }
+</style>
+
+<div class="ch-wrap">
   <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
 
-  <h2 class="page-title"><i class="bi bi-credit-card-2-front"></i> Credit History</h2>
-
-  <div class="balance-card">
-    <div class="balance-label">Current Balance</div>
-    <div class="balance-value">({{ balance }} Credits)</div>
+  <div class="ch-header">
+    <h1 class="ch-title">Credit History</h1>
+    <div class="ch-balance-pill">Current Balance: {{ '{:,}'.format(current_credits) }} Credits</div>
   </div>
 
-  <div class="history-card">
-    <div class="history-title">Transaction History</div>
-
-    {% if transactions %}
-    <table class="txn-table">
-      <thead>
-        <tr>
-          <th style="width:14%">Date</th>
-          <th style="width:18%">Type</th>
-          <th>Description</th>
-          <th style="width:13%; text-align:right;">Amount</th>
-          <th style="width:13%; text-align:right;">Balance</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for t in transactions %}
-        <tr>
-          <td>{{ t.date }}</td>
-          <td>
-            {% if t.type == 'Signup Bonus' %}
-              <span class="txn-type-badge badge-signup">Signup Bonus</span>
-            {% elif t.type == 'Deal Submission' %}
-              <span class="txn-type-badge badge-deal">Deal Earned</span>
-            {% elif t.type == 'Valuation' %}
-              <span class="txn-type-badge badge-val">Valuation</span>
-            {% else %}
-              <span class="txn-type-badge badge-signup">{{ t.type }}</span>
-            {% endif %}
-          </td>
-          <td style="color:#b0b0b0;">{{ t.description|default('—') }}</td>
-          <td style="text-align:right;" class="{{ 'amount-pos' if t.amount > 0 else 'amount-neg' }}">
-            {{ '+' if t.amount > 0 else '' }}{{ t.amount }}
-          </td>
-          <td style="text-align:right; color:#ffa500; font-weight:600;">
-            ({{ t.balance }})
-          </td>
-        </tr>
+  <div class="ch-controls">
+    <div class="ch-filter-group">
+      <label for="type-filter">Filter by type:</label>
+      <select id="type-filter" onchange="applyFilter(this.value)">
+        <option value="all" {% if filter_type == 'all' %}selected{% endif %}>All Transactions</option>
+        {% for opt in type_options %}
+          <option value="{{ opt.value }}" {% if filter_type == opt.value %}selected{% endif %}>{{ opt.label }}</option>
         {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <div class="empty-state">
-      <i class="bi bi-inbox" style="font-size:2.5rem; opacity:0.4;"></i>
-      <p class="mt-3 mb-0">No transactions yet. Submit a deal to start earning credits!</p>
+      </select>
     </div>
+    <a href="{{ url_for('credit_history_export', type=filter_type) }}" class="btn-export">
+      ⬇ Export CSV
+    </a>
+  </div>
+
+  <div class="ch-card">
+    {% if txns %}
+      <table class="ch-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th style="text-align: right;">Amount</th>
+            <th style="text-align: right;">Balance After</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in txns %}
+            <tr>
+              <td>{{ t.date_display }}</td>
+              <td><span class="ch-type-badge">{{ t.type_label }}</span></td>
+              <td class="ch-desc">{{ t.description or '—' }}</td>
+              <td style="text-align: right;" class="{{ t.amount_class }}">{{ t.amount_display }}</td>
+              <td style="text-align: right; color: #e9ecef; font-weight: 600;">{{ '{:,}'.format(t.balance_after) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if total_pages > 1 %}
+        <div class="ch-pagination">
+          <div class="ch-pagination-info">
+            Showing {{ ((page - 1) * per_page) + 1 }}–{{ [page * per_page, total] | min }} of {{ total }} transactions
+          </div>
+          <div class="ch-pagination-links">
+            {% if page > 1 %}
+              <a href="{{ url_for('credit_history', type=filter_type, page=page-1) }}" class="ch-page-btn">← Prev</a>
+            {% else %}
+              <span class="ch-page-btn disabled">← Prev</span>
+            {% endif %}
+
+            {% set start_p = [1, page - 2] | max %}
+            {% set end_p = [total_pages, page + 2] | min %}
+
+            {% if start_p > 1 %}
+              <a href="{{ url_for('credit_history', type=filter_type, page=1) }}" class="ch-page-btn">1</a>
+              {% if start_p > 2 %}<span style="color: #6c757d;">…</span>{% endif %}
+            {% endif %}
+
+            {% for p in range(start_p, end_p + 1) %}
+              {% if p == page %}
+                <span class="ch-page-btn active">{{ p }}</span>
+              {% else %}
+                <a href="{{ url_for('credit_history', type=filter_type, page=p) }}" class="ch-page-btn">{{ p }}</a>
+              {% endif %}
+            {% endfor %}
+
+            {% if end_p < total_pages %}
+              {% if end_p < total_pages - 1 %}<span style="color: #6c757d;">…</span>{% endif %}
+              <a href="{{ url_for('credit_history', type=filter_type, page=total_pages) }}" class="ch-page-btn">{{ total_pages }}</a>
+            {% endif %}
+
+            {% if page < total_pages %}
+              <a href="{{ url_for('credit_history', type=filter_type, page=page+1) }}" class="ch-page-btn">Next →</a>
+            {% else %}
+              <span class="ch-page-btn disabled">Next →</span>
+            {% endif %}
+          </div>
+        </div>
+      {% else %}
+        <div class="ch-pagination">
+          <div class="ch-pagination-info">
+            Showing {{ total }} transaction{{ 's' if total != 1 else '' }}
+          </div>
+        </div>
+      {% endif %}
+
+    {% else %}
+      <div class="ch-empty">
+        <h3>No transactions yet</h3>
+        <p>
+          {% if filter_type != 'all' %}
+            No transactions match the selected filter. <a href="{{ url_for('credit_history') }}" style="color: #4e54ff;">View all</a>
+          {% else %}
+            Your credit activity will appear here.
+          {% endif %}
+        </p>
+      </div>
     {% endif %}
   </div>
 </div>
+
+<script>
+  function applyFilter(value) {
+    const url = new URL(window.location.href);
+    if (value === 'all') {
+      url.searchParams.delete('type');
+    } else {
+      url.searchParams.set('type', value);
+    }
+    url.searchParams.delete('page'); // reset to page 1 on filter change
+    window.location.href = url.toString();
+  }
+</script>
 {% endblock %}
