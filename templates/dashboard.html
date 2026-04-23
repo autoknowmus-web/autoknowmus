@@ -122,6 +122,47 @@
   .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
   @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
+  /* Mini confidence benefit table (inside Data Confidence KPI card) */
+  .conf-table {
+    margin-top: 8px;
+    border-top: 1px solid #2a2d34;
+    padding-top: 8px;
+    font-size: 0.68rem;
+    text-align: left;
+  }
+  .conf-row {
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    gap: 6px;
+    padding: 3px 4px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    align-items: start;
+    color: #adb5bd;
+    line-height: 1.3;
+  }
+  .conf-row .conf-bracket {
+    font-weight: 700;
+    color: #b0b0b0;
+    font-variant-numeric: tabular-nums;
+  }
+  .conf-row .conf-meaning {
+    font-weight: 400;
+  }
+  .conf-row .conf-meaning .conf-benefit {
+    display: block;
+    color: #6c757d;
+    font-size: 0.65rem;
+    margin-top: 1px;
+  }
+  .conf-row.conf-active {
+    background: rgba(78, 176, 255, 0.08);
+    border: 1px solid rgba(78, 176, 255, 0.35);
+  }
+  .conf-row.conf-active .conf-bracket { color: #4eb0ff; }
+  .conf-row.conf-active .conf-meaning { color: #e9ecef; }
+  .conf-row.conf-active .conf-meaning .conf-benefit { color: #adb5bd; }
+
   /* ℹ️ info icon with custom tooltip — 3+ lines, white on black */
   .info-wrap { position: relative; display: inline-flex; }
   .info-icon {
@@ -207,6 +248,14 @@
     .dist-bar { grid-template-columns: 95px 1fr 38px; gap: 6px; font-size: 0.72rem; }
   }
 
+  .dist-footnote {
+    margin-top: 8px;
+    color: #6c757d;
+    font-size: 0.72rem;
+    text-align: right;
+    font-style: italic;
+  }
+
   .verdict-card {
     background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
     border: 1px solid #28a745;
@@ -234,6 +283,21 @@
 {% endblock %}
 
 {% block content %}
+{#
+  --- Reusable macro: render Indian price as "X.YL" (1dp Lakhs) ---
+  Thresholds:
+    >= 1 Crore  → "X.YCr"
+    >= 1 Lakh   → "X.YL"
+    < 1 Lakh    → "0.ZL" (still shown as fractional Lakh for consistency)
+  Applied to all price outputs on this page. Footnote on dist card: "L = Lakhs".
+#}
+{% macro l1dp(v) -%}
+  {%- if v is none -%}—
+  {%- elif v|int >= 10000000 -%}{{ '%.1f'|format(v / 10000000) }}Cr
+  {%- else -%}{{ '%.1f'|format(v / 100000) }}L
+  {%- endif %}
+{%- endmacro %}
+
 <div class="dashboard-wrap">
 
   <!-- HEADER -->
@@ -257,9 +321,9 @@
       <div class="price-hero">
         <div class="hero-label">ESTIMATED FAIR MARKET VALUE</div>
         <div class="hero-range">
-          ₹ {{ price_low | lakh }}<span class="hero-dash">—</span>₹ {{ price_high | lakh }}
+          ₹ {{ l1dp(price_low) }}<span class="hero-dash">—</span>₹ {{ l1dp(price_high) }}
         </div>
-        <div class="hero-mid">Most likely: <strong>₹ {{ estimated | lakh }}</strong></div>
+        <div class="hero-mid">Most likely: <strong>₹ {{ l1dp(estimated) }}</strong></div>
       </div>
 
       <div class="slider-section">
@@ -268,13 +332,13 @@
           <span class="right">Highest Price →</span>
         </div>
         <div class="slider-track-wrap">
-          <div class="slider-bubble" id="slider-bubble">₹ {{ estimated | lakh }}</div>
+          <div class="slider-bubble" id="slider-bubble">₹ {{ l1dp(estimated) }}</div>
           <input type="range" id="price-slider"
                  min="{{ price_low }}" max="{{ price_high }}"
                  value="{{ estimated }}" step="1000">
         </div>
         <div class="slider-info">
-          <div>Your price: <strong id="slider-price-text">₹ {{ estimated | lakh }}</strong></div>
+          <div>Your price: <strong id="slider-price-text">₹ {{ l1dp(estimated) }}</strong></div>
           <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
         </div>
       </div>
@@ -313,19 +377,53 @@
       <div class="kpi-value demand-{{ demand }}" id="demand-value">{{ demand }}</div>
       <div class="kpi-sub" id="demand-sub">Based on brand, age & price</div>
     </div>
+
     <div class="kpi-card">
       <div class="kpi-label">
         Data Confidence
         <span class="info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip">
-            How accurate this valuation is, based on real verified deals we have for similar cars. Higher is better. Starts at 50% with just our formula, and climbs to 95% as more users submit verified transactions.
+            How reliable this valuation is based on verified real-world deals for similar cars. Higher confidence means your price is grounded in more actual transactions — see the bracket guide below for what each level means for your sale.
           </span>
         </span>
       </div>
       <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
-      <div class="kpi-sub">Improves with more deals</div>
+
+      <!-- Mini confidence benefit table -->
+      <div class="conf-table">
+        {% set c = confidence | int %}
+        <div class="conf-row {% if c >= 90 %}conf-active{% endif %}">
+          <div class="conf-bracket">90–95%</div>
+          <div class="conf-meaning">
+            Strong match with many verified deals.
+            <span class="conf-benefit">List confidently — minimal haggling room.</span>
+          </div>
+        </div>
+        <div class="conf-row {% if c >= 75 and c < 90 %}conf-active{% endif %}">
+          <div class="conf-bracket">75–89%</div>
+          <div class="conf-meaning">
+            Good match with several similar deals.
+            <span class="conf-benefit">Price is dependable — small negotiation buffer is safe.</span>
+          </div>
+        </div>
+        <div class="conf-row {% if c >= 60 and c < 75 %}conf-active{% endif %}">
+          <div class="conf-bracket">60–74%</div>
+          <div class="conf-meaning">
+            Moderate match, limited verified deals.
+            <span class="conf-benefit">Use as a guideline — expect 5–8% swing.</span>
+          </div>
+        </div>
+        <div class="conf-row {% if c < 60 %}conf-active{% endif %}">
+          <div class="conf-bracket">50–59%</div>
+          <div class="conf-meaning">
+            Baseline estimate, few comparable deals.
+            <span class="conf-benefit">Treat as a starting point — verify with other sources.</span>
+          </div>
+        </div>
+      </div>
     </div>
+
     <div class="kpi-card">
       <div class="kpi-label">
         Expected Days to Sell
@@ -343,9 +441,8 @@
 
   <!-- Market stats -->
   <div class="market-stats">
-    <strong>{{ verified_count }}</strong> verified transactions ·
-    <strong>{{ buyers_last_30d }}</strong> buyers last 30 days ·
-    Average <strong>{{ avg_buyers_range }}</strong> buyers/day
+    <strong>{{ verified_count }}</strong> Verified transactions ·
+    <strong>{{ buyers_last_30d }}</strong> Buyers last 30 days
   </div>
 
   <!-- BOTTOM ROW: Distribution (left) + Verdict (right) -->
@@ -357,11 +454,11 @@
         <div class="dist-bar">
           <div class="dist-label">
             {% if band.low is none %}
-              Below ₹ {{ band.high | lakh }}
+              Below ₹ {{ l1dp(band.high) }}
             {% elif band.high is none %}
-              Above ₹ {{ band.low | lakh }}
+              Above ₹ {{ l1dp(band.low) }}
             {% else %}
-              ₹ {{ band.low | lakh }} – ₹ {{ band.high | lakh }}
+              ₹ {{ l1dp(band.low) }} – ₹ {{ l1dp(band.high) }}
             {% endif %}
           </div>
           <div class="dist-track">
@@ -371,6 +468,7 @@
         </div>
         {% endfor %}
       </div>
+      <div class="dist-footnote">L = Lakhs (₹1L = ₹1,00,000)</div>
     </div>
 
     <div class="verdict-card">
@@ -399,13 +497,12 @@
   const VERIFIED_COUNT = {{ verified_count }};
 
   // ----- Formatters -----
-  function lakhFormat(n) {
+  // 1dp Lakhs formatter (matches the server-side l1dp macro)
+  function lakh1dp(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
-    if (n >= 10000000) return (n / 10000000).toFixed(2) + ' Crore';
-    if (n >= 100000)   return (n / 100000).toFixed(2) + ' Lakh';
-    if (n >= 1000)     return (n / 1000).toFixed(1) + ' K';
-    return String(n);
+    if (n >= 10000000) return (n / 10000000).toFixed(1) + 'Cr';
+    return (n / 100000).toFixed(1) + 'L';
   }
 
   // Depreciation lookup — map a day to a price
@@ -441,13 +538,13 @@
   }
 
   // ======================================================
-  // Verdict — now includes depreciation guidance
+  // Verdict — includes depreciation guidance
   // ======================================================
   function generateVerdict(price, demand, days) {
     const confidenceWord =
-      CONFIDENCE >= 80 ? 'strong' :
-      CONFIDENCE >= 65 ? 'fairly strong' :
-      CONFIDENCE >= 50 ? 'moderate' : 'preliminary';
+      CONFIDENCE >= 90 ? 'strong' :
+      CONFIDENCE >= 75 ? 'good' :
+      CONFIDENCE >= 60 ? 'moderate' : 'preliminary';
 
     const dataNote = VERIFIED_COUNT === 0
       ? "Our estimate is formula-based using age, mileage, condition, ownership and fuel type. We don't yet have verified real-world deals for this exact car."
@@ -456,11 +553,11 @@
     let pricingStrategy;
     const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
     if (pct < 0.33) {
-      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakhFormat(price)}, demand is <span class="ok">${demand}</span> — expect serious interest within a week or two.`;
+      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakh1dp(price)}, demand is <span class="ok">${demand}</span> — expect serious interest within a week or two.`;
     } else if (pct < 0.66) {
-      pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakhFormat(price)}, you'll see <span class="ok">${demand}</span> demand — balanced approach.`;
+      pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakh1dp(price)}, you'll see <span class="ok">${demand}</span> demand — balanced approach.`;
     } else {
-      pricingStrategy = `<span class="hi">Priced at the upper end.</span> At ₹ ${lakhFormat(price)}, demand drops to <span class="hi">${demand}</span> — you may wait longer but could fetch top value.`;
+      pricingStrategy = `<span class="hi">Priced at the upper end.</span> At ₹ ${lakh1dp(price)}, demand drops to <span class="hi">${demand}</span> — you may wait longer but could fetch top value.`;
     }
 
     const timeGuidance = days <= 20
@@ -469,7 +566,7 @@
       ? `Expect to sell in around <strong>${days} days</strong>.`
       : `This price may take around <strong class="hi">${days} days</strong> to find a buyer.`;
 
-    // Depreciation guidance — if selling takes longer, car loses value
+    // Depreciation guidance
     const priceAtDay30 = priceAtDay(30);
     const priceAtDay90 = priceAtDay(90);
     const loss30  = price - priceAtDay30;
@@ -481,12 +578,12 @@
     if (days <= 20) {
       depreciationNote = `<strong>Waiting cost:</strong> Not a concern at this price — you'll sell before depreciation bites.`;
     } else if (days <= 45) {
-      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakhFormat(loss30)} (${pctLoss30}%)</span> to depreciation. Factor this in.`;
+      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakh1dp(loss30)} (${pctLoss30}%)</span> to depreciation. Factor this in.`;
     } else {
-      depreciationNote = `<strong>Waiting cost:</strong> At this price, selling could stretch past 45 days. Over 90 days, your car could lose <span class="warn">₹ ${lakhFormat(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
+      depreciationNote = `<strong>Waiting cost:</strong> At this price, selling could stretch past 45 days. Over 90 days, your car could lose <span class="warn">₹ ${lakh1dp(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
     }
 
-    const actionable = `<strong>Recommendation:</strong> For a balanced sale aim for ₹ ${lakhFormat(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. Need cash fast? List at ₹ ${lakhFormat(PRICE_LOW)}. Can wait 2+ months? Try ₹ ${lakhFormat(PRICE_HIGH)} — but remember depreciation.`;
+    const actionable = `<strong>Recommendation:</strong> For a balanced sale aim for ₹ ${lakh1dp(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. Need cash fast? List at ₹ ${lakh1dp(PRICE_LOW)}. Can wait 2+ months? Try ₹ ${lakh1dp(PRICE_HIGH)} — but remember depreciation.`;
 
     return `
       <p>Your <strong>${CAR_NAME}</strong> has a ${confidenceWord} valuation (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>
@@ -527,8 +624,8 @@
     const demand = demandForPrice(val);
     const days = daysForPrice(val);
 
-    bubble.textContent = '₹ ' + lakhFormat(val);
-    priceText.textContent = '₹ ' + lakhFormat(val);
+    bubble.textContent = '₹ ' + lakh1dp(val);
+    priceText.textContent = '₹ ' + lakh1dp(val);
     daysEl.textContent = days;
     daysKpiEl.textContent = days;
     updateDemandClass(demand);
@@ -594,7 +691,7 @@
             title: function(items) { return 'Day ' + items[0].dataIndex; },
             label: function(item) {
               const v = item.parsed.y;
-              return '₹ ' + lakhFormat(v);
+              return '₹ ' + lakh1dp(v);
             }
           }
         }
@@ -615,7 +712,7 @@
           ticks: {
             color: '#6c757d',
             maxTicksLimit: 5,
-            callback: function(v) { return '₹ ' + lakhFormat(v); }
+            callback: function(v) { return '₹ ' + lakh1dp(v); }
           },
           grid: { color: 'rgba(255,255,255,0.06)' }
         }
