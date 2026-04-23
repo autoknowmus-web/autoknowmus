@@ -349,34 +349,62 @@
   }
 
   // ======================================================
-  // Mileage dropdown buckets
+  // Mileage RANGE dropdown
+  // Each range: { min, max, mid }
+  // Label shown = "X - Y kms"; submitted value = midpoint (used by valuation)
   // ======================================================
-  const MILEAGE_BUCKETS = [
-    0, 10000, 20000, 30000, 40000, 50000,
-    60000, 70000, 80000, 90000, 100000,
-    125000, 150000, 175000, 200000,
-    250000, 300000, 400000, 500000
+  const MILEAGE_RANGES = [
+    { min: 0,      max: 10000,  mid: 5000   },
+    { min: 10000,  max: 20000,  mid: 15000  },
+    { min: 20000,  max: 30000,  mid: 25000  },
+    { min: 30000,  max: 40000,  mid: 35000  },
+    { min: 40000,  max: 50000,  mid: 45000  },
+    { min: 50000,  max: 60000,  mid: 55000  },
+    { min: 60000,  max: 70000,  mid: 65000  },
+    { min: 70000,  max: 80000,  mid: 75000  },
+    { min: 80000,  max: 90000,  mid: 85000  },
+    { min: 90000,  max: 100000, mid: 95000  },
+    { min: 100000, max: 125000, mid: 112500 },
+    { min: 125000, max: 150000, mid: 137500 },
+    { min: 150000, max: 175000, mid: 162500 },
+    { min: 175000, max: 200000, mid: 187500 },
+    { min: 200000, max: 250000, mid: 225000 },
+    { min: 250000, max: 300000, mid: 275000 },
+    { min: 300000, max: 400000, mid: 350000 },
+    { min: 400000, max: 500000, mid: 450000 },
+    { min: 500000, max: 500000, mid: 500000 }  // 5,00,000+
   ];
 
-  function buildMileageOptions(selectedVal) {
+  function rangeLabel(r) {
+    if (r.min === r.max) return inrGroup(r.min) + '+ kms';
+    return inrGroup(r.min) + ' - ' + inrGroup(r.max) + ' kms';
+  }
+
+  function buildMileageOptions(selectedMid) {
     mileageEl.innerHTML = '';
-    MILEAGE_BUCKETS.forEach(km => {
+    MILEAGE_RANGES.forEach(r => {
       const opt = document.createElement('option');
-      opt.value = km;
-      opt.textContent = inrGroup(km) + ' km';
-      if (selectedVal !== null && selectedVal !== undefined && String(selectedVal) === String(km)) {
+      opt.value = r.mid;
+      opt.textContent = rangeLabel(r);
+      if (selectedMid !== null && selectedMid !== undefined && String(selectedMid) === String(r.mid)) {
         opt.selected = true;
       }
       mileageEl.appendChild(opt);
     });
   }
 
-  // Snap a raw km value to the nearest bucket >= value (so estimate rounds up a bit)
-  function snapToBucket(km) {
-    for (let i = 0; i < MILEAGE_BUCKETS.length; i++) {
-      if (MILEAGE_BUCKETS[i] >= km) return MILEAGE_BUCKETS[i];
+  // Given a raw km number (from prefill or estimate), find the range it belongs to and return its mid
+  function kmToRangeMid(km) {
+    for (let i = 0; i < MILEAGE_RANGES.length; i++) {
+      const r = MILEAGE_RANGES[i];
+      // Last bucket handles 500k+
+      if (i === MILEAGE_RANGES.length - 1) {
+        if (km >= r.min) return r.mid;
+      } else {
+        if (km >= r.min && km < r.max) return r.mid;
+      }
     }
-    return MILEAGE_BUCKETS[MILEAGE_BUCKETS.length - 1];
+    return MILEAGE_RANGES[0].mid;
   }
 
   // Track whether user has manually picked mileage
@@ -386,16 +414,16 @@
     const y = parseInt(year, 10);
     if (!y || isNaN(y)) return null;
     const age = Math.max(0, CURRENT_YEAR - y);
-    // Use 1 year minimum so brand-new cars still get ~10k default
-    const estimated = Math.max(10000, age * 10000);
-    return snapToBucket(estimated);
+    // At least 1 year's worth of mileage so brand-new cars don't land in "0-10k"
+    const estimated = Math.max(5000, age * 10000);
+    return kmToRangeMid(estimated);
   }
 
   function applyDefaultMileage() {
     if (mileageUserTouched) return;
-    const def = defaultMileageForYear(yearEl.value);
-    if (def !== null) {
-      mileageEl.value = String(def);
+    const defMid = defaultMileageForYear(yearEl.value);
+    if (defMid !== null) {
+      mileageEl.value = String(defMid);
     }
   }
 
@@ -403,31 +431,26 @@
   (function initMileage() {
     const prefillMileage = PREFILL.mileage;
     if (prefillMileage) {
-      // User has a previous value — preserve it, mark as touched so defaults don't clobber it
       const asNum = parseInt(prefillMileage, 10);
       if (!isNaN(asNum)) {
-        // Make sure the exact value exists as a bucket; if not, snap it
-        const snapped = MILEAGE_BUCKETS.includes(asNum) ? asNum : snapToBucket(asNum);
-        buildMileageOptions(snapped);
+        const mid = kmToRangeMid(asNum);
+        buildMileageOptions(mid);
         mileageUserTouched = true;
       } else {
         buildMileageOptions(null);
       }
     } else {
       buildMileageOptions(null);
-      // Apply default based on prefilled year if any
       if (PREFILL.year) {
         applyDefaultMileage();
       }
     }
   })();
 
-  // User change on mileage = sticky
   mileageEl.addEventListener('change', function() {
     mileageUserTouched = true;
   });
 
-  // Year change = recompute mileage default (unless user has touched it)
   yearEl.addEventListener('change', function() {
     applyDefaultMileage();
   });
