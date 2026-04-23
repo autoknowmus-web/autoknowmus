@@ -74,7 +74,7 @@
     font-weight: 600;
   }
 
-  /* Orange dismissible welcome alert (inline in case layout macro is missing) */
+  /* Orange dismissible welcome alert */
   .welcome-alert {
     background: #ff8c00; color: #fff; border: none; border-radius: 8px;
     padding: 0.85rem 2.5rem 0.85rem 1rem; margin: 0 auto 1.5rem;
@@ -85,11 +85,48 @@
     background: transparent; border: none; color: #fff;
     font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 0 0.25rem;
   }
+
+  /* Dismissible flash messages (for post-submit notifications) */
+  .role-flash {
+    max-width: 900px;
+    margin: 0 auto 1.25rem;
+    border-radius: 8px;
+    padding: 0.85rem 2.5rem 0.85rem 1rem;
+    position: relative;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #fff;
+  }
+  .role-flash.success {
+    background: #28a745;
+  }
+  .role-flash.error {
+    background: #ff8c00;
+  }
+  .role-flash .btn-close-x {
+    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 0 0.25rem;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="role-wrap">
+
+  {# Flash messages (e.g. "+100 credits awarded" after deal submission) — dismissible with × #}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="role-flash {{ 'success' if category == 'success' else 'error' }}" id="role-flash-{{ loop.index }}">
+          {% if category == 'success' %}✅{% else %}⚠️{% endif %} {{ message }}
+          <button type="button" class="btn-close-x"
+                  onclick="document.getElementById('role-flash-{{ loop.index }}').remove()"
+                  aria-label="Close">&times;</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
 
   {# ORIGINAL welcome message text — no "(500 Credits)" suffix per standing rule #}
   {% if show_welcome %}
@@ -144,7 +181,6 @@
           Record Actual Transaction Data
         </a>
 
-        {# View my alerts link — shown always, shows count if any #}
         <a href="{{ url_for('my_alerts') }}" class="view-alerts-link">
           🔔 View my alerts
           {% if active_alerts_count and active_alerts_count > 0 %}
