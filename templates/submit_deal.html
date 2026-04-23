@@ -49,7 +49,7 @@
   .location-row { margin-bottom: 1rem; }
   .location-row .form-select { max-width: 100%; }
 
-  /* Registration number group: State + District + Series + Number */
+  /* Registration number group */
   .reg-group {
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
   }
@@ -179,7 +179,6 @@
       <strong style="color:#28a745;">{{ deal_reward }} credits</strong> and improve price intelligence for everyone.
     </p>
 
-    {# Rate limit banner — only shown when LIMIT IS REACHED (not the under-limit informational version) #}
     {% if weekly_count >= max_per_week %}
       <div class="rate-limit-full">
         ⚠️ <strong>Weekly limit reached.</strong> You've submitted the maximum number of deals allowed per 7 days. Please come back in a few days.
@@ -273,7 +272,7 @@
         </div>
       </div>
 
-      <!-- Registration Number: State dropdown + District dropdown + Series + Number -->
+      <!-- Registration Number -->
       <div class="row g-3 mb-3">
         <div class="col-md-7">
           <label class="form-label">Registration Number <span style="color:#ff6b6b;">*</span></label>
@@ -332,7 +331,7 @@
 
       <div class="row g-3 mb-3">
         <div class="col-md-6">
-          <label class="form-label">Seller's Asking Price <span style="color:#6c757d;">(Optional)</span></label>
+          <label class="form-label">Asking Price <span style="color:#6c757d;">(Optional)</span></label>
           <div class="price-wrap">
             <span class="rupee-prefix">₹</span>
             <input type="text" class="form-control price-input" id="asking-display" inputmode="numeric"
@@ -503,9 +502,7 @@
     }
   })();
 
-  // ======================================================
-  // Indian comma formatting helper
-  // ======================================================
+  // Indian comma formatting
   function inrGroup(n) {
     const s = String(Math.abs(n));
     if (s.length <= 3) return s;
@@ -529,9 +526,7 @@
     return String(n);
   }
 
-  // ======================================================
   // Mileage formatting
-  // ======================================================
   const mileageDisplay = document.getElementById('mileage-display');
   const mileageRaw     = document.getElementById('mileage-raw');
 
@@ -549,9 +544,7 @@
   mileageDisplay.addEventListener('blur',  formatMileage);
   formatMileage();
 
-  // ======================================================
   // Price field formatting
-  // ======================================================
   function bindPriceField(displayId, rawId, hintId, maxVal) {
     const disp = document.getElementById(displayId);
     const raw  = document.getElementById(rawId);
@@ -576,9 +569,7 @@
   bindPriceField('asking-display', 'asking-raw', 'asking-hint', 100000000);
   bindPriceField('sale-display',   'sale-raw',   'sale-hint',   100000000);
 
-  // ======================================================
   // Registration number live preview
-  // ======================================================
   const stateEl    = document.getElementById('reg_state');
   const districtEl = document.getElementById('reg_district');
   const seriesEl   = document.getElementById('reg_series');
@@ -598,9 +589,7 @@
   });
   formatReg();
 
-  // ======================================================
   // Transaction date: visible DD-MMM-YYYY + hidden native picker
-  // ======================================================
   const nativeDate = document.getElementById('transaction_date');
   const dateDisplay = document.getElementById('date-display');
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -619,7 +608,6 @@
   nativeDate.addEventListener('change', formatDateDisplay);
   formatDateDisplay();
 
-  // Set max=today (prevents future dates in picker)
   (function setMaxDate() {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -628,7 +616,6 @@
     nativeDate.setAttribute('max', `${yyyy}-${mm}-${dd}`);
   })();
 
-  // Clicking the visible field opens the native picker
   dateDisplay.addEventListener('click', function() {
     try {
       if (typeof nativeDate.showPicker === 'function') nativeDate.showPicker();
@@ -638,9 +625,7 @@
     }
   });
 
-  // ======================================================
   // Buyer type pills + proof guard
-  // ======================================================
   const pills = document.querySelectorAll('.buyer-type-pill');
   const proofCheck = document.getElementById('has_proof');
   const proofNote  = document.getElementById('proof-required-note');
@@ -668,9 +653,7 @@
   proofCheck.addEventListener('change', syncPills);
   syncPills();
 
-  // ======================================================
   // Submit guard
-  // ======================================================
   document.getElementById('deal-form').addEventListener('submit', function(e) {
     const dealerSelected = document.querySelector('input[name="buyer_type"][value="Dealer"]')?.checked;
     if (dealerSelected && !proofCheck.checked) {
