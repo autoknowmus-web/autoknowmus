@@ -1,298 +1,335 @@
 {% extends "layout.html" %}
-{% block title %}Choose Your Role - AutoKnowMus{% endblock %}
 
-{% block extra_head %}
+{% block title %}Choose Role — AutoKnowMus{% endblock %}
+
+{% block content %}
 <style>
-  .role-wrap { padding: 20px 40px 60px; }
-  .greeting {
-    text-align: center; color: #fff; font-size: 1.8rem; font-weight: 600;
-    margin: 10px 0 35px;
-  }
-  .role-card {
-    background: #1a1d24; border-radius: 12px; padding: 30px;
-    height: 100%; display: flex; flex-direction: column;
-  }
-  .role-card.seller { border: 2px solid #28a745; }
-  .role-card.buyer { border: 2px solid #4e54ff; }
-  .role-title { text-align: center; font-size: 1.5rem; font-weight: 600; margin-bottom: 10px; }
-  .role-title.seller-title { color: #28a745; }
-  .role-title.buyer-title { color: #4e54ff; }
-  .role-sub { text-align: center; color: #b0b0b0; margin-bottom: 20px; font-size: 0.95rem; }
-
-  .btn-role { padding: 13px; border-radius: 8px; font-weight: 600; border: none; color: #fff; }
-  .btn-role-seller { background: #28a745; }
-  .btn-role-seller:hover { background: #218838; color: #fff; }
-  .btn-role-buyer { background: #4e54ff; }
-  .btn-role-buyer:hover { background: #3a40d9; color: #fff; }
-
-  .benefit-box {
-    background: #0e1117; border-radius: 8px; padding: 18px; margin: 18px 0;
-  }
-  .benefit-title { font-weight: 600; margin-bottom: 6px; font-size: 0.98rem; }
-  .benefit-title.seller-b { color: #28a745; }
-  .benefit-title.buyer-b { color: #4e54ff; }
-  .benefit-text { color: #b0b0b0; font-size: 0.88rem; line-height: 1.5; margin: 0; }
-
-  .btn-secondary-outline {
-    background: transparent; border: 1px solid #4eb0ff; color: #4eb0ff;
-    padding: 11px; border-radius: 8px; font-weight: 500; text-decoration: none;
-    text-align: center; display: block;
-  }
-  .btn-secondary-outline:hover { background: rgba(78,176,255,0.1); color: #4eb0ff; }
-
-  .btn-disabled-coming {
-    background: #2a2d34; color: #666; padding: 11px; border-radius: 8px;
-    font-weight: 500; text-align: center; margin-bottom: 10px; cursor: not-allowed;
-  }
-  .btn-disabled-coming .coming-soon { color: #ffa500; font-size: 0.8rem; font-weight: 600; }
-
-  .btn-guest-locked {
-    background: #2a2d34; color: #888; padding: 11px; border-radius: 8px;
-    font-weight: 500; text-align: center; cursor: not-allowed;
-    border: 1px dashed #4a4f5a;
-  }
-  .btn-guest-locked .lock-note { color: #ffa500; font-size: 0.78rem; font-weight: 600; margin-left: 4px; }
-
-  .view-alerts-link {
-    display: block;
-    text-align: center;
-    margin-top: 12px;
-    color: #8a90ff;
-    text-decoration: none;
-    font-size: 0.85rem;
-    font-weight: 500;
-    padding: 6px;
-    border-radius: 6px;
-    transition: all 0.2s;
-  }
-  .view-alerts-link:hover {
-    background: rgba(78,84,255,0.08);
-    color: #a5abff;
-  }
-  .view-alerts-link .count-pill {
-    display: inline-block;
-    background: rgba(78,84,255,0.2);
-    color: #a5abff;
-    font-size: 0.75rem;
-    padding: 1px 8px;
-    border-radius: 10px;
-    margin-left: 4px;
-    font-weight: 600;
-  }
-  .view-alerts-locked {
-    display: block;
-    text-align: center;
-    margin-top: 12px;
-    color: #6c757d;
-    font-size: 0.8rem;
-    padding: 6px;
-    font-style: italic;
+  .role-wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px 20px 60px;
+    color: #e4e6eb;
   }
 
-  .welcome-alert {
-    background: #ff8c00; color: #fff; border: none; border-radius: 8px;
-    padding: 0.85rem 2.5rem 0.85rem 1rem; margin: 0 auto 1.5rem;
-    max-width: 900px; position: relative; font-size: 0.95rem; font-weight: 500;
-  }
-  .welcome-alert .btn-close-x {
-    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
-    background: transparent; border: none; color: #fff;
-    font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 0 0.25rem;
-  }
-
-  /* ===== Guest mode banner ===== */
-  .guest-banner {
-    background: linear-gradient(135deg, rgba(78,84,255,0.15), rgba(78,84,255,0.05));
-    border: 1px solid #4e54ff;
-    border-radius: 10px;
-    padding: 14px 22px;
-    margin: 0 auto 1.5rem;
-    max-width: 900px;
+  /* ---- Greeting + admin link ---- */
+  .greeting-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 16px;
+    margin-bottom: 18px;
     flex-wrap: wrap;
+    gap: 10px;
   }
-  .guest-banner .gb-text {
-    color: #e6e6e6;
-    font-size: 0.95rem;
-    line-height: 1.4;
-    flex: 1;
-    min-width: 260px;
+
+  .greeting {
+    font-size: 22px;
+    font-weight: 700;
+    color: #e4e6eb;
+    margin: 0;
   }
-  .guest-banner .gb-text strong { color: #8a90ff; font-weight: 700; }
-  .guest-banner .gb-signup {
-    background: #4e54ff;
-    color: #fff;
-    padding: 8px 18px;
-    border-radius: 7px;
+
+  .admin-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid rgba(255, 165, 0, 0.45);
+    border-radius: 6px;
+    color: #ffa500;
+    background: rgba(255, 165, 0, 0.06);
+    font-size: 12px;
     font-weight: 600;
-    font-size: 0.9rem;
     text-decoration: none;
-    white-space: nowrap;
-    transition: background 0.15s;
+    transition: background 0.15s ease;
   }
-  .guest-banner .gb-signup:hover { background: #3a40d9; color: #fff; }
-  .guest-banner .gb-icon { font-size: 1.4rem; flex-shrink: 0; }
 
-  .guest-banner.used {
-    background: linear-gradient(135deg, rgba(220,53,69,0.12), rgba(220,53,69,0.05));
-    border-color: #dc3545;
+  .admin-link:hover {
+    background: rgba(255, 165, 0, 0.14);
   }
-  .guest-banner.used .gb-text strong { color: #ff6b6b; }
 
-  .role-flash {
-    max-width: 900px;
-    margin: 0 auto 1.25rem;
-    border-radius: 8px;
-    padding: 0.85rem 2.5rem 0.85rem 1rem;
+  /* ---- Alerts ---- */
+  .flash-alert {
+    background: rgba(255, 165, 0, 0.1);
+    border: 1px solid rgba(255, 165, 0, 0.5);
+    border-radius: 6px;
+    padding: 12px 44px 12px 16px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: #ffc77d;
     position: relative;
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: #fff;
   }
-  .role-flash.success { background: #28a745; }
-  .role-flash.error { background: #ff8c00; }
-  .role-flash .btn-close-x {
-    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
-    background: transparent; border: none; color: #fff;
-    font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 0 0.25rem;
+
+  .flash-alert .close-x {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #ffa500;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+  }
+
+  .flash-alert.success {
+    background: rgba(40, 167, 69, 0.1);
+    border-color: rgba(40, 167, 69, 0.5);
+    color: #5bd47b;
+  }
+
+  .flash-alert.success .close-x { color: #28a745; }
+
+  .flash-alert.error {
+    background: rgba(220, 53, 69, 0.1);
+    border-color: rgba(220, 53, 69, 0.5);
+    color: #ff6b7b;
+  }
+
+  .flash-alert.error .close-x { color: #dc3545; }
+
+  /* ---- Guest banner ---- */
+  .guest-banner {
+    background: linear-gradient(135deg, rgba(78, 84, 255, 0.15), rgba(78, 84, 255, 0.05));
+    border: 1px solid rgba(78, 84, 255, 0.4);
+    border-radius: 8px;
+    padding: 14px 44px 14px 16px;
+    margin-bottom: 18px;
+    font-size: 13px;
+    color: #c8cbff;
+    position: relative;
+  }
+
+  .guest-banner strong { color: #9da2ff; }
+
+  .guest-banner.locked {
+    background: rgba(220, 53, 69, 0.08);
+    border-color: rgba(220, 53, 69, 0.4);
+    color: #ffb0b8;
+  }
+
+  .guest-banner.locked strong { color: #ff7a85; }
+
+  .guest-banner .close-x {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    opacity: 0.7;
+  }
+
+  /* ---- Role cards ---- */
+  .role-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-top: 8px;
+  }
+
+  .role-card {
+    background: #1a1d24;
+    border-radius: 10px;
+    padding: 28px 22px;
+    text-align: center;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+    position: relative;
+    display: block;
+  }
+
+  .role-card.seller {
+    border: 2px solid #28a745;
+  }
+
+  .role-card.buyer {
+    border: 2px solid #4e54ff;
+  }
+
+  .role-card:not(.locked):hover {
+    transform: translateY(-2px);
+  }
+
+  .role-card.seller:not(.locked):hover { border-color: #5bd47b; }
+  .role-card.buyer:not(.locked):hover  { border-color: #7a80ff; }
+
+  .role-card.locked {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .role-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    line-height: 1;
+  }
+
+  .role-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 6px 0;
+    color: #e4e6eb;
+  }
+
+  .role-card.seller .role-title { color: #5bd47b; }
+  .role-card.buyer  .role-title { color: #7a80ff; }
+
+  .role-subtitle {
+    font-size: 13px;
+    color: #8b92a5;
+    line-height: 1.4;
+    margin: 0 0 14px 0;
+  }
+
+  .role-cta {
+    display: inline-block;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .role-card.seller .role-cta { color: #5bd47b; }
+  .role-card.buyer  .role-cta { color: #7a80ff; }
+
+  .role-lock-note {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #ff7a85;
+    font-weight: 600;
+  }
+
+  /* ---- Deal button ---- */
+  .deal-section {
+    margin-top: 22px;
+    text-align: center;
+  }
+
+  .deal-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    background: rgba(255, 165, 0, 0.1);
+    border: 1px solid rgba(255, 165, 0, 0.45);
+    border-radius: 6px;
+    color: #ffa500;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.15s ease;
+  }
+
+  .deal-btn:hover { background: rgba(255, 165, 0, 0.18); }
+
+  .deal-reward-note {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #8b92a5;
+  }
+
+  @media (max-width: 640px) {
+    .role-cards { grid-template-columns: 1fr; }
+    .greeting { font-size: 19px; }
   }
 </style>
-{% endblock %}
 
-{% block content %}
 <div class="role-wrap">
 
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        <div class="role-flash {{ 'success' if category == 'success' else 'error' }}" id="role-flash-{{ loop.index }}">
-          {% if category == 'success' %}✅{% else %}⚠️{% endif %} {{ message }}
-          <button type="button" class="btn-close-x"
-                  onclick="document.getElementById('role-flash-{{ loop.index }}').remove()"
-                  aria-label="Close">&times;</button>
-        </div>
-      {% endfor %}
+  <!-- Greeting row -->
+  <div class="greeting-row">
+    <h1 class="greeting">
+      {% if is_admin %}🛠️ {% endif %}Hello {{ first_name }}!
+    </h1>
+    {% if is_admin %}
+    <a href="{{ url_for('admin_data_health') }}" class="admin-link">
+      🛠️ Admin Console
+    </a>
     {% endif %}
+  </div>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash-alert {{ category }}" data-alert>
+        {{ message }}
+        <button type="button" class="close-x" onclick="this.parentElement.style.display='none';">&times;</button>
+      </div>
+    {% endfor %}
   {% endwith %}
 
+  <!-- Welcome bonus message -->
   {% if show_welcome %}
-    <div class="welcome-alert" id="welcome-alert">
-      🎉 Welcome! 500 bonus credits added for 5 free searches!
-      <button type="button" class="btn-close-x" onclick="document.getElementById('welcome-alert').remove()" aria-label="Close">&times;</button>
-    </div>
+  <div class="flash-alert" data-alert>
+    🎉 Welcome! 500 bonus credits added for 5 free searches!
+    <button type="button" class="close-x" onclick="this.parentElement.style.display='none';">&times;</button>
+  </div>
   {% endif %}
 
-  {# ===== Guest mode banners ===== #}
-  {% if session.is_guest %}
+  <!-- Guest banner -->
+  {% if user is none %}
     {% if guest_used %}
-      <div class="guest-banner used">
-        <span class="gb-icon">🔒</span>
-        <div class="gb-text">
-          <strong>Guest trial used.</strong> Your one-time guest search is complete. Sign up to unlock unlimited searches, set alerts, record deals, and earn credits.
-        </div>
-        <a href="{{ url_for('signup') }}" class="gb-signup">Sign Up Free</a>
-      </div>
+    <div class="guest-banner locked">
+      <strong>🔒 Guest trial used.</strong>
+      Your free search is done. <a href="{{ url_for('signup') }}" style="color: inherit; text-decoration: underline; font-weight: 600;">Sign up</a> to continue — 500 free credits on signup.
+      <button type="button" class="close-x" onclick="this.parentElement.style.display='none';">&times;</button>
+    </div>
     {% else %}
-      <div class="guest-banner">
-        <span class="gb-icon">🎁</span>
-        <div class="gb-text">
-          <strong>Guest mode — 1 free search.</strong> Pick Seller or Buyer below. Sign up anytime to save results, set alerts, and earn credits for sharing real deals.
-        </div>
-        <a href="{{ url_for('signup') }}" class="gb-signup">Sign Up Free</a>
-      </div>
+    <div class="guest-banner">
+      <strong>👋 Guest access.</strong>
+      You have 100 credits for 1 free search (seller OR buyer). <a href="{{ url_for('signup') }}" style="color: inherit; text-decoration: underline; font-weight: 600;">Sign up</a> for 500 credits and unlimited features.
+      <button type="button" class="close-x" onclick="this.parentElement.style.display='none';">&times;</button>
+    </div>
     {% endif %}
   {% endif %}
 
-  <h2 class="greeting">
-    {% if session.is_guest %}
-      Try AutoKnowMus — one free search
-    {% else %}
-      Hello {{ first_name }}! Ready to make a smarter decision?
-    {% endif %}
-  </h2>
+  <!-- Role cards -->
+  <div class="role-cards">
 
-  <div class="row g-4">
-    <!-- Seller -->
-    <div class="col-md-6">
-      <div class="role-card seller">
-        <h3 class="role-title seller-title">I am a Seller</h3>
-        <p class="role-sub">Price your car right with real market intelligence before you list.</p>
+    <a href="{% if user is none and guest_used %}#{% else %}{{ url_for('seller') }}{% endif %}"
+       class="role-card seller {% if user is none and guest_used %}locked{% endif %}">
+      <div class="role-icon">🚗</div>
+      <h2 class="role-title">I'm Selling</h2>
+      <p class="role-subtitle">Get a fair-price estimate for your used car</p>
+      <div class="role-cta">Start Valuation →</div>
+      {% if user is none and guest_used %}
+      <div class="role-lock-note">🔒 Sign up to continue searching</div>
+      {% endif %}
+    </a>
 
-        {% if session.is_guest and guest_used %}
-          <div class="btn-guest-locked">🔒 Sign up to continue searching</div>
-        {% else %}
-          <a href="{{ url_for('seller') }}" class="btn btn-role btn-role-seller">Find My Car Value</a>
-        {% endif %}
+    <a href="{% if user is none and guest_used %}#{% else %}{{ url_for('buyer') }}{% endif %}"
+       class="role-card buyer {% if user is none and guest_used %}locked{% endif %}">
+      <div class="role-icon">🔍</div>
+      <h2 class="role-title">I'm Buying</h2>
+      <p class="role-subtitle">Check if a seller's asking price is fair</p>
+      <div class="role-cta">Start Analysis →</div>
+      {% if user is none and guest_used %}
+      <div class="role-lock-note">🔒 Sign up to continue searching</div>
+      {% endif %}
+    </a>
 
-        <div class="benefit-box">
-          <div class="benefit-title seller-b">Seller Credit Benefits</div>
-          <p class="benefit-text">
-            Unlimited real price searches for 30 days based on verified transaction data from your city.
-            Know your car's fair market value before any buyer makes you an offer.
-          </p>
-        </div>
-        <div class="btn-disabled-coming">
-          Purchase 500 Credits for Seller <span class="coming-soon">(Coming Soon)</span>
-        </div>
+  </div>
 
-        {% if session.is_guest %}
-          <div class="btn-guest-locked">
-            Record Actual Transaction Data <span class="lock-note">🔒 Sign up required</span>
-          </div>
-        {% else %}
-          <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
-            Record Actual Transaction Data
-          </a>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Buyer -->
-    <div class="col-md-6">
-      <div class="role-card buyer">
-        <h3 class="role-title buyer-title">I am a Buyer</h3>
-        <p class="role-sub">Evaluate any deal against real market data before you pay.</p>
-
-        {% if session.is_guest and guest_used %}
-          <div class="btn-guest-locked">🔒 Sign up to continue searching</div>
-        {% else %}
-          <a href="{{ url_for('buyer') }}" class="btn btn-role btn-role-buyer">Research Prices</a>
-        {% endif %}
-
-        <div class="benefit-box">
-          <div class="benefit-title buyer-b">Buyer Credit Benefits</div>
-          <p class="benefit-text">
-            Unlimited real price searches for 30 days based on user-submitted transaction data.
-            Never overpay — know exactly what similar cars are selling for in Bangalore.
-          </p>
-        </div>
-        <div class="btn-disabled-coming">
-          Purchase 500 Credits as Buyer <span class="coming-soon">(Coming Soon)</span>
-        </div>
-
-        {% if session.is_guest %}
-          <div class="btn-guest-locked">
-            Record Actual Transaction Data <span class="lock-note">🔒 Sign up required</span>
-          </div>
-          <div class="view-alerts-locked">
-            🔒 Alerts are available after signup
-          </div>
-        {% else %}
-          <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
-            Record Actual Transaction Data
-          </a>
-          <a href="{{ url_for('my_alerts') }}" class="view-alerts-link">
-            🔔 View my alerts
-            {% if active_alerts_count and active_alerts_count > 0 %}
-              <span class="count-pill">{{ active_alerts_count }} of 5 active</span>
-            {% endif %}
-          </a>
-        {% endif %}
-      </div>
+  <!-- Submit deal (post-login only) -->
+  {% if user is not none %}
+  <div class="deal-section">
+    <a href="{{ url_for('submit_deal') }}" class="deal-btn">
+      📝 Submit a Verified Deal
+    </a>
+    <div class="deal-reward-note">
+      Help build real market data · Earn 100 Credits per verified deal (max 3/week)
     </div>
   </div>
+  {% endif %}
+
 </div>
+
 {% endblock %}
