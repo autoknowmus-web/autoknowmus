@@ -68,6 +68,10 @@
     color: #adb5bd; font-weight: 600; pointer-events: none; z-index: 2;
   }
   .price-input-wrap .form-control { padding-left: 28px; }
+
+  .optional-hint {
+    color: #6c757d; font-weight: 400; font-size: 0.82rem;
+  }
 </style>
 {% endblock %}
 
@@ -163,11 +167,11 @@
         </div>
       </div>
 
-      <!-- Row 3: Year, Owner, Mileage, Condition -->
+      <!-- Row 3: Year, Owner (optional), Mileage (optional), Condition (optional) -->
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
-          <select class="form-select" name="year" required>
+          <select class="form-select" name="year" id="year" required>
             <option value="">Select Year</option>
             {% for y in years %}
               <option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>
@@ -175,26 +179,30 @@
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">No. of Owners <span style="color:#ff6b6b;">*</span></label>
-          <select class="form-select" name="owner" required>
-            <option value="">Select Owner</option>
+          <label class="form-label">No. of Owners <span class="optional-hint">(optional)</span></label>
+          <select class="form-select" name="owner" id="owner">
             {% for o in owners %}
-              <option value="{{ o }}" {% if form.owner == o %}selected{% endif %}>{{ o }}</option>
+              <option value="{{ o }}"
+                {% if form.owner == o %}selected
+                {% elif not form.owner and o == '1st Owner' %}selected
+                {% endif %}>{{ o }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
-          <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
-                 value="{{ form.mileage or '' }}" placeholder="e.g. 45,000">
-          <input type="hidden" name="mileage" id="mileage-raw" value="{{ form.mileage or '' }}">
+          <label class="form-label">Mileage (KMs) <span class="optional-hint">(optional)</span></label>
+          <select class="form-select" name="mileage" id="mileage">
+            <!-- Populated by JS -->
+          </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Condition <span style="color:#ff6b6b;">*</span></label>
-          <select class="form-select" name="condition" required>
-            <option value="">Select Condition</option>
+          <label class="form-label">Condition <span class="optional-hint">(optional)</span></label>
+          <select class="form-select" name="condition" id="condition">
             {% for c in conditions %}
-              <option value="{{ c }}" {% if form.condition == c %}selected{% endif %}>{{ c }}</option>
+              <option value="{{ c }}"
+                {% if form.condition == c %}selected
+                {% elif not form.condition and c == 'Good' %}selected
+                {% endif %}>{{ c }}</option>
             {% endfor %}
           </select>
         </div>
@@ -203,7 +211,7 @@
       <!-- Row 4: Asking Price (optional, full width) -->
       <div class="row g-3 mb-4">
         <div class="col-12">
-          <label class="form-label">Asking Price <span style="color:#6c757d; font-weight:400;">(optional — enter to analyze if it's a fair deal)</span></label>
+          <label class="form-label">Asking Price <span class="optional-hint">(optional — enter to analyze if it's a fair deal)</span></label>
           <div class="price-input-wrap">
             <span class="price-prefix">₹</span>
             <input type="text" class="form-control" id="asking-display" inputmode="numeric"
@@ -227,17 +235,22 @@
 <script>
   const CAR_DATA = {{ car_data_json | safe }};
   const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
+  const CURRENT_YEAR = {{ years[0] }};  // newest year in dropdown = current
 
   const makeEl    = document.getElementById('make');
   const fuelEl    = document.getElementById('fuel');
   const modelEl   = document.getElementById('model');
   const variantEl = document.getElementById('variant');
+  const yearEl    = document.getElementById('year');
+  const mileageEl = document.getElementById('mileage');
 
   const PREFILL = {
     make:    {{ (form.make    or '')|tojson }},
     fuel:    {{ (form.fuel    or '')|tojson }},
     model:   {{ (form.model   or '')|tojson }},
-    variant: {{ (form.variant or '')|tojson }}
+    variant: {{ (form.variant or '')|tojson }},
+    year:    {{ (form.year    or '')|tojson }},
+    mileage: {{ (form.mileage or '')|tojson }}
   };
 
   function resetSelect(el, placeholder) {
@@ -252,131 +265,4 @@
     Object.values(CAR_DATA[make]).forEach(mdl => {
       (mdl.fuels || []).forEach(f => fuelSet.add(f));
     });
-    const ordered = FUEL_ORDER.filter(f => fuelSet.has(f));
-    ordered.forEach(f => {
-      const opt = document.createElement('option');
-      opt.value = f;
-      opt.textContent = f;
-      if (preselect && f === preselect) opt.selected = true;
-      fuelEl.appendChild(opt);
-    });
-    fuelEl.disabled = false;
-  }
-
-  function populateModels(make, fuel, preselect) {
-    resetSelect(modelEl, 'Select Model');
-    if (!make || !fuel || !CAR_DATA[make]) return;
-    const models = Object.keys(CAR_DATA[make])
-      .filter(m => (CAR_DATA[make][m].fuels || []).includes(fuel))
-      .sort();
-    models.forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m;
-      opt.textContent = m;
-      if (preselect && m === preselect) opt.selected = true;
-      modelEl.appendChild(opt);
-    });
-    modelEl.disabled = false;
-  }
-
-  function populateVariants(make, model, preselect) {
-    resetSelect(variantEl, 'Select Variant');
-    if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
-    const variants = [...(CAR_DATA[make][model].variants || [])].sort();
-    variants.forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v;
-      opt.textContent = v;
-      if (preselect && v === preselect) opt.selected = true;
-      variantEl.appendChild(opt);
-    });
-    variantEl.disabled = false;
-  }
-
-  makeEl.addEventListener('change', function() {
-    populateFuels(this.value, null);
-    resetSelect(modelEl, 'Select Fuel first');
-    resetSelect(variantEl, 'Select Model first');
-  });
-  fuelEl.addEventListener('change', function() {
-    populateModels(makeEl.value, this.value, null);
-    resetSelect(variantEl, 'Select Model first');
-  });
-  modelEl.addEventListener('change', function() {
-    populateVariants(makeEl.value, this.value, null);
-  });
-
-  (function init() {
-    if (PREFILL.make) {
-      populateFuels(PREFILL.make, PREFILL.fuel);
-      if (PREFILL.fuel) {
-        populateModels(PREFILL.make, PREFILL.fuel, PREFILL.model);
-        if (PREFILL.model) {
-          populateVariants(PREFILL.make, PREFILL.model, PREFILL.variant);
-        }
-      }
-    }
-  })();
-
-  // ======================================================
-  // Indian comma formatter (shared)
-  // ======================================================
-  function inrGroup(n) {
-    const s = String(Math.abs(n));
-    if (s.length <= 3) return s;
-    const last3 = s.slice(-3);
-    let rest = s.slice(0, -3);
-    const groups = [];
-    while (rest.length > 2) {
-      groups.unshift(rest.slice(-2));
-      rest = rest.slice(0, -2);
-    }
-    if (rest) groups.unshift(rest);
-    return groups.join(',') + ',' + last3;
-  }
-
-  // ======================================================
-  // Mileage
-  // ======================================================
-  const mileageDisplay = document.getElementById('mileage-display');
-  const mileageRaw     = document.getElementById('mileage-raw');
-
-  function formatMileage() {
-    const digits = mileageDisplay.value.replace(/\D+/g, '');
-    if (!digits) {
-      mileageDisplay.value = '';
-      mileageRaw.value = '';
-      return;
-    }
-    let n = parseInt(digits, 10);
-    if (n > 500000) n = 500000;
-    mileageRaw.value = n;
-    mileageDisplay.value = inrGroup(n);
-  }
-  mileageDisplay.addEventListener('input', formatMileage);
-  mileageDisplay.addEventListener('blur',  formatMileage);
-  formatMileage();
-
-  // ======================================================
-  // Asking Price
-  // ======================================================
-  const askingDisplay = document.getElementById('asking-display');
-  const askingRaw     = document.getElementById('asking-raw');
-
-  function formatAsking() {
-    const digits = askingDisplay.value.replace(/\D+/g, '');
-    if (!digits) {
-      askingDisplay.value = '';
-      askingRaw.value = '';
-      return;
-    }
-    let n = parseInt(digits, 10);
-    if (n > 100000000) n = 100000000;
-    askingRaw.value = n;
-    askingDisplay.value = inrGroup(n);
-  }
-  askingDisplay.addEventListener('input', formatAsking);
-  askingDisplay.addEventListener('blur',  formatAsking);
-  formatAsking();
-</script>
-{% endblock %}
+    co
