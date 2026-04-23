@@ -247,7 +247,7 @@
               <td><span class="ch-type-badge">{{ t.type_label }}</span></td>
               <td class="ch-desc">{{ t.description or '—' }}</td>
               <td style="text-align: right;" class="{{ t.amount_class }}">{{ t.amount_display }}</td>
-              <td style="text-align: right; color: #e9ecef; font-weight: 600;">{{ '{:,}'.format(t.balance_after) }}</td>
+              <td style="text-align: right; color: #e9ecef; font-weight: 600;">{{ '{:,}'.format(t.balance_after_display) }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -324,7 +324,7 @@
     } else {
       url.searchParams.set('type', value);
     }
-    url.searchParams.delete('page'); // reset to page 1 on filter change
+    url.searchParams.delete('page');
     window.location.href = url.toString();
   }
 </script>
