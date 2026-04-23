@@ -1,723 +1,223 @@
 {% extends "layout.html" %}
-{% block title %}Valuation Result — AutoKnowMus{% endblock %}
+{% block title %}Sell Your Car - AutoKnowMus{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* Tighter spacing to fit on one screen */
-  .dashboard-wrap { padding: 14px 30px 20px; }
-
-  .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
-  .car-summary { color: #e6e6e6; text-align: right; }
-  .car-summary .car-name { color: #28a745; font-weight: 700; font-size: 1.05rem; line-height: 1.2; }
-  .car-summary .car-meta { color: #b0b0b0; font-size: 0.82rem; margin-top: 2px; }
-
-  /* ===== TOP ROW: Price+Slider (left) + Graph (right) ===== */
-  .top-row {
-    display: grid;
-    grid-template-columns: 1fr 1.25fr;
-    gap: 14px;
-    margin-bottom: 12px;
+  .seller-wrap { padding: 30px 40px; }
+  .page-title { color: #28a745; font-size: 1.8rem; font-weight: 700; text-align: right; margin: 0; }
+  .form-section { background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px; padding: 30px; }
+  .btn-generate {
+    background: #28a745; color: #fff; border: none; padding: 14px 40px;
+    border-radius: 8px; font-weight: 700; font-size: 1rem; letter-spacing: 0.5px;
+    width: 320px; display: block; margin: 0 auto;
   }
-  @media (max-width: 900px) { .top-row { grid-template-columns: 1fr; } }
-
-  .card {
-    background: #1a1d24;
-    border: 1px solid #2a2d34;
-    border-radius: 12px;
-    padding: 14px 18px;
+  .btn-generate:hover { background: #218838; color: #fff; }
+  .btn-generate:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
+  .btn-generate .credit-cost {
+    display: block; font-size: 0.85rem; font-weight: 500;
+    margin-top: 3px; opacity: 0.95;
   }
-  .card-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+  .credit-note {
+    text-align: center; color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;
   }
-  .card-title .sub { color: #b0b0b0; font-size: 0.75rem; font-weight: 400; margin-left: 6px; }
-
-  /* Price + slider combined card */
-  .hero-combined { display: flex; flex-direction: column; gap: 14px; }
-  .price-hero { text-align: center; }
-  .price-hero .hero-label { color: #b0b0b0; font-size: 0.76rem; letter-spacing: 0.5px; margin-bottom: 4px; }
-  .price-hero .hero-range { color: #28a745; font-size: 1.85rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
-  .price-hero .hero-dash { color: #28a745; margin: 0 6px; }
-  .price-hero .hero-mid { color: #adb5bd; font-size: 0.85rem; margin-top: 6px; }
-  .price-hero .hero-mid strong { color: #ffa500; font-weight: 600; }
-  @media (min-width: 1200px) { .price-hero .hero-range { font-size: 2rem; } }
-
-  /* Slider */
-  .slider-section { border-top: 1px solid #2a2d34; padding-top: 12px; }
-  .slider-labels { display: flex; justify-content: space-between; color: #b0b0b0; font-size: 0.76rem; margin-bottom: 4px; }
-  .slider-labels .left  { color: #ffa500; font-weight: 600; }
-  .slider-labels .right { color: #28a745; font-weight: 600; }
-  .slider-track-wrap { position: relative; padding-top: 26px; padding-bottom: 3px; }
-  #price-slider {
-    -webkit-appearance: none; appearance: none;
-    width: 100%; height: 7px;
-    background: linear-gradient(to right, #ffa500 0%, #28a745 100%);
-    border-radius: 4px; outline: none;
+  .alert-dismiss {
+    background: #ff8c00; color: #fff; border: none; border-radius: 8px;
+    padding: 0.75rem 2.5rem 0.75rem 1rem; margin-bottom: 1.25rem;
+    position: relative; font-size: 0.92rem;
   }
-  #price-slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 20px; height: 20px;
-    background: #fff; border: 3px solid #28a745;
-    border-radius: 50%; cursor: pointer;
-  }
-  #price-slider::-moz-range-thumb {
-    width: 20px; height: 20px;
-    background: #fff; border: 3px solid #28a745;
-    border-radius: 50%; cursor: pointer;
-  }
-  .slider-bubble {
-    position: absolute; top: 0; transform: translateX(-50%);
-    background: #28a745; color: #fff;
-    padding: 2px 9px; border-radius: 12px;
-    font-size: 0.76rem; font-weight: 600;
-    white-space: nowrap; pointer-events: none;
-    transition: left 0.05s linear;
-  }
-  .slider-bubble::after {
-    content: ''; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
-    border-left: 5px solid transparent; border-right: 5px solid transparent;
-    border-top: 5px solid #28a745;
-  }
-  .slider-info { display: flex; justify-content: space-between; margin-top: 8px; flex-wrap: wrap; gap: 6px; color: #e6e6e6; font-size: 0.82rem; align-items: center; }
-  .slider-info .days-badge { background: #14171d; padding: 4px 9px; border-radius: 6px; }
-  .slider-info .days-badge .num { color: #28a745; font-weight: 700; }
-
-  /* Graph */
-  .graph-wrap { position: relative; height: 220px; }
-  @media (max-width: 900px) { .graph-wrap { height: 200px; } }
-
-  /* ===== KPI cards ===== */
-  .kpi-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  .kpi-card {
-    background: #1a1d24;
-    border: 1px solid #2a2d34;
-    border-radius: 10px;
-    padding: 10px 12px;
-    text-align: center;
-  }
-  .kpi-card .kpi-label {
-    color: #b0b0b0;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 3px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .kpi-card .kpi-value { font-size: 1.2rem; font-weight: 700; color: #fff; line-height: 1.1; }
-  .kpi-card .kpi-sub   { color: #6c757d; font-size: 0.7rem; margin-top: 1px; }
-  .kpi-card .kpi-value.demand-HIGH   { color: #28a745; }
-  .kpi-card .kpi-value.demand-MEDIUM { color: #ffa500; }
-  .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
-  @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
-
-  /* Mini confidence benefit table (inside Data Confidence KPI card) */
-  .conf-table {
-    margin-top: 8px;
-    border-top: 1px solid #2a2d34;
-    padding-top: 8px;
-    font-size: 0.68rem;
-    text-align: left;
-  }
-  .conf-row {
-    display: grid;
-    grid-template-columns: 54px 1fr;
-    gap: 6px;
-    padding: 3px 4px;
-    border-radius: 4px;
-    margin-bottom: 2px;
-    align-items: start;
-    color: #adb5bd;
-    line-height: 1.3;
-  }
-  .conf-row .conf-bracket {
-    font-weight: 700;
-    color: #b0b0b0;
-    font-variant-numeric: tabular-nums;
-  }
-  .conf-row .conf-meaning {
-    font-weight: 400;
-  }
-  .conf-row .conf-meaning .conf-benefit {
-    display: block;
-    color: #6c757d;
-    font-size: 0.65rem;
-    margin-top: 1px;
-  }
-  .conf-row.conf-active {
-    background: rgba(78, 176, 255, 0.08);
-    border: 1px solid rgba(78, 176, 255, 0.35);
-  }
-  .conf-row.conf-active .conf-bracket { color: #4eb0ff; }
-  .conf-row.conf-active .conf-meaning { color: #e9ecef; }
-  .conf-row.conf-active .conf-meaning .conf-benefit { color: #adb5bd; }
-
-  /* ℹ️ info icon with custom tooltip — 3+ lines, white on black */
-  .info-wrap { position: relative; display: inline-flex; }
-  .info-icon {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 14px; height: 14px;
-    background: #2a2d34; color: #adb5bd;
-    border-radius: 50%;
-    font-size: 0.7rem; font-weight: 700;
-    cursor: help; font-style: italic;
-    font-family: Georgia, serif;
-  }
-  .info-icon:hover { background: #ffa500; color: #fff; }
-  .info-tooltip {
-    visibility: hidden; opacity: 0;
-    position: absolute;
-    bottom: calc(100% + 10px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: #000;
-    color: #fff;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid #28a745;
-    font-size: 0.78rem;
-    font-weight: 400;
-    line-height: 1.5;
-    width: 240px;
-    max-width: 280px;
-    text-transform: none;
-    letter-spacing: normal;
-    text-align: left;
-    z-index: 10;
-    transition: opacity 0.15s;
-    white-space: normal;
-    pointer-events: none;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-  }
-  .info-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%; left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: #000;
-  }
-  .info-wrap:hover .info-tooltip {
-    visibility: visible; opacity: 1;
+  .alert-dismiss .btn-close-x {
+    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
 
-  /* Market stats */
-  .market-stats {
-    background: #14171d;
-    border-radius: 8px;
-    padding: 7px 14px;
-    margin-bottom: 10px;
-    color: #adb5bd;
-    font-size: 0.82rem;
-    text-align: center;
+  .flash-success {
+    background: #28a745; color: #fff; border: none; border-radius: 8px;
+    padding: 0.75rem 2.5rem 0.75rem 1rem; margin-bottom: 1.25rem;
+    position: relative; font-size: 0.92rem; font-weight: 500;
   }
-  .market-stats strong { color: #e9ecef; }
-
-  /* ===== BOTTOM ROW: Distribution (left) + Verdict (right) ===== */
-  .bottom-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-  @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
-
-  .dist-row { display: flex; flex-direction: column; gap: 5px; }
-  .dist-bar {
-    display: grid;
-    grid-template-columns: 145px 1fr 40px;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.78rem;
-  }
-  .dist-bar .dist-label { color: #b0b0b0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .dist-bar .dist-track { background: #14171d; border-radius: 5px; height: 11px; overflow: hidden; }
-  .dist-bar .dist-fill  { height: 100%; border-radius: 5px; transition: width 0.8s ease; }
-  .dist-bar .dist-pct   { color: #e6e6e6; font-weight: 600; text-align: right; font-size: 0.78rem; }
-  @media (max-width: 600px) {
-    .dist-bar { grid-template-columns: 95px 1fr 38px; gap: 6px; font-size: 0.72rem; }
+  .flash-success .btn-close-x {
+    position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
 
-  .dist-footnote {
-    margin-top: 8px;
-    color: #6c757d;
-    font-size: 0.72rem;
-    text-align: right;
-    font-style: italic;
+  .credit-request-card {
+    background: #14171d; border: 2px solid #ffa500; border-radius: 12px;
+    padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; text-align: center;
   }
+  .credit-request-card h4 {
+    color: #ffa500; font-size: 1.05rem; font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .credit-request-card p {
+    color: #adb5bd; font-size: 0.9rem; margin-bottom: 1rem;
+  }
+  .btn-request-credits {
+    background: #ffa500; color: #1a1d24; border: none; font-weight: 700;
+    padding: 0.65rem 1.5rem; border-radius: 8px; font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .btn-request-credits:hover { background: #e69500; color: #1a1d24; }
 
-  .verdict-card {
-    background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
-    border: 1px solid #28a745;
-    border-radius: 12px;
-    padding: 14px 18px;
+  /* Location full-width row, muted */
+  .location-row { margin-bottom: 1rem; }
+  .location-row .form-select { max-width: 100%; }
+
+  .optional-hint {
+    color: #6c757d; font-weight: 400; font-size: 0.82rem;
   }
-  .verdict-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #28a745;
-    margin-bottom: 8px;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .verdict-body p {
-    color: #e6e6e6;
-    font-size: 0.83rem;
-    line-height: 1.55;
-    margin-bottom: 6px;
-  }
-  .verdict-body p:last-child { margin-bottom: 0; }
-  .verdict-body .hi { color: #ffa500; font-weight: 600; }
-  .verdict-body .ok { color: #28a745; font-weight: 600; }
-  .verdict-body .warn { color: #ff6b6b; font-weight: 600; }
 </style>
 {% endblock %}
 
 {% block content %}
-{#
-  --- Reusable macro: render Indian price as "X.YL" (1dp Lakhs) ---
-  Thresholds:
-    >= 1 Crore  → "X.YCr"
-    >= 1 Lakh   → "X.YL"
-    < 1 Lakh    → "0.ZL" (still shown as fractional Lakh for consistency)
-  Applied to all price outputs on this page. Footnote on dist card: "L = Lakhs".
-#}
-{% macro l1dp(v) -%}
-  {%- if v is none -%}—
-  {%- elif v|int >= 10000000 -%}{{ '%.1f'|format(v / 10000000) }}Cr
-  {%- else -%}{{ '%.1f'|format(v / 100000) }}L
-  {%- endif %}
-{%- endmacro %}
-
-<div class="dashboard-wrap">
-
-  <!-- HEADER -->
-  <div class="dash-header">
-    <a href="{{ url_for('seller',
-                        make=back_prefill.make, fuel=back_prefill.fuel,
-                        model=back_prefill.model, variant=back_prefill.variant,
-                        year=back_prefill.year, owner=back_prefill.owner,
-                        mileage=back_prefill.mileage, condition=back_prefill.condition) }}"
-       class="btn-back">← Back</a>
-    <div class="car-summary">
-      <div class="car-name">{{ val.year }} {{ val.make }} {{ val.model }} {{ val.variant }}</div>
-      <div class="car-meta">{{ val.fuel }} · {{ val.mileage | inr }} km · {{ val.condition }} · {{ val.owner }}</div>
-    </div>
-  </div>
-
-  <!-- TOP ROW: Price+Slider (left) + Graph (right) -->
-  <div class="top-row">
-    <!-- LEFT: Price hero with slider -->
-    <div class="card hero-combined">
-      <div class="price-hero">
-        <div class="hero-label">ESTIMATED FAIR MARKET VALUE</div>
-        <div class="hero-range">
-          ₹ {{ l1dp(price_low) }}<span class="hero-dash">—</span>₹ {{ l1dp(price_high) }}
-        </div>
-        <div class="hero-mid">Most likely: <strong>₹ {{ l1dp(estimated) }}</strong></div>
-      </div>
-
-      <div class="slider-section">
-        <div class="slider-labels">
-          <span class="left">← Quick Sale</span>
-          <span class="right">Highest Price →</span>
-        </div>
-        <div class="slider-track-wrap">
-          <div class="slider-bubble" id="slider-bubble">₹ {{ l1dp(estimated) }}</div>
-          <input type="range" id="price-slider"
-                 min="{{ price_low }}" max="{{ price_high }}"
-                 value="{{ estimated }}" step="1000">
-        </div>
-        <div class="slider-info">
-          <div>Your price: <strong id="slider-price-text">₹ {{ l1dp(estimated) }}</strong></div>
-          <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
-        </div>
-      </div>
+<div class="seller-wrap">
+  <div class="form-section">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+      <h2 class="page-title">Sell Your Car: Market Valuation</h2>
     </div>
 
-    <!-- RIGHT: Depreciation graph -->
-    <div class="card">
-      <div class="card-title">
-        Depreciation Forecast
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            How your car's value is expected to drop over the next 90 days if you don't sell now. Cars depreciate continuously — waiting longer usually means accepting a lower price later. Hover on the line to see specific days.
-          </span>
-        </span>
-        <span class="sub">next 90 days</span>
-      </div>
-      <div class="graph-wrap">
-        <canvas id="dep-chart"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- KPIs -->
-  <div class="kpi-row">
-    <div class="kpi-card">
-      <div class="kpi-label">
-        Market Demand
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            How many buyers are actively looking for cars like yours. HIGH means your car sells fast. LOW means fewer interested buyers — you may need patience or a lower price. Changes with your asking price.
-          </span>
-        </span>
-      </div>
-      <div class="kpi-value demand-{{ demand }}" id="demand-value">{{ demand }}</div>
-      <div class="kpi-sub" id="demand-sub">Based on brand, age & price</div>
-    </div>
-
-    <div class="kpi-card">
-      <div class="kpi-label">
-        Data Confidence
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            How reliable this valuation is based on verified real-world deals for similar cars. Higher confidence means your price is grounded in more actual transactions — see the bracket guide below for what each level means for your sale.
-          </span>
-        </span>
-      </div>
-      <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
-
-      <!-- Mini confidence benefit table -->
-      <div class="conf-table">
-        {% set c = confidence | int %}
-        <div class="conf-row {% if c >= 90 %}conf-active{% endif %}">
-          <div class="conf-bracket">90–95%</div>
-          <div class="conf-meaning">
-            Strong match with many verified deals.
-            <span class="conf-benefit">List confidently — minimal haggling room.</span>
+    {# Flash messages — e.g. "500 credits added" #}
+    {% with flash_msgs = get_flashed_messages(category_filter=['success']) %}
+      {% if flash_msgs %}
+        {% for m in flash_msgs %}
+          <div class="flash-success" id="flash-success-{{ loop.index }}">
+            ✅ {{ m }}
+            <button type="button" class="btn-close-x"
+                    onclick="document.getElementById('flash-success-{{ loop.index }}').remove()">&times;</button>
           </div>
-        </div>
-        <div class="conf-row {% if c >= 75 and c < 90 %}conf-active{% endif %}">
-          <div class="conf-bracket">75–89%</div>
-          <div class="conf-meaning">
-            Good match with several similar deals.
-            <span class="conf-benefit">Price is dependable — small negotiation buffer is safe.</span>
-          </div>
-        </div>
-        <div class="conf-row {% if c >= 60 and c < 75 %}conf-active{% endif %}">
-          <div class="conf-bracket">60–74%</div>
-          <div class="conf-meaning">
-            Moderate match, limited verified deals.
-            <span class="conf-benefit">Use as a guideline — expect 5–8% swing.</span>
-          </div>
-        </div>
-        <div class="conf-row {% if c < 60 %}conf-active{% endif %}">
-          <div class="conf-bracket">50–59%</div>
-          <div class="conf-meaning">
-            Baseline estimate, few comparable deals.
-            <span class="conf-benefit">Treat as a starting point — verify with other sources.</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="kpi-card">
-      <div class="kpi-label">
-        Expected Days to Sell
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            How many days we expect it to take to find a buyer at your current asking price. Lower prices sell faster, higher prices take longer. Move the slider to see how pricing affects selling speed.
-          </span>
-        </span>
-      </div>
-      <div class="kpi-value" style="color:#ffa500;" id="days-value">{{ days_to_sell }}</div>
-      <div class="kpi-sub">days at current price</div>
-    </div>
-  </div>
-
-  <!-- Market stats -->
-  <div class="market-stats">
-    <strong>{{ verified_count }}</strong> Verified transactions ·
-    <strong>{{ buyers_last_30d }}</strong> Buyers last 30 days
-  </div>
-
-  <!-- BOTTOM ROW: Distribution (left) + Verdict (right) -->
-  <div class="bottom-row">
-    <div class="card">
-      <div class="card-title">Buyer Price-Band Distribution <span class="sub">where buyers are concentrated</span></div>
-      <div class="dist-row">
-        {% for band in buyer_dist %}
-        <div class="dist-bar">
-          <div class="dist-label">
-            {% if band.low is none %}
-              Below ₹ {{ l1dp(band.high) }}
-            {% elif band.high is none %}
-              Above ₹ {{ l1dp(band.low) }}
-            {% else %}
-              ₹ {{ l1dp(band.low) }} – ₹ {{ l1dp(band.high) }}
-            {% endif %}
-          </div>
-          <div class="dist-track">
-            <div class="dist-fill" style="width: {{ band.pct }}%; background: {{ band.color }};"></div>
-          </div>
-          <div class="dist-pct">{{ band.pct }}%</div>
-        </div>
         {% endfor %}
-      </div>
-      <div class="dist-footnote">L = Lakhs (₹1L = ₹1,00,000)</div>
-    </div>
+      {% endif %}
+    {% endwith %}
 
-    <div class="verdict-card">
-      <div class="verdict-title">🎯 AutoKnowMus Verdict</div>
-      <div class="verdict-body" id="verdict-body">
-        <!-- JS populated -->
-      </div>
+    {% if error %}
+    <div class="alert-dismiss" id="err-alert">
+      {{ error }}
+      <button type="button" class="btn-close-x" onclick="document.getElementById('err-alert').remove()">&times;</button>
     </div>
+    {% endif %}
+
+    {% if show_credit_request %}
+    <div class="credit-request-card">
+      <h4>🎁 Need more credits?</h4>
+      <p>Request 500 free credits and keep exploring valuations. Auto-approved instantly.</p>
+      <form method="POST" action="{{ url_for('request_credits') }}" style="display:inline;">
+        {# Preserve form values through the credit top-up roundtrip #}
+        <input type="hidden" name="return_to" value="seller">
+        <input type="hidden" name="keep_make"      value="{{ form.make or '' }}">
+        <input type="hidden" name="keep_fuel"      value="{{ form.fuel or '' }}">
+        <input type="hidden" name="keep_model"     value="{{ form.model or '' }}">
+        <input type="hidden" name="keep_variant"   value="{{ form.variant or '' }}">
+        <input type="hidden" name="keep_year"      value="{{ form.year or '' }}">
+        <input type="hidden" name="keep_owner"     value="{{ form.owner or '' }}">
+        <input type="hidden" name="keep_mileage"   value="{{ form.mileage or '' }}">
+        <input type="hidden" name="keep_condition" value="{{ form.condition or '' }}">
+        <button type="submit" class="btn-request-credits">
+          Request 500 Credits (Free)
+        </button>
+      </form>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('seller') }}">
+
+      <!-- Row 1: LOCATION (full width, locked) -->
+      <div class="row g-3 location-row">
+        <div class="col-12">
+          <label class="form-label">Location</label>
+          <select class="form-select" disabled>
+            <option>Bangalore</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 2: Make, Fuel, Model, Variant -->
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Make <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="make" id="make" required>
+            <option value="">Select Make</option>
+            {% for m in makes %}
+              <option value="{{ m }}" {% if form.make == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Fuel Type <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="fuel" id="fuel" required disabled>
+            <option value="">Select Make first</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Model <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="model" id="model" required disabled>
+            <option value="">Select Fuel first</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Variant / Suffix <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="variant" id="variant" required disabled>
+            <option value="">Select Model first</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 3: Year, Owner (optional), Mileage (optional), Condition (optional) -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="year" required>
+            <option value="">Select Year</option>
+            {% for y in years %}
+              <option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">No. of Owners <span class="optional-hint">(optional)</span></label>
+          <select class="form-select" name="owner">
+            {% for o in owners %}
+              <option value="{{ o }}"
+                {% if form.owner == o %}selected
+                {% elif not form.owner and o == '1st Owner' %}selected
+                {% endif %}>{{ o }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Mileage (KMs) <span class="optional-hint">(optional)</span></label>
+          {# Visible field formats as user types; hidden field carries the raw number for POST #}
+          <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
+                 value="{{ form.mileage or '' }}" placeholder="e.g. 45,000">
+          <input type="hidden" name="mileage" id="mileage-raw" value="{{ form.mileage or '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Condition <span class="optional-hint">(optional)</span></label>
+          <select class="form-select" name="condition">
+            {% for c in conditions %}
+              <option value="{{ c }}"
+                {% if form.condition == c %}selected
+                {% elif not form.condition and c == 'Good' %}selected
+                {% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-generate">
+        GENERATE INTELLIGENCE
+        <span class="credit-cost">(100 Credits)</span>
+      </button>
+      <div class="credit-note">You have <strong style="color:#ffa500;">{{ session.credits|default(0) }} Credits</strong></div>
+    </form>
   </div>
-
 </div>
-
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
-<script>
-  // ----- Injected from Flask -----
-  const DEP_DATA      = {{ depreciation_json | safe }};
-  const PRICE_LOW     = {{ price_low }};
-  const PRICE_HIGH    = {{ price_high }};
-  const ESTIMATED     = {{ estimated }};
-  const BASE_DAYS     = {{ days_to_sell }};
-  const BASE_DEMAND   = {{ demand | tojson }};
-  const CONFIDENCE    = {{ confidence }};
-  const CAR_NAME      = {{ (val.year ~ ' ' ~ val.make ~ ' ' ~ val.model ~ ' ' ~ val.variant) | tojson }};
-  const VERIFIED_COUNT = {{ verified_count }};
-
-  // ----- Formatters -----
-  // 1dp Lakhs formatter (matches the server-side l1dp macro)
-  function lakh1dp(n) {
-    if (n === null || n === undefined || isNaN(n)) return '—';
-    n = Math.round(Number(n));
-    if (n >= 10000000) return (n / 10000000).toFixed(1) + 'Cr';
-    return (n / 100000).toFixed(1) + 'L';
-  }
-
-  // Depreciation lookup — map a day to a price
-  function priceAtDay(day) {
-    if (day < 0) day = 0;
-    if (day >= DEP_DATA.length) day = DEP_DATA.length - 1;
-    return DEP_DATA[day].price;
-  }
-
-  // ======================================================
-  // Dynamic demand + days based on slider position
-  // ======================================================
-  function demandForPrice(price) {
-    const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
-    if (BASE_DEMAND === 'HIGH') {
-      if (pct < 0.33) return 'HIGH';
-      if (pct < 0.75) return 'MEDIUM';
-      return 'LOW';
-    }
-    if (BASE_DEMAND === 'MEDIUM') {
-      if (pct < 0.33) return 'HIGH';
-      if (pct < 0.75) return 'MEDIUM';
-      return 'LOW';
-    }
-    if (pct < 0.33) return 'MEDIUM';
-    return 'LOW';
-  }
-
-  function daysForPrice(price) {
-    const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
-    const factor = 0.55 + pct * 0.95;
-    return Math.max(5, Math.round(BASE_DAYS * factor));
-  }
-
-  // ======================================================
-  // Verdict — includes depreciation guidance
-  // ======================================================
-  function generateVerdict(price, demand, days) {
-    const confidenceWord =
-      CONFIDENCE >= 90 ? 'strong' :
-      CONFIDENCE >= 75 ? 'good' :
-      CONFIDENCE >= 60 ? 'moderate' : 'preliminary';
-
-    const dataNote = VERIFIED_COUNT === 0
-      ? "Our estimate is formula-based using age, mileage, condition, ownership and fuel type. We don't yet have verified real-world deals for this exact car."
-      : `Our estimate blends the formula with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
-
-    let pricingStrategy;
-    const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
-    if (pct < 0.33) {
-      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakh1dp(price)}, demand is <span class="ok">${demand}</span> — expect serious interest within a week or two.`;
-    } else if (pct < 0.66) {
-      pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakh1dp(price)}, you'll see <span class="ok">${demand}</span> demand — balanced approach.`;
-    } else {
-      pricingStrategy = `<span class="hi">Priced at the upper end.</span> At ₹ ${lakh1dp(price)}, demand drops to <span class="hi">${demand}</span> — you may wait longer but could fetch top value.`;
-    }
-
-    const timeGuidance = days <= 20
-      ? `Expect to sell in around <strong class="ok">${days} days</strong>.`
-      : days <= 35
-      ? `Expect to sell in around <strong>${days} days</strong>.`
-      : `This price may take around <strong class="hi">${days} days</strong> to find a buyer.`;
-
-    // Depreciation guidance
-    const priceAtDay30 = priceAtDay(30);
-    const priceAtDay90 = priceAtDay(90);
-    const loss30  = price - priceAtDay30;
-    const loss90  = price - priceAtDay90;
-    const pctLoss30 = Math.round((loss30 / price) * 100);
-    const pctLoss90 = Math.round((loss90 / price) * 100);
-
-    let depreciationNote;
-    if (days <= 20) {
-      depreciationNote = `<strong>Waiting cost:</strong> Not a concern at this price — you'll sell before depreciation bites.`;
-    } else if (days <= 45) {
-      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakh1dp(loss30)} (${pctLoss30}%)</span> to depreciation. Factor this in.`;
-    } else {
-      depreciationNote = `<strong>Waiting cost:</strong> At this price, selling could stretch past 45 days. Over 90 days, your car could lose <span class="warn">₹ ${lakh1dp(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
-    }
-
-    const actionable = `<strong>Recommendation:</strong> For a balanced sale aim for ₹ ${lakh1dp(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. Need cash fast? List at ₹ ${lakh1dp(PRICE_LOW)}. Can wait 2+ months? Try ₹ ${lakh1dp(PRICE_HIGH)} — but remember depreciation.`;
-
-    return `
-      <p>Your <strong>${CAR_NAME}</strong> has a ${confidenceWord} valuation (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>
-      <p>${pricingStrategy} ${timeGuidance}</p>
-      <p>${depreciationNote}</p>
-      <p>${actionable}</p>
-    `;
-  }
-
-  // ======================================================
-  // Slider handlers
-  // ======================================================
-  const slider       = document.getElementById('price-slider');
-  const bubble       = document.getElementById('slider-bubble');
-  const priceText    = document.getElementById('slider-price-text');
-  const daysEl       = document.getElementById('slider-days');
-  const demandEl     = document.getElementById('demand-value');
-  const daysKpiEl    = document.getElementById('days-value');
-  const verdictEl    = document.getElementById('verdict-body');
-
-  function positionBubble() {
-    const min = Number(slider.min);
-    const max = Number(slider.max);
-    const val = Number(slider.value);
-    const pct = ((val - min) / (max - min)) * 100;
-    const thumbOffset = 10 - (pct / 100) * 20;
-    bubble.style.left = `calc(${pct}% + ${thumbOffset}px)`;
-  }
-
-  function updateDemandClass(demand) {
-    demandEl.classList.remove('demand-HIGH', 'demand-MEDIUM', 'demand-LOW');
-    demandEl.classList.add('demand-' + demand);
-    demandEl.textContent = demand;
-  }
-
-  function onSliderInput() {
-    const val = Number(slider.value);
-    const demand = demandForPrice(val);
-    const days = daysForPrice(val);
-
-    bubble.textContent = '₹ ' + lakh1dp(val);
-    priceText.textContent = '₹ ' + lakh1dp(val);
-    daysEl.textContent = days;
-    daysKpiEl.textContent = days;
-    updateDemandClass(demand);
-    verdictEl.innerHTML = generateVerdict(val, demand, days);
-    positionBubble();
-  }
-
-  slider.addEventListener('input', onSliderInput);
-  window.addEventListener('resize', positionBubble);
-
-  requestAnimationFrame(() => {
-    positionBubble();
-    verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
-  });
-
-  // ======================================================
-  // Depreciation chart
-  // ======================================================
-  const ctx = document.getElementById('dep-chart').getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, 0, 220);
-  grad.addColorStop(0, 'rgba(40, 167, 69, 0.35)');
-  grad.addColorStop(1, 'rgba(40, 167, 69, 0.02)');
-
-  const labels = DEP_DATA.map(p => 'Day ' + p.day);
-  const prices = DEP_DATA.map(p => p.price);
-
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Projected price',
-        data: prices,
-        borderColor: '#28a745',
-        backgroundColor: grad,
-        borderWidth: 2.5,
-        fill: true,
-        tension: 0.35,
-        pointRadius: 0,
-        pointHoverRadius: 6,
-        pointHoverBackgroundColor: '#28a745',
-        pointHoverBorderColor: '#fff',
-        pointHoverBorderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#0e1117',
-          titleColor: '#ffa500',
-          bodyColor: '#e6e6e6',
-          borderColor: '#28a745',
-          borderWidth: 1,
-          padding: 10,
-          titleFont: { weight: '600' },
-          bodyFont: { size: 13 },
-          displayColors: false,
-          callbacks: {
-            title: function(items) { return 'Day ' + items[0].dataIndex; },
-            label: function(item) {
-              const v = item.parsed.y;
-              return '₹ ' + lakh1dp(v);
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          ticks: {
-            color: '#6c757d',
-            maxTicksLimit: 5,
-            callback: function(val, idx) {
-              if (idx === 0 || idx === DEP_DATA.length - 1) return labels[idx];
-              return (idx % 22 === 0) ? labels[idx] : '';
-            }
-          },
-          grid: { color: 'rgba(255,255,255,0.04)' }
-        },
-        y: {
-          ticks: {
-            color: '#6c757d',
-            maxTicksLimit: 5,
-            callback: function(v) { return '₹ ' + lakh1dp(v); }
-          },
-          grid: { color: 'rgba(255,255,255,0.06)' }
-        }
-      }
-    }
-  });
-</script>
 {% endblock %}
+
+{% block scripts %}
+<script>
+  const CAR_DATA = {{ car_data_json | safe }};
+  const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
+
+  const makeEl    = document.getElementById('make');
