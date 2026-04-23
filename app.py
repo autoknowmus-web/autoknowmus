@@ -107,8 +107,14 @@ google = oauth.register(
 EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 PHONE_RE = re.compile(r'^\d{10}$')
 
+# Registration number validators
+RTO_CODE_RE    = re.compile(r'^[A-Z]{2}[0-9]{1,2}$')   # e.g. KA03, MH12
+REG_SERIES_RE  = re.compile(r'^[A-Z]{0,3}$')           # e.g. MK, AB, ABC (optional 0-3 letters for old plates)
+REG_NUMBER_RE  = re.compile(r'^[0-9]{1,4}$')           # e.g. 8201
+
 CONDITIONS = ['Excellent', 'Good', 'Fair']
 OWNERS = ['1st Owner', '2nd Owner', '3rd Owner or more']
+BUYER_TYPES = ['Dealer', 'Private']  # Alphabetical per standing rule
 FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV']
 YEAR_START = 2011
 YEAR_END = 2026
@@ -119,6 +125,8 @@ CREDIT_REQUEST_AMOUNT = 500
 ALERT_SUBSCRIPTION_COST = 500
 ALERT_SUBSCRIPTION_DAYS = 30
 MAX_ACTIVE_ALERTS = 5
+DEAL_REWARD_AMOUNT = 100
+MAX_DEALS_PER_WEEK = 3
 
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
@@ -193,6 +201,20 @@ def count_active_alert_subscriptions(user_id):
         return r.count or 0
     except Exception as e:
         app.logger.warning(f"count_active_alert_subscriptions failed: {e}")
+        return 0
+
+def count_recent_deals(user_id, days=7):
+    """Count deals submitted by user in the past N days (rate limit)."""
+    try:
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        r = (supabase.table('deals')
+             .select('id', count='exact')
+             .eq('user_id', user_id)
+             .gte('created_at', cutoff)
+             .execute())
+        return r.count or 0
+    except Exception as e:
+        app.logger.warning(f"count_recent_deals failed: {e}")
         return 0
 
 def login_user_session(user: dict):
@@ -1081,7 +1103,6 @@ def buyer_dashboard():
     depreciation = compute_depreciation_series_monthly(adjusted, months=60)
     verified_count, buyers_last_30d, avg_buyers_range = get_market_stats(make, model)
 
-    # Check if user already has an active alert subscription for this car
     active_sub = get_active_alert_subscription(user['id'], make, model, variant)
     active_alerts_count = count_active_alert_subscriptions(user['id'])
 
@@ -1367,21 +1388,237 @@ def cancel_alert(alert_id):
     except Exception as e:
         app.logger.warning(f"Log cancel transaction failed: {e}")
 
-    # Refresh slot count in session
     session['active_alerts_count'] = count_active_alert_subscriptions(user['id'])
 
     flash(f'Alert for {car_label} cancelled. Slot freed (no credit refund).', 'success')
     return redirect(url_for('my_alerts'))
 
 
-# ---------- Stage 3 stubs ----------
+# ========== SUBMIT DEAL ==========
 
-@app.route('/submit-deal')
+@app.route('/submit-deal', methods=['GET', 'POST'])
 @login_required
 def submit_deal():
+    """Submit a verified car transaction. Awards 100 credits on approval."""
     user = current_user()
-    return render_template('placeholder.html', user=user, page_title='Record Transaction',
-                           message='Deal submission form is coming in Stage 3B.')
+    if not user:
+        return redirect(url_for('index'))
+
+    def render_form(form_data, error='', weekly_count=None):
+        return render_template(
+            'submit_deal.html',
+            user=user,
+            first_name=firstname_filter(user.get('name')),
+            form=form_data,
+            error=error,
+            makes=get_makes(),
+            years=YEARS,
+            owners=OWNERS,
+            conditions=CONDITIONS,
+            buyer_types=BUYER_TYPES,
+            car_data_json=json.dumps(CAR_DATA),
+            weekly_count=weekly_count if weekly_count is not None else count_recent_deals(user['id'], 7),
+            max_per_week=MAX_DEALS_PER_WEEK,
+            deal_reward=DEAL_REWARD_AMOUNT,
+        )
+
+    if request.method == 'GET':
+        prefill = {
+            'make':              request.args.get('make', ''),
+            'fuel':              request.args.get('fuel', ''),
+            'model':             request.args.get('model', ''),
+            'variant':           request.args.get('variant', ''),
+            'year':              request.args.get('year', ''),
+            'owner':             request.args.get('owner', ''),
+            'mileage':           request.args.get('mileage', ''),
+            'condition':         request.args.get('condition', ''),
+            'buyer_type':        request.args.get('buyer_type', ''),
+            'rto_code':          request.args.get('rto_code', ''),
+            'reg_series':        request.args.get('reg_series', ''),
+            'reg_number':        request.args.get('reg_number', ''),
+            'transaction_date':  request.args.get('transaction_date', ''),
+            'asking_price':      request.args.get('asking_price', ''),
+            'sale_price':        request.args.get('sale_price', ''),
+            'has_proof':         request.args.get('has_proof', ''),
+        }
+        return render_form(prefill)
+
+    # ==== POST: validate + insert ====
+    form_data = {
+        'make':              (request.form.get('make') or '').strip(),
+        'fuel':              (request.form.get('fuel') or '').strip(),
+        'model':             (request.form.get('model') or '').strip(),
+        'variant':           (request.form.get('variant') or '').strip(),
+        'year':              (request.form.get('year') or '').strip(),
+        'owner':             (request.form.get('owner') or '').strip(),
+        'mileage':           (request.form.get('mileage') or '').strip(),
+        'condition':         (request.form.get('condition') or '').strip(),
+        'buyer_type':        (request.form.get('buyer_type') or '').strip(),
+        'rto_code':          (request.form.get('rto_code') or '').strip().upper(),
+        'reg_series':        (request.form.get('reg_series') or '').strip().upper(),
+        'reg_number':        (request.form.get('reg_number') or '').strip(),
+        'transaction_date':  (request.form.get('transaction_date') or '').strip(),
+        'asking_price':      (request.form.get('asking_price') or '').strip(),
+        'sale_price':        (request.form.get('sale_price') or '').strip(),
+        'has_proof':         request.form.get('has_proof') == 'on',
+    }
+
+    # Rate limit: max 3 deals per 7 days
+    weekly_count = count_recent_deals(user['id'], 7)
+    if weekly_count >= MAX_DEALS_PER_WEEK:
+        return render_form(
+            form_data,
+            error=f'Weekly limit reached. You can submit up to {MAX_DEALS_PER_WEEK} deals every 7 days. Please try again later.',
+            weekly_count=weekly_count
+        )
+
+    # Required fields (asking_price + has_proof are conditional)
+    required = ['make', 'fuel', 'model', 'variant', 'year', 'owner',
+                'mileage', 'condition', 'buyer_type',
+                'rto_code', 'reg_series', 'reg_number',
+                'transaction_date', 'sale_price']
+    for key in required:
+        if not form_data[key]:
+            return render_form(form_data, error='Please fill in all required fields.')
+
+    if form_data['make'] not in CAR_DATA:
+        return render_form(form_data, error='Invalid Make selected.')
+    if form_data['model'] not in CAR_DATA[form_data['make']]:
+        return render_form(form_data, error='Invalid Model selected.')
+    if form_data['variant'] not in CAR_DATA[form_data['make']][form_data['model']]['variants']:
+        return render_form(form_data, error='Invalid Variant selected.')
+    if form_data['fuel'] not in CAR_DATA[form_data['make']][form_data['model']]['fuels']:
+        return render_form(form_data, error='Selected Fuel is not available for this Model.')
+    if form_data['owner'] not in OWNERS:
+        return render_form(form_data, error='Invalid Owner selected.')
+    if form_data['condition'] not in CONDITIONS:
+        return render_form(form_data, error='Invalid Condition selected.')
+    if form_data['buyer_type'] not in BUYER_TYPES:
+        return render_form(form_data, error='Invalid Buyer Type. Select Private or Dealer.')
+
+    try:
+        year_int = int(form_data['year'])
+        if year_int < YEAR_START or year_int > YEAR_END:
+            raise ValueError
+    except (ValueError, TypeError):
+        return render_form(form_data, error='Invalid Year.')
+
+    try:
+        mileage_int = int(form_data['mileage'])
+        if mileage_int < 0 or mileage_int > 500000:
+            raise ValueError
+    except (ValueError, TypeError):
+        return render_form(form_data, error='Mileage must be a number between 0 and 500000.')
+
+    # Registration number validation
+    if not RTO_CODE_RE.match(form_data['rto_code']):
+        return render_form(form_data, error='RTO code must be 2 letters + 1-2 digits (e.g. KA03).')
+    if not REG_SERIES_RE.match(form_data['reg_series']):
+        return render_form(form_data, error='Series must be 0-3 letters (e.g. MK, AB).')
+    if not REG_NUMBER_RE.match(form_data['reg_number']):
+        return render_form(form_data, error='Registration number must be 1-4 digits (e.g. 8201).')
+
+    # Transaction date validation: must be valid date, not in future, not before 2010
+    try:
+        tx_date = datetime.strptime(form_data['transaction_date'], '%Y-%m-%d').date()
+        today = datetime.utcnow().date()
+        if tx_date > today:
+            return render_form(form_data, error='Transaction date cannot be in the future.')
+        if tx_date.year < 2010:
+            return render_form(form_data, error='Transaction date must be on or after 2010.')
+    except (ValueError, TypeError):
+        return render_form(form_data, error='Invalid transaction date.')
+
+    # Sale price (required)
+    cleaned_sale = form_data['sale_price'].replace(',', '').replace('₹', '').strip()
+    try:
+        sale_price_int = int(cleaned_sale)
+        if sale_price_int <= 0 or sale_price_int > 100000000:
+            raise ValueError
+    except (ValueError, TypeError):
+        return render_form(form_data, error='Sale price must be a positive number up to ₹10 Crore.')
+
+    # Asking price (optional)
+    asking_price_int = None
+    if form_data['asking_price']:
+        cleaned_ask = form_data['asking_price'].replace(',', '').replace('₹', '').strip()
+        try:
+            asking_price_int = int(cleaned_ask)
+            if asking_price_int <= 0 or asking_price_int > 100000000:
+                raise ValueError
+        except (ValueError, TypeError):
+            return render_form(form_data, error='Asking price, if provided, must be a positive number.')
+
+    # Dealer MUST have proof. Private may skip it (will be flagged unverified).
+    if form_data['buyer_type'] == 'Dealer' and not form_data['has_proof']:
+        return render_form(form_data, error='Dealer transactions require proof of sale (invoice). Please confirm you have proof.')
+
+    # Determine verified status
+    # Dealer + proof → verified=True (proof required to even submit)
+    # Private + proof → verified=True
+    # Private + no proof → verified=False (flagged unverified, not used in valuations)
+    verified_flag = form_data['has_proof']
+
+    # Build INSERT payload
+    payload = {
+        'user_id':           user['id'],
+        'make':              form_data['make'],
+        'model':             form_data['model'],
+        'variant':           form_data['variant'],
+        'fuel':              form_data['fuel'],
+        'year':              year_int,
+        'mileage':           mileage_int,
+        'condition':         form_data['condition'],
+        'owner':             form_data['owner'],
+        'buyer_type':        form_data['buyer_type'],
+        'sale_price':        sale_price_int,
+        'asking_price':      asking_price_int,
+        'transaction_date':  tx_date.isoformat(),
+        'rto_code':          form_data['rto_code'],
+        'reg_series':        form_data['reg_series'] or None,
+        'reg_number':        form_data['reg_number'],
+        'has_proof':         form_data['has_proof'],
+        'verified':          verified_flag,
+    }
+
+    try:
+        ins = supabase.table('deals').insert(payload).execute()
+        deal_row = ins.data[0] if ins.data else None
+    except Exception as e:
+        app.logger.error(f"Deal insert failed: {e}")
+        return render_form(form_data, error='Could not save your deal. Please try again.')
+
+    if not deal_row:
+        return render_form(form_data, error='Could not save your deal. Please try again.')
+
+    # Award credits
+    current_credits = user.get('credits', 0) or 0
+    new_balance = current_credits + DEAL_REWARD_AMOUNT
+    try:
+        update_user(user['id'], {'credits': new_balance})
+        log_credit_transaction(
+            user_id=user['id'],
+            type_='deal_reward',
+            description=f"Deal submitted: {year_int} {form_data['make']} {form_data['model']} {form_data['variant']} ({form_data['buyer_type']})",
+            amount=DEAL_REWARD_AMOUNT,
+            balance_after=new_balance,
+        )
+        session['credits'] = new_balance
+        if 'user' in session:
+            session['user']['credits'] = new_balance
+    except Exception as e:
+        app.logger.error(f"Deal reward credit award failed: {e}")
+
+    verified_msg = '' if verified_flag else ' (Flagged as unverified — private sale without proof. Thanks for contributing!)'
+    flash(
+        f"✅ Deal recorded! +{DEAL_REWARD_AMOUNT} credits awarded. "
+        f"New balance: {new_balance} credits.{verified_msg}",
+        'success'
+    )
+    return redirect(url_for('role'))
+
+
+# ---------- Stage 3 stubs ----------
 
 @app.route('/credit-history')
 @login_required
