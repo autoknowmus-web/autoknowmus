@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}Data Health — Admin{% endblock %}
+{% block title %}Data Health — Admin · AutoKnowMus{% endblock %}
 
 {% block content %}
 <style>
@@ -11,6 +11,22 @@
     color: #e4e6eb;
   }
 
+  .btn-back {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 14px;
+  }
+
+  .btn-back:hover { background: #5a6168; }
+
   .admin-header {
     display: flex;
     justify-content: space-between;
@@ -18,6 +34,8 @@
     margin-bottom: 22px;
     padding-bottom: 14px;
     border-bottom: 1px solid #2a2f3a;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   .admin-header h1 {
@@ -39,13 +57,6 @@
     margin-bottom: 16px;
   }
 
-  .admin-grid-full {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-
   .card {
     background: #1a1d24;
     border: 1px solid #2a2f3a;
@@ -54,45 +65,39 @@
   }
 
   .card h2 {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     color: #ffa500;
     margin: 0 0 12px 0;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.6px;
   }
 
   .stat-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 0;
+    padding: 7px 0;
     border-bottom: 1px solid #242832;
     font-size: 13px;
   }
 
   .stat-row:last-child { border-bottom: none; }
 
-  .stat-label {
-    color: #b4b8c3;
-  }
+  .stat-label { color: #b4b8c3; }
+  .stat-value { font-weight: 600; color: #e4e6eb; }
 
-  .stat-value {
-    font-weight: 600;
-    color: #e4e6eb;
-  }
-
-  .trend-up   { color: #28a745; font-size: 12px; margin-left: 6px; }
-  .trend-down { color: #dc3545; font-size: 12px; margin-left: 6px; }
-  .trend-flat { color: #8b92a5; font-size: 12px; margin-left: 6px; }
+  .trend-up   { color: #28a745; font-size: 11px; margin-left: 6px; font-weight: 600; }
+  .trend-down { color: #dc3545; font-size: 11px; margin-left: 6px; font-weight: 600; }
+  .trend-flat { color: #8b92a5; font-size: 11px; margin-left: 6px; }
 
   .phase-bar {
     display: grid;
-    grid-template-columns: 140px 1fr 80px;
+    grid-template-columns: 150px 1fr 90px;
     gap: 10px;
     align-items: center;
     padding: 6px 0;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .phase-bar-track {
@@ -105,6 +110,7 @@
   .phase-bar-fill {
     height: 100%;
     border-radius: 4px;
+    transition: width 0.3s ease;
   }
 
   .phase-4-fill { background: #ffd700; }
@@ -114,20 +120,20 @@
 
   .phase-4-label { color: #ffd700; font-weight: 600; }
   .phase-3-label { color: #28a745; font-weight: 600; }
-  .phase-2-label { color: #4e54ff; font-weight: 600; }
-  .phase-1-label { color: #6c757d; font-weight: 600; }
+  .phase-2-label { color: #7a80ff; font-weight: 600; }
+  .phase-1-label { color: #8b92a5; font-weight: 600; }
 
-  .phase-count { text-align: right; font-variant-numeric: tabular-nums; }
+  .phase-count { text-align: right; font-variant-numeric: tabular-nums; color: #b4b8c3; }
 
   table.data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: 12.5px;
   }
 
   table.data-table th {
     text-align: left;
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #8b92a5;
@@ -148,16 +154,16 @@
     display: inline-block;
     padding: 2px 8px;
     border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
 
-  .pill-phase-4 { background: rgba(255,215,0,0.15);  color: #ffd700; }
-  .pill-phase-3 { background: rgba(40,167,69,0.15);  color: #28a745; }
-  .pill-phase-2 { background: rgba(78,84,255,0.15); color: #4e54ff; }
-  .pill-phase-1 { background: rgba(108,117,125,0.15); color: #8b92a5; }
+  .pill-phase-4 { background: rgba(255,215,0,0.15);  color: #ffd700; border: 1px solid rgba(255,215,0,0.3); }
+  .pill-phase-3 { background: rgba(40,167,69,0.15);  color: #28a745; border: 1px solid rgba(40,167,69,0.3); }
+  .pill-phase-2 { background: rgba(78,84,255,0.15); color: #7a80ff; border: 1px solid rgba(78,84,255,0.3); }
+  .pill-phase-1 { background: rgba(108,117,125,0.15); color: #8b92a5; border: 1px solid rgba(108,117,125,0.3); }
 
   .flag-item {
     padding: 10px 0;
@@ -171,18 +177,21 @@
     font-weight: 600;
     color: #dc3545;
     margin-bottom: 4px;
+    font-size: 13px;
   }
 
   .flag-detail {
     color: #b4b8c3;
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
   .broker-row {
     display: grid;
     grid-template-columns: 1fr auto;
-    padding: 10px 0;
+    gap: 12px;
+    padding: 12px 0;
     border-bottom: 1px solid #242832;
+    align-items: start;
   }
 
   .broker-row:last-child { border-bottom: none; }
@@ -199,20 +208,19 @@
     margin-top: 2px;
   }
 
-  .broker-flags {
-    font-size: 11px;
-    color: #ffa500;
-    margin-top: 4px;
-  }
+  .broker-flags { margin-top: 6px; }
 
   .broker-flags .flag-chip {
     display: inline-block;
-    background: rgba(255,165,0,0.1);
-    border: 1px solid rgba(255,165,0,0.3);
-    padding: 2px 6px;
+    background: rgba(255,165,0,0.08);
+    border: 1px solid rgba(255,165,0,0.25);
+    color: #ffa500;
+    padding: 2px 7px;
     border-radius: 4px;
+    font-size: 10.5px;
     margin-right: 4px;
-    margin-top: 2px;
+    margin-top: 4px;
+    font-weight: 500;
   }
 
   .btn-flag {
@@ -224,39 +232,15 @@
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
-    align-self: center;
   }
 
   .btn-flag:hover { background: #b52a39; }
-
-  .btn-back {
-    background: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 6px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-block;
-    margin-bottom: 14px;
-  }
 
   .empty-state {
     color: #6c757d;
     font-size: 12px;
     font-style: italic;
-    padding: 16px 0;
-    text-align: center;
-  }
-
-  .footer-version {
-    margin-top: 24px;
-    padding-top: 14px;
-    border-top: 1px solid #2a2f3a;
-    font-size: 11px;
-    color: #6c757d;
+    padding: 14px 0;
     text-align: center;
   }
 
@@ -268,11 +252,25 @@
 
   .upgrade-close {
     color: #28a745;
-    font-weight: 600;
+    font-weight: 700;
   }
 
-  @media (max-width: 768px) {
+  .footer-version {
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px solid #2a2f3a;
+    font-size: 11px;
+    color: #6c757d;
+    text-align: center;
+  }
+
+  @media (max-width: 900px) {
     .admin-grid { grid-template-columns: 1fr; }
+    .phase-bar { grid-template-columns: 120px 1fr 80px; font-size: 11px; }
+  }
+
+  @media (max-width: 520px) {
+    .admin-header h1 { font-size: 18px; }
   }
 </style>
 
@@ -295,7 +293,7 @@
       </div>
       {% for p in phase_distribution %}
       <div class="phase-bar">
-        <span class="phase-{{ p.phase }}-label">Phase {{ p.phase }} · {{ p.label }}</span>
+        <span class="phase-{{ p.phase }}-label">P{{ p.phase }} · {{ p.label }}</span>
         <div class="phase-bar-track">
           <div class="phase-bar-fill phase-{{ p.phase }}-fill" style="width: {{ p.pct }}%;"></div>
         </div>
@@ -382,15 +380,13 @@
           <tr>
             <td>{{ m.make }} {{ m.model }}</td>
             <td style="text-align:right;" class="upgrade-progress">
-              {{ m.deal_count }}/{{ m.threshold_deals }} · {{ m.distinct_users }}/{{ m.threshold_users }}
+              {{ m.deal_count }}/{{ m.threshold_deals }}d · {{ m.distinct_users }}/{{ m.threshold_users }}u
             </td>
             <td style="text-align:right;" class="{% if m.deals_needed <= 2 %}upgrade-close{% endif %}">
               {% if m.deals_needed == 0 and m.users_needed == 0 %}
                 ready for P{{ m.next_phase }}
               {% else %}
-                {{ m.deals_needed }}d
-                {% if m.users_needed > 0 %}+{{ m.users_needed }}u{% endif %}
-                → P{{ m.next_phase }}
+                {{ m.deals_needed }}d{% if m.users_needed > 0 %}+{{ m.users_needed }}u{% endif %} → P{{ m.next_phase }}
               {% endif %}
             </td>
           </tr>
