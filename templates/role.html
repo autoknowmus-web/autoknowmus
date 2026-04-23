@@ -46,7 +46,13 @@
   }
   .btn-disabled-coming .coming-soon { color: #ffa500; font-size: 0.8rem; font-weight: 600; }
 
-  /* My alerts link inside buyer card */
+  .btn-guest-locked {
+    background: #2a2d34; color: #888; padding: 11px; border-radius: 8px;
+    font-weight: 500; text-align: center; cursor: not-allowed;
+    border: 1px dashed #4a4f5a;
+  }
+  .btn-guest-locked .lock-note { color: #ffa500; font-size: 0.78rem; font-weight: 600; margin-left: 4px; }
+
   .view-alerts-link {
     display: block;
     text-align: center;
@@ -73,8 +79,16 @@
     margin-left: 4px;
     font-weight: 600;
   }
+  .view-alerts-locked {
+    display: block;
+    text-align: center;
+    margin-top: 12px;
+    color: #6c757d;
+    font-size: 0.8rem;
+    padding: 6px;
+    font-style: italic;
+  }
 
-  /* Orange dismissible welcome alert */
   .welcome-alert {
     background: #ff8c00; color: #fff; border: none; border-radius: 8px;
     padding: 0.85rem 2.5rem 0.85rem 1rem; margin: 0 auto 1.5rem;
@@ -86,7 +100,48 @@
     font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 0 0.25rem;
   }
 
-  /* Dismissible flash messages (for post-submit notifications) */
+  /* ===== Guest mode banner ===== */
+  .guest-banner {
+    background: linear-gradient(135deg, rgba(78,84,255,0.15), rgba(78,84,255,0.05));
+    border: 1px solid #4e54ff;
+    border-radius: 10px;
+    padding: 14px 22px;
+    margin: 0 auto 1.5rem;
+    max-width: 900px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .guest-banner .gb-text {
+    color: #e6e6e6;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    flex: 1;
+    min-width: 260px;
+  }
+  .guest-banner .gb-text strong { color: #8a90ff; font-weight: 700; }
+  .guest-banner .gb-signup {
+    background: #4e54ff;
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 7px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .guest-banner .gb-signup:hover { background: #3a40d9; color: #fff; }
+  .guest-banner .gb-icon { font-size: 1.4rem; flex-shrink: 0; }
+
+  .guest-banner.used {
+    background: linear-gradient(135deg, rgba(220,53,69,0.12), rgba(220,53,69,0.05));
+    border-color: #dc3545;
+  }
+  .guest-banner.used .gb-text strong { color: #ff6b6b; }
+
   .role-flash {
     max-width: 900px;
     margin: 0 auto 1.25rem;
@@ -97,12 +152,8 @@
     font-weight: 500;
     color: #fff;
   }
-  .role-flash.success {
-    background: #28a745;
-  }
-  .role-flash.error {
-    background: #ff8c00;
-  }
+  .role-flash.success { background: #28a745; }
+  .role-flash.error { background: #ff8c00; }
   .role-flash .btn-close-x {
     position: absolute; top: 50%; right: 0.75rem; transform: translateY(-50%);
     background: transparent; border: none; color: #fff;
@@ -114,7 +165,6 @@
 {% block content %}
 <div class="role-wrap">
 
-  {# Flash messages (e.g. "+100 credits awarded" after deal submission) — dismissible with × #}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for category, message in messages %}
@@ -128,7 +178,6 @@
     {% endif %}
   {% endwith %}
 
-  {# ORIGINAL welcome message text — no "(500 Credits)" suffix per standing rule #}
   {% if show_welcome %}
     <div class="welcome-alert" id="welcome-alert">
       🎉 Welcome! 500 bonus credits added for 5 free searches!
@@ -136,7 +185,34 @@
     </div>
   {% endif %}
 
-  <h2 class="greeting">Hello {{ first_name }}! Ready to make a smarter decision?</h2>
+  {# ===== Guest mode banners ===== #}
+  {% if session.is_guest %}
+    {% if guest_used %}
+      <div class="guest-banner used">
+        <span class="gb-icon">🔒</span>
+        <div class="gb-text">
+          <strong>Guest trial used.</strong> Your one-time guest search is complete. Sign up to unlock unlimited searches, set alerts, record deals, and earn credits.
+        </div>
+        <a href="{{ url_for('signup') }}" class="gb-signup">Sign Up Free</a>
+      </div>
+    {% else %}
+      <div class="guest-banner">
+        <span class="gb-icon">🎁</span>
+        <div class="gb-text">
+          <strong>Guest mode — 1 free search.</strong> Pick Seller or Buyer below. Sign up anytime to save results, set alerts, and earn credits for sharing real deals.
+        </div>
+        <a href="{{ url_for('signup') }}" class="gb-signup">Sign Up Free</a>
+      </div>
+    {% endif %}
+  {% endif %}
+
+  <h2 class="greeting">
+    {% if session.is_guest %}
+      Try AutoKnowMus — one free search
+    {% else %}
+      Hello {{ first_name }}! Ready to make a smarter decision?
+    {% endif %}
+  </h2>
 
   <div class="row g-4">
     <!-- Seller -->
@@ -144,7 +220,13 @@
       <div class="role-card seller">
         <h3 class="role-title seller-title">I am a Seller</h3>
         <p class="role-sub">Price your car right with real market intelligence before you list.</p>
-        <a href="{{ url_for('seller') }}" class="btn btn-role btn-role-seller">Find My Car Value</a>
+
+        {% if session.is_guest and guest_used %}
+          <div class="btn-guest-locked">🔒 Sign up to continue searching</div>
+        {% else %}
+          <a href="{{ url_for('seller') }}" class="btn btn-role btn-role-seller">Find My Car Value</a>
+        {% endif %}
+
         <div class="benefit-box">
           <div class="benefit-title seller-b">Seller Credit Benefits</div>
           <p class="benefit-text">
@@ -155,9 +237,16 @@
         <div class="btn-disabled-coming">
           Purchase 500 Credits for Seller <span class="coming-soon">(Coming Soon)</span>
         </div>
-        <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
-          Record Actual Transaction Data
-        </a>
+
+        {% if session.is_guest %}
+          <div class="btn-guest-locked">
+            Record Actual Transaction Data <span class="lock-note">🔒 Sign up required</span>
+          </div>
+        {% else %}
+          <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
+            Record Actual Transaction Data
+          </a>
+        {% endif %}
       </div>
     </div>
 
@@ -166,7 +255,13 @@
       <div class="role-card buyer">
         <h3 class="role-title buyer-title">I am a Buyer</h3>
         <p class="role-sub">Evaluate any deal against real market data before you pay.</p>
-        <a href="{{ url_for('buyer') }}" class="btn btn-role btn-role-buyer">Research Prices</a>
+
+        {% if session.is_guest and guest_used %}
+          <div class="btn-guest-locked">🔒 Sign up to continue searching</div>
+        {% else %}
+          <a href="{{ url_for('buyer') }}" class="btn btn-role btn-role-buyer">Research Prices</a>
+        {% endif %}
+
         <div class="benefit-box">
           <div class="benefit-title buyer-b">Buyer Credit Benefits</div>
           <p class="benefit-text">
@@ -177,16 +272,25 @@
         <div class="btn-disabled-coming">
           Purchase 500 Credits as Buyer <span class="coming-soon">(Coming Soon)</span>
         </div>
-        <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
-          Record Actual Transaction Data
-        </a>
 
-        <a href="{{ url_for('my_alerts') }}" class="view-alerts-link">
-          🔔 View my alerts
-          {% if active_alerts_count and active_alerts_count > 0 %}
-            <span class="count-pill">{{ active_alerts_count }} of 5 active</span>
-          {% endif %}
-        </a>
+        {% if session.is_guest %}
+          <div class="btn-guest-locked">
+            Record Actual Transaction Data <span class="lock-note">🔒 Sign up required</span>
+          </div>
+          <div class="view-alerts-locked">
+            🔒 Alerts are available after signup
+          </div>
+        {% else %}
+          <a href="{{ url_for('submit_deal') }}" class="btn-secondary-outline">
+            Record Actual Transaction Data
+          </a>
+          <a href="{{ url_for('my_alerts') }}" class="view-alerts-link">
+            🔔 View my alerts
+            {% if active_alerts_count and active_alerts_count > 0 %}
+              <span class="count-pill">{{ active_alerts_count }} of 5 active</span>
+            {% endif %}
+          </a>
+        {% endif %}
       </div>
     </div>
   </div>
