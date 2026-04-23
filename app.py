@@ -9,6 +9,7 @@ import logging
 import bcrypt
 from datetime import datetime, timedelta
 from functools import wraps
+from collections import Counter, defaultdict
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, make_response
 from authlib.integrations.flask_client import OAuth
 from supabase import create_client, Client
@@ -16,7 +17,10 @@ from supabase import create_client, Client
 from car_data import (
     CAR_DATA, get_makes, get_models, get_variants, get_fuels,
     compute_base_valuation, compute_price_range, adjust_with_deals,
-    get_base_price, CURRENT_YEAR
+    get_base_price, get_variant_base_price, get_phase_display,
+    determine_phase, CURRENT_YEAR,
+    BASE_PRICE_DATA_VERSION, BASE_PRICE_LAST_UPDATED,
+    PHASE_THRESHOLDS, PHASE_BLEND,
 )
 
 app = Flask(__name__)
@@ -24,6 +28,15 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-change-me')
 
 logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
+
+# ============================================================
+# ADMIN ALLOWLIST — swap this placeholder with your email(s)
+# TODO: migrate to a role flag on users table when you add a second admin
+# ============================================================
+ADMIN_EMAILS = {
+    'YOUR_EMAIL@example.com',   # <-- REPLACE WITH YOUR EMAIL
+}
+
 
 # ---------- Jinja filters ----------
 @app.template_filter('firstname')
@@ -76,7 +89,6 @@ def lakh_filter(value):
 
 @app.template_filter('ddmmmyyyy')
 def ddmmmyyyy_filter(value):
-    """Format datetime/ISO string as DD-MMM-YYYY."""
     if not value:
         return '—'
     if isinstance(value, str):
@@ -138,11 +150,14 @@ MAX_ACTIVE_ALERTS = 5
 DEAL_REWARD_AMOUNT = 100
 MAX_DEALS_PER_WEEK = 3
 
+# Phase detection lookback window
+PHASE_LOOKBACK_DAYS = 180
+
 # Guest access
 GUEST_CREDITS = 100
 GUEST_LOCKOUT_DAYS = 30
 GUEST_COOKIE_NAME = 'ak_guest_token'
-GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * GUEST_LOCKOUT_DAYS  # 30 days
+GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * GUEST_LOCKOUT_DAYS
 
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
@@ -256,7 +271,6 @@ def count_recent_deals(user_id, days=7):
 # ========== GUEST HELPERS ==========
 
 def has_valid_guest_usage(token: str) -> bool:
-    """Check if a guest token has already consumed its one-time usage (within 30-day lockout window)."""
     if not token:
         return False
     try:
@@ -274,7 +288,6 @@ def has_valid_guest_usage(token: str) -> bool:
 
 
 def record_guest_usage(token: str, action_type: str) -> bool:
-    """Record a guest usage event. Called after successful seller/buyer search."""
     if not token:
         return False
     try:
@@ -296,7 +309,6 @@ def record_guest_usage(token: str, action_type: str) -> bool:
 
 
 def start_guest_session(token: str):
-    """Initialize session for a fresh guest."""
     session.clear()
     session['is_guest'] = True
     session['guest_token'] = token
@@ -304,8 +316,6 @@ def start_guest_session(token: str):
     session['active_alerts_count'] = 0
     session['guest_used'] = False
 
-
-# ==========
 
 def login_user_session(user: dict):
     session.clear()
@@ -340,7 +350,6 @@ def current_user():
 
 
 def login_required(f):
-    """Allows both authenticated users AND active guests."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if session.get('is_guest'):
@@ -367,7 +376,6 @@ def login_required(f):
 
 
 def no_guest(redirect_endpoint='signup', message=None):
-    """Decorator that blocks guests from gated routes with a clean signup redirect."""
     def outer(f):
         @wraps(f)
         def decorated(*args, **kwargs):
@@ -377,6 +385,20 @@ def no_guest(redirect_endpoint='signup', message=None):
             return f(*args, **kwargs)
         return decorated
     return outer
+
+
+def admin_required(f):
+    """Only users whose email is in ADMIN_EMAILS can access."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get('is_guest'):
+            return redirect(url_for('role'))
+        user = current_user()
+        if not user or (user.get('email') or '').lower() not in {e.lower() for e in ADMIN_EMAILS}:
+            # Silently redirect to role — don't reveal admin route exists
+            return redirect(url_for('role'))
+        return f(*args, **kwargs)
+    return decorated
 
 
 def log_credit_transaction(user_id, type_, description, amount, balance_after):
@@ -391,10 +413,42 @@ def log_credit_transaction(user_id, type_, description, amount, balance_after):
     except Exception as e:
         app.logger.error(f"Failed to log transaction: {e}")
 
-def fetch_similar_deals(make, model, year, fuel, window_years=2):
+
+# ============================================================
+# PHASE + COMPS HELPERS
+# ============================================================
+
+def fetch_similar_deals(make, model, variant, fuel, year, window_years=2,
+                        lookback_days=PHASE_LOOKBACK_DAYS):
+    """
+    Fetch verified deals matching make+model+variant+fuel within year±2,
+    submitted in last `lookback_days`.
+    Fallback: if fewer than 3 variant-specific deals, widen to model-level.
+    Returns list of sale_price ints.
+    """
     try:
         year_low = int(year) - window_years
         year_high = int(year) + window_years
+        cutoff = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
+
+        # Primary: variant-specific
+        r = (supabase.table('deals')
+             .select('sale_price')
+             .eq('make', make)
+             .eq('model', model)
+             .eq('variant', variant)
+             .eq('fuel', fuel)
+             .eq('verified', True)
+             .gte('year', year_low)
+             .lte('year', year_high)
+             .gte('created_at', cutoff)
+             .execute())
+        variant_deals = [row['sale_price'] for row in (r.data or []) if row.get('sale_price')]
+
+        if len(variant_deals) >= 3:
+            return variant_deals
+
+        # Fallback: widen to model-wide (drop variant filter)
         r = (supabase.table('deals')
              .select('sale_price')
              .eq('make', make)
@@ -403,11 +457,50 @@ def fetch_similar_deals(make, model, year, fuel, window_years=2):
              .eq('verified', True)
              .gte('year', year_low)
              .lte('year', year_high)
+             .gte('created_at', cutoff)
              .execute())
         return [row['sale_price'] for row in (r.data or []) if row.get('sale_price')]
     except Exception as e:
         app.logger.warning(f"fetch_similar_deals failed: {e}")
         return []
+
+
+def compute_model_phase_data(make, model):
+    """
+    Compute phase for a (make, model) using verified deals in last 180 days.
+    Returns dict:
+      {
+        'phase': int 1-4,
+        'deal_count_180d': int,
+        'distinct_users_180d': int,
+        'display': {badge, detail, tooltip},
+      }
+    """
+    try:
+        cutoff = (datetime.utcnow() - timedelta(days=PHASE_LOOKBACK_DAYS)).isoformat()
+        r = (supabase.table('deals')
+             .select('user_id, sale_price')
+             .eq('make', make)
+             .eq('model', model)
+             .eq('verified', True)
+             .gte('created_at', cutoff)
+             .execute())
+        rows = r.data or []
+    except Exception as e:
+        app.logger.warning(f"compute_model_phase_data failed: {e}")
+        rows = []
+
+    deal_count = len(rows)
+    distinct_users = len({row['user_id'] for row in rows if row.get('user_id')})
+    phase = determine_phase(deal_count, distinct_users, previous_phase=1)
+
+    return {
+        'phase': phase,
+        'deal_count_180d': deal_count,
+        'distinct_users_180d': distinct_users,
+        'display': get_phase_display(phase),
+    }
+
 
 def compute_demand(make, year):
     age = max(0, CURRENT_YEAR - int(year))
@@ -507,23 +600,38 @@ def compute_buyer_distribution(price_low, price_high, confidence):
 
 
 def get_market_stats(make, model):
+    """
+    Returns (verified_180d, verified_all_time) — HONEST counts only.
+    Removed fabricated "buyers_last_30d" synthetic metric.
+    Templates should display: "N verified transactions in last 6 months".
+    """
     try:
-        r = (supabase.table('deals')
-             .select('id', count='exact')
-             .eq('make', make)
-             .eq('model', model)
-             .eq('verified', True)
-             .execute())
-        verified_count = r.count or 0
+        cutoff = (datetime.utcnow() - timedelta(days=180)).isoformat()
+        r_recent = (supabase.table('deals')
+                    .select('id', count='exact')
+                    .eq('make', make)
+                    .eq('model', model)
+                    .eq('verified', True)
+                    .gte('created_at', cutoff)
+                    .execute())
+        recent = r_recent.count or 0
     except Exception as e:
-        app.logger.warning(f"market_stats failed: {e}")
-        verified_count = 0
+        app.logger.warning(f"market_stats recent failed: {e}")
+        recent = 0
 
-    buyers_last_30d = max(5, verified_count * 3)
-    avg = buyers_last_30d / 30.0
-    lo = int(avg)
-    hi = lo + 1
-    return verified_count, buyers_last_30d, f"{lo}-{hi}"
+    try:
+        r_all = (supabase.table('deals')
+                 .select('id', count='exact')
+                 .eq('make', make)
+                 .eq('model', model)
+                 .eq('verified', True)
+                 .execute())
+        all_time = r_all.count or 0
+    except Exception as e:
+        app.logger.warning(f"market_stats all_time failed: {e}")
+        all_time = 0
+
+    return recent, all_time
 
 
 def get_active_alert_subscription(user_id, make, model, variant):
@@ -559,7 +667,6 @@ def index():
 
 @app.route('/guest-access')
 def guest_access():
-    """Start a guest session. Checks cookie for prior use within 30-day window."""
     if session.get('user_id'):
         return redirect(url_for('role'))
 
@@ -569,7 +676,6 @@ def guest_access():
         return redirect(url_for('index',
             error='Your guest trial was already used. Please sign up to continue exploring — it only takes a minute and you get 500 free credits.'))
 
-    # Reuse existing token if present (and not used), else create new
     token = existing_token or str(uuid.uuid4())
     start_guest_session(token)
 
@@ -588,7 +694,6 @@ def guest_access():
 
 @app.route('/guest-exit')
 def guest_exit():
-    """Exit guest mode back to landing (preserves cookie for lockout tracking)."""
     session.clear()
     return redirect(url_for('index'))
 
@@ -777,16 +882,19 @@ def role():
     first_name = firstname_filter(user.get('name'))
     show_welcome = session.pop('show_welcome', False)
     active_alerts_count = count_active_alert_subscriptions(user['id'])
+
+    is_admin = (user.get('email') or '').lower() in {e.lower() for e in ADMIN_EMAILS}
+
     return render_template('role.html', user=user, first_name=first_name,
                            show_welcome=show_welcome,
                            active_alerts_count=active_alerts_count,
-                           guest_used=False)
+                           guest_used=False,
+                           is_admin=is_admin)
 
 
 # ========== SELLER FLOW ==========
 
 def _guest_block_if_used():
-    """If guest has already used their 1 search, redirect to signup."""
     if session.get('is_guest'):
         token = session.get('guest_token')
         if has_valid_guest_usage(token) or session.get('guest_used', False):
@@ -798,7 +906,6 @@ def _guest_block_if_used():
 @app.route('/seller', methods=['GET', 'POST'])
 @login_required
 def seller():
-    # Guest: block if already used
     block = _guest_block_if_used()
     if block:
         return block
@@ -900,12 +1007,17 @@ def seller():
     if estimated is None:
         return render_form(form_data, error='Could not compute a price for this combination. Please check inputs.')
 
+    # === PHASE + BLEND ===
+    phase_data = compute_model_phase_data(form_data['make'], form_data['model'])
+    phase = phase_data['phase']
+
     similar_prices = fetch_similar_deals(
         make=form_data['make'], model=form_data['model'],
-        year=year_int, fuel=form_data['fuel']
+        variant=form_data['variant'], fuel=form_data['fuel'],
+        year=year_int,
     )
-    adjusted, confidence = adjust_with_deals(estimated, similar_prices)
-    price_low, price_high = compute_price_range(adjusted)
+    adjusted, confidence = adjust_with_deals(estimated, similar_prices, phase=phase)
+    price_low, price_high = compute_price_range(adjusted, phase=phase)
 
     val_payload = {
         'make': form_data['make'],
@@ -920,7 +1032,7 @@ def seller():
         'price_low': price_low,
         'price_high': price_high,
     }
-    # Only persist for registered users (valuations.user_id is NOT NULL)
+
     if not is_guest:
         val_payload['user_id'] = user['id']
         try:
@@ -949,11 +1061,10 @@ def seller():
 
         return redirect(url_for('seller_dashboard', valuation_id=valuation_row['id']))
 
-    # GUEST path: stash valuation in session, deduct credits in session, record usage
+    # GUEST path
     session['credits'] = current_credits - VALUATION_COST
     session['guest_used'] = True
     record_guest_usage(session.get('guest_token'), 'seller')
-    # Stash for guest dashboard render
     guest_val = dict(val_payload)
     guest_val['id'] = 'guest'
     session['guest_valuation'] = guest_val
@@ -987,17 +1098,22 @@ def seller_dashboard(valuation_id):
     price_low  = val['price_low']
     price_high = val['price_high']
 
+    # === PHASE + CONFIDENCE ===
+    phase_data = compute_model_phase_data(val['make'], val['model'])
+    phase = phase_data['phase']
+
     similar_prices = fetch_similar_deals(
         make=val['make'], model=val['model'],
-        year=val['year'], fuel=val['fuel']
+        variant=val['variant'], fuel=val['fuel'],
+        year=val['year'],
     )
-    _, confidence = adjust_with_deals(estimated, similar_prices)
+    _, confidence = adjust_with_deals(estimated, similar_prices, phase=phase)
 
     demand       = compute_demand(val['make'], val['year'])
     days_to_sell = compute_days_to_sell(demand, estimated)
     depreciation = compute_depreciation_series(estimated, days=90)
     buyer_dist   = compute_buyer_distribution(price_low, price_high, confidence)
-    verified_count, buyers_last_30d, avg_buyers_range = get_market_stats(val['make'], val['model'])
+    verified_180d, verified_all_time = get_market_stats(val['make'], val['model'])
 
     back_prefill = {
         'make':      val['make'],
@@ -1022,10 +1138,11 @@ def seller_dashboard(valuation_id):
         days_to_sell=days_to_sell,
         depreciation_json=json.dumps(depreciation),
         buyer_dist=buyer_dist,
-        verified_count=verified_count,
-        buyers_last_30d=buyers_last_30d,
-        avg_buyers_range=avg_buyers_range,
+        verified_180d=verified_180d,
+        verified_all_time=verified_all_time,
         back_prefill=back_prefill,
+        phase_data=phase_data,
+        data_version=BASE_PRICE_DATA_VERSION,
     )
 
 
@@ -1310,9 +1427,15 @@ def buyer_dashboard():
                                page_title='Analysis Unavailable',
                                message='Could not compute market analysis for this combination. Please try different filters.')
 
-    similar_prices = fetch_similar_deals(make=make, model=model, year=year_int, fuel=fuel)
-    adjusted, confidence = adjust_with_deals(estimated, similar_prices)
-    price_low, price_high = compute_price_range(adjusted)
+    # === PHASE + BLEND ===
+    phase_data = compute_model_phase_data(make, model)
+    phase = phase_data['phase']
+
+    similar_prices = fetch_similar_deals(
+        make=make, model=model, variant=variant, fuel=fuel, year=year_int,
+    )
+    adjusted, confidence = adjust_with_deals(estimated, similar_prices, phase=phase)
+    price_low, price_high = compute_price_range(adjusted, phase=phase)
 
     asking_position = None
     asking_pct_diff = None
@@ -1332,7 +1455,7 @@ def buyer_dashboard():
     demand       = compute_demand(make, year_int)
     days_to_sell = compute_days_to_sell(demand, adjusted)
     depreciation = compute_depreciation_series_monthly(adjusted, months=60)
-    verified_count, buyers_last_30d, avg_buyers_range = get_market_stats(make, model)
+    verified_180d, verified_all_time = get_market_stats(make, model)
 
     if is_guest:
         active_sub = None
@@ -1371,14 +1494,15 @@ def buyer_dashboard():
         demand=demand,
         days_to_sell=days_to_sell,
         depreciation_json=json.dumps(depreciation),
-        verified_count=verified_count,
-        buyers_last_30d=buyers_last_30d,
-        avg_buyers_range=avg_buyers_range,
+        verified_180d=verified_180d,
+        verified_all_time=verified_all_time,
         back_prefill=back_prefill,
         active_sub=active_sub,
         active_alerts_count=active_alerts_count,
         alert_cost=ALERT_SUBSCRIPTION_COST,
         alert_days=ALERT_SUBSCRIPTION_DAYS,
+        phase_data=phase_data,
+        data_version=BASE_PRICE_DATA_VERSION,
     )
 
 
@@ -1990,6 +2114,337 @@ def credit_history_export():
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename={filename}'},
     )
+
+
+# ============================================================
+# ADMIN — DATA HEALTH DASHBOARD
+# ============================================================
+
+def _fetch_all_deals_180d():
+    """Fetch all verified deals from the last 180 days for admin analysis."""
+    try:
+        cutoff = (datetime.utcnow() - timedelta(days=180)).isoformat()
+        r = (supabase.table('deals')
+             .select('id, user_id, make, model, variant, sale_price, created_at, verified')
+             .eq('verified', True)
+             .gte('created_at', cutoff)
+             .execute())
+        return r.data or []
+    except Exception as e:
+        app.logger.error(f"admin _fetch_all_deals_180d failed: {e}")
+        return []
+
+
+def _fetch_all_deals_30d():
+    """Used for trend comparison."""
+    try:
+        cutoff = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        r = (supabase.table('deals')
+             .select('id', count='exact')
+             .eq('verified', True)
+             .gte('created_at', cutoff)
+             .execute())
+        return r.count or 0
+    except Exception as e:
+        app.logger.error(f"admin _fetch_all_deals_30d failed: {e}")
+        return 0
+
+
+def _fetch_all_deals_30_to_60d():
+    """Prev-period count for trend delta."""
+    try:
+        cutoff_start = (datetime.utcnow() - timedelta(days=60)).isoformat()
+        cutoff_end = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        r = (supabase.table('deals')
+             .select('id', count='exact')
+             .eq('verified', True)
+             .gte('created_at', cutoff_start)
+             .lt('created_at', cutoff_end)
+             .execute())
+        return r.count or 0
+    except Exception as e:
+        app.logger.error(f"admin _fetch_all_deals_30_to_60d failed: {e}")
+        return 0
+
+
+def _compute_phase_distribution(deals_180d):
+    """Compute phase for every known model. Returns list of dicts."""
+    # Group deals by (make, model)
+    by_model = defaultdict(list)
+    for d in deals_180d:
+        key = (d.get('make'), d.get('model'))
+        if key[0] and key[1]:
+            by_model[key].append(d)
+
+    model_phases = []
+    for make in sorted(CAR_DATA.keys()):
+        for model in sorted(CAR_DATA[make].keys()):
+            key = (make, model)
+            deals = by_model.get(key, [])
+            deal_count = len(deals)
+            distinct_users = len({d['user_id'] for d in deals if d.get('user_id')})
+            phase = determine_phase(deal_count, distinct_users)
+            model_phases.append({
+                'make': make,
+                'model': model,
+                'phase': phase,
+                'deal_count': deal_count,
+                'distinct_users': distinct_users,
+            })
+    return model_phases
+
+
+def _compute_upgrade_queue(model_phases):
+    """Models close to next phase — sort by progress toward upgrade."""
+    queue = []
+    for mp in model_phases:
+        current = mp['phase']
+        if current >= 4:
+            continue  # already top phase
+        next_phase = current + 1
+        deals_needed = PHASE_THRESHOLDS[next_phase][0] - mp['deal_count']
+        users_needed = PHASE_THRESHOLDS[next_phase][1] - mp['distinct_users']
+        # Only show models within striking distance (deals_needed <= 10)
+        if deals_needed <= 10 and mp['deal_count'] > 0:
+            queue.append({
+                **mp,
+                'next_phase': next_phase,
+                'deals_needed': max(0, deals_needed),
+                'users_needed': max(0, users_needed),
+                'threshold_deals': PHASE_THRESHOLDS[next_phase][0],
+                'threshold_users': PHASE_THRESHOLDS[next_phase][1],
+            })
+    # Sort by fewest deals needed (closest to upgrade first)
+    queue.sort(key=lambda x: (x['deals_needed'], -x['deal_count']))
+    return queue[:15]  # top 15
+
+
+def _compute_guardrail_flags(deals_180d, model_phases):
+    """Models where real-deal median deviates >15% from formula base estimate."""
+    flags = []
+    by_model = defaultdict(list)
+    for d in deals_180d:
+        key = (d.get('make'), d.get('model'))
+        if key[0] and key[1] and d.get('sale_price'):
+            by_model[key].append(d.get('sale_price'))
+
+    for mp in model_phases:
+        if mp['phase'] < 2:
+            continue  # only flag for models with real data
+        key = (mp['make'], mp['model'])
+        prices = sorted(by_model.get(key, []))
+        if len(prices) < 5:
+            continue
+        n = len(prices)
+        median = prices[n // 2] if n % 2 == 1 else (prices[n // 2 - 1] + prices[n // 2]) // 2
+
+        # Compare to model anchor (base variant price as rough model centroid)
+        anchor = get_base_price(mp['make'], mp['model'])
+        if not anchor:
+            continue
+
+        # Age-adjust anchor for ~3-year-old car (rough depreciation for comparison)
+        anchor_aged = anchor * 0.77
+        deviation = (median - anchor_aged) / anchor_aged
+
+        if abs(deviation) > 0.15:
+            flags.append({
+                'make': mp['make'],
+                'model': mp['model'],
+                'deal_count': len(prices),
+                'median_price': int(median),
+                'expected_price': int(anchor_aged),
+                'deviation_pct': round(deviation * 100, 1),
+            })
+
+    # Sort by magnitude of deviation
+    flags.sort(key=lambda x: -abs(x['deviation_pct']))
+    return flags[:10]
+
+
+def _compute_broker_signals(lookback_days=60):
+    """
+    Detect suspicious patterns that might indicate broker behavior.
+    Returns list of users with flags.
+    """
+    try:
+        cutoff = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
+        r = (supabase.table('deals')
+             .select('id, user_id, make, model, sale_price, created_at')
+             .gte('created_at', cutoff)
+             .execute())
+        deals = r.data or []
+    except Exception as e:
+        app.logger.error(f"admin broker signals fetch failed: {e}")
+        return []
+
+    # Group deals by user
+    by_user = defaultdict(list)
+    for d in deals:
+        if d.get('user_id'):
+            by_user[d['user_id']].append(d)
+
+    signals = []
+    for uid, user_deals in by_user.items():
+        total = len(user_deals)
+        if total < 3:
+            continue  # not enough data to be suspicious
+
+        flags = []
+
+        # Flag 1: Clustered same model (5+ deals of same make+model)
+        model_counts = Counter((d['make'], d['model']) for d in user_deals)
+        top_model, top_count = model_counts.most_common(1)[0] if model_counts else (None, 0)
+        if top_count >= 5:
+            flags.append(f"Clustered: {top_count} deals of {top_model[0]} {top_model[1]}")
+
+        # Flag 2: Wildly varied price segments (budget + luxury in same 60d window)
+        prices = [d.get('sale_price', 0) for d in user_deals if d.get('sale_price')]
+        if prices:
+            mn, mx = min(prices), max(prices)
+            if mn > 0 and mx > 0 and mx / mn >= 10:
+                flags.append(f"Mixed segments: ₹{mn:,} to ₹{mx:,}")
+
+        # Flag 3: Hit weekly cap repeatedly (3 deals in multiple 7-day windows)
+        # Simple check: if user submitted 6+ deals in 60 days, they're hitting the cap
+        if total >= 6:
+            flags.append(f"{total} deals in {lookback_days} days (cap-hitter)")
+
+        if not flags:
+            continue
+
+        # Fetch user info
+        user_info = get_user_by_id(uid)
+        if not user_info:
+            continue
+
+        signals.append({
+            'user_id': uid,
+            'name': user_info.get('name', '—'),
+            'email': user_info.get('email', '—'),
+            'deal_count': total,
+            'flags': flags,
+        })
+
+    # Sort by number of flags + deal count
+    signals.sort(key=lambda x: (-len(x['flags']), -x['deal_count']))
+    return signals[:20]
+
+
+@app.route('/admin/data-health')
+@login_required
+@admin_required
+def admin_data_health():
+    user = current_user()
+
+    deals_180d = _fetch_all_deals_180d()
+    deals_30d_count = _fetch_all_deals_30d()
+    deals_30_60d_count = _fetch_all_deals_30_to_60d()
+
+    if deals_30_60d_count > 0:
+        trend_pct = round(((deals_30d_count - deals_30_60d_count) / deals_30_60d_count) * 100, 1)
+    else:
+        trend_pct = None
+
+    total_verified_180d = len(deals_180d)
+    unique_submitters_180d = len({d['user_id'] for d in deals_180d if d.get('user_id')})
+
+    model_phases = _compute_phase_distribution(deals_180d)
+
+    # Phase distribution counts
+    phase_counts = Counter(mp['phase'] for mp in model_phases)
+    total_models = len(model_phases)
+
+    phase_distribution = []
+    for p in [4, 3, 2, 1]:
+        count = phase_counts.get(p, 0)
+        pct = round((count / total_models) * 100, 1) if total_models else 0
+        phase_distribution.append({
+            'phase': p,
+            'label': PHASE_BLEND[p]['badge'],
+            'count': count,
+            'pct': pct,
+        })
+
+    # Top models by deal volume
+    top_models = sorted(
+        [mp for mp in model_phases if mp['deal_count'] > 0],
+        key=lambda x: -x['deal_count']
+    )[:20]
+
+    # Upgrade queue
+    upgrade_queue = _compute_upgrade_queue(model_phases)
+
+    # Guardrail flags
+    guardrail_flags = _compute_guardrail_flags(deals_180d, model_phases)
+
+    # Broker signals
+    broker_signals = _compute_broker_signals()
+
+    # Data freshness: models with zero deals in last 90d
+    try:
+        cutoff_90d = (datetime.utcnow() - timedelta(days=90)).isoformat()
+        r = (supabase.table('deals')
+             .select('make, model')
+             .eq('verified', True)
+             .gte('created_at', cutoff_90d)
+             .execute())
+        recent_model_keys = {(d.get('make'), d.get('model')) for d in (r.data or [])}
+    except Exception:
+        recent_model_keys = set()
+
+    stale_count = sum(
+        1 for make in CAR_DATA
+        for model in CAR_DATA[make]
+        if (make, model) not in recent_model_keys
+    )
+
+    return render_template(
+        'admin_data_health.html',
+        user=user,
+        first_name=firstname_filter(user.get('name')),
+        total_models=total_models,
+        phase_distribution=phase_distribution,
+        total_verified_180d=total_verified_180d,
+        deals_30d_count=deals_30d_count,
+        trend_pct=trend_pct,
+        unique_submitters_180d=unique_submitters_180d,
+        top_models=top_models,
+        upgrade_queue=upgrade_queue,
+        guardrail_flags=guardrail_flags,
+        broker_signals=broker_signals,
+        stale_count=stale_count,
+        data_version=BASE_PRICE_DATA_VERSION,
+        last_updated=BASE_PRICE_LAST_UPDATED,
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
+
+
+@app.route('/admin/flag-user/<user_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_flag_user(user_id):
+    """Soft-flag a user as suspected broker. Logs a note in transactions; does NOT block."""
+    admin = current_user()
+    target = get_user_by_id(user_id)
+    if not target:
+        flash('User not found.', 'error')
+        return redirect(url_for('admin_data_health'))
+
+    try:
+        supabase.table('transactions').insert({
+            'user_id': user_id,
+            'type': 'alert_cancelled',  # reuse existing type — no schema change needed
+            'amount': 0,
+            'balance_after': target.get('credits', 0),
+            'description': f'[ADMIN FLAG] Suspected broker — flagged by {admin.get("email")}',
+        }).execute()
+        flash(f'User {target.get("email")} flagged for review. (Not blocked — this is a soft flag.)', 'success')
+    except Exception as e:
+        app.logger.error(f"admin_flag_user failed: {e}")
+        flash('Could not flag user. Please try again.', 'error')
+
+    return redirect(url_for('admin_data_health'))
 
 
 # ---------- Misc ----------
