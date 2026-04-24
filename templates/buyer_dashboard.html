@@ -1,806 +1,1145 @@
 {% extends "layout.html" %}
+{% block title %}Market Analysis — AutoKnowMus{% endblock %}
 
-{% block title %}Buyer Dashboard — AutoKnowMus{% endblock %}
-
-{% block content %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
+{% block extra_head %}
 <style>
-  :root {
-    --bg-card: #1a1d24;
-    --bg-card-2: #15181f;
-    --border: #2a2f3a;
-    --border-soft: #242832;
-    --text: #e4e6eb;
-    --text-dim: #b4b8c3;
-    --text-mute: #8b92a5;
-    --text-disabled: #6c757d;
-    --green: #28a745;
-    --green-dim: #5bd47b;
-    --orange: #ffa500;
-    --red: #dc3545;
-    --blue: #4e54ff;
-    --blue-dim: #7a80ff;
-    --gold: #ffd700;
-  }
+  /* ===== Ultra-compact single-viewport layout ===== */
+  .dashboard-wrap { padding: 10px 24px 14px; }
 
-  .bd-wrap {
-    max-width: 1040px;
-    margin: 0 auto;
-    padding: 12px 16px 40px;
-    color: var(--text);
-  }
+  .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+  .car-summary { color: #e6e6e6; text-align: right; }
+  .car-summary .car-name { color: #4e54ff; font-weight: 700; font-size: 1rem; line-height: 1.15; }
+  .car-summary .car-meta { color: #b0b0b0; font-size: 0.78rem; margin-top: 1px; }
 
-  .bd-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
+  .top-row {
+    display: grid;
+    grid-template-columns: 1fr 1.25fr;
     gap: 10px;
-    flex-wrap: wrap;
+    margin-bottom: 8px;
   }
+  @media (max-width: 900px) { .top-row { grid-template-columns: 1fr; } }
 
-  .btn-back {
-    background: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 6px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-block;
-  }
-
-  .btn-back:hover { background: #5a6168; }
-
-  .bd-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-dim);
-    margin: 0;
-  }
-
-  .bd-title strong { color: var(--text); font-weight: 700; }
-
-  .flash-alert {
-    background: rgba(255,165,0,0.1);
-    border: 1px solid rgba(255,165,0,0.5);
-    border-radius: 6px;
-    padding: 10px 40px 10px 14px;
-    margin-bottom: 10px;
-    font-size: 13px;
-    color: #ffc77d;
-    position: relative;
-  }
-
-  .flash-alert.success {
-    background: rgba(40,167,69,0.1);
-    border-color: rgba(40,167,69,0.5);
-    color: var(--green-dim);
-  }
-
-  .flash-alert.error {
-    background: rgba(220,53,69,0.1);
-    border-color: rgba(220,53,69,0.5);
-    color: #ff6b7b;
-  }
-
-  .flash-alert .close-x {
-    position: absolute;
-    top: 50%;
-    right: 10px;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: inherit;
-    font-size: 18px;
-    cursor: pointer;
-    line-height: 1;
-  }
-
-  /* ---- HERO CARD (blue theme) ---- */
-  .hero {
-    background: var(--bg-card);
-    border: 1.5px solid var(--blue);
+  .card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
     border-radius: 10px;
-    padding: 14px 18px;
-    margin-bottom: 10px;
-    position: relative;
+    padding: 10px 14px;
   }
-
-  .hero-price-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--text-mute);
+  .card-title {
+    font-size: 0.9rem;
     font-weight: 600;
-    text-align: center;
-    margin-bottom: 4px;
-  }
-
-  .hero-price {
-    font-size: 30px;
-    font-weight: 700;
-    color: var(--blue-dim);
-    text-align: center;
-    line-height: 1.1;
-    margin-bottom: 4px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .hero-price .dash { color: var(--text-mute); margin: 0 6px; font-weight: 400; }
-
-  .phase-row {
+    color: #fff;
+    margin-bottom: 6px;
     display: flex;
-    justify-content: center;
     align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 6px;
+    gap: 6px;
   }
+  .card-title .sub { color: #b0b0b0; font-size: 0.72rem; font-weight: 400; margin-left: 6px; }
 
-  .phase-badge {
+  .hero-combined { display: flex; flex-direction: column; gap: 10px; }
+  .price-hero { text-align: center; }
+  .price-hero .hero-label { color: #b0b0b0; font-size: 0.72rem; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .price-hero .hero-range { color: #4e54ff; font-size: 1.7rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
+  .price-hero .hero-dash { color: #4e54ff; margin: 0 6px; }
+  .price-hero .hero-mid { color: #adb5bd; font-size: 0.8rem; margin-top: 4px; }
+  .price-hero .hero-mid strong { color: #8a90ff; font-weight: 600; }
+  @media (min-width: 1200px) { .price-hero .hero-range { font-size: 1.85rem; } }
+
+  /* Phase badge — small, matches existing blue palette */
+  .phase-badge-inline {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 11px;
+    margin-top: 6px;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 0.68rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     cursor: help;
+    vertical-align: middle;
   }
+  .phase-badge-inline.p4 { background: rgba(255,215,0,0.15); color: #ffd700; border: 1px solid rgba(255,215,0,0.4); }
+  .phase-badge-inline.p3 { background: rgba(78,84,255,0.2);  color: #8a90ff; border: 1px solid rgba(78,84,255,0.5); }
+  .phase-badge-inline.p2 { background: rgba(78,84,255,0.12); color: #9da2ff; border: 1px solid rgba(78,84,255,0.3); }
+  .phase-badge-inline.p1 { background: rgba(108,117,125,0.15); color: #adb5bd; border: 1px solid rgba(108,117,125,0.4); }
 
-  .phase-badge-4 { background: rgba(255,215,0,0.15); color: var(--gold); border: 1px solid rgba(255,215,0,0.4); }
-  .phase-badge-3 { background: rgba(78,84,255,0.2); color: var(--blue-dim); border: 1px solid rgba(78,84,255,0.5); }
-  .phase-badge-2 { background: rgba(78,84,255,0.12); color: #9da2ff; border: 1px solid rgba(78,84,255,0.3); }
-  .phase-badge-1 { background: rgba(108,117,125,0.15); color: var(--text-mute); border: 1px solid rgba(108,117,125,0.4); }
-
-  .phase-detail {
-    font-size: 11px;
-    color: var(--text-mute);
+  .deal-section { border-top: 1px solid #2a2d34; padding-top: 8px; }
+  .deal-banner {
+    border-radius: 9px;
+    padding: 9px 12px;
+    display: flex; align-items: flex-start; gap: 10px;
   }
+  .deal-banner .deal-icon { font-size: 1.4rem; line-height: 1; flex-shrink: 0; }
+  .deal-banner .deal-text { flex: 1; }
+  .deal-banner .deal-title { font-weight: 700; font-size: 0.88rem; margin-bottom: 2px; }
+  .deal-banner .deal-body { font-size: 0.76rem; line-height: 1.4; }
 
-  .market-stats {
-    text-align: center;
-    font-size: 11px;
-    color: var(--text-mute);
-    margin-top: 6px;
-  }
+  .deal-great    { background: rgba(40,167,69,0.12);  border: 1px solid #28a745; }
+  .deal-great .deal-title    { color: #28a745; }
+  .deal-great .deal-body     { color: #c9f0d3; }
 
-  /* ---- Caution chip (red for buyers — asking too high) ---- */
-  .caution-chip {
+  .deal-fair     { background: rgba(78,84,255,0.14);  border: 1px solid #4e54ff; }
+  .deal-fair .deal-title     { color: #8a90ff; }
+  .deal-fair .deal-body      { color: #c9cdf5; }
+
+  .deal-over     { background: rgba(255,140,0,0.12);  border: 1px solid #ff8c00; }
+  .deal-over .deal-title     { color: #ffa500; }
+  .deal-over .deal-body      { color: #f5dcc0; }
+
+  .deal-toogood  { background: rgba(220,53,69,0.12);  border: 1px solid #dc3545; }
+  .deal-toogood .deal-title  { color: #ff6b6b; }
+  .deal-toogood .deal-body   { color: #f5c2c7; }
+
+  .deal-unknown  { background: #14171d;  border: 1px dashed #3a3f4a; }
+  .deal-unknown .deal-title  { color: #adb5bd; }
+  .deal-unknown .deal-body   { color: #adb5bd; }
+
+  .graph-wrap { position: relative; height: 185px; }
+  @media (max-width: 900px) { .graph-wrap { height: 180px; } }
+
+  /* ===== Caution chip on chart ===== */
+  .chart-card { position: relative; }
+  .chart-caution-chip {
     position: absolute;
-    top: 10px;
+    top: 8px;
     right: 10px;
-    background: rgba(220,53,69,0.15);
-    border: 1px solid rgba(220,53,69,0.5);
-    color: #ff6b7b;
-    font-size: 10px;
+    background: rgba(220, 53, 69, 0.95);
+    color: #fff;
+    font-size: 0.68rem;
     font-weight: 700;
-    padding: 4px 8px;
-    border-radius: 10px;
-    display: none;
-    cursor: help;
-    max-width: 190px;
-    text-align: right;
+    padding: 3px 8px;
+    border-radius: 11px;
+    max-width: 260px;
     line-height: 1.3;
-  }
-
-  .caution-chip.active { display: block; }
-
-  /* ---- Asking-price context strip ---- */
-  .asking-strip {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 14px;
-    margin-bottom: 10px;
-    font-size: 12px;
-    color: var(--text-dim);
-    display: flex;
-    justify-content: space-between;
+    z-index: 5;
+    cursor: help;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    display: none;
     align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .chart-caution-chip.show { display: inline-flex; }
+  .chart-caution-chip .chip-icon { font-size: 0.8rem; }
+  .chart-caution-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: #000;
+    color: #fff;
+    padding: 9px 11px;
+    border-radius: 8px;
+    border: 1px solid #dc3545;
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.45;
+    width: 280px;
+    text-align: left;
+    z-index: 20;
+    transition: opacity 0.15s;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    pointer-events: none;
+  }
+  .chart-caution-chip:hover .chart-caution-tooltip {
+    visibility: visible; opacity: 1;
   }
 
-  .asking-label { color: var(--text-mute); }
-  .asking-value { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-  .asking-verdict { font-weight: 700; padding: 3px 10px; border-radius: 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .asking-verdict.below  { background: rgba(40,167,69,0.15); color: var(--green-dim); border: 1px solid rgba(40,167,69,0.4); }
-  .asking-verdict.within { background: rgba(78,84,255,0.15); color: var(--blue-dim); border: 1px solid rgba(78,84,255,0.4); }
-  .asking-verdict.above  { background: rgba(220,53,69,0.15); color: #ff6b7b; border: 1px solid rgba(220,53,69,0.4); }
-
-  /* ---- KPI ROW ---- */
   .kpi-row {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
-
-  .kpi {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
+  .kpi-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 9px;
+    padding: 8px 10px;
     text-align: center;
     position: relative;
   }
-
-  .kpi-label {
-    font-size: 10px;
+  .kpi-card .kpi-label {
+    color: #b0b0b0;
+    font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--text-mute);
-    font-weight: 600;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
+  .kpi-card .kpi-value { font-size: 1.1rem; font-weight: 700; color: #fff; line-height: 1.05; }
+  .kpi-card .kpi-sub   { color: #6c757d; font-size: 0.66rem; margin-top: 1px; }
+  .kpi-card .kpi-value.demand-HIGH   { color: #28a745; }
+  .kpi-card .kpi-value.demand-MEDIUM { color: #ffa500; }
+  .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
+  @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
-  .kpi-value {
-    font-size: 17px;
-    font-weight: 700;
-    color: var(--text);
-    line-height: 1;
+  .info-wrap { position: relative; display: inline-flex; }
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 13px; height: 13px;
+    background: #2a2d34; color: #adb5bd;
+    border-radius: 50%;
+    font-size: 0.65rem; font-weight: 700;
+    cursor: help; font-style: italic;
+    font-family: Georgia, serif;
   }
+  .info-icon:hover { background: #4e54ff; color: #fff; }
 
-  .kpi-sub {
-    font-size: 10px;
-    color: var(--text-mute);
-    margin-top: 2px;
-  }
-
-  .kpi-value.hi  { color: var(--green-dim); }
-  .kpi-value.md  { color: var(--orange); }
-  .kpi-value.lo  { color: var(--text-mute); }
-
-  .kpi.clickable { cursor: help; }
-
-  /* ---- DEALER vs PRIVATE CARD ---- */
-  .dp-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
+  .info-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #fff;
+    padding: 9px 11px;
     border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 10px;
+    border: 1px solid #4e54ff;
+    font-size: 0.74rem;
+    font-weight: 400;
+    line-height: 1.45;
+    width: 230px;
+    text-transform: none;
+    letter-spacing: normal;
+    text-align: left;
+    z-index: 10;
+    transition: opacity 0.15s;
+    white-space: normal;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+  .info-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #000;
+  }
+  .info-wrap:hover .info-tooltip {
+    visibility: visible; opacity: 1;
   }
 
-  .dp-card h3 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-mute);
-    font-weight: 600;
-    margin: 0 0 8px 0;
+  .info-tooltip.wide {
+    width: 320px;
+    border-color: #4eb0ff;
   }
 
-  .dp-row {
+  .conf-mini-row {
+    display: grid;
+    grid-template-columns: 62px 1fr;
+    gap: 8px;
+    padding: 4px 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    align-items: start;
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+  .conf-mini-row:last-child { border-bottom: none; }
+  .conf-mini-row .mini-bracket { font-weight: 700; color: #b0b0b0; white-space: nowrap; }
+  .conf-mini-row.active .mini-bracket { color: #4eb0ff; }
+  .conf-mini-row.active {
+    background: rgba(78,176,255,0.12);
+    border-radius: 4px;
+    border-bottom-color: transparent;
+  }
+  .conf-mini-row .mini-benefit {
+    display: block;
+    color: #adb5bd;
+    font-size: 0.66rem;
+    margin-top: 1px;
+  }
+  .conf-header {
+    color: #4eb0ff;
+    font-weight: 700;
+    font-size: 0.75rem;
+    margin-bottom: 5px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    display: block;
+  }
+
+  .market-stats {
+    background: #14171d;
+    border-radius: 7px;
+    padding: 5px 12px;
+    margin-bottom: 8px;
+    color: #adb5bd;
+    font-size: 0.78rem;
+    text-align: center;
+  }
+  .market-stats strong { color: #e9ecef; }
+
+  /* ===== Alert Subscription card — tightened ===== */
+  .alert-card {
+    background: linear-gradient(135deg, #1a2030 0%, #14171d 100%);
+    border: 1px solid #4e54ff;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+  }
+  .alert-card-header {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .alert-card-title {
+    color: #8a90ff; font-weight: 700; font-size: 0.88rem;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .alert-card-sub { color: #adb5bd; font-size: 0.74rem; margin-top: 1px; }
+  .alert-pill {
+    display: inline-block;
+    background: rgba(40,167,69,0.15);
+    color: #28a745;
+    padding: 2px 9px; border-radius: 18px;
+    font-size: 0.72rem; font-weight: 600;
+    border: 1px solid #28a745;
+  }
+  .alert-pill.expired { background: rgba(108,117,125,0.15); color: #adb5bd; border-color: #6c757d; }
+
+  .alert-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .alert-channels { display: flex; gap: 10px; color: #e6e6e6; font-size: 0.8rem; flex-wrap: wrap; }
+  .alert-channels label {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    padding: 4px 8px; background: #14171d; border-radius: 5px; border: 1px solid #2a2d34;
+  }
+  .alert-channels input[type="checkbox"] {
+    width: 14px; height: 14px; accent-color: #4e54ff; cursor: pointer;
+  }
+  .btn-alert-subscribe {
+    background: #4e54ff; color: #fff; border: none;
+    padding: 8px 18px; border-radius: 7px;
+    font-weight: 700; font-size: 0.84rem; cursor: pointer;
+    letter-spacing: 0.3px;
+  }
+  .btn-alert-subscribe:hover { background: #3a3fd0; color: #fff; }
+  .btn-alert-subscribe:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
+  .btn-alert-topup {
+    background: #ffa500; color: #1a1d24; border: none;
+    padding: 8px 16px; border-radius: 7px;
+    font-weight: 700; font-size: 0.8rem; cursor: pointer;
+  }
+  .btn-alert-topup:hover { background: #e69500; color: #1a1d24; }
+  .alert-footnote {
+    color: #6c757d; font-size: 0.68rem; margin-top: 5px; line-height: 1.35;
+  }
+  .alert-error {
+    color: #ff6b6b; font-size: 0.78rem; margin-top: 4px;
+  }
+
+  /* Flash messages */
+  .flash-success-dash {
+    background: #28a745; color: #fff; border-radius: 7px;
+    padding: 0.55rem 2.2rem 0.55rem 0.85rem; margin-bottom: 8px;
+    position: relative; font-size: 0.85rem; font-weight: 500;
+  }
+  .flash-error-dash {
+    background: #dc3545; color: #fff; border-radius: 7px;
+    padding: 0.55rem 2.2rem 0.55rem 0.85rem; margin-bottom: 8px;
+    position: relative; font-size: 0.85rem; font-weight: 500;
+  }
+  .flash-close-x {
+    position: absolute; top: 50%; right: 0.6rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.2rem; line-height: 1; cursor: pointer;
+  }
+
+  .bottom-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
   }
+  @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
 
-  .dp-cell {
-    background: var(--bg-card-2);
-    border-radius: 6px;
-    padding: 8px 12px;
+  .compare-row { display: flex; flex-direction: column; gap: 7px; }
+  .compare-item {
+    background: #14171d;
+    border-radius: 7px;
+    padding: 8px 11px;
+    border-left: 3px solid transparent;
   }
+  .compare-item.dealer  { border-left-color: #ffa500; }
+  .compare-item.private { border-left-color: #28a745; }
+  .compare-item .ci-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+  .compare-item .ci-label { color: #adb5bd; font-size: 0.77rem; font-weight: 600; }
+  .compare-item .ci-price { color: #fff; font-weight: 700; font-size: 1rem; }
+  .compare-item .ci-hint  { color: #6c757d; font-size: 0.7rem; line-height: 1.35; }
+  .compare-item.dealer .ci-label  { color: #ffa500; }
+  .compare-item.private .ci-label { color: #28a745; }
 
-  .dp-cell-label { font-size: 10px; color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.5px; }
-  .dp-cell-value { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .dp-cell-sub { font-size: 10px; color: var(--text-mute); margin-top: 2px; }
-
-  /* ---- CHART CARD ---- */
-  .chart-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+  .verdict-card {
+    background: linear-gradient(135deg, #1a2030 0%, #14171d 100%);
+    border: 1px solid #4e54ff;
+    border-radius: 10px;
     padding: 10px 14px;
-    margin-bottom: 10px;
   }
-
-  .chart-card h3 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-mute);
-    font-weight: 600;
-    margin: 0 0 6px 0;
-  }
-
-  .chart-wrap {
-    position: relative;
-    height: 190px;
-  }
-
-  /* ---- ALERT SUBSCRIPTION CARD ---- */
-  .alert-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 10px;
-  }
-
-  .alert-card h3 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--orange);
-    font-weight: 600;
-    margin: 0 0 8px 0;
-  }
-
-  .alert-active-msg {
-    background: rgba(40,167,69,0.1);
-    border: 1px solid rgba(40,167,69,0.4);
-    color: var(--green-dim);
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-  }
-
-  .alert-form-row {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
-    font-size: 12px;
-  }
-
-  .alert-form-row label {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    color: var(--text-dim);
-    cursor: pointer;
-  }
-
-  .alert-form-row input[type="checkbox"] { accent-color: var(--blue); }
-
-  .alert-submit {
-    background: var(--blue);
-    color: white;
-    border: none;
-    padding: 8px 18px;
-    border-radius: 5px;
-    font-size: 12px;
+  .verdict-title {
+    font-size: 0.9rem;
     font-weight: 700;
-    cursor: pointer;
-    margin-left: auto;
+    color: #8a90ff;
+    margin-bottom: 6px;
+    display: flex; align-items: center; gap: 6px;
   }
-
-  .alert-submit:hover { background: #6066ff; }
-
-  .alert-price {
-    font-size: 11px;
-    color: var(--text-mute);
-    margin-top: 6px;
+  .verdict-body p {
+    color: #e6e6e6;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin-bottom: 4px;
   }
+  .verdict-body p:last-child { margin-bottom: 0; }
+  .verdict-body .hi   { color: #ffa500; font-weight: 600; }
+  .verdict-body .ok   { color: #28a745; font-weight: 600; }
+  .verdict-body .warn { color: #ff6b6b; font-weight: 600; }
+  .verdict-body .info { color: #8a90ff; font-weight: 600; }
 
-  /* ---- FOOTER ---- */
-  .data-footer {
-    margin-top: 16px;
-    padding-top: 10px;
-    border-top: 1px solid var(--border-soft);
-    font-size: 10px;
-    color: var(--text-mute);
+  /* Data version footer */
+  .data-version-footer {
+    margin-top: 10px;
+    padding-top: 6px;
+    border-top: 1px solid #2a2d34;
+    color: #6c757d;
+    font-size: 0.66rem;
     text-align: center;
-  }
-
-  /* ---- TOOLTIPS (shared) ---- */
-  .smart-tooltip {
-    position: absolute;
-    z-index: 50;
-    background: #0d0f14;
-    border: 1px solid var(--orange);
-    border-radius: 6px;
-    padding: 10px 12px;
-    font-size: 11px;
-    color: var(--text);
-    min-width: 250px;
-    max-width: 320px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
-    display: none;
-    line-height: 1.5;
-  }
-
-  .smart-tooltip.show { display: block; }
-
-  .smart-tooltip h4 {
-    color: var(--orange);
-    font-size: 11px;
-    margin: 0 0 6px 0;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .buyer-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 4px;
-    font-size: 11px;
-  }
-
-  .buyer-table td {
-    padding: 4px 6px;
-    border-bottom: 1px solid var(--border-soft);
-  }
-
-  .buyer-table tr:last-child td { border-bottom: none; }
-
-  .buyer-table tr.highlight {
-    background: rgba(255,165,0,0.12);
-  }
-
-  .buyer-table tr.highlight td {
-    color: var(--orange);
-    font-weight: 600;
-  }
-
-  .buyer-table td:first-child {
-    color: var(--text-mute);
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  @media (max-width: 640px) {
-    .hero-price { font-size: 24px; }
-    .kpi-value { font-size: 15px; }
-    .chart-wrap { height: 165px; }
-    .dp-row { grid-template-columns: 1fr; }
-    .caution-chip { position: static; margin-top: 6px; max-width: 100%; text-align: center; }
+    font-style: italic;
   }
 </style>
+{% endblock %}
 
-<div class="bd-wrap">
+{% block content %}
+{# 2dp Lakhs formatter — renders as "X.YYL" or "X.YYCr" #}
+{% macro l2dp(v) -%}
+  {%- if v is none -%}—
+  {%- elif v|int >= 10000000 -%}{{ '%.2f'|format(v / 10000000) }}Cr
+  {%- else -%}{{ '%.2f'|format(v / 100000) }}L
+  {%- endif %}
+{%- endmacro %}
 
-  <!-- Top bar -->
-  <div class="bd-top">
-    <a href="{{ url_for('buyer', **back_prefill) }}" class="btn-back">← Back</a>
-    <p class="bd-title">
-      <strong>{{ year }} {{ make }} {{ model }} {{ variant }}</strong>
-      · {{ fuel }} · {{ mileage|inr }} km · {{ condition }} · {{ owner }}
-    </p>
+<div class="dashboard-wrap">
+
+  <div class="dash-header">
+    <a href="{{ url_for('buyer',
+                        make=back_prefill.make, fuel=back_prefill.fuel,
+                        model=back_prefill.model, variant=back_prefill.variant,
+                        year=back_prefill.year, owner=back_prefill.owner,
+                        mileage=back_prefill.mileage, condition=back_prefill.condition,
+                        asking_price=back_prefill.asking_price) }}"
+       class="btn-back">← Back</a>
+    <div class="car-summary">
+      <div class="car-name">{{ year }} {{ make }} {{ model }} {{ variant }}</div>
+      <div class="car-meta">{{ fuel }} · {{ mileage | inr }} km · {{ condition }} · {{ owner }} · Bangalore</div>
+    </div>
   </div>
 
-  <!-- Flash messages -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-    <div class="flash-alert {{ category }}">
-      {{ message }}
-      <button type="button" class="close-x" onclick="this.parentElement.style.display='none';">&times;</button>
-    </div>
-    {% endfor %}
+  {# Flash messages #}
+  {% with flash_success = get_flashed_messages(category_filter=['success']) %}
+    {% if flash_success %}
+      {% for m in flash_success %}
+        <div class="flash-success-dash" id="flash-ok-{{ loop.index }}">
+          {{ m }}
+          <button type="button" class="flash-close-x"
+                  onclick="document.getElementById('flash-ok-{{ loop.index }}').remove()">&times;</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% with flash_error = get_flashed_messages(category_filter=['error']) %}
+    {% if flash_error %}
+      {% for m in flash_error %}
+        <div class="flash-error-dash" id="flash-err-{{ loop.index }}">
+          {{ m }}
+          <button type="button" class="flash-close-x"
+                  onclick="document.getElementById('flash-err-{{ loop.index }}').remove()">&times;</button>
+        </div>
+      {% endfor %}
+    {% endif %}
   {% endwith %}
 
-  <!-- HERO -->
-  <div class="hero">
-    {% if asking_position == 'above' %}
-    <div class="caution-chip active" title="Asking price is above fair range. At this price, you could lose ~₹{{ ((asking_price - estimated) * 0.35 / 100000)|round(2) }}L over 3 years and ~₹{{ ((asking_price - estimated) * 0.55 / 100000)|round(2) }}L over 5 years vs fair-price buyer.">
-      ⚠ Above fair range — negotiate hard
-    </div>
-    {% endif %}
+  <div class="top-row">
+    <div class="card hero-combined">
+      <div class="price-hero">
+        <div class="hero-label">FAIR MARKET PRICE RANGE</div>
+        <div class="hero-range">
+          ₹ {{ l2dp(price_low) }}<span class="hero-dash">—</span>₹ {{ l2dp(price_high) }}
+        </div>
+        <div class="hero-mid">Most likely value: <strong>₹ {{ l2dp(estimated) }}</strong></div>
+        <span class="phase-badge-inline p{{ phase_data.phase }}" title="{{ phase_data.display.tooltip }}">
+          {% if phase_data.phase == 4 %}⭐{% elif phase_data.phase == 3 %}✓{% elif phase_data.phase == 2 %}📈{% else %}📊{% endif %}
+          {{ phase_data.display.badge }}
+        </span>
+      </div>
 
-    <div class="hero-price-label">Estimated Fair Price Range</div>
-    <div class="hero-price">
-      ₹{{ "%.2f"|format(price_low / 100000) }} L
-      <span class="dash">–</span>
-      ₹{{ "%.2f"|format(price_high / 100000) }} L
+      <div class="deal-section">
+        {% if asking_price is not none %}
+          {% set pct = asking_pct_diff or 0 %}
+          {% if asking_position == 'below' and pct <= -15 %}
+            <div class="deal-banner deal-toogood">
+              <div class="deal-icon">⚠️</div>
+              <div class="deal-text">
+                <div class="deal-title">Too Good to Be True</div>
+                <div class="deal-body">
+                  Asking ₹ {{ l2dp(asking_price) }} is <strong>{{ (pct * -1) | round(1) }}% below</strong> fair market.
+                  Verify thoroughly — unusual discounts can signal accident history, odometer tampering, or unclear ownership.
+                </div>
+              </div>
+            </div>
+          {% elif asking_position == 'below' %}
+            <div class="deal-banner deal-great">
+              <div class="deal-icon">🎯</div>
+              <div class="deal-text">
+                <div class="deal-title">Great Deal</div>
+                <div class="deal-body">
+                  Asking ₹ {{ l2dp(asking_price) }} is <strong>{{ (pct * -1) | round(1) }}% below</strong> fair market.
+                  Worth moving fast if the car checks out on inspection.
+                </div>
+              </div>
+            </div>
+          {% elif asking_position == 'within' %}
+            <div class="deal-banner deal-fair">
+              <div class="deal-icon">✅</div>
+              <div class="deal-text">
+                <div class="deal-title">Fair Price</div>
+                <div class="deal-body">
+                  Asking ₹ {{ l2dp(asking_price) }} sits within fair market range.
+                  Try negotiating toward ₹ {{ l2dp(price_low) }} to get a better deal.
+                </div>
+              </div>
+            </div>
+          {% else %}
+            <div class="deal-banner deal-over">
+              <div class="deal-icon">💸</div>
+              <div class="deal-text">
+                <div class="deal-title">Overpriced</div>
+                <div class="deal-body">
+                  Asking ₹ {{ l2dp(asking_price) }} is <strong>{{ pct | round(1) }}% above</strong> fair market.
+                  Counter-offer closer to ₹ {{ l2dp(estimated) }} or walk away.
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        {% else %}
+          <div class="deal-banner deal-unknown">
+            <div class="deal-icon">💡</div>
+            <div class="deal-text">
+              <div class="deal-title">Enter an asking price to analyze</div>
+              <div class="deal-body">
+                Go back and add the seller's asking price — we'll tell you if it's a Great Deal, Fair, Overpriced, or Too Good to Be True.
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
     </div>
 
-    <div class="phase-row">
-      <span class="phase-badge phase-badge-{{ phase_data.phase }}" title="{{ phase_data.display.tooltip }}">
-        {% if phase_data.phase == 4 %}⭐{% elif phase_data.phase == 3 %}✓{% elif phase_data.phase == 2 %}📈{% else %}📊{% endif %}
-        {{ phase_data.display.badge }}
-      </span>
-      <span class="phase-detail">{{ phase_data.display.detail }}</span>
-    </div>
+    <div class="card chart-card">
+      <div class="card-title">
+        Depreciation Forecast
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            How this car's value is expected to drop over the next 5 years from today. Today / Year 2 / Year 4 values are shown on the chart — hover anywhere to see any month's projected price.
+          </span>
+        </span>
+        <span class="sub">next 5 years · values at Today / 2yr / 4yr</span>
+      </div>
 
-    <div class="market-stats">
-      {{ verified_180d }} Verified transactions in last 6 months{% if verified_all_time > verified_180d %} · {{ verified_all_time }} all-time{% endif %}
+      <div class="chart-caution-chip" id="caution-chip">
+        <span class="chip-icon">⚠️</span>
+        <span>Paying top price? Expect steeper loss at resale</span>
+        <div class="chart-caution-tooltip">
+          <strong style="color:#ff6b6b;">Buying at the top of the range magnifies depreciation loss.</strong><br><br>
+          Cars bought at premium prices lose more rupees in the first 2–3 years than mid-range purchases — you absorb the full depreciation curve from a higher start point.<br><br>
+          <span id="caution-numbers"></span>
+          <br><br>
+          Tip: negotiate closer to the midpoint or wait for a better-priced listing. Use the "Get Notified" card below to catch one.
+        </div>
+      </div>
+
+      <div class="graph-wrap">
+        <canvas id="dep-chart"></canvas>
+      </div>
     </div>
   </div>
 
-  <!-- Asking price context (if provided) -->
-  {% if asking_price %}
-  <div class="asking-strip">
-    <div>
-      <span class="asking-label">Seller's Asking Price:</span>
-      <span class="asking-value">₹{{ "%.2f"|format(asking_price / 100000) }} L</span>
-      <span style="color: var(--text-mute); margin-left: 6px;">
-        ({% if asking_pct_diff > 0 %}+{% endif %}{{ asking_pct_diff }}% vs fair)
-      </span>
-    </div>
-    <div class="asking-verdict {{ asking_position }}">
-      {% if asking_position == 'below' %}✓ Below Fair Range
-      {% elif asking_position == 'within' %}✓ Within Fair Range
-      {% else %}⚠ Above Fair Range{% endif %}
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- KPI Row -->
   <div class="kpi-row">
-    <div class="kpi clickable" id="demandKpi">
-      <div class="kpi-label">Market Demand</div>
-      <div class="kpi-value {% if demand == 'HIGH' %}hi{% elif demand == 'MEDIUM' %}md{% else %}lo{% endif %}">{{ demand }}</div>
-      <div class="kpi-sub">Tap for tips</div>
-      <div class="smart-tooltip" id="demandTooltip">
-        <h4>Buyer Negotiation Tips</h4>
-        <table class="buyer-table">
-          <tr class="{% if demand == 'HIGH' %}highlight{% endif %}"><td>HIGH</td><td>2–4% max discount · decide fast</td></tr>
-          <tr class="{% if demand == 'MEDIUM' %}highlight{% endif %}"><td>MEDIUM</td><td>5–8% discount · walk away once</td></tr>
-          <tr class="{% if demand == 'LOW' %}highlight{% endif %}"><td>LOW</td><td>10–15% discount · leverage listing age</td></tr>
-        </table>
+    <div class="kpi-card">
+      <div class="kpi-label">
+        Market Demand
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            How in-demand this car is. HIGH means many buyers want this model — expect sellers to hold firm on price. LOW means you have more negotiating leverage.
+          </span>
+        </span>
+      </div>
+      <div class="kpi-value demand-{{ demand }}">{{ demand }}</div>
+      <div class="kpi-sub">
+        {% if demand == 'HIGH' %}Sellers have leverage
+        {% elif demand == 'MEDIUM' %}Balanced market
+        {% else %}Buyers have leverage{% endif %}
       </div>
     </div>
 
-    <div class="kpi clickable" id="confKpi">
-      <div class="kpi-label">Data Confidence</div>
-      <div class="kpi-value {% if confidence >= 75 %}hi{% elif confidence >= 60 %}md{% else %}lo{% endif %}">{{ confidence }}%</div>
-      <div class="kpi-sub">Tap for details</div>
-      <div class="smart-tooltip" id="confTooltip">
-        <h4>Data Confidence</h4>
-        <table class="buyer-table">
-          <tr class="{% if confidence >= 90 %}highlight{% endif %}"><td>90–95</td><td>Very high · pay within range</td></tr>
-          <tr class="{% if confidence >= 75 and confidence < 90 %}highlight{% endif %}"><td>75–89</td><td>High · small buffer OK</td></tr>
-          <tr class="{% if confidence >= 60 and confidence < 75 %}highlight{% endif %}"><td>60–74</td><td>Moderate · negotiate harder</td></tr>
-          <tr class="{% if confidence < 60 %}highlight{% endif %}"><td>50–59</td><td>Emerging · get inspection</td></tr>
-        </table>
+    <div class="kpi-card">
+      <div class="kpi-label">
+        Data Confidence
+        <span class="info-wrap" id="conf-info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip wide" id="conf-tooltip">
+            <span class="conf-header">Confidence levels — what each means</span>
+            {% set c = confidence | int %}
+            <span class="conf-mini-row {% if c >= 90 %}active{% endif %}">
+              <span class="mini-bracket">90–95%</span>
+              <span>
+                Strong match with many verified deals.
+                <span class="mini-benefit">Pay within fair range; don't overpay.</span>
+              </span>
+            </span>
+            <span class="conf-mini-row {% if c >= 75 and c < 90 %}active{% endif %}">
+              <span class="mini-bracket">75–89%</span>
+              <span>
+                Good match with several similar deals.
+                <span class="mini-benefit">Aim mid-range; small negotiation buffer.</span>
+              </span>
+            </span>
+            <span class="conf-mini-row {% if c >= 60 and c < 75 %}active{% endif %}">
+              <span class="mini-bracket">60–74%</span>
+              <span>
+                Moderate match, limited data.
+                <span class="mini-benefit">Negotiate harder — aim below midpoint.</span>
+              </span>
+            </span>
+            <span class="conf-mini-row {% if c < 60 %}active{% endif %}">
+              <span class="mini-bracket">50–59%</span>
+              <span>
+                Baseline estimate, few comparable deals.
+                <span class="mini-benefit">Get an independent inspection before buying.</span>
+              </span>
+            </span>
+          </span>
+        </span>
       </div>
+      <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
+      <div class="kpi-sub">Based on verified deals</div>
     </div>
 
-    <div class="kpi">
-      <div class="kpi-label">Avg Days to Sell</div>
-      <div class="kpi-value">{{ days_to_sell }}</div>
-      <div class="kpi-sub">market signal</div>
+    <div class="kpi-card">
+      <div class="kpi-label">
+        Typical Listing Time
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            Average days a car like this stays listed before being sold. If the car you're evaluating has been listed far longer than typical, the seller may be open to negotiation; if it's fresh, move fast.
+          </span>
+        </span>
+      </div>
+      <div class="kpi-value" style="color:#ffa500;">{{ days_to_sell }}</div>
+      <div class="kpi-sub">days on market</div>
     </div>
   </div>
 
-  <!-- Dealer vs Private -->
-  <div class="dp-card">
-    <h3>Typical Seller-Type Pricing</h3>
-    <div class="dp-row">
-      <div class="dp-cell">
-        <div class="dp-cell-label">From a Dealer</div>
-        <div class="dp-cell-value">₹{{ "%.2f"|format(dealer_price / 100000) }} L</div>
-        <div class="dp-cell-sub">~12% dealer margin included</div>
-      </div>
-      <div class="dp-cell">
-        <div class="dp-cell-label">From a Private Seller</div>
-        <div class="dp-cell-value">₹{{ "%.2f"|format(private_price / 100000) }} L</div>
-        <div class="dp-cell-sub">typically lower, no margin</div>
-      </div>
-    </div>
+  <div class="market-stats">
+    <strong>{{ verified_180d }}</strong> Verified transactions in last 6 months
+    {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
   </div>
 
-  <!-- Depreciation chart (5 years) -->
-  <div class="chart-card">
-    <h3>Depreciation — Next 5 Years</h3>
-    <div class="chart-wrap">
-      <canvas id="depChart"></canvas>
-    </div>
-  </div>
-
-  <!-- Alert subscription -->
-  {% if user is not none %}
+  {# ===== ALERT SUBSCRIPTION CARD ===== #}
   <div class="alert-card">
-    <h3>🔔 Price Alerts for This Car</h3>
     {% if active_sub %}
-      <div class="alert-active-msg">
-        ✓ Alert active until <strong>{{ active_sub.expires_at|ddmmmyyyy }}</strong> ·
-        <a href="{{ url_for('my_alerts') }}" style="color: inherit; text-decoration: underline;">Manage alerts</a>
+      <div class="alert-card-header">
+        <div>
+          <div class="alert-card-title">🔔 Listing Alerts Active
+            <span class="info-wrap">
+              <span class="info-icon">i</span>
+              <span class="info-tooltip">
+                We'll notify you when a similar {{ make }} {{ model }} {{ variant }} is listed on supported marketplaces, with our deal evaluation attached. Alerts begin within 24 hours of subscription.
+              </span>
+            </span>
+          </div>
+          <div class="alert-card-sub">
+            Channels:
+            {% if active_sub.email_enabled %}<strong style="color:#8a90ff;">Email</strong>{% endif %}
+            {% if active_sub.email_enabled and active_sub.whatsapp_enabled %} + {% endif %}
+            {% if active_sub.whatsapp_enabled %}<strong style="color:#25d366;">WhatsApp</strong>{% endif %}
+            &nbsp;·&nbsp;
+            Active until <strong>{{ active_sub.expires_at | ddmmmyyyy }}</strong>
+          </div>
+        </div>
+        <span class="alert-pill">✓ Subscribed</span>
+      </div>
+      <div class="alert-footnote">
+        You'll get notified when a similar {{ make }} {{ model }} {{ variant }} appears in any supported marketplace listing, along with our Great Deal / Fair / Overpriced / Too Good To Be True evaluation.
       </div>
     {% else %}
-      <form method="POST" action="{{ url_for('subscribe_alert') }}">
-        <input type="hidden" name="make" value="{{ make }}">
-        <input type="hidden" name="model" value="{{ model }}">
-        <input type="hidden" name="variant" value="{{ variant }}">
-        <input type="hidden" name="fuel" value="{{ fuel }}">
-        <input type="hidden" name="year" value="{{ year }}">
-        <input type="hidden" name="owner" value="{{ owner }}">
-        <input type="hidden" name="mileage" value="{{ mileage }}">
-        <input type="hidden" name="condition" value="{{ condition }}">
-        {% if asking_price %}<input type="hidden" name="asking_price" value="{{ asking_price }}">{% endif %}
+      <div class="alert-card-header">
+        <div>
+          <div class="alert-card-title">🔔 Get Notified About Similar Listings
+            <span class="info-wrap">
+              <span class="info-icon">i</span>
+              <span class="info-tooltip">
+                When a similar {{ make }} {{ model }} {{ variant }} is listed on supported marketplaces, we'll send you the listing along with our deal evaluation (Great Deal / Fair / Overpriced / Too Good to Be True) so you can act fast.
+              </span>
+            </span>
+          </div>
+          <div class="alert-card-sub">
+            We'll alert you when a similar <strong>{{ make }} {{ model }} {{ variant }}</strong> is listed anywhere, with our deal evaluation attached.
+          </div>
+        </div>
+      </div>
 
-        <div class="alert-form-row">
-          <label><input type="checkbox" name="email_enabled" checked> Email</label>
-          <label><input type="checkbox" name="whatsapp_enabled" checked> WhatsApp</label>
-          <button type="submit" class="alert-submit">
-            Subscribe ({{ alert_cost }} Credits · {{ alert_days }}d)
+      {% set user_credits = session.credits|default(0) %}
+      {% if user_credits >= alert_cost %}
+        <form method="POST" action="{{ url_for('subscribe_alert') }}" class="alert-form" id="subscribe-alert-form">
+          <input type="hidden" name="make"      value="{{ make }}">
+          <input type="hidden" name="model"     value="{{ model }}">
+          <input type="hidden" name="variant"   value="{{ variant }}">
+          <input type="hidden" name="fuel"      value="{{ fuel }}">
+          <input type="hidden" name="year"      value="{{ year }}">
+          <input type="hidden" name="owner"     value="{{ owner }}">
+          <input type="hidden" name="mileage"   value="{{ mileage }}">
+          <input type="hidden" name="condition" value="{{ condition }}">
+          <input type="hidden" name="asking_price" value="{{ asking_price if asking_price is not none else '' }}">
+
+          <div class="alert-channels">
+            <label>
+              <input type="checkbox" name="email_enabled" checked>
+              📧 Email
+              <span style="color:#8a90ff; font-weight:500;">({{ user.email }})</span>
+            </label>
+            <label>
+              <input type="checkbox" name="whatsapp_enabled" {% if user.whatsapp_phone %}checked{% endif %} {% if not user.whatsapp_phone %}disabled{% endif %}>
+              💬 WhatsApp
+              {% if user.whatsapp_phone %}
+                <span style="color:#25d366; font-weight:500;">(+91 {{ user.whatsapp_phone }})</span>
+              {% else %}
+                <span style="color:#6c757d;">(no WhatsApp on file)</span>
+              {% endif %}
+            </label>
+          </div>
+
+          <button type="submit" class="btn-alert-subscribe">
+            Subscribe ({{ alert_cost }} Credits · {{ alert_days }} days)
           </button>
+        </form>
+        <div class="alert-error" id="alert-error" style="display:none;">Please select at least one channel (Email or WhatsApp).</div>
+        <div class="alert-footnote">
+          Alerts begin within 24 hours of subscription. You can subscribe to multiple cars by running separate searches.
         </div>
-        <div class="alert-price">
-          Get notified when new verified deals match this car.
-          ({{ active_alerts_count }}/{{ 5 }} active alerts used)
+      {% else %}
+        <div style="color:#ffa500; font-size:0.82rem; margin-bottom:6px;">
+          You need <strong>{{ alert_cost }} credits</strong> to subscribe. You currently have <strong>{{ user_credits }} credits</strong>.
         </div>
-      </form>
+        <form method="POST" action="{{ url_for('request_credits') }}" style="display:inline;">
+          <input type="hidden" name="return_to" value="buyer_dashboard">
+          <input type="hidden" name="keep_make"         value="{{ make }}">
+          <input type="hidden" name="keep_fuel"         value="{{ fuel }}">
+          <input type="hidden" name="keep_model"        value="{{ model }}">
+          <input type="hidden" name="keep_variant"      value="{{ variant }}">
+          <input type="hidden" name="keep_year"         value="{{ year }}">
+          <input type="hidden" name="keep_owner"        value="{{ owner }}">
+          <input type="hidden" name="keep_mileage"      value="{{ mileage }}">
+          <input type="hidden" name="keep_condition"    value="{{ condition }}">
+          <input type="hidden" name="keep_asking_price" value="{{ asking_price if asking_price is not none else '' }}">
+          <button type="submit" class="btn-alert-topup">
+            🎁 Get 500 Free Credits (Auto-approved)
+          </button>
+        </form>
+        <div class="alert-footnote">
+          Credits added instantly. You'll return to this dashboard so you can subscribe right away.
+        </div>
+      {% endif %}
     {% endif %}
   </div>
-  {% endif %}
 
-  <div class="data-footer">
+  <div class="bottom-row">
+    <div class="card">
+      <div class="card-title">
+        Dealer vs Private Seller
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            Dealers typically charge more but offer warranty, certification, and paperwork help. Private sellers are cheaper but require more due diligence on your end.
+          </span>
+        </span>
+      </div>
+      <div class="compare-row">
+        <div class="compare-item dealer">
+          <div class="ci-top">
+            <span class="ci-label">🏢 Typical Dealer Price</span>
+            <span class="ci-price">₹ {{ l2dp(dealer_price) }}</span>
+          </div>
+          <div class="ci-hint">Includes ~12% markup for warranty, certification, showroom costs, and paperwork.</div>
+        </div>
+        <div class="compare-item private">
+          <div class="ci-top">
+            <span class="ci-label">👤 Typical Private Sale</span>
+            <span class="ci-price">₹ {{ l2dp(private_price) }}</span>
+          </div>
+          <div class="ci-hint">Direct from owner — best value if you're willing to handle inspection and RC transfer yourself.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="verdict-card">
+      <div class="verdict-title">🎯 AutoKnowMus Verdict</div>
+      <div class="verdict-body" id="verdict-body">
+      </div>
+    </div>
+  </div>
+
+  <!-- Data version footer -->
+  <div class="data-version-footer">
     Prices calibrated {{ data_version }}
   </div>
 
 </div>
 
-<script>
-(function(){
-  // ---- Generic smart-tooltip helper ----
-  function attachSmartTooltip(triggerId, tooltipId) {
-    var trigger = document.getElementById(triggerId);
-    var tip = document.getElementById(tooltipId);
-    if (!trigger || !tip) return;
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
-    function toggle(show) {
-      if (show) {
-        // Hide siblings first
-        document.querySelectorAll('.smart-tooltip').forEach(function(t){ t.classList.remove('show'); });
-        tip.classList.add('show');
-        var rect = trigger.getBoundingClientRect();
-        var tipH = tip.offsetHeight;
-        var viewportH = window.innerHeight;
-        if (rect.bottom + tipH + 10 > viewportH) {
-          tip.style.top = 'auto';
-          tip.style.bottom = '100%';
-          tip.style.marginBottom = '6px';
-          tip.style.marginTop = '0';
-        } else {
-          tip.style.top = '100%';
-          tip.style.bottom = 'auto';
-          tip.style.marginTop = '6px';
-          tip.style.marginBottom = '0';
-        }
-        tip.style.left = '50%';
-        tip.style.transform = 'translateX(-50%)';
+<script>
+  const DEP_DATA        = {{ depreciation_json | safe }};
+  const PRICE_LOW       = {{ price_low }};
+  const PRICE_HIGH      = {{ price_high }};
+  const ESTIMATED       = {{ estimated }};
+  const DEALER_PRICE    = {{ dealer_price }};
+  const PRIVATE_PRICE   = {{ private_price }};
+  const DAYS_TO_SELL    = {{ days_to_sell }};
+  const DEMAND          = {{ demand | tojson }};
+  const CONFIDENCE      = {{ confidence }};
+  const CAR_NAME        = {{ (year|string ~ ' ' ~ make ~ ' ' ~ model ~ ' ' ~ variant) | tojson }};
+  const VERIFIED_COUNT  = {{ verified_180d }};
+  const ASKING_PRICE    = {{ asking_price if asking_price is not none else 'null' }};
+  const ASKING_POSITION = {{ asking_position | tojson if asking_position else 'null' }};
+  const ASKING_PCT_DIFF = {{ asking_pct_diff if asking_pct_diff is not none else 'null' }};
+
+  // Anchor months on the 5-year chart: Today (0), Year 2 (24), Year 4 (48)
+  const ANCHOR_MONTHS = [0, 24, 48];
+
+  // 2dp Lakhs formatter
+  function lakh2dp(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    n = Math.round(Number(n));
+    if (n >= 10000000) return (n / 10000000).toFixed(2) + 'Cr';
+    return (n / 100000).toFixed(2) + 'L';
+  }
+
+  function monthLabel(month) {
+    if (month === 0) return 'Today';
+    if (month < 12)  return 'Month ' + month;
+    const years = Math.floor(month / 12);
+    const remMonths = month % 12;
+    const yearWord = years === 1 ? 'Year' : 'Years';
+    if (remMonths === 0) return years + ' ' + yearWord;
+    const monthWord = remMonths === 1 ? 'Month' : 'Months';
+    return years + ' ' + yearWord + ' ' + remMonths + ' ' + monthWord;
+  }
+
+  function priceAtMonth(month) {
+    const idx = Math.max(0, Math.min(DEP_DATA.length - 1, month));
+    return DEP_DATA[idx].price;
+  }
+
+  // ================================================
+  // Caution chip — show when asking price is in top 20% of fair range or above
+  // ================================================
+  const cautionChip = document.getElementById('caution-chip');
+  const cautionNumbers = document.getElementById('caution-numbers');
+
+  function updateCaution() {
+    if (ASKING_PRICE === null) return;
+    let shouldShow = false;
+    if (ASKING_POSITION === 'above') {
+      shouldShow = true;
+    } else {
+      // Within-range: top 20% check
+      const pct = (ASKING_PRICE - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
+      if (pct >= 0.80) shouldShow = true;
+    }
+    if (shouldShow) {
+      // Compute projected loss at 3 years for this asking price
+      // We scale the formula-based 5yr depreciation to the user's entry point
+      const priceAt3y = priceAtMonth(36);
+      const priceAt5y = priceAtMonth(60);
+      // Proportional: if user pays ASKING_PRICE vs ESTIMATED, the resale trajectory scales the same %
+      const ratio3y = priceAt3y / ESTIMATED;
+      const ratio5y = priceAt5y / ESTIMATED;
+      const userValAt3y = Math.round(ASKING_PRICE * ratio3y);
+      const userValAt5y = Math.round(ASKING_PRICE * ratio5y);
+      const loss3y = ASKING_PRICE - userValAt3y;
+      const loss5y = ASKING_PRICE - userValAt5y;
+      cautionNumbers.innerHTML =
+        `At ₹${lakh2dp(ASKING_PRICE)}, your car may be worth only ₹${lakh2dp(userValAt3y)} in 3 years ` +
+        `(loss of ₹${lakh2dp(loss3y)}) and ₹${lakh2dp(userValAt5y)} in 5 years (loss of ₹${lakh2dp(loss5y)}).`;
+      cautionChip.classList.add('show');
+    } else {
+      cautionChip.classList.remove('show');
+    }
+  }
+  updateCaution();
+
+  // ================================================
+  // Verdict
+  // ================================================
+  function generateBuyerVerdict() {
+    const confidenceWord =
+      CONFIDENCE >= 90 ? 'strong' :
+      CONFIDENCE >= 75 ? 'good' :
+      CONFIDENCE >= 60 ? 'moderate' : 'preliminary';
+
+    const dataNote = VERIFIED_COUNT === 0
+      ? "Our estimate is formula-based using age, mileage, condition, ownership and fuel type — we don't yet have verified real-world deals for this exact car."
+      : `Our estimate blends the formula with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
+
+    let dealVerdict = '';
+    if (ASKING_PRICE !== null) {
+      if (ASKING_POSITION === 'below' && ASKING_PCT_DIFF <= -15) {
+        dealVerdict = `<p><span class="warn">⚠️ Proceed with extreme caution.</span> At ₹ ${lakh2dp(ASKING_PRICE)} this is <strong>${(ASKING_PCT_DIFF * -1).toFixed(1)}% below</strong> fair market — unusually low. Demand full service history, RC book check, and pre-purchase inspection.</p>`;
+      } else if (ASKING_POSITION === 'below') {
+        dealVerdict = `<p><span class="ok">Strong buying opportunity.</span> Asking ₹ ${lakh2dp(ASKING_PRICE)} gives you a <strong>${(ASKING_PCT_DIFF * -1).toFixed(1)}% saving</strong> vs fair market. Inspect thoroughly, then act fast.</p>`;
+      } else if (ASKING_POSITION === 'within') {
+        const negotiation = Math.round((ASKING_PRICE - PRICE_LOW) / 2 + PRICE_LOW);
+        dealVerdict = `<p><span class="info">Reasonable asking price.</span> ₹ ${lakh2dp(ASKING_PRICE)} is within fair range. Open negotiation at <strong>₹ ${lakh2dp(negotiation)}</strong> — sellers often accept 3–5% below asking.</p>`;
       } else {
-        tip.classList.remove('show');
+        dealVerdict = `<p><span class="hi">This is overpriced.</span> Asking ₹ ${lakh2dp(ASKING_PRICE)} is <strong>${ASKING_PCT_DIFF.toFixed(1)}% above</strong> fair market. Counter-offer at <strong>₹ ${lakh2dp(ESTIMATED)}</strong> or walk away.</p>`;
       }
+    } else {
+      dealVerdict = `<p><span class="info">💡 Tip:</span> Go back and enter the seller's asking price for a specific deal verdict.</p>`;
     }
 
-    trigger.addEventListener('click', function(e){
-      e.stopPropagation();
-      toggle(!tip.classList.contains('show'));
-    });
-    tip.addEventListener('click', function(e){ e.stopPropagation(); });
+    let demandGuidance = '';
+    if (DEMAND === 'HIGH') {
+      demandGuidance = `<p>Demand is <span class="hi">HIGH</span> — sellers hold pricing power. Decide quickly on fair listings; don't expect deep discounts.</p>`;
+    } else if (DEMAND === 'MEDIUM') {
+      demandGuidance = `<p>Demand is <span class="info">MEDIUM</span> — balanced market. Expect 5–8% negotiation room below asking.</p>`;
+    } else {
+      demandGuidance = `<p>Demand is <span class="ok">LOW</span> — you have leverage. Aim for 10–15% below asking.</p>`;
+    }
+
+    const diff = DEALER_PRICE - PRIVATE_PRICE;
+    const dealerPremiumPct = Math.round((diff / PRIVATE_PRICE) * 100);
+    const dealerVsPrivate = `<p><strong>Where to buy:</strong> Private saves ~<span class="ok">₹ ${lakh2dp(diff)} (${dealerPremiumPct}%)</span> but needs more diligence. Dealers cost more but offer warranty + paperwork — worth it for first-time used-car buyers.</p>`;
+
+    const priceAt5y = priceAtMonth(DEP_DATA.length - 1);
+    const loss5y = ESTIMATED - priceAt5y;
+    const pct5y = Math.round((loss5y / ESTIMATED) * 100);
+    const deprecNote = `<p><strong>Future value:</strong> Over 5 years this depreciates ~<span class="hi">₹ ${lakh2dp(loss5y)} (${pct5y}%)</span>. Factor into long-term cost of ownership.</p>`;
+
+    const intro = `<p>Target <strong>${CAR_NAME}</strong> has a ${confidenceWord} analysis (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>`;
+
+    return intro + dealVerdict + demandGuidance + dealerVsPrivate + deprecNote;
   }
 
-  attachSmartTooltip('demandKpi', 'demandTooltip');
-  attachSmartTooltip('confKpi', 'confTooltip');
-  document.addEventListener('click', function(){
-    document.querySelectorAll('.smart-tooltip').forEach(function(t){ t.classList.remove('show'); });
-  });
+  document.getElementById('verdict-body').innerHTML = generateBuyerVerdict();
 
-  // ---- Depreciation chart (5-year monthly) ----
-  var depData = {{ depreciation_json|safe }};
-  var ctx = document.getElementById('depChart');
-  if (ctx && window.Chart) {
-    var labels = depData.map(function(d){ return d.month; });
-    var prices = depData.map(function(d){ return d.price; });
-
-    // Anchor points: Year 1 (month 12), Year 3 (month 36), Year 5 (month 60)
-    var anchorMonths = [12, 36, 60];
-
-    var anchorPlugin = {
-      id: 'anchorBadges',
-      afterDatasetsDraw: function(chart) {
-        var ctx = chart.ctx;
-        var meta = chart.getDatasetMeta(0);
-        var points = meta.data;
-        ctx.save();
-        anchorMonths.forEach(function(m, idx){
-          if (m >= points.length) return;
-          var p = points[m];
-          if (!p) return;
-          var priceLakh = (prices[m] / 100000).toFixed(2);
-          var yearNum = m / 12;
-          var label = 'Y' + yearNum + ' · ₹' + priceLakh + 'L';
-          ctx.font = 'bold 10px sans-serif';
-          var textW = ctx.measureText(label).width;
-          var padX = 6;
-          var boxW = textW + padX * 2;
-          var boxH = 16;
-          var x = p.x;
-          var y = p.y - 20;
-          var chartArea = chart.chartArea;
-          if (x + boxW/2 > chartArea.right) x = chartArea.right - boxW/2;
-          if (x - boxW/2 < chartArea.left)  x = chartArea.left + boxW/2;
-          ctx.fillStyle = '#ffa500';
-          ctx.beginPath();
-          if (ctx.roundRect) {
-            ctx.roundRect(x - boxW/2, y - boxH/2, boxW, boxH, 8);
-          } else {
-            ctx.rect(x - boxW/2, y - boxH/2, boxW, boxH);
-          }
-          ctx.fill();
-          ctx.fillStyle = 'white';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(label, x, y);
-          ctx.strokeStyle = '#ffa500';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(x, y + boxH/2);
-          ctx.lineTo(p.x, p.y - 2);
-          ctx.stroke();
-        });
-        ctx.restore();
+  // Subscribe form validation
+  const subForm = document.getElementById('subscribe-alert-form');
+  if (subForm) {
+    subForm.addEventListener('submit', function(e) {
+      const email = subForm.querySelector('input[name="email_enabled"]');
+      const wa    = subForm.querySelector('input[name="whatsapp_enabled"]');
+      const errEl = document.getElementById('alert-error');
+      const emailChecked = email && email.checked;
+      const waChecked    = wa && wa.checked && !wa.disabled;
+      if (!emailChecked && !waChecked) {
+        e.preventDefault();
+        if (errEl) errEl.style.display = 'block';
       }
-    };
+    });
+  }
 
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{
-          data: prices,
-          borderColor: '#7a80ff',
-          backgroundColor: 'rgba(122,128,255,0.08)',
-          borderWidth: 2,
-          fill: true,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#7a80ff',
-          tension: 0.3
-        }]
+  // ================================================
+  // Confidence tooltip smart-positioning (like seller dashboard)
+  // ================================================
+  const confWrap = document.getElementById('conf-info-wrap');
+  const confTip  = document.getElementById('conf-tooltip');
+  if (confWrap && confTip) {
+    confWrap.addEventListener('mouseenter', function() {
+      const iconRect = confWrap.getBoundingClientRect();
+      const tipWidth = 320;
+      const viewW = window.innerWidth;
+      const halfTip = tipWidth / 2;
+      const iconCenterX = iconRect.left + iconRect.width / 2;
+      const leftSpace  = iconCenterX;
+      const rightSpace = viewW - iconCenterX;
+
+      if (leftSpace < halfTip + 10) {
+        confTip.style.left = '0';
+        confTip.style.transform = 'none';
+      } else if (rightSpace < halfTip + 10) {
+        confTip.style.left = 'auto';
+        confTip.style.right = '0';
+        confTip.style.transform = 'none';
+      } else {
+        confTip.style.left = '50%';
+        confTip.style.right = 'auto';
+        confTip.style.transform = 'translateX(-50%)';
+      }
+    });
+  }
+
+  // ================================================
+  // Depreciation chart with anchor labels at Today / Year 2 / Year 4
+  // ================================================
+  const ctx = document.getElementById('dep-chart').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 185);
+  grad.addColorStop(0, 'rgba(78, 84, 255, 0.35)');
+  grad.addColorStop(1, 'rgba(78, 84, 255, 0.02)');
+
+  const labels = DEP_DATA.map(p => monthLabel(p.month));
+  const prices = DEP_DATA.map(p => p.price);
+
+  // Point arrays: only anchor months get visible points
+  const pointRadiusArr = DEP_DATA.map(p => ANCHOR_MONTHS.includes(p.month) ? 4 : 0);
+  const pointBgArr = DEP_DATA.map(p => ANCHOR_MONTHS.includes(p.month) ? '#ffa500' : '#4e54ff');
+  const pointBorderArr = DEP_DATA.map(p => ANCHOR_MONTHS.includes(p.month) ? '#fff' : '#4e54ff');
+
+  // Anchor badge plugin — clamps X so badges stay inside chart area
+  const anchorLabelsPlugin = {
+    id: 'anchorLabels',
+    afterDatasetsDraw: function(chart) {
+      const cctx = chart.ctx;
+      const area = chart.chartArea;
+      cctx.save();
+      cctx.font = '600 10px system-ui, -apple-system, sans-serif';
+      cctx.textAlign = 'center';
+      cctx.textBaseline = 'bottom';
+
+      ANCHOR_MONTHS.forEach(month => {
+        const idx = DEP_DATA.findIndex(p => p.month === month);
+        if (idx < 0) return;
+        const meta = chart.getDatasetMeta(0);
+        const point = meta.data[idx];
+        if (!point) return;
+
+        const price = DEP_DATA[idx].price;
+        const label = '₹' + lakh2dp(price);
+
+        const padX = 5, padY = 3;
+        const textW = cctx.measureText(label).width;
+        const badgeW = textW + padX*2;
+        const badgeH = 16;
+
+        // Clamp badge inside chart area
+        let centerX = point.x;
+        const minCenter = area.left + badgeW / 2 + 2;
+        const maxCenter = area.right - badgeW / 2 - 2;
+        if (centerX < minCenter) centerX = minCenter;
+        if (centerX > maxCenter) centerX = maxCenter;
+
+        const badgeX = centerX - badgeW / 2;
+        const badgeY = point.y - 22;
+
+        cctx.fillStyle = 'rgba(255,165,0,0.95)';
+        cctx.beginPath();
+        const r = 8;
+        cctx.moveTo(badgeX + r, badgeY);
+        cctx.lineTo(badgeX + badgeW - r, badgeY);
+        cctx.quadraticCurveTo(badgeX + badgeW, badgeY, badgeX + badgeW, badgeY + r);
+        cctx.lineTo(badgeX + badgeW, badgeY + badgeH - r);
+        cctx.quadraticCurveTo(badgeX + badgeW, badgeY + badgeH, badgeX + badgeW - r, badgeY + badgeH);
+        cctx.lineTo(badgeX + r, badgeY + badgeH);
+        cctx.quadraticCurveTo(badgeX, badgeY + badgeH, badgeX, badgeY + badgeH - r);
+        cctx.lineTo(badgeX, badgeY + r);
+        cctx.quadraticCurveTo(badgeX, badgeY, badgeX + r, badgeY);
+        cctx.closePath();
+        cctx.fill();
+
+        cctx.fillStyle = '#1a1d24';
+        cctx.fillText(label, centerX, badgeY + badgeH - padY);
+      });
+
+      cctx.restore();
+    }
+  };
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Projected market price',
+        data: prices,
+        borderColor: '#4e54ff',
+        backgroundColor: grad,
+        borderWidth: 2.5,
+        fill: true,
+        tension: 0.35,
+        pointRadius: pointRadiusArr,
+        pointBackgroundColor: pointBgArr,
+        pointBorderColor: pointBorderArr,
+        pointBorderWidth: 2,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: '#4e54ff',
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      layout: {
+        padding: { top: 22, right: 36, left: 4, bottom: 0 }
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: { padding: { top: 22, right: 36, left: 4, bottom: 0 } },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              title: function(items){
-                var m = parseInt(items[0].label, 10);
-                if (m === 0) return 'Today';
-                if (m % 12 === 0) return 'Year ' + (m/12);
-                return 'Month ' + m;
-              },
-              label: function(ctx){ return '₹' + (ctx.parsed.y / 100000).toFixed(2) + ' L'; }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: {
-              color: '#8b92a5',
-              font: { size: 10 },
-              autoSkip: false,
-              callback: function(val){
-                var m = parseInt(this.getLabelForValue(val), 10);
-                if (m === 0) return 'Today';
-                if (m === 12) return '1yr';
-                if (m === 24) return '2yr';
-                if (m === 36) return '3yr';
-                if (m === 48) return '4yr';
-                if (m === 60) return '5yr';
-                return '';
-              }
-            }
-          },
-          y: {
-            grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: {
-              color: '#8b92a5',
-              font: { size: 10 },
-              callback: function(v){ return '₹' + (v/100000).toFixed(1) + 'L'; }
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0e1117',
+          titleColor: '#ffa500',
+          bodyColor: '#e6e6e6',
+          borderColor: '#4e54ff',
+          borderWidth: 1,
+          padding: 8,
+          titleFont: { weight: '600' },
+          bodyFont: { size: 12 },
+          displayColors: false,
+          callbacks: {
+            title: function(items) {
+              const m = DEP_DATA[items[0].dataIndex].month;
+              return monthLabel(m);
+            },
+            label: function(item) {
+              return '₹ ' + lakh2dp(item.parsed.y);
             }
           }
         }
       },
-      plugins: [anchorPlugin]
-    });
-  }
-})();
+      scales: {
+        x: {
+          ticks: {
+            color: '#6c757d',
+            maxTicksLimit: 6,
+            autoSkip: false,
+            callback: function(val, idx) {
+              const m = DEP_DATA[idx] ? DEP_DATA[idx].month : 0;
+              if (m === 0)  return 'Today';
+              if (m === 12) return '1yr';
+              if (m === 24) return '2yr';
+              if (m === 36) return '3yr';
+              if (m === 48) return '4yr';
+              if (m === 60) return '5yr';
+              return '';
+            },
+            font: { size: 10 }
+          },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        },
+        y: {
+          ticks: {
+            color: '#6c757d',
+            maxTicksLimit: 4,
+            callback: function(v) { return '₹ ' + lakh2dp(v); },
+            font: { size: 10 }
+          },
+          grid: { color: 'rgba(255,255,255,0.06)' }
+        }
+      }
+    },
+    plugins: [anchorLabelsPlugin]
+  });
 </script>
-
 {% endblock %}
