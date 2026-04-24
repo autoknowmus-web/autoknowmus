@@ -274,7 +274,10 @@
   function populateVariants(make, model, preselect) {
     resetSelect(variantEl, 'Select Variant');
     if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
-    const variants = [...(CAR_DATA[make][model].variants || [])].sort();
+    // Handle both dict-shape (new) and list-shape (legacy) variants structure.
+    // Preserve TRIM ORDER (base → top) — do NOT sort alphabetically.
+    const variantsObj = CAR_DATA[make][model].variants || {};
+    const variants = Array.isArray(variantsObj) ? variantsObj : Object.keys(variantsObj);
     variants.forEach(v => {
       const opt = document.createElement('option');
       opt.value = v;
