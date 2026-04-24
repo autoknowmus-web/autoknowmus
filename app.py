@@ -21,7 +21,10 @@ from car_data import (
     determine_phase, CURRENT_YEAR,
     BASE_PRICE_DATA_VERSION, BASE_PRICE_LAST_UPDATED,
     PHASE_THRESHOLDS, PHASE_BLEND,
+    # Google Sheets integration
+    refresh_prices, refresh_module_constants, get_cache_status,
 )
+import car_data as _car_data_module
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-change-me')
@@ -34,7 +37,7 @@ app.logger.setLevel(logging.INFO)
 # TODO: migrate to a role flag on users table when you add a second admin
 # ============================================================
 ADMIN_EMAILS = {
-    'YOUR_EMAIL@example.com',   # <-- REPLACE WITH YOUR EMAIL
+    'autoknowmus@gmail.com',   # <-- REPLACE WITH YOUR EMAIL
 }
 
 
@@ -183,6 +186,22 @@ def _format_txn_date(iso_str):
         return dt.strftime('%d-%b-%Y %H:%M')
     except Exception:
         return iso_str
+
+
+def _live_data_version():
+    """Read latest data_version from car_data cache (updated from Google Sheet meta tab)."""
+    try:
+        return _car_data_module.BASE_PRICE_DATA_VERSION or BASE_PRICE_DATA_VERSION
+    except Exception:
+        return BASE_PRICE_DATA_VERSION
+
+
+def _live_last_updated():
+    """Read latest last_updated from car_data cache (updated from Google Sheet meta tab)."""
+    try:
+        return _car_data_module.BASE_PRICE_LAST_UPDATED or BASE_PRICE_LAST_UPDATED
+    except Exception:
+        return BASE_PRICE_LAST_UPDATED
 
 
 def hash_password(plain: str) -> str:
@@ -1130,7 +1149,7 @@ def seller_dashboard(valuation_id):
         verified_all_time=verified_all_time,
         back_prefill=back_prefill,
         phase_data=phase_data,
-        data_version=BASE_PRICE_DATA_VERSION,
+        data_version=_live_data_version(),
     )
 
 
@@ -1489,7 +1508,7 @@ def buyer_dashboard():
         alert_cost=ALERT_SUBSCRIPTION_COST,
         alert_days=ALERT_SUBSCRIPTION_DAYS,
         phase_data=phase_data,
-        data_version=BASE_PRICE_DATA_VERSION,
+        data_version=_live_data_version(),
     )
 
 
@@ -2353,6 +2372,16 @@ def admin_data_health():
         if (make, model) not in recent_model_keys
     )
 
+    # Live cache status for admin visibility
+    try:
+        cache_status = get_cache_status()
+    except Exception as e:
+        app.logger.warning(f"get_cache_status failed: {e}")
+        cache_status = {
+            'source': 'unknown', 'last_fetch_age_seconds': 0, 'last_error': str(e),
+            'cache_ttl': 3600, 'makes': 0, 'data_version': '?', 'last_updated': '?',
+        }
+
     return render_template(
         'admin_data_health.html',
         user=user,
@@ -2368,8 +2397,9 @@ def admin_data_health():
         guardrail_flags=guardrail_flags,
         broker_signals=broker_signals,
         stale_count=stale_count,
-        data_version=BASE_PRICE_DATA_VERSION,
-        last_updated=BASE_PRICE_LAST_UPDATED,
+        data_version=_live_data_version(),
+        last_updated=_live_last_updated(),
+        cache_status=cache_status,
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
     )
 
@@ -2396,6 +2426,60 @@ def admin_flag_user(user_id):
     except Exception as e:
         app.logger.error(f"admin_flag_user failed: {e}")
         flash('Could not flag user. Please try again.', 'error')
+
+    return redirect(url_for('admin_data_health'))
+
+
+# ============================================================
+# ADMIN — PRICE CACHE REFRESH
+# ============================================================
+
+@app.route('/admin/refresh-prices', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_refresh_prices():
+    """
+    Force immediate reload of Google Sheets price data.
+    Useful after editing the sheet — avoids waiting up to 1 hour for cache TTL.
+    GET request works too so it can be triggered by clicking a link.
+    """
+    try:
+        result = refresh_prices(force=True)
+        refresh_module_constants()
+    except Exception as e:
+        app.logger.error(f"admin_refresh_prices failed: {e}")
+        flash(f'Refresh failed: {e}', 'error')
+        return redirect(url_for('admin_data_health'))
+
+    status = result.get('status', '?')
+    source = result.get('source', '?')
+    errors = result.get('errors')
+    makes = result.get('makes', 0)
+    variants = result.get('variants', 0)
+    version = result.get('data_version', '?')
+    overrides = result.get('sheet_overrides', 0)
+
+    if status == 'refreshed':
+        flash(
+            f'✅ Prices refreshed from Google Sheets. Source: {source}. '
+            f'{makes} makes, {variants} variants loaded. '
+            f'Data version: {version}. Sheet overrides: {overrides}.',
+            'success'
+        )
+    elif status == 'partial_error':
+        flash(
+            f'⚠️ Partial refresh (some tabs failed). Source: {source}. '
+            f'Loaded {makes} makes, {variants} variants. Errors: {errors}',
+            'error'
+        )
+    elif status == 'cache_hit':
+        flash(
+            f'ℹ️ Cache still fresh (age: {result.get("age_seconds")}s). '
+            f'Source: {source}. No reload was needed.',
+            'success'
+        )
+    else:
+        flash(f'Refresh returned status: {status}', 'success')
 
     return redirect(url_for('admin_data_health'))
 
