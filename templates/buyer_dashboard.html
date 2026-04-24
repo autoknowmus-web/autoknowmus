@@ -3,13 +3,13 @@
 
 {% block extra_head %}
 <style>
-  /* ===== Ultra-compact single-viewport layout ===== */
   .dashboard-wrap { padding: 10px 24px 14px; }
 
   .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
   .car-summary { color: #e6e6e6; text-align: right; }
   .car-summary .car-name { color: #4e54ff; font-weight: 700; font-size: 1rem; line-height: 1.15; }
   .car-summary .car-meta { color: #b0b0b0; font-size: 0.78rem; margin-top: 1px; }
+  .car-summary .car-meta .lbl { color: #6c757d; font-weight: 400; }
 
   .top-row {
     display: grid;
@@ -45,12 +45,19 @@
   .price-hero .hero-mid strong { color: #8a90ff; font-weight: 600; }
   @media (min-width: 1200px) { .price-hero .hero-range { font-size: 1.85rem; } }
 
-  /* Phase badge — small, matches existing blue palette */
+  .price-hero .lakhs-hint { color: #6c757d; font-size: 0.66rem; margin-top: 3px; font-style: italic; }
+
+  /* Phase badge with styled tooltip (matches confidence-i style) */
+  .phase-badge-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-top: 6px;
+  }
   .phase-badge-inline {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    margin-top: 6px;
     padding: 3px 10px;
     border-radius: 10px;
     font-size: 0.68rem;
@@ -64,6 +71,42 @@
   .phase-badge-inline.p3 { background: rgba(78,84,255,0.2);  color: #8a90ff; border: 1px solid rgba(78,84,255,0.5); }
   .phase-badge-inline.p2 { background: rgba(78,84,255,0.12); color: #9da2ff; border: 1px solid rgba(78,84,255,0.3); }
   .phase-badge-inline.p1 { background: rgba(108,117,125,0.15); color: #adb5bd; border: 1px solid rgba(108,117,125,0.4); }
+
+  .phase-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #fff;
+    padding: 9px 11px;
+    border-radius: 8px;
+    border: 1px solid #4e54ff;
+    font-size: 0.74rem;
+    font-weight: 400;
+    line-height: 1.45;
+    width: 250px;
+    text-transform: none;
+    letter-spacing: normal;
+    text-align: left;
+    z-index: 15;
+    transition: opacity 0.15s;
+    white-space: normal;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+  .phase-tooltip::before {
+    content: '';
+    position: absolute;
+    bottom: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: #000;
+  }
+  .phase-badge-wrap:hover .phase-tooltip {
+    visibility: visible; opacity: 1;
+  }
 
   .deal-section { border-top: 1px solid #2a2d34; padding-top: 8px; }
   .deal-banner {
@@ -99,7 +142,6 @@
   .graph-wrap { position: relative; height: 185px; }
   @media (max-width: 900px) { .graph-wrap { height: 180px; } }
 
-  /* ===== Caution chip on chart ===== */
   .chart-card { position: relative; }
   .chart-caution-chip {
     position: absolute;
@@ -275,61 +317,70 @@
   }
   .market-stats strong { color: #e9ecef; }
 
-  /* ===== Alert Subscription card — tightened ===== */
+  /* ===== Alert Subscription card — tightened + uses full width ===== */
   .alert-card {
     background: linear-gradient(135deg, #1a2030 0%, #14171d 100%);
     border: 1px solid #4e54ff;
     border-radius: 10px;
-    padding: 10px 14px;
+    padding: 9px 14px;
     margin-bottom: 8px;
   }
-  .alert-card-header {
-    display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin-bottom: 6px;
-  }
-  .alert-card-title {
+  .alert-card-title-row {
     color: #8a90ff; font-weight: 700; font-size: 0.88rem;
-    display: flex; align-items: center; gap: 6px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 3px;
   }
-  .alert-card-sub { color: #adb5bd; font-size: 0.74rem; margin-top: 1px; }
-  .alert-pill {
-    display: inline-block;
+  .alert-card-title-row .alert-pill {
+    margin-left: auto;
     background: rgba(40,167,69,0.15);
     color: #28a745;
     padding: 2px 9px; border-radius: 18px;
-    font-size: 0.72rem; font-weight: 600;
+    font-size: 0.7rem; font-weight: 600;
     border: 1px solid #28a745;
   }
-  .alert-pill.expired { background: rgba(108,117,125,0.15); color: #adb5bd; border-color: #6c757d; }
-
-  .alert-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .alert-channels { display: flex; gap: 10px; color: #e6e6e6; font-size: 0.8rem; flex-wrap: wrap; }
+  .alert-card-title-row .alert-pill.expired { background: rgba(108,117,125,0.15); color: #adb5bd; border-color: #6c757d; }
+  .alert-card-sub {
+    color: #adb5bd; font-size: 0.74rem;
+    margin-bottom: 5px;
+    line-height: 1.35;
+  }
+  .alert-form {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    width: 100%;
+    margin-top: 4px;
+  }
+  .alert-channels {
+    display: flex; gap: 10px; color: #e6e6e6; font-size: 0.78rem; flex-wrap: wrap;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
   .alert-channels label {
     display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-    padding: 4px 8px; background: #14171d; border-radius: 5px; border: 1px solid #2a2d34;
+    padding: 3px 8px; background: #14171d; border-radius: 5px; border: 1px solid #2a2d34;
   }
   .alert-channels input[type="checkbox"] {
     width: 14px; height: 14px; accent-color: #4e54ff; cursor: pointer;
   }
   .btn-alert-subscribe {
     background: #4e54ff; color: #fff; border: none;
-    padding: 8px 18px; border-radius: 7px;
-    font-weight: 700; font-size: 0.84rem; cursor: pointer;
+    padding: 7px 16px; border-radius: 7px;
+    font-weight: 700; font-size: 0.82rem; cursor: pointer;
     letter-spacing: 0.3px;
+    flex-shrink: 0;
   }
   .btn-alert-subscribe:hover { background: #3a3fd0; color: #fff; }
   .btn-alert-subscribe:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
   .btn-alert-topup {
     background: #ffa500; color: #1a1d24; border: none;
-    padding: 8px 16px; border-radius: 7px;
-    font-weight: 700; font-size: 0.8rem; cursor: pointer;
+    padding: 7px 14px; border-radius: 7px;
+    font-weight: 700; font-size: 0.78rem; cursor: pointer;
   }
   .btn-alert-topup:hover { background: #e69500; color: #1a1d24; }
   .alert-footnote {
-    color: #6c757d; font-size: 0.68rem; margin-top: 5px; line-height: 1.35;
+    color: #6c757d; font-size: 0.66rem; margin-top: 4px; line-height: 1.3;
   }
   .alert-error {
-    color: #ff6b6b; font-size: 0.78rem; margin-top: 4px;
+    color: #ff6b6b; font-size: 0.76rem; margin-top: 4px;
   }
 
   /* Flash messages */
@@ -397,7 +448,6 @@
   .verdict-body .warn { color: #ff6b6b; font-weight: 600; }
   .verdict-body .info { color: #8a90ff; font-weight: 600; }
 
-  /* Data version footer */
   .data-version-footer {
     margin-top: 10px;
     padding-top: 6px;
@@ -411,7 +461,6 @@
 {% endblock %}
 
 {% block content %}
-{# 2dp Lakhs formatter — renders as "X.YYL" or "X.YYCr" #}
 {% macro l2dp(v) -%}
   {%- if v is none -%}—
   {%- elif v|int >= 10000000 -%}{{ '%.2f'|format(v / 10000000) }}Cr
@@ -431,11 +480,16 @@
        class="btn-back">← Back</a>
     <div class="car-summary">
       <div class="car-name">{{ year }} {{ make }} {{ model }} {{ variant }}</div>
-      <div class="car-meta">{{ fuel }} · {{ mileage | inr }} km · {{ condition }} · {{ owner }} · Bangalore</div>
+      <div class="car-meta">
+        <span class="lbl">Fuel:</span> {{ fuel }} ·
+        <span class="lbl">Mileage:</span> {{ mileage | inr }} km ·
+        <span class="lbl">Condition:</span> {{ condition }} ·
+        <span class="lbl">Owner:</span> {{ owner }} ·
+        Bangalore
+      </div>
     </div>
   </div>
 
-  {# Flash messages #}
   {% with flash_success = get_flashed_messages(category_filter=['success']) %}
     {% if flash_success %}
       {% for m in flash_success %}
@@ -467,10 +521,14 @@
           ₹ {{ l2dp(price_low) }}<span class="hero-dash">—</span>₹ {{ l2dp(price_high) }}
         </div>
         <div class="hero-mid">Most likely value: <strong>₹ {{ l2dp(estimated) }}</strong></div>
-        <span class="phase-badge-inline p{{ phase_data.phase }}" title="{{ phase_data.display.tooltip }}">
-          {% if phase_data.phase == 4 %}⭐{% elif phase_data.phase == 3 %}✓{% elif phase_data.phase == 2 %}📈{% else %}📊{% endif %}
-          {{ phase_data.display.badge }}
-        </span>
+        <div class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000)</div>
+        <div class="phase-badge-wrap">
+          <span class="phase-badge-inline p{{ phase_data.phase }}">
+            {% if phase_data.phase == 4 %}⭐{% elif phase_data.phase == 3 %}✓{% elif phase_data.phase == 2 %}📈{% else %}📊{% endif %}
+            {{ phase_data.display.badge }}
+          </span>
+          <span class="phase-tooltip">{{ phase_data.display.tooltip }}</span>
+        </div>
       </div>
 
       <div class="deal-section">
@@ -544,7 +602,7 @@
             How this car's value is expected to drop over the next 5 years from today. Year 1, Year 3, and Year 5 values are shown on the chart — hover anywhere to see any month's projected price.
           </span>
         </span>
-        <span class="sub">next 5 years · values at 1yr / 3yr / 5yr</span>
+        <span class="sub">next 5 years · values at 1 Yr. / 3 Yr. / 5 Yr.</span>
       </div>
 
       <div class="chart-caution-chip" id="caution-chip">
@@ -572,7 +630,9 @@
         <span class="info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip">
-            How in-demand this car is. HIGH means many buyers want this model — expect sellers to hold firm on price. LOW means you have more negotiating leverage.
+            <strong style="color:#28a745;">HIGH</strong> — many active buyers; sellers hold pricing power. Decide fast.<br>
+            <strong style="color:#ffa500;">MEDIUM</strong> — balanced market; 5–8% negotiation room typical.<br>
+            <strong style="color:#ff6b6b;">LOW</strong> — buyers have leverage; aim 10–15% below asking.
           </span>
         </span>
       </div>
@@ -647,48 +707,42 @@
     {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
   </div>
 
-  {# ===== ALERT SUBSCRIPTION CARD ===== #}
+  {# ===== ALERT SUBSCRIPTION CARD — tightened layout ===== #}
   <div class="alert-card">
     {% if active_sub %}
-      <div class="alert-card-header">
-        <div>
-          <div class="alert-card-title">🔔 Listing Alerts Active
-            <span class="info-wrap">
-              <span class="info-icon">i</span>
-              <span class="info-tooltip">
-                We'll notify you when a similar {{ make }} {{ model }} {{ variant }} is listed on supported marketplaces, with our deal evaluation attached. Alerts begin within 24 hours of subscription.
-              </span>
-            </span>
-          </div>
-          <div class="alert-card-sub">
-            Channels:
-            {% if active_sub.email_enabled %}<strong style="color:#8a90ff;">Email</strong>{% endif %}
-            {% if active_sub.email_enabled and active_sub.whatsapp_enabled %} + {% endif %}
-            {% if active_sub.whatsapp_enabled %}<strong style="color:#25d366;">WhatsApp</strong>{% endif %}
-            &nbsp;·&nbsp;
-            Active until <strong>{{ active_sub.expires_at | ddmmmyyyy }}</strong>
-          </div>
-        </div>
+      <div class="alert-card-title-row">
+        🔔 Listing Alerts Active
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            We'll notify you when a similar {{ make }} {{ model }} {{ variant }} is listed on supported marketplaces, with our deal evaluation attached. Alerts begin within 24 hours of subscription.
+          </span>
+        </span>
         <span class="alert-pill">✓ Subscribed</span>
+      </div>
+      <div class="alert-card-sub">
+        Channels:
+        {% if active_sub.email_enabled %}<strong style="color:#8a90ff;">Email</strong>{% endif %}
+        {% if active_sub.email_enabled and active_sub.whatsapp_enabled %} + {% endif %}
+        {% if active_sub.whatsapp_enabled %}<strong style="color:#25d366;">WhatsApp</strong>{% endif %}
+        &nbsp;·&nbsp;
+        Active until <strong>{{ active_sub.expires_at | ddmmmyyyy }}</strong>
       </div>
       <div class="alert-footnote">
         You'll get notified when a similar {{ make }} {{ model }} {{ variant }} appears in any supported marketplace listing, along with our Great Deal / Fair / Overpriced / Too Good To Be True evaluation.
       </div>
     {% else %}
-      <div class="alert-card-header">
-        <div>
-          <div class="alert-card-title">🔔 Get Notified About Similar Listings
-            <span class="info-wrap">
-              <span class="info-icon">i</span>
-              <span class="info-tooltip">
-                When a similar {{ make }} {{ model }} {{ variant }} is listed on supported marketplaces, we'll send you the listing along with our deal evaluation (Great Deal / Fair / Overpriced / Too Good to Be True) so you can act fast.
-              </span>
-            </span>
-          </div>
-          <div class="alert-card-sub">
-            We'll alert you when a similar <strong>{{ make }} {{ model }} {{ variant }}</strong> is listed anywhere, with our deal evaluation attached.
-          </div>
-        </div>
+      <div class="alert-card-title-row">
+        🔔 Get Notified About Similar Listings
+        <span class="info-wrap">
+          <span class="info-icon">i</span>
+          <span class="info-tooltip">
+            When a similar {{ make }} {{ model }} {{ variant }} is listed on supported marketplaces, we'll send you the listing along with our deal evaluation (Great Deal / Fair / Overpriced / Too Good to Be True) so you can act fast.
+          </span>
+        </span>
+      </div>
+      <div class="alert-card-sub">
+        We'll alert you when a similar <strong>{{ make }} {{ model }} {{ variant }}</strong> is listed anywhere, with our deal evaluation attached.
       </div>
 
       {% set user_credits = session.credits|default(0) %}
@@ -730,7 +784,7 @@
           Alerts begin within 24 hours of subscription. You can subscribe to multiple cars by running separate searches.
         </div>
       {% else %}
-        <div style="color:#ffa500; font-size:0.82rem; margin-bottom:6px;">
+        <div style="color:#ffa500; font-size:0.78rem; margin:4px 0 6px;">
           You need <strong>{{ alert_cost }} credits</strong> to subscribe. You currently have <strong>{{ user_credits }} credits</strong>.
         </div>
         <form method="POST" action="{{ url_for('request_credits') }}" style="display:inline;">
@@ -791,7 +845,6 @@
     </div>
   </div>
 
-  <!-- Data version footer -->
   <div class="data-version-footer">
     Prices calibrated {{ data_version }}
   </div>
@@ -819,7 +872,6 @@
   // Anchor months on the 5-year chart: Year 1 (12), Year 3 (36), Year 5 (60)
   const ANCHOR_MONTHS = [12, 36, 60];
 
-  // 2dp Lakhs formatter
   function lakh2dp(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
@@ -843,9 +895,6 @@
     return DEP_DATA[idx].price;
   }
 
-  // ================================================
-  // Caution chip — show when asking price is in top 20% of fair range or above
-  // ================================================
   const cautionChip = document.getElementById('caution-chip');
   const cautionNumbers = document.getElementById('caution-numbers');
 
@@ -855,16 +904,12 @@
     if (ASKING_POSITION === 'above') {
       shouldShow = true;
     } else {
-      // Within-range: top 20% check
       const pct = (ASKING_PRICE - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
       if (pct >= 0.80) shouldShow = true;
     }
     if (shouldShow) {
-      // Compute projected loss at 3 years for this asking price
-      // We scale the formula-based 5yr depreciation to the user's entry point
       const priceAt3y = priceAtMonth(36);
       const priceAt5y = priceAtMonth(60);
-      // Proportional: if user pays ASKING_PRICE vs ESTIMATED, the resale trajectory scales the same %
       const ratio3y = priceAt3y / ESTIMATED;
       const ratio5y = priceAt5y / ESTIMATED;
       const userValAt3y = Math.round(ASKING_PRICE * ratio3y);
@@ -881,9 +926,6 @@
   }
   updateCaution();
 
-  // ================================================
-  // Verdict
-  // ================================================
   function generateBuyerVerdict() {
     const confidenceWord =
       CONFIDENCE >= 90 ? 'strong' :
@@ -935,7 +977,6 @@
 
   document.getElementById('verdict-body').innerHTML = generateBuyerVerdict();
 
-  // Subscribe form validation
   const subForm = document.getElementById('subscribe-alert-form');
   if (subForm) {
     subForm.addEventListener('submit', function(e) {
@@ -951,9 +992,6 @@
     });
   }
 
-  // ================================================
-  // Confidence tooltip smart-positioning (like seller dashboard)
-  // ================================================
   const confWrap = document.getElementById('conf-info-wrap');
   const confTip  = document.getElementById('conf-tooltip');
   if (confWrap && confTip) {
@@ -981,9 +1019,6 @@
     });
   }
 
-  // ================================================
-  // Depreciation chart with anchor labels at Year 1 / Year 3 / Year 5
-  // ================================================
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 185);
   grad.addColorStop(0, 'rgba(78, 84, 255, 0.35)');
@@ -992,12 +1027,10 @@
   const labels = DEP_DATA.map(p => monthLabel(p.month));
   const prices = DEP_DATA.map(p => p.price);
 
-  // Point arrays: only anchor months get visible points
   const pointRadiusArr = DEP_DATA.map(p => ANCHOR_MONTHS.includes(p.month) ? 4 : 0);
   const pointBgArr = DEP_DATA.map(p => ANCHOR_MONTHS.includes(p.month) ? '#ffa500' : '#4e54ff');
   const pointBorderArr = DEP_DATA.map(p => ANCHOR_MONTHS.includes(p.month) ? '#fff' : '#4e54ff');
 
-  // Anchor badge plugin — clamps X so badges stay inside chart area
   const anchorLabelsPlugin = {
     id: 'anchorLabels',
     afterDatasetsDraw: function(chart) {
@@ -1023,7 +1056,6 @@
         const badgeW = textW + padX*2;
         const badgeH = 16;
 
-        // Clamp badge inside chart area
         let centerX = point.x;
         const minCenter = area.left + badgeW / 2 + 2;
         const maxCenter = area.right - badgeW / 2 - 2;
@@ -1117,11 +1149,11 @@
             callback: function(val, idx) {
               const m = DEP_DATA[idx] ? DEP_DATA[idx].month : 0;
               if (m === 0)  return 'Today';
-              if (m === 12) return '1yr';
-              if (m === 24) return '2yr';
-              if (m === 36) return '3yr';
-              if (m === 48) return '4yr';
-              if (m === 60) return '5yr';
+              if (m === 12) return '1 Yr.';
+              if (m === 24) return '2 Yr.';
+              if (m === 36) return '3 Yr.';
+              if (m === 48) return '4 Yr.';
+              if (m === 60) return '5 Yr.';
               return '';
             },
             font: { size: 10 }
