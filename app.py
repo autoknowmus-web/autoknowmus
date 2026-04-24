@@ -424,14 +424,12 @@ def fetch_similar_deals(make, model, variant, fuel, year, window_years=2,
     Fetch verified deals matching make+model+variant+fuel within year±2,
     submitted in last `lookback_days`.
     Fallback: if fewer than 3 variant-specific deals, widen to model-level.
-    Returns list of sale_price ints.
     """
     try:
         year_low = int(year) - window_years
         year_high = int(year) + window_years
         cutoff = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
 
-        # Primary: variant-specific
         r = (supabase.table('deals')
              .select('sale_price')
              .eq('make', make)
@@ -448,7 +446,6 @@ def fetch_similar_deals(make, model, variant, fuel, year, window_years=2,
         if len(variant_deals) >= 3:
             return variant_deals
 
-        # Fallback: widen to model-wide (drop variant filter)
         r = (supabase.table('deals')
              .select('sale_price')
              .eq('make', make)
@@ -468,13 +465,6 @@ def fetch_similar_deals(make, model, variant, fuel, year, window_years=2,
 def compute_model_phase_data(make, model):
     """
     Compute phase for a (make, model) using verified deals in last 180 days.
-    Returns dict:
-      {
-        'phase': int 1-4,
-        'deal_count_180d': int,
-        'distinct_users_180d': int,
-        'display': {badge, detail, tooltip},
-      }
     """
     try:
         cutoff = (datetime.utcnow() - timedelta(days=PHASE_LOOKBACK_DAYS)).isoformat()
@@ -602,8 +592,6 @@ def compute_buyer_distribution(price_low, price_high, confidence):
 def get_market_stats(make, model):
     """
     Returns (verified_180d, verified_all_time) — HONEST counts only.
-    Removed fabricated "buyers_last_30d" synthetic metric.
-    Templates should display: "N verified transactions in last 6 months".
     """
     try:
         cutoff = (datetime.utcnow() - timedelta(days=180)).isoformat()
@@ -872,7 +860,8 @@ def role():
             first_name='Guest',
             show_welcome=False,
             active_alerts_count=0,
-            guest_used=guest_used)
+            guest_used=guest_used,
+            is_admin=False)
 
     user = current_user()
     if not user:
@@ -1098,7 +1087,6 @@ def seller_dashboard(valuation_id):
     price_low  = val['price_low']
     price_high = val['price_high']
 
-    # === PHASE + CONFIDENCE ===
     phase_data = compute_model_phase_data(val['make'], val['model'])
     phase = phase_data['phase']
 
@@ -1427,7 +1415,6 @@ def buyer_dashboard():
                                page_title='Analysis Unavailable',
                                message='Could not compute market analysis for this combination. Please try different filters.')
 
-    # === PHASE + BLEND ===
     phase_data = compute_model_phase_data(make, model)
     phase = phase_data['phase']
 
@@ -1824,13 +1811,11 @@ def submit_deal():
         'has_proof':         request.form.get('has_proof') == 'on',
     }
 
+    # Silent backend enforcement of weekly cap — no user-visible error.
+    # A user cannot submit a 4th deal in 7 days even if they bypass the frontend.
     weekly_count = count_recent_deals(user['id'], 7)
     if weekly_count >= MAX_DEALS_PER_WEEK:
-        return render_form(
-            form_data,
-            error=f'Weekly limit reached. You can submit up to {MAX_DEALS_PER_WEEK} deals every 7 days. Please try again later.',
-            weekly_count=weekly_count
-        )
+        return redirect(url_for('role'))
 
     required = ['make', 'fuel', 'model', 'variant', 'year', 'owner',
                 'mileage', 'condition', 'buyer_type',
@@ -2121,7 +2106,6 @@ def credit_history_export():
 # ============================================================
 
 def _fetch_all_deals_180d():
-    """Fetch all verified deals from the last 180 days for admin analysis."""
     try:
         cutoff = (datetime.utcnow() - timedelta(days=180)).isoformat()
         r = (supabase.table('deals')
@@ -2136,7 +2120,6 @@ def _fetch_all_deals_180d():
 
 
 def _fetch_all_deals_30d():
-    """Used for trend comparison."""
     try:
         cutoff = (datetime.utcnow() - timedelta(days=30)).isoformat()
         r = (supabase.table('deals')
@@ -2151,7 +2134,6 @@ def _fetch_all_deals_30d():
 
 
 def _fetch_all_deals_30_to_60d():
-    """Prev-period count for trend delta."""
     try:
         cutoff_start = (datetime.utcnow() - timedelta(days=60)).isoformat()
         cutoff_end = (datetime.utcnow() - timedelta(days=30)).isoformat()
@@ -2168,8 +2150,6 @@ def _fetch_all_deals_30_to_60d():
 
 
 def _compute_phase_distribution(deals_180d):
-    """Compute phase for every known model. Returns list of dicts."""
-    # Group deals by (make, model)
     by_model = defaultdict(list)
     for d in deals_180d:
         key = (d.get('make'), d.get('model'))
@@ -2195,16 +2175,14 @@ def _compute_phase_distribution(deals_180d):
 
 
 def _compute_upgrade_queue(model_phases):
-    """Models close to next phase — sort by progress toward upgrade."""
     queue = []
     for mp in model_phases:
         current = mp['phase']
         if current >= 4:
-            continue  # already top phase
+            continue
         next_phase = current + 1
         deals_needed = PHASE_THRESHOLDS[next_phase][0] - mp['deal_count']
         users_needed = PHASE_THRESHOLDS[next_phase][1] - mp['distinct_users']
-        # Only show models within striking distance (deals_needed <= 10)
         if deals_needed <= 10 and mp['deal_count'] > 0:
             queue.append({
                 **mp,
@@ -2214,13 +2192,11 @@ def _compute_upgrade_queue(model_phases):
                 'threshold_deals': PHASE_THRESHOLDS[next_phase][0],
                 'threshold_users': PHASE_THRESHOLDS[next_phase][1],
             })
-    # Sort by fewest deals needed (closest to upgrade first)
     queue.sort(key=lambda x: (x['deals_needed'], -x['deal_count']))
-    return queue[:15]  # top 15
+    return queue[:15]
 
 
 def _compute_guardrail_flags(deals_180d, model_phases):
-    """Models where real-deal median deviates >15% from formula base estimate."""
     flags = []
     by_model = defaultdict(list)
     for d in deals_180d:
@@ -2230,7 +2206,7 @@ def _compute_guardrail_flags(deals_180d, model_phases):
 
     for mp in model_phases:
         if mp['phase'] < 2:
-            continue  # only flag for models with real data
+            continue
         key = (mp['make'], mp['model'])
         prices = sorted(by_model.get(key, []))
         if len(prices) < 5:
@@ -2238,12 +2214,10 @@ def _compute_guardrail_flags(deals_180d, model_phases):
         n = len(prices)
         median = prices[n // 2] if n % 2 == 1 else (prices[n // 2 - 1] + prices[n // 2]) // 2
 
-        # Compare to model anchor (base variant price as rough model centroid)
         anchor = get_base_price(mp['make'], mp['model'])
         if not anchor:
             continue
 
-        # Age-adjust anchor for ~3-year-old car (rough depreciation for comparison)
         anchor_aged = anchor * 0.77
         deviation = (median - anchor_aged) / anchor_aged
 
@@ -2257,16 +2231,11 @@ def _compute_guardrail_flags(deals_180d, model_phases):
                 'deviation_pct': round(deviation * 100, 1),
             })
 
-    # Sort by magnitude of deviation
     flags.sort(key=lambda x: -abs(x['deviation_pct']))
     return flags[:10]
 
 
 def _compute_broker_signals(lookback_days=60):
-    """
-    Detect suspicious patterns that might indicate broker behavior.
-    Returns list of users with flags.
-    """
     try:
         cutoff = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
         r = (supabase.table('deals')
@@ -2278,7 +2247,6 @@ def _compute_broker_signals(lookback_days=60):
         app.logger.error(f"admin broker signals fetch failed: {e}")
         return []
 
-    # Group deals by user
     by_user = defaultdict(list)
     for d in deals:
         if d.get('user_id'):
@@ -2288,32 +2256,27 @@ def _compute_broker_signals(lookback_days=60):
     for uid, user_deals in by_user.items():
         total = len(user_deals)
         if total < 3:
-            continue  # not enough data to be suspicious
+            continue
 
         flags = []
 
-        # Flag 1: Clustered same model (5+ deals of same make+model)
         model_counts = Counter((d['make'], d['model']) for d in user_deals)
         top_model, top_count = model_counts.most_common(1)[0] if model_counts else (None, 0)
         if top_count >= 5:
             flags.append(f"Clustered: {top_count} deals of {top_model[0]} {top_model[1]}")
 
-        # Flag 2: Wildly varied price segments (budget + luxury in same 60d window)
         prices = [d.get('sale_price', 0) for d in user_deals if d.get('sale_price')]
         if prices:
             mn, mx = min(prices), max(prices)
             if mn > 0 and mx > 0 and mx / mn >= 10:
                 flags.append(f"Mixed segments: ₹{mn:,} to ₹{mx:,}")
 
-        # Flag 3: Hit weekly cap repeatedly (3 deals in multiple 7-day windows)
-        # Simple check: if user submitted 6+ deals in 60 days, they're hitting the cap
         if total >= 6:
             flags.append(f"{total} deals in {lookback_days} days (cap-hitter)")
 
         if not flags:
             continue
 
-        # Fetch user info
         user_info = get_user_by_id(uid)
         if not user_info:
             continue
@@ -2326,7 +2289,6 @@ def _compute_broker_signals(lookback_days=60):
             'flags': flags,
         })
 
-    # Sort by number of flags + deal count
     signals.sort(key=lambda x: (-len(x['flags']), -x['deal_count']))
     return signals[:20]
 
@@ -2351,7 +2313,6 @@ def admin_data_health():
 
     model_phases = _compute_phase_distribution(deals_180d)
 
-    # Phase distribution counts
     phase_counts = Counter(mp['phase'] for mp in model_phases)
     total_models = len(model_phases)
 
@@ -2366,22 +2327,15 @@ def admin_data_health():
             'pct': pct,
         })
 
-    # Top models by deal volume
     top_models = sorted(
         [mp for mp in model_phases if mp['deal_count'] > 0],
         key=lambda x: -x['deal_count']
     )[:20]
 
-    # Upgrade queue
     upgrade_queue = _compute_upgrade_queue(model_phases)
-
-    # Guardrail flags
     guardrail_flags = _compute_guardrail_flags(deals_180d, model_phases)
-
-    # Broker signals
     broker_signals = _compute_broker_signals()
 
-    # Data freshness: models with zero deals in last 90d
     try:
         cutoff_90d = (datetime.utcnow() - timedelta(days=90)).isoformat()
         r = (supabase.table('deals')
@@ -2424,7 +2378,6 @@ def admin_data_health():
 @login_required
 @admin_required
 def admin_flag_user(user_id):
-    """Soft-flag a user as suspected broker. Logs a note in transactions; does NOT block."""
     admin = current_user()
     target = get_user_by_id(user_id)
     if not target:
@@ -2434,7 +2387,7 @@ def admin_flag_user(user_id):
     try:
         supabase.table('transactions').insert({
             'user_id': user_id,
-            'type': 'alert_cancelled',  # reuse existing type — no schema change needed
+            'type': 'alert_cancelled',
             'amount': 0,
             'balance_after': target.get('credits', 0),
             'description': f'[ADMIN FLAG] Suspected broker — flagged by {admin.get("email")}',
