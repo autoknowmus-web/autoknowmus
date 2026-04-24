@@ -541,10 +541,10 @@
         <span class="info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip">
-            How this car's value is expected to drop over the next 5 years from today. Today / Year 2 / Year 4 values are shown on the chart — hover anywhere to see any month's projected price.
+            How this car's value is expected to drop over the next 5 years from today. Year 1, Year 3, and Year 5 values are shown on the chart — hover anywhere to see any month's projected price.
           </span>
         </span>
-        <span class="sub">next 5 years · values at Today / 2yr / 4yr</span>
+        <span class="sub">next 5 years · values at 1yr / 3yr / 5yr</span>
       </div>
 
       <div class="chart-caution-chip" id="caution-chip">
@@ -816,8 +816,8 @@
   const ASKING_POSITION = {{ asking_position | tojson if asking_position else 'null' }};
   const ASKING_PCT_DIFF = {{ asking_pct_diff if asking_pct_diff is not none else 'null' }};
 
-  // Anchor months on the 5-year chart: Today (0), Year 2 (24), Year 4 (48)
-  const ANCHOR_MONTHS = [0, 24, 48];
+  // Anchor months on the 5-year chart: Year 1 (12), Year 3 (36), Year 5 (60)
+  const ANCHOR_MONTHS = [12, 36, 60];
 
   // 2dp Lakhs formatter
   function lakh2dp(n) {
@@ -982,7 +982,7 @@
   }
 
   // ================================================
-  // Depreciation chart with anchor labels at Today / Year 2 / Year 4
+  // Depreciation chart with anchor labels at Year 1 / Year 3 / Year 5
   // ================================================
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 185);
