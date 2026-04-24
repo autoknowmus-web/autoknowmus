@@ -48,7 +48,7 @@
   .price-hero .hero-mid strong { color: #ffa500; font-weight: 600; }
   @media (min-width: 1200px) { .price-hero .hero-range { font-size: 2rem; } }
 
-  /* Phase badge — visual only, its own hover tooltip */
+  /* Phase badge */
   .phase-badge-wrap {
     position: relative;
     display: inline-flex;
@@ -87,7 +87,7 @@
     font-size: 0.78rem;
     font-weight: 400;
     line-height: 1.5;
-    width: 250px;
+    width: 260px;
     max-width: 280px;
     text-transform: none;
     letter-spacing: normal;
@@ -154,7 +154,6 @@
   .graph-wrap { position: relative; height: 220px; }
   @media (max-width: 900px) { .graph-wrap { height: 200px; } }
 
-  /* Caution chip on chart */
   .chart-caution-chip {
     position: absolute;
     top: 10px;
@@ -230,7 +229,7 @@
   .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
   @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
-  /* Shared info icon + tooltip pattern */
+  /* Info icon + tooltip — supports flip-down when near viewport top */
   .info-wrap { position: relative; display: inline-flex; }
   .info-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -242,15 +241,12 @@
     font-family: Georgia, serif;
   }
   .info-icon:hover { background: #ffa500; color: #fff; }
-
-  /* Smaller info icon variant for inline use in hero-mid */
-  .info-icon.sm {
-    width: 12px; height: 12px; font-size: 0.6rem;
-  }
+  .info-icon.sm { width: 12px; height: 12px; font-size: 0.6rem; }
 
   .info-tooltip {
     visibility: hidden; opacity: 0;
     position: absolute;
+    /* Default: above the icon */
     bottom: calc(100% + 10px);
     left: 50%;
     transform: translateX(-50%);
@@ -273,6 +269,7 @@
     pointer-events: none;
     box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   }
+  /* Arrow pointing down when tooltip is above icon */
   .info-tooltip::after {
     content: '';
     position: absolute;
@@ -281,16 +278,28 @@
     border: 6px solid transparent;
     border-top-color: #000;
   }
+  /* When tooltip is flipped below icon */
+  .info-tooltip.flip-down {
+    bottom: auto;
+    top: calc(100% + 10px);
+  }
+  .info-tooltip.flip-down::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: #000;
+  }
   .info-wrap:hover .info-tooltip {
     visibility: visible; opacity: 1;
   }
 
-  /* Wide variant for confidence + estimate breakdown tooltips */
   .info-tooltip.wide {
-    width: 300px;
-    max-width: 320px;
+    width: 310px;
+    max-width: 340px;
     border-color: #4eb0ff;
   }
+
+  /* Phase-explanation rows (used inside estimate tooltip) */
   .phase-tip-row {
     display: grid;
     grid-template-columns: 110px 1fr;
@@ -302,22 +311,15 @@
     line-height: 1.4;
   }
   .phase-tip-row:last-child { border-bottom: none; }
-  .phase-tip-row .tip-label {
-    font-weight: 700;
-    color: #b0b0b0;
-  }
+  .phase-tip-row .tip-label { font-weight: 700; color: #b0b0b0; }
   .phase-tip-row.active { background: rgba(255,165,0,0.14); border-radius: 4px; border-bottom-color: transparent; margin: 0 -2px; padding: 4px; }
   .phase-tip-row.active .tip-label { color: #ffa500; }
   .phase-tip-header {
-    display: block;
-    color: #ffa500;
-    font-weight: 700;
-    font-size: 0.76rem;
-    margin-bottom: 6px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid rgba(255,255,255,0.15);
+    display: block; color: #ffa500; font-weight: 700; font-size: 0.76rem;
+    margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
+  /* Confidence tooltip rows */
   .conf-tip-row {
     display: grid;
     grid-template-columns: 62px 1fr;
@@ -338,7 +340,30 @@
     margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
-  /* Market stats (now includes Lakhs hint) */
+  /* Market Demand tooltip rows — same structure as Confidence */
+  .demand-tip-row {
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    gap: 8px;
+    padding: 4px 2px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    align-items: start;
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+  .demand-tip-row:last-child { border-bottom: none; }
+  .demand-tip-row .tip-label { font-weight: 700; }
+  .demand-tip-row.demand-high   .tip-label { color: #28a745; }
+  .demand-tip-row.demand-medium .tip-label { color: #ffa500; }
+  .demand-tip-row.demand-low    .tip-label { color: #ff6b6b; }
+  .demand-tip-row.active { background: rgba(255,255,255,0.06); border-radius: 4px; border-bottom-color: transparent; margin: 0 -2px; padding: 4px; }
+  .demand-tip-row .tip-body { color: #c9cdd5; }
+  .demand-tip-header {
+    display: block; color: #adb5bd; font-weight: 700; font-size: 0.76rem;
+    margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
+  }
+
+  /* Market stats */
   .market-stats {
     background: #14171d;
     border-radius: 8px;
@@ -358,7 +383,6 @@
   }
   @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
 
-  /* Distribution bars — labels now right-aligned, sit closer to bar */
   .dist-row { display: flex; flex-direction: column; gap: 5px; }
   .dist-bar {
     display: grid;
@@ -417,7 +441,6 @@
 {% endblock %}
 
 {% block content %}
-{# 2dp Lakhs macro — renders all prices as X.YY L or X.YY Cr #}
 {% macro l2dp(v) -%}
   {%- if v is none -%}—
   {%- elif v|int >= 10000000 -%}{{ '%.2f'|format(v / 10000000) }}Cr
@@ -462,19 +485,19 @@
               <span class="phase-tip-header">How this estimate is built</span>
               <div class="phase-tip-row {% if phase_data.phase == 1 %}active{% endif %}">
                 <span class="tip-label">📊 Estimate</span>
-                <span>Formula-based from age, mileage, condition, ownership &amp; fuel. No verified deals yet.</span>
+                <span>Formula-based on age, mileage, condition, ownership &amp; fuel — not yet calibrated against the local used car market.</span>
               </div>
               <div class="phase-tip-row {% if phase_data.phase == 2 %}active{% endif %}">
                 <span class="tip-label">📈 Calibrated</span>
-                <span>Formula + early verified deals blended in. Confidence improves.</span>
+                <span>Formula blended with early verified deals from the local used car market. Confidence improves.</span>
               </div>
               <div class="phase-tip-row {% if phase_data.phase == 3 %}active{% endif %}">
                 <span class="tip-label">✓ Market-verified</span>
-                <span>Majority of the estimate comes from real deals. Narrow range.</span>
+                <span>Majority of the estimate comes from real deals in the local used car market. Narrower range.</span>
               </div>
               <div class="phase-tip-row {% if phase_data.phase == 4 %}active{% endif %}">
                 <span class="tip-label">⭐ Real-Market</span>
-                <span>Estimate is almost entirely driven by verified market transactions.</span>
+                <span>Driven almost entirely by verified transactions from the local used car market.</span>
               </div>
             </span>
           </span>
@@ -516,7 +539,7 @@
             This shows the cost of delay in selling your car — as time passes, the value will further drop. Day 30 / 60 / 90 prices are pinned on the chart, and you can hover anywhere to see any specific day's projected value.
           </span>
         </span>
-        <span class="sub">next 90 days · values at D30 / D60 / D90</span>
+        <span class="sub">Next 90 Days · Values at D30 / D60 / D90</span>
       </div>
 
       <div class="chart-caution-chip" id="caution-chip">
@@ -545,10 +568,20 @@
         Market Demand
         <span class="info-wrap">
           <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            <strong style="color:#28a745;">HIGH</strong> — many active buyers; expect to sell fast with minimal price flexibility.<br>
-            <strong style="color:#ffa500;">MEDIUM</strong> — balanced market; modest negotiation expected.<br>
-            <strong style="color:#ff6b6b;">LOW</strong> — fewer buyers; you may need patience or a lower price to sell.
+          <span class="info-tooltip wide">
+            <span class="demand-tip-header">Market demand — what each level means</span>
+            <div class="demand-tip-row demand-high {% if demand == 'HIGH' %}active{% endif %}">
+              <span class="tip-label">HIGH</span>
+              <span class="tip-body">Many active buyers. Expect to sell fast with minimal price flexibility.</span>
+            </div>
+            <div class="demand-tip-row demand-medium {% if demand == 'MEDIUM' %}active{% endif %}">
+              <span class="tip-label">MEDIUM</span>
+              <span class="tip-body">Balanced market. Modest negotiation expected from interested buyers.</span>
+            </div>
+            <div class="demand-tip-row demand-low {% if demand == 'LOW' %}active{% endif %}">
+              <span class="tip-label">LOW</span>
+              <span class="tip-body">Fewer buyers. You may need patience or a lower price to close the sale.</span>
+            </div>
           </span>
         </span>
       </div>
@@ -610,7 +643,7 @@
     </div>
   </div>
 
-  <!-- Market stats — now includes L = Lakhs hint -->
+  <!-- Market stats -->
   <div class="market-stats">
     <strong>{{ verified_180d }}</strong> Verified transactions in last 6 months
     {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
@@ -669,7 +702,6 @@
 
   const ANCHOR_DAYS = [30, 60, 90];
 
-  // 2dp Lakhs formatter — all prices now show 2 decimals
   function lakh2dp(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
@@ -814,35 +846,61 @@
     verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
   });
 
-  // Confidence tooltip smart-positioning
-  const confWrap = document.getElementById('conf-info-wrap');
-  const confTip  = document.getElementById('conf-tooltip');
-  if (confWrap && confTip) {
-    confWrap.addEventListener('mouseenter', function() {
-      const iconRect = confWrap.getBoundingClientRect();
-      const tipWidth = 300;
-      const viewW = window.innerWidth;
-      const halfTip = tipWidth / 2;
-      const iconCenterX = iconRect.left + iconRect.width / 2;
-      const leftSpace  = iconCenterX;
-      const rightSpace = viewW - iconCenterX;
+  // ================================================
+  // Smart-position ALL info tooltips — flip down when near viewport top
+  // ================================================
+  function setupTooltipFlip() {
+    const wraps = document.querySelectorAll('.info-wrap');
+    wraps.forEach(function(wrap) {
+      const tip = wrap.querySelector('.info-tooltip');
+      if (!tip) return;
+      wrap.addEventListener('mouseenter', function() {
+        tip.classList.remove('flip-down');
+        tip.style.left = '';
+        tip.style.right = '';
+        tip.style.transform = 'translateX(-50%)';
 
-      if (leftSpace < halfTip + 10) {
-        confTip.style.left = '0';
-        confTip.style.transform = 'none';
-      } else if (rightSpace < halfTip + 10) {
-        confTip.style.left = 'auto';
-        confTip.style.right = '0';
-        confTip.style.transform = 'none';
-      } else {
-        confTip.style.left = '50%';
-        confTip.style.right = 'auto';
-        confTip.style.transform = 'translateX(-50%)';
-      }
+        // Force layout so we can measure
+        tip.style.visibility = 'hidden';
+        tip.style.opacity = '0';
+        const tmpDisplay = tip.style.display;
+        tip.style.display = 'block';
+        const tipHeight = tip.offsetHeight || 140;
+        const tipWidth = tip.offsetWidth || 240;
+        tip.style.display = tmpDisplay;
+        tip.style.visibility = '';
+        tip.style.opacity = '';
+
+        const iconRect = wrap.getBoundingClientRect();
+
+        // Flip below icon if not enough room above
+        if (iconRect.top < tipHeight + 20) {
+          tip.classList.add('flip-down');
+        }
+
+        // Horizontal overflow protection
+        const viewW = window.innerWidth;
+        const halfTip = tipWidth / 2;
+        const iconCenterX = iconRect.left + iconRect.width / 2;
+        const leftSpace  = iconCenterX;
+        const rightSpace = viewW - iconCenterX;
+
+        if (leftSpace < halfTip + 10) {
+          tip.style.left = '0';
+          tip.style.transform = 'none';
+        } else if (rightSpace < halfTip + 10) {
+          tip.style.left = 'auto';
+          tip.style.right = '0';
+          tip.style.transform = 'none';
+        }
+      });
     });
   }
+  setupTooltipFlip();
 
-  // Depreciation chart with D30/D60/D90 anchor badges
+  // ================================================
+  // Depreciation chart
+  // ================================================
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 220);
   grad.addColorStop(0, 'rgba(40, 167, 69, 0.35)');
