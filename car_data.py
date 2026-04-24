@@ -378,8 +378,7 @@ FALLBACK_CAR_DATA = {
         'XC40 Recharge': {'variants': {'Ultimate': 5600000}, 'fuels': ['BEV']},
         'XC60': {'variants': {'Plus': 5360000, 'Ultimate': 8710000}, 'fuels': ['Petrol', 'Diesel']},
         'XC90': {'variants': {'Ultimate': 9800000}, 'fuels': ['Petrol', 'Diesel', 'HEV']}
-    }
-
+    },
 }
 
 FALLBACK_DEPRECIATION_CURVE = {
@@ -414,7 +413,7 @@ _cache = {
     "meta": None,
     "last_fetch": 0,
     "last_error": None,
-    "source": "uninitialized",  # "sheet" | "fallback" | "mixed"
+    "source": "uninitialized",
 }
 _cache_lock = threading.Lock()
 
@@ -459,7 +458,6 @@ def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
             data[make][model]["variants"][variant] = price
         if fuel not in data[make][model]["fuels"]:
             data[make][model]["fuels"].append(fuel)
-    # Canonical fuel order
     fuel_order = ["Petrol", "Diesel", "CNG", "HEV", "PHEV", "BEV"]
     for make in data:
         for model in data[make]:
@@ -512,11 +510,9 @@ def _parse_meta(rows: List[Dict[str, str]]) -> Dict[str, str]:
 def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
     """
     Merge sheet data on top of fallback. Sheet wins where it has data.
-    This is the key function: a variant in the sheet overrides the fallback,
-    but variants present only in fallback remain available to users.
+    Variants present only in fallback remain available.
     """
     merged = {}
-    # Start with fallback
     for make, models in fallback_data.items():
         merged[make] = {}
         for model, data in models.items():
@@ -524,17 +520,14 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
                 "variants": dict(data["variants"]),
                 "fuels": list(data["fuels"]),
             }
-    # Overlay sheet data
     for make, models in sheet_data.items():
         if make not in merged:
             merged[make] = {}
         for model, data in models.items():
             if model not in merged[make]:
                 merged[make][model] = {"variants": {}, "fuels": []}
-            # Sheet variants overwrite fallback variants by key
             for variant, price in data["variants"].items():
                 merged[make][model]["variants"][variant] = price
-            # Fuels: union, preserving canonical order
             fuel_set = set(merged[make][model]["fuels"]) | set(data["fuels"])
             fuel_order = ["Petrol", "Diesel", "CNG", "HEV", "PHEV", "BEV"]
             merged[make][model]["fuels"] = [f for f in fuel_order if f in fuel_set]
@@ -566,7 +559,6 @@ def _refresh_cache(force: bool = False) -> Dict:
         except Exception as e:
             errors.append(f"prices: {e}")
 
-        # Merge: fallback provides coverage, sheet overlays with latest values
         _cache["car_data"] = _merge_with_fallback(sheet_car_data, FALLBACK_CAR_DATA)
 
         try:
@@ -581,7 +573,6 @@ def _refresh_cache(force: bool = False) -> Dict:
             rows = _fetch_csv(GSHEET_MULTIPLIERS_URL)
             mults = _parse_multipliers(rows)
             if mults and any(mults.values()):
-                # Fill any missing subcategories from fallback
                 for cat in ("condition", "owner", "fuel_premium"):
                     if not mults.get(cat):
                         mults[cat] = FALLBACK_MULTIPLIERS[cat]
@@ -641,7 +632,13 @@ def _ensure_loaded():
 
 def refresh_prices(force: bool = True) -> Dict:
     """Public entrypoint to force-reload from Google Sheets."""
-    return _refresh_cache(force=force)
+    result = _refresh_cache(force=force)
+    # Keep CAR_DATA LazyDict in sync so json.dumps(CAR_DATA) reflects new data
+    try:
+        CAR_DATA._sync()
+    except Exception:
+        pass
+    return result
 
 
 def get_cache_status() -> Dict:
@@ -729,7 +726,7 @@ def get_multiplier(category: str, key: str) -> float:
 
 
 # ============================================================
-# PRICING FORMULA (unchanged from pre-sheet version)
+# PRICING FORMULA
 # ============================================================
 
 def compute_base_valuation(make, model, variant, fuel, year, mileage, condition, owner):
@@ -741,7 +738,6 @@ def compute_base_valuation(make, model, variant, fuel, year, mileage, condition,
     age = max(0, CURRENT_YEAR - int(year))
     age = min(age, 15)
 
-    # Prefer curve from sheet/fallback; fall back to legacy formula if missing
     retention = get_retention_for_age(age)
     price = base * retention
 
@@ -854,47 +850,55 @@ def get_phase_display(phase):
 
 # ============================================================
 # BACKWARDS-COMPATIBLE MODULE-LEVEL ATTRIBUTES
-# app.py uses `from car_data import CAR_DATA, BASE_PRICE_DATA_VERSION`
-# These are now dynamic proxies that read from the cache.
 # ============================================================
 
-class _LazyDict:
-    """Acts like the CAR_DATA dict, but reads from live cache on every access."""
+class _LazyDict(dict):
+    """
+    Acts like the CAR_DATA dict, but stays in sync with the live cache.
+    Inherits from dict so json.dumps() and other dict-expecting code work
+    natively. Every access re-syncs from _cache to reflect latest refreshes.
+    """
+    def _sync(self):
+        _ensure_loaded()
+        cached = _cache["car_data"] or {}
+        if dict.__ne__(self, cached):
+            dict.clear(self)
+            dict.update(self, cached)
+
     def __getitem__(self, key):
-        _ensure_loaded()
-        return _cache["car_data"][key]
+        self._sync()
+        return dict.__getitem__(self, key)
     def __contains__(self, key):
-        _ensure_loaded()
-        return key in _cache["car_data"]
+        self._sync()
+        return dict.__contains__(self, key)
     def __iter__(self):
-        _ensure_loaded()
-        return iter(_cache["car_data"])
+        self._sync()
+        return dict.__iter__(self)
     def __len__(self):
-        _ensure_loaded()
-        return len(_cache["car_data"])
+        self._sync()
+        return dict.__len__(self)
     def keys(self):
-        _ensure_loaded()
-        return _cache["car_data"].keys()
+        self._sync()
+        return dict.keys(self)
     def values(self):
-        _ensure_loaded()
-        return _cache["car_data"].values()
+        self._sync()
+        return dict.values(self)
     def items(self):
-        _ensure_loaded()
-        return _cache["car_data"].items()
+        self._sync()
+        return dict.items(self)
     def get(self, key, default=None):
-        _ensure_loaded()
-        return _cache["car_data"].get(key, default)
+        self._sync()
+        return dict.get(self, key, default)
     def to_dict(self):
         """Plain dict snapshot, useful for json.dumps(CAR_DATA) in templates."""
-        _ensure_loaded()
-        return _cache["car_data"]
+        self._sync()
+        return dict(self)
 
 
 CAR_DATA = _LazyDict()
 
 
 # Module-level string constants referenced by templates/routes.
-# Updated after every cache refresh via refresh_module_constants().
 BASE_PRICE_DATA_VERSION = FALLBACK_META.get("data_version", "?")
 BASE_PRICE_LAST_UPDATED = FALLBACK_META.get("last_updated", "?")
 
@@ -913,6 +917,9 @@ def refresh_module_constants():
 try:
     _refresh_cache(force=True)
     refresh_module_constants()
+    # Hydrate the CAR_DATA LazyDict from the cache so json.dumps(CAR_DATA)
+    # works immediately, before any dict method is called on it.
+    CAR_DATA._sync()
     _src = _cache.get("source", "?")
     _n = len(_cache["car_data"]) if _cache["car_data"] else 0
     print(f"[car_data] Loaded {_n} makes. Source: {_src}.")
