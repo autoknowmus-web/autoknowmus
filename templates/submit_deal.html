@@ -33,13 +33,6 @@
     font-size: 1.3rem; line-height: 1; cursor: pointer;
   }
 
-  .rate-limit-full {
-    background: rgba(255, 140, 0, 0.12); border: 1px solid #ff8c00;
-    border-radius: 8px; padding: 10px 14px; margin-bottom: 1.25rem;
-    color: #ffa94d; font-size: 0.9rem;
-  }
-  .rate-limit-full strong { color: #fff; }
-
   .section-label {
     color: #4eb0ff; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.5px;
     margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #2a2d34;
@@ -178,12 +171,6 @@
       Help build accurate market data. Share your recent buy/sell transaction to earn
       <strong style="color:#28a745;">{{ deal_reward }} credits</strong> and improve price intelligence for everyone.
     </p>
-
-    {% if weekly_count >= max_per_week %}
-      <div class="rate-limit-full">
-        ⚠️ <strong>Weekly limit reached.</strong> You've submitted the maximum number of deals allowed per 7 days. Please come back in a few days.
-      </div>
-    {% endif %}
 
     {% if error %}
       <div class="alert-dismiss" id="err-alert">
@@ -393,8 +380,7 @@
 
       <!-- SUBMIT -->
       <div style="margin-top: 28px;">
-        <button type="submit" class="btn-generate" id="submit-btn"
-                {% if weekly_count >= max_per_week %}disabled{% endif %}>
+        <button type="submit" class="btn-generate" id="submit-btn">
           SUBMIT DEAL
           <span class="credit-cost">(Earn {{ deal_reward }} Credits)</span>
         </button>
@@ -467,7 +453,10 @@
   function populateVariants(make, model, preselect) {
     resetSelect(variantEl, 'Select Variant');
     if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
-    const variants = [...(CAR_DATA[make][model].variants || [])].sort();
+    // Handle both dict-shape (new) and list-shape (legacy) variants structure.
+    // Preserve TRIM ORDER (base → top) — do NOT sort alphabetically.
+    const variantsObj = CAR_DATA[make][model].variants || {};
+    const variants = Array.isArray(variantsObj) ? variantsObj : Object.keys(variantsObj);
     variants.forEach(v => {
       const opt = document.createElement('option');
       opt.value = v; opt.textContent = v;
