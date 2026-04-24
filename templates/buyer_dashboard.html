@@ -681,7 +681,7 @@
         <span class="info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip">
-            This shows the cost of delay — the car's value will keep dropping over the next 5 years. Year 1, Year 3, and Year 5 values are pinned on the chart, and you can hover anywhere to see any specific month's projected value.
+            Depreciation is the real cost of owning a car — what matters isn't what you pay today, but what it's worth in a few years. A pricier car that holds its value better can cost less to own than a cheaper one that depreciates fast. Year 1, Year 3, and Year 5 values are pinned; hover anywhere to see any specific month.
           </span>
         </span>
         <span class="sub">Next 5 Years · Values at 1 Yr. / 3 Yr. / 5 Yr.</span>
@@ -1061,7 +1061,7 @@
     const priceAt5y = priceAtMonth(DEP_DATA.length - 1);
     const loss5y = ESTIMATED - priceAt5y;
     const pct5y = Math.round((loss5y / ESTIMATED) * 100);
-    const deprecNote = `<p><strong>Future value:</strong> Over 5 years this depreciates ~<span class="hi">₹ ${lakh2dp(loss5y)} (${pct5y}%)</span>. Factor into long-term cost of ownership.</p>`;
+    const deprecNote = `<p><strong>Cost of ownership:</strong> Over 5 years this car depreciates ~<span class="hi">₹ ${lakh2dp(loss5y)} (${pct5y}%)</span>. This IS your cost of owning it — factor this in when comparing against other cars, even cheaper ones that may depreciate faster.</p>`;
 
     const intro = `<p>Target <strong>${CAR_NAME}</strong> has a ${confidenceWord} analysis (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>`;
 
@@ -1099,7 +1099,6 @@
         tip.style.right = '';
         tip.style.transform = 'translateX(-50%)';
 
-        // Force layout
         tip.style.visibility = 'hidden';
         tip.style.opacity = '0';
         const tmpDisplay = tip.style.display;
