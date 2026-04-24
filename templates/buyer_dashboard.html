@@ -48,7 +48,6 @@
   .price-hero .hero-mid strong { color: #8a90ff; font-weight: 600; }
   @media (min-width: 1200px) { .price-hero .hero-range { font-size: 1.85rem; } }
 
-  /* Phase badge */
   .phase-badge-wrap {
     position: relative;
     display: inline-flex;
@@ -87,7 +86,7 @@
     font-size: 0.74rem;
     font-weight: 400;
     line-height: 1.45;
-    width: 250px;
+    width: 260px;
     text-transform: none;
     letter-spacing: normal;
     text-align: left;
@@ -220,6 +219,7 @@
   .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
   @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
+  /* Info icon + tooltip — supports flip-down */
   .info-wrap { position: relative; display: inline-flex; }
   .info-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -231,7 +231,6 @@
     font-family: Georgia, serif;
   }
   .info-icon:hover { background: #4e54ff; color: #fff; }
-
   .info-icon.sm { width: 11px; height: 11px; font-size: 0.58rem; }
 
   .info-tooltip {
@@ -266,15 +265,26 @@
     border: 6px solid transparent;
     border-top-color: #000;
   }
+  .info-tooltip.flip-down {
+    bottom: auto;
+    top: calc(100% + 8px);
+  }
+  .info-tooltip.flip-down::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: #000;
+  }
   .info-wrap:hover .info-tooltip {
     visibility: visible; opacity: 1;
   }
 
   .info-tooltip.wide {
-    width: 300px;
+    width: 310px;
     border-color: #4eb0ff;
   }
 
+  /* Phase-explanation rows (estimate tooltip) */
   .phase-tip-row {
     display: grid;
     grid-template-columns: 110px 1fr;
@@ -294,6 +304,7 @@
     margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
+  /* Confidence tooltip rows */
   .conf-mini-row {
     display: grid;
     grid-template-columns: 62px 1fr;
@@ -328,7 +339,30 @@
     display: block;
   }
 
-  /* Market stats — now includes L = Lakhs hint */
+  /* Market Demand tooltip rows */
+  .demand-tip-row {
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    gap: 8px;
+    padding: 4px 2px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    align-items: start;
+    font-size: 0.7rem;
+    line-height: 1.4;
+  }
+  .demand-tip-row:last-child { border-bottom: none; }
+  .demand-tip-row .tip-label { font-weight: 700; }
+  .demand-tip-row.demand-high   .tip-label { color: #28a745; }
+  .demand-tip-row.demand-medium .tip-label { color: #ffa500; }
+  .demand-tip-row.demand-low    .tip-label { color: #ff6b6b; }
+  .demand-tip-row.active { background: rgba(255,255,255,0.06); border-radius: 4px; border-bottom-color: transparent; margin: 0 -2px; padding: 4px; }
+  .demand-tip-row .tip-body { color: #c9cdd5; }
+  .demand-tip-header {
+    display: block; color: #adb5bd; font-weight: 700; font-size: 0.74rem;
+    margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
+  }
+
+  /* Market stats */
   .market-stats {
     background: #14171d;
     border-radius: 7px;
@@ -341,7 +375,7 @@
   .market-stats strong { color: #e9ecef; }
   .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.72rem; }
 
-  /* Alert card */
+  /* Alert card — Subscribe button forced to right */
   .alert-card {
     background: linear-gradient(135deg, #1a2030 0%, #14171d 100%);
     border: 1px solid #4e54ff;
@@ -391,6 +425,7 @@
     font-weight: 700; font-size: 0.82rem; cursor: pointer;
     letter-spacing: 0.3px;
     flex-shrink: 0;
+    margin-left: auto;
   }
   .btn-alert-subscribe:hover { background: #3a3fd0; color: #fff; }
   .btn-alert-subscribe:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
@@ -398,6 +433,7 @@
     background: #ffa500; color: #1a1d24; border: none;
     padding: 7px 14px; border-radius: 7px;
     font-weight: 700; font-size: 0.78rem; cursor: pointer;
+    margin-left: auto;
   }
   .btn-alert-topup:hover { background: #e69500; color: #1a1d24; }
   .alert-footnote {
@@ -551,19 +587,19 @@
               <span class="phase-tip-header">How this estimate is built</span>
               <div class="phase-tip-row {% if phase_data.phase == 1 %}active{% endif %}">
                 <span class="tip-label">📊 Estimate</span>
-                <span>Formula-based from age, mileage, condition, ownership &amp; fuel. No verified deals yet.</span>
+                <span>Formula-based on age, mileage, condition, ownership &amp; fuel — not yet calibrated against the local used car market.</span>
               </div>
               <div class="phase-tip-row {% if phase_data.phase == 2 %}active{% endif %}">
                 <span class="tip-label">📈 Calibrated</span>
-                <span>Formula + early verified deals blended in. Confidence improves.</span>
+                <span>Formula blended with early verified deals from the local used car market. Confidence improves.</span>
               </div>
               <div class="phase-tip-row {% if phase_data.phase == 3 %}active{% endif %}">
                 <span class="tip-label">✓ Market-verified</span>
-                <span>Majority of the estimate comes from real deals. Narrow range.</span>
+                <span>Majority of the estimate comes from real deals in the local used car market. Narrower range.</span>
               </div>
               <div class="phase-tip-row {% if phase_data.phase == 4 %}active{% endif %}">
                 <span class="tip-label">⭐ Real-Market</span>
-                <span>Estimate is almost entirely driven by verified market transactions.</span>
+                <span>Driven almost entirely by verified transactions from the local used car market.</span>
               </div>
             </span>
           </span>
@@ -648,7 +684,7 @@
             This shows the cost of delay — the car's value will keep dropping over the next 5 years. Year 1, Year 3, and Year 5 values are pinned on the chart, and you can hover anywhere to see any specific month's projected value.
           </span>
         </span>
-        <span class="sub">next 5 years · values at 1 Yr. / 3 Yr. / 5 Yr.</span>
+        <span class="sub">Next 5 Years · Values at 1 Yr. / 3 Yr. / 5 Yr.</span>
       </div>
 
       <div class="chart-caution-chip" id="caution-chip">
@@ -675,10 +711,20 @@
         Market Demand
         <span class="info-wrap">
           <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            <strong style="color:#28a745;">HIGH</strong> — many active buyers; sellers hold pricing power. Decide fast.<br>
-            <strong style="color:#ffa500;">MEDIUM</strong> — balanced market; 5–8% negotiation room typical.<br>
-            <strong style="color:#ff6b6b;">LOW</strong> — buyers have leverage; aim 10–15% below asking.
+          <span class="info-tooltip wide">
+            <span class="demand-tip-header">Market demand — what each level means</span>
+            <div class="demand-tip-row demand-high {% if demand == 'HIGH' %}active{% endif %}">
+              <span class="tip-label">HIGH</span>
+              <span class="tip-body">Many active buyers. Sellers hold pricing power — decide fast on fair listings.</span>
+            </div>
+            <div class="demand-tip-row demand-medium {% if demand == 'MEDIUM' %}active{% endif %}">
+              <span class="tip-label">MEDIUM</span>
+              <span class="tip-body">Balanced market. Expect 5–8% negotiation room below asking.</span>
+            </div>
+            <div class="demand-tip-row demand-low {% if demand == 'LOW' %}active{% endif %}">
+              <span class="tip-label">LOW</span>
+              <span class="tip-body">Buyers have leverage. Aim 10–15% below asking.</span>
+            </div>
           </span>
         </span>
       </div>
@@ -748,7 +794,7 @@
     </div>
   </div>
 
-  <!-- Market stats — now includes L = Lakhs hint -->
+  <!-- Market stats -->
   <div class="market-stats">
     <strong>{{ verified_180d }}</strong> Verified transactions in last 6 months
     {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
@@ -831,24 +877,26 @@
           Alerts begin within 24 hours of subscription. You can subscribe to multiple cars by running separate searches.
         </div>
       {% else %}
-        <div style="color:#ffa500; font-size:0.78rem; margin:4px 0 6px;">
-          You need <strong>{{ alert_cost }} credits</strong> to subscribe. You currently have <strong>{{ user_credits }} credits</strong>.
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:4px 0 6px;">
+          <div style="color:#ffa500; font-size:0.78rem; flex:1 1 auto; min-width: 0;">
+            You need <strong>{{ alert_cost }} credits</strong> to subscribe. You currently have <strong>{{ user_credits }} credits</strong>.
+          </div>
+          <form method="POST" action="{{ url_for('request_credits') }}" style="margin-left:auto;">
+            <input type="hidden" name="return_to" value="buyer_dashboard">
+            <input type="hidden" name="keep_make"         value="{{ make }}">
+            <input type="hidden" name="keep_fuel"         value="{{ fuel }}">
+            <input type="hidden" name="keep_model"        value="{{ model }}">
+            <input type="hidden" name="keep_variant"      value="{{ variant }}">
+            <input type="hidden" name="keep_year"         value="{{ year }}">
+            <input type="hidden" name="keep_owner"        value="{{ owner }}">
+            <input type="hidden" name="keep_mileage"      value="{{ mileage }}">
+            <input type="hidden" name="keep_condition"    value="{{ condition }}">
+            <input type="hidden" name="keep_asking_price" value="{{ asking_price if asking_price is not none else '' }}">
+            <button type="submit" class="btn-alert-topup">
+              🎁 Get 500 Free Credits (Auto-approved)
+            </button>
+          </form>
         </div>
-        <form method="POST" action="{{ url_for('request_credits') }}" style="display:inline;">
-          <input type="hidden" name="return_to" value="buyer_dashboard">
-          <input type="hidden" name="keep_make"         value="{{ make }}">
-          <input type="hidden" name="keep_fuel"         value="{{ fuel }}">
-          <input type="hidden" name="keep_model"        value="{{ model }}">
-          <input type="hidden" name="keep_variant"      value="{{ variant }}">
-          <input type="hidden" name="keep_year"         value="{{ year }}">
-          <input type="hidden" name="keep_owner"        value="{{ owner }}">
-          <input type="hidden" name="keep_mileage"      value="{{ mileage }}">
-          <input type="hidden" name="keep_condition"    value="{{ condition }}">
-          <input type="hidden" name="keep_asking_price" value="{{ asking_price if asking_price is not none else '' }}">
-          <button type="submit" class="btn-alert-topup">
-            🎁 Get 500 Free Credits (Auto-approved)
-          </button>
-        </form>
         <div class="alert-footnote">
           Credits added instantly. You'll return to this dashboard so you can subscribe right away.
         </div>
@@ -1037,32 +1085,55 @@
     });
   }
 
-  const confWrap = document.getElementById('conf-info-wrap');
-  const confTip  = document.getElementById('conf-tooltip');
-  if (confWrap && confTip) {
-    confWrap.addEventListener('mouseenter', function() {
-      const iconRect = confWrap.getBoundingClientRect();
-      const tipWidth = 320;
-      const viewW = window.innerWidth;
-      const halfTip = tipWidth / 2;
-      const iconCenterX = iconRect.left + iconRect.width / 2;
-      const leftSpace  = iconCenterX;
-      const rightSpace = viewW - iconCenterX;
+  // ================================================
+  // Smart-position ALL info tooltips — flip down when near viewport top
+  // ================================================
+  function setupTooltipFlip() {
+    const wraps = document.querySelectorAll('.info-wrap');
+    wraps.forEach(function(wrap) {
+      const tip = wrap.querySelector('.info-tooltip');
+      if (!tip) return;
+      wrap.addEventListener('mouseenter', function() {
+        tip.classList.remove('flip-down');
+        tip.style.left = '';
+        tip.style.right = '';
+        tip.style.transform = 'translateX(-50%)';
 
-      if (leftSpace < halfTip + 10) {
-        confTip.style.left = '0';
-        confTip.style.transform = 'none';
-      } else if (rightSpace < halfTip + 10) {
-        confTip.style.left = 'auto';
-        confTip.style.right = '0';
-        confTip.style.transform = 'none';
-      } else {
-        confTip.style.left = '50%';
-        confTip.style.right = 'auto';
-        confTip.style.transform = 'translateX(-50%)';
-      }
+        // Force layout
+        tip.style.visibility = 'hidden';
+        tip.style.opacity = '0';
+        const tmpDisplay = tip.style.display;
+        tip.style.display = 'block';
+        const tipHeight = tip.offsetHeight || 140;
+        const tipWidth = tip.offsetWidth || 230;
+        tip.style.display = tmpDisplay;
+        tip.style.visibility = '';
+        tip.style.opacity = '';
+
+        const iconRect = wrap.getBoundingClientRect();
+
+        if (iconRect.top < tipHeight + 20) {
+          tip.classList.add('flip-down');
+        }
+
+        const viewW = window.innerWidth;
+        const halfTip = tipWidth / 2;
+        const iconCenterX = iconRect.left + iconRect.width / 2;
+        const leftSpace  = iconCenterX;
+        const rightSpace = viewW - iconCenterX;
+
+        if (leftSpace < halfTip + 10) {
+          tip.style.left = '0';
+          tip.style.transform = 'none';
+        } else if (rightSpace < halfTip + 10) {
+          tip.style.left = 'auto';
+          tip.style.right = '0';
+          tip.style.transform = 'none';
+        }
+      });
     });
   }
+  setupTooltipFlip();
 
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 185);
