@@ -41,13 +41,14 @@
   .price-hero .hero-label { color: #b0b0b0; font-size: 0.72rem; letter-spacing: 0.5px; margin-bottom: 2px; }
   .price-hero .hero-range { color: #4e54ff; font-size: 1.7rem; font-weight: 800; letter-spacing: -0.5px; line-height: 1.05; }
   .price-hero .hero-dash { color: #4e54ff; margin: 0 6px; }
-  .price-hero .hero-mid { color: #adb5bd; font-size: 0.8rem; margin-top: 4px; }
+  .price-hero .hero-mid {
+    color: #adb5bd; font-size: 0.8rem; margin-top: 4px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
   .price-hero .hero-mid strong { color: #8a90ff; font-weight: 600; }
   @media (min-width: 1200px) { .price-hero .hero-range { font-size: 1.85rem; } }
 
-  .price-hero .lakhs-hint { color: #6c757d; font-size: 0.66rem; margin-top: 3px; font-style: italic; }
-
-  /* Phase badge with styled tooltip (matches confidence-i style) */
+  /* Phase badge */
   .phase-badge-wrap {
     position: relative;
     display: inline-flex;
@@ -231,6 +232,8 @@
   }
   .info-icon:hover { background: #4e54ff; color: #fff; }
 
+  .info-icon.sm { width: 11px; height: 11px; font-size: 0.58rem; }
+
   .info-tooltip {
     visibility: hidden; opacity: 0;
     position: absolute;
@@ -268,8 +271,27 @@
   }
 
   .info-tooltip.wide {
-    width: 320px;
+    width: 300px;
     border-color: #4eb0ff;
+  }
+
+  .phase-tip-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 8px;
+    padding: 4px 2px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    align-items: start;
+    font-size: 0.7rem;
+    line-height: 1.4;
+  }
+  .phase-tip-row:last-child { border-bottom: none; }
+  .phase-tip-row .tip-label { font-weight: 700; color: #b0b0b0; }
+  .phase-tip-row.active { background: rgba(78,84,255,0.14); border-radius: 4px; border-bottom-color: transparent; margin: 0 -2px; padding: 4px; }
+  .phase-tip-row.active .tip-label { color: #8a90ff; }
+  .phase-tip-header {
+    display: block; color: #8a90ff; font-weight: 700; font-size: 0.74rem;
+    margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
   .conf-mini-row {
@@ -306,6 +328,7 @@
     display: block;
   }
 
+  /* Market stats — now includes L = Lakhs hint */
   .market-stats {
     background: #14171d;
     border-radius: 7px;
@@ -316,8 +339,9 @@
     text-align: center;
   }
   .market-stats strong { color: #e9ecef; }
+  .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.72rem; }
 
-  /* ===== Alert Subscription card — tightened + uses full width ===== */
+  /* Alert card */
   .alert-card {
     background: linear-gradient(135deg, #1a2030 0%, #14171d 100%);
     border: 1px solid #4e54ff;
@@ -383,7 +407,6 @@
     color: #ff6b6b; font-size: 0.76rem; margin-top: 4px;
   }
 
-  /* Flash messages */
   .flash-success-dash {
     background: #28a745; color: #fff; border-radius: 7px;
     padding: 0.55rem 2.2rem 0.55rem 0.85rem; margin-bottom: 8px;
@@ -520,8 +543,31 @@
         <div class="hero-range">
           ₹ {{ l2dp(price_low) }}<span class="hero-dash">—</span>₹ {{ l2dp(price_high) }}
         </div>
-        <div class="hero-mid">Most likely value: <strong>₹ {{ l2dp(estimated) }}</strong></div>
-        <div class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000)</div>
+        <div class="hero-mid">
+          Most likely value: <strong>₹ {{ l2dp(estimated) }}</strong>
+          <span class="info-wrap">
+            <span class="info-icon sm">i</span>
+            <span class="info-tooltip wide">
+              <span class="phase-tip-header">How this estimate is built</span>
+              <div class="phase-tip-row {% if phase_data.phase == 1 %}active{% endif %}">
+                <span class="tip-label">📊 Estimate</span>
+                <span>Formula-based from age, mileage, condition, ownership &amp; fuel. No verified deals yet.</span>
+              </div>
+              <div class="phase-tip-row {% if phase_data.phase == 2 %}active{% endif %}">
+                <span class="tip-label">📈 Calibrated</span>
+                <span>Formula + early verified deals blended in. Confidence improves.</span>
+              </div>
+              <div class="phase-tip-row {% if phase_data.phase == 3 %}active{% endif %}">
+                <span class="tip-label">✓ Market-verified</span>
+                <span>Majority of the estimate comes from real deals. Narrow range.</span>
+              </div>
+              <div class="phase-tip-row {% if phase_data.phase == 4 %}active{% endif %}">
+                <span class="tip-label">⭐ Real-Market</span>
+                <span>Estimate is almost entirely driven by verified market transactions.</span>
+              </div>
+            </span>
+          </span>
+        </div>
         <div class="phase-badge-wrap">
           <span class="phase-badge-inline p{{ phase_data.phase }}">
             {% if phase_data.phase == 4 %}⭐{% elif phase_data.phase == 3 %}✓{% elif phase_data.phase == 2 %}📈{% else %}📊{% endif %}
@@ -599,7 +645,7 @@
         <span class="info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip">
-            How this car's value is expected to drop over the next 5 years from today. Year 1, Year 3, and Year 5 values are shown on the chart — hover anywhere to see any month's projected price.
+            This shows the cost of delay — the car's value will keep dropping over the next 5 years. Year 1, Year 3, and Year 5 values are pinned on the chart, and you can hover anywhere to see any specific month's projected value.
           </span>
         </span>
         <span class="sub">next 5 years · values at 1 Yr. / 3 Yr. / 5 Yr.</span>
@@ -702,12 +748,13 @@
     </div>
   </div>
 
+  <!-- Market stats — now includes L = Lakhs hint -->
   <div class="market-stats">
     <strong>{{ verified_180d }}</strong> Verified transactions in last 6 months
     {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
+    &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000)</span>
   </div>
 
-  {# ===== ALERT SUBSCRIPTION CARD — tightened layout ===== #}
   <div class="alert-card">
     {% if active_sub %}
       <div class="alert-card-title-row">
@@ -840,8 +887,7 @@
 
     <div class="verdict-card">
       <div class="verdict-title">🎯 AutoKnowMus Verdict</div>
-      <div class="verdict-body" id="verdict-body">
-      </div>
+      <div class="verdict-body" id="verdict-body"></div>
     </div>
   </div>
 
@@ -869,7 +915,6 @@
   const ASKING_POSITION = {{ asking_position | tojson if asking_position else 'null' }};
   const ASKING_PCT_DIFF = {{ asking_pct_diff if asking_pct_diff is not none else 'null' }};
 
-  // Anchor months on the 5-year chart: Year 1 (12), Year 3 (36), Year 5 (60)
   const ANCHOR_MONTHS = [12, 36, 60];
 
   function lakh2dp(n) {
