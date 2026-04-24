@@ -3,7 +3,6 @@
 
 {% block extra_head %}
 <style>
-  /* Tighter spacing to fit on one screen */
   .dashboard-wrap { padding: 14px 30px 20px; }
 
   .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
@@ -12,7 +11,6 @@
   .car-summary .car-meta { color: #b0b0b0; font-size: 0.82rem; margin-top: 2px; }
   .car-summary .car-meta .lbl { color: #6c757d; font-weight: 400; }
 
-  /* ===== TOP ROW: Price+Slider (left) + Graph (right) ===== */
   .top-row {
     display: grid;
     grid-template-columns: 1fr 1.25fr;
@@ -38,7 +36,6 @@
   }
   .card-title .sub { color: #b0b0b0; font-size: 0.75rem; font-weight: 400; margin-left: 6px; }
 
-  /* Price + slider combined card */
   .hero-combined { display: flex; flex-direction: column; gap: 14px; }
   .price-hero { text-align: center; }
   .price-hero .hero-label { color: #b0b0b0; font-size: 0.76rem; letter-spacing: 0.5px; margin-bottom: 4px; }
@@ -48,7 +45,7 @@
   .price-hero .hero-mid strong { color: #ffa500; font-weight: 600; }
   @media (min-width: 1200px) { .price-hero .hero-range { font-size: 2rem; } }
 
-  /* Phase badge with styled tooltip (matches confidence-i style) */
+  /* Phase badge with styled tooltip */
   .phase-badge-wrap {
     position: relative;
     display: inline-flex;
@@ -151,10 +148,57 @@
   .slider-info .days-badge .num { color: #28a745; font-weight: 700; }
 
   /* Graph */
+  .chart-card { position: relative; }
   .graph-wrap { position: relative; height: 220px; }
   @media (max-width: 900px) { .graph-wrap { height: 200px; } }
 
-  /* ===== KPI cards ===== */
+  /* ===== Caution chip on chart (appears when slider is in top 20%) ===== */
+  .chart-caution-chip {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: rgba(255, 140, 0, 0.95);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 12px;
+    max-width: 240px;
+    line-height: 1.3;
+    z-index: 5;
+    cursor: help;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    display: none;
+    align-items: center;
+    gap: 5px;
+  }
+  .chart-caution-chip.show { display: inline-flex; }
+  .chart-caution-chip .chip-icon { font-size: 0.85rem; }
+  .chart-caution-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: #000;
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #ff8c00;
+    font-size: 0.74rem;
+    font-weight: 400;
+    line-height: 1.45;
+    width: 280px;
+    text-align: left;
+    z-index: 20;
+    transition: opacity 0.15s;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    pointer-events: none;
+  }
+  .chart-caution-chip:hover .chart-caution-tooltip {
+    visibility: visible; opacity: 1;
+  }
+
+  /* KPI cards */
   .kpi-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -185,48 +229,7 @@
   .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
   @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
-  /* Mini confidence benefit table (inside Data Confidence KPI card) */
-  .conf-table {
-    margin-top: 8px;
-    border-top: 1px solid #2a2d34;
-    padding-top: 8px;
-    font-size: 0.68rem;
-    text-align: left;
-  }
-  .conf-row {
-    display: grid;
-    grid-template-columns: 54px 1fr;
-    gap: 6px;
-    padding: 3px 4px;
-    border-radius: 4px;
-    margin-bottom: 2px;
-    align-items: start;
-    color: #adb5bd;
-    line-height: 1.3;
-  }
-  .conf-row .conf-bracket {
-    font-weight: 700;
-    color: #b0b0b0;
-    font-variant-numeric: tabular-nums;
-  }
-  .conf-row .conf-meaning {
-    font-weight: 400;
-  }
-  .conf-row .conf-meaning .conf-benefit {
-    display: block;
-    color: #6c757d;
-    font-size: 0.65rem;
-    margin-top: 1px;
-  }
-  .conf-row.conf-active {
-    background: rgba(78, 176, 255, 0.08);
-    border: 1px solid rgba(78, 176, 255, 0.35);
-  }
-  .conf-row.conf-active .conf-bracket { color: #4eb0ff; }
-  .conf-row.conf-active .conf-meaning { color: #e9ecef; }
-  .conf-row.conf-active .conf-meaning .conf-benefit { color: #adb5bd; }
-
-  /* ℹ️ info icon with custom tooltip — 3+ lines, white on black */
+  /* Info icon + tooltip (shared pattern) */
   .info-wrap { position: relative; display: inline-flex; }
   .info-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -275,6 +278,53 @@
     visibility: visible; opacity: 1;
   }
 
+  /* Wide tooltip variant for the confidence breakdown */
+  .info-tooltip.wide {
+    width: 300px;
+    max-width: 320px;
+    border-color: #4eb0ff;
+  }
+  .conf-tip-row {
+    display: grid;
+    grid-template-columns: 62px 1fr;
+    gap: 8px;
+    padding: 4px 2px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    align-items: start;
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+  .conf-tip-row:last-child { border-bottom: none; }
+  .conf-tip-row .tip-bracket {
+    font-weight: 700;
+    color: #b0b0b0;
+    font-variant-numeric: tabular-nums;
+  }
+  .conf-tip-row.active {
+    background: rgba(78,176,255,0.12);
+    border-radius: 4px;
+    border-bottom-color: transparent;
+    margin: 0 -2px;
+    padding: 4px;
+  }
+  .conf-tip-row.active .tip-bracket { color: #4eb0ff; }
+  .conf-tip-row .tip-benefit {
+    display: block;
+    color: #adb5bd;
+    font-size: 0.66rem;
+    margin-top: 1px;
+    font-style: italic;
+  }
+  .conf-tip-header {
+    display: block;
+    color: #4eb0ff;
+    font-weight: 700;
+    font-size: 0.76rem;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+  }
+
   /* Market stats */
   .market-stats {
     background: #14171d;
@@ -287,7 +337,7 @@
   }
   .market-stats strong { color: #e9ecef; }
 
-  /* ===== BOTTOM ROW: Distribution (left) + Verdict (right) ===== */
+  /* Bottom row */
   .bottom-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -343,7 +393,6 @@
   .verdict-body .ok { color: #28a745; font-weight: 600; }
   .verdict-body .warn { color: #ff6b6b; font-weight: 600; }
 
-  /* Data version footer */
   .data-version-footer {
     margin-top: 12px;
     padding-top: 8px;
@@ -422,18 +471,32 @@
       </div>
     </div>
 
-    <!-- RIGHT: Depreciation graph -->
-    <div class="card">
+    <!-- RIGHT: Depreciation graph with caution chip + anchor badges -->
+    <div class="card chart-card">
       <div class="card-title">
         Depreciation Forecast
         <span class="info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip">
-            How your car's value is expected to drop over the next 90 days if you don't sell now. Cars depreciate continuously — waiting longer usually means accepting a lower price later. Hover on the line to see specific days.
+            How your car's value is expected to drop over the next 90 days if you don't sell now. Day 30 / 60 / 90 values are pinned on the chart — hover anywhere to see any specific day.
           </span>
         </span>
-        <span class="sub">next 90 days</span>
+        <span class="sub">next 90 days · values at D30 / D60 / D90</span>
       </div>
+
+      <div class="chart-caution-chip" id="caution-chip">
+        <span class="chip-icon">⚠️</span>
+        <span>Premium pricing — preparation matters</span>
+        <div class="chart-caution-tooltip">
+          <strong style="color:#ffa500;">Priced at the top of the range.</strong><br><br>
+          Buyers paying top price expect showroom-like condition. Ensure you have:<br>
+          • Full service history<br>
+          • No visible scratches, dents, or interior wear<br>
+          • Spotless detailing before viewings<br><br>
+          Without these, expect lowball offers or a slow sale.
+        </div>
+      </div>
+
       <div class="graph-wrap">
         <canvas id="dep-chart"></canvas>
       </div>
@@ -461,47 +524,44 @@
     <div class="kpi-card">
       <div class="kpi-label">
         Data Confidence
-        <span class="info-wrap">
+        <span class="info-wrap" id="conf-info-wrap">
           <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            How reliable this valuation is based on verified real-world deals for similar cars. Higher confidence means your price is grounded in more actual transactions — see the bracket guide below for what each level means for your sale.
+          <span class="info-tooltip wide" id="conf-tooltip">
+            <span class="conf-tip-header">Confidence levels — what each means</span>
+            {% set c = confidence | int %}
+            <div class="conf-tip-row {% if c >= 90 %}active{% endif %}">
+              <span class="tip-bracket">90–95%</span>
+              <span>
+                Strong match with many verified deals.
+                <span class="tip-benefit">List confidently — minimal haggling room.</span>
+              </span>
+            </div>
+            <div class="conf-tip-row {% if c >= 75 and c < 90 %}active{% endif %}">
+              <span class="tip-bracket">75–89%</span>
+              <span>
+                Good match with several similar deals.
+                <span class="tip-benefit">Price is dependable — small buffer is safe.</span>
+              </span>
+            </div>
+            <div class="conf-tip-row {% if c >= 60 and c < 75 %}active{% endif %}">
+              <span class="tip-bracket">60–74%</span>
+              <span>
+                Moderate match, limited verified deals.
+                <span class="tip-benefit">Use as a guideline — expect 5–8% swing.</span>
+              </span>
+            </div>
+            <div class="conf-tip-row {% if c < 60 %}active{% endif %}">
+              <span class="tip-bracket">50–59%</span>
+              <span>
+                Baseline estimate, few comparable deals.
+                <span class="tip-benefit">Treat as a starting point — verify with other sources.</span>
+              </span>
+            </div>
           </span>
         </span>
       </div>
       <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
-
-      <!-- Mini confidence benefit table -->
-      <div class="conf-table">
-        {% set c = confidence | int %}
-        <div class="conf-row {% if c >= 90 %}conf-active{% endif %}">
-          <div class="conf-bracket">90–95%</div>
-          <div class="conf-meaning">
-            Strong match with many verified deals.
-            <span class="conf-benefit">List confidently — minimal haggling room.</span>
-          </div>
-        </div>
-        <div class="conf-row {% if c >= 75 and c < 90 %}conf-active{% endif %}">
-          <div class="conf-bracket">75–89%</div>
-          <div class="conf-meaning">
-            Good match with several similar deals.
-            <span class="conf-benefit">Price is dependable — small negotiation buffer is safe.</span>
-          </div>
-        </div>
-        <div class="conf-row {% if c >= 60 and c < 75 %}conf-active{% endif %}">
-          <div class="conf-bracket">60–74%</div>
-          <div class="conf-meaning">
-            Moderate match, limited verified deals.
-            <span class="conf-benefit">Use as a guideline — expect 5–8% swing.</span>
-          </div>
-        </div>
-        <div class="conf-row {% if c < 60 %}conf-active{% endif %}">
-          <div class="conf-bracket">50–59%</div>
-          <div class="conf-meaning">
-            Baseline estimate, few comparable deals.
-            <span class="conf-benefit">Treat as a starting point — verify with other sources.</span>
-          </div>
-        </div>
-      </div>
+      <div class="kpi-sub">Based on verified deals</div>
     </div>
 
     <div class="kpi-card">
@@ -525,7 +585,7 @@
     {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
   </div>
 
-  <!-- BOTTOM ROW: Distribution (left) + Verdict (right) -->
+  <!-- BOTTOM ROW: Distribution + Verdict -->
   <div class="bottom-row">
     <div class="card">
       <div class="card-title">Buyer Price-Band Distribution <span class="sub">where buyers are concentrated</span></div>
@@ -559,7 +619,6 @@
     </div>
   </div>
 
-  <!-- Data version footer -->
   <div class="data-version-footer">
     Prices calibrated {{ data_version }}
   </div>
@@ -579,6 +638,9 @@
   const CONFIDENCE    = {{ confidence }};
   const CAR_NAME      = {{ (val.year ~ ' ' ~ val.make ~ ' ' ~ val.model ~ ' ' ~ val.variant) | tojson }};
   const VERIFIED_COUNT = {{ verified_180d }};
+
+  // Anchor days for the seller chart: Day 30 / 60 / 90
+  const ANCHOR_DAYS = [30, 60, 90];
 
   function lakh1dp(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
@@ -674,6 +736,7 @@
   const demandEl     = document.getElementById('demand-value');
   const daysKpiEl    = document.getElementById('days-value');
   const verdictEl    = document.getElementById('verdict-body');
+  const cautionChip  = document.getElementById('caution-chip');
 
   function positionBubble() {
     const min = Number(slider.min);
@@ -690,6 +753,16 @@
     demandEl.textContent = demand;
   }
 
+  function updateCaution(price) {
+    // Show caution when price is in top 20% of range
+    const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
+    if (pct >= 0.80) {
+      cautionChip.classList.add('show');
+    } else {
+      cautionChip.classList.remove('show');
+    }
+  }
+
   function onSliderInput() {
     const val = Number(slider.value);
     const demand = demandForPrice(val);
@@ -700,6 +773,7 @@
     daysEl.textContent = days;
     daysKpiEl.textContent = days;
     updateDemandClass(demand);
+    updateCaution(val);
     verdictEl.innerHTML = generateVerdict(val, demand, days);
     positionBubble();
   }
@@ -709,9 +783,43 @@
 
   requestAnimationFrame(() => {
     positionBubble();
+    updateCaution(ESTIMATED);
     verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
   });
 
+  // ================================================
+  // Confidence tooltip smart-positioning
+  // ================================================
+  const confWrap = document.getElementById('conf-info-wrap');
+  const confTip  = document.getElementById('conf-tooltip');
+  if (confWrap && confTip) {
+    confWrap.addEventListener('mouseenter', function() {
+      const iconRect = confWrap.getBoundingClientRect();
+      const tipWidth = 300;
+      const viewW = window.innerWidth;
+      const halfTip = tipWidth / 2;
+      const iconCenterX = iconRect.left + iconRect.width / 2;
+      const leftSpace  = iconCenterX;
+      const rightSpace = viewW - iconCenterX;
+
+      if (leftSpace < halfTip + 10) {
+        confTip.style.left = '0';
+        confTip.style.transform = 'none';
+      } else if (rightSpace < halfTip + 10) {
+        confTip.style.left = 'auto';
+        confTip.style.right = '0';
+        confTip.style.transform = 'none';
+      } else {
+        confTip.style.left = '50%';
+        confTip.style.right = 'auto';
+        confTip.style.transform = 'translateX(-50%)';
+      }
+    });
+  }
+
+  // ================================================
+  // Depreciation chart with D30 / D60 / D90 anchor badges
+  // ================================================
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 220);
   grad.addColorStop(0, 'rgba(40, 167, 69, 0.35)');
@@ -719,6 +827,80 @@
 
   const labels = DEP_DATA.map(p => 'Day ' + p.day);
   const prices = DEP_DATA.map(p => p.price);
+
+  // Anchor points get visible markers; others hidden
+  const pointRadiusArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? 4 : 0);
+  const pointBgArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? '#ffa500' : '#28a745');
+  const pointBorderArr = DEP_DATA.map(p => ANCHOR_DAYS.includes(p.day) ? '#fff' : '#28a745');
+
+  // Plugin: draws orange pill badges at each anchor day
+  const anchorLabelsPlugin = {
+    id: 'anchorLabels',
+    afterDatasetsDraw: function(chart) {
+      const cctx = chart.ctx;
+      const area = chart.chartArea;
+      cctx.save();
+      cctx.font = '600 10px system-ui, -apple-system, sans-serif';
+      cctx.textAlign = 'center';
+      cctx.textBaseline = 'bottom';
+
+      ANCHOR_DAYS.forEach(day => {
+        const idx = DEP_DATA.findIndex(p => p.day === day);
+        if (idx < 0) return;
+        const meta = chart.getDatasetMeta(0);
+        const point = meta.data[idx];
+        if (!point) return;
+
+        const price = DEP_DATA[idx].price;
+        const label = 'D' + day + ' · ₹' + lakh1dp(price);
+
+        const padX = 5, padY = 3;
+        const textW = cctx.measureText(label).width;
+        const badgeW = textW + padX * 2;
+        const badgeH = 16;
+
+        // Clamp badge inside chart area
+        let centerX = point.x;
+        const minCenter = area.left + badgeW / 2 + 2;
+        const maxCenter = area.right - badgeW / 2 - 2;
+        if (centerX < minCenter) centerX = minCenter;
+        if (centerX > maxCenter) centerX = maxCenter;
+
+        const badgeX = centerX - badgeW / 2;
+        const badgeY = point.y - 24;
+
+        // Pill background
+        cctx.fillStyle = 'rgba(255,165,0,0.95)';
+        cctx.beginPath();
+        const r = 8;
+        cctx.moveTo(badgeX + r, badgeY);
+        cctx.lineTo(badgeX + badgeW - r, badgeY);
+        cctx.quadraticCurveTo(badgeX + badgeW, badgeY, badgeX + badgeW, badgeY + r);
+        cctx.lineTo(badgeX + badgeW, badgeY + badgeH - r);
+        cctx.quadraticCurveTo(badgeX + badgeW, badgeY + badgeH, badgeX + badgeW - r, badgeY + badgeH);
+        cctx.lineTo(badgeX + r, badgeY + badgeH);
+        cctx.quadraticCurveTo(badgeX, badgeY + badgeH, badgeX, badgeY + badgeH - r);
+        cctx.lineTo(badgeX, badgeY + r);
+        cctx.quadraticCurveTo(badgeX, badgeY, badgeX + r, badgeY);
+        cctx.closePath();
+        cctx.fill();
+
+        // Label text
+        cctx.fillStyle = '#1a1d24';
+        cctx.fillText(label, centerX, badgeY + badgeH - padY);
+
+        // Short connector line to the curve point
+        cctx.strokeStyle = 'rgba(255,165,0,0.7)';
+        cctx.lineWidth = 1;
+        cctx.beginPath();
+        cctx.moveTo(centerX, badgeY + badgeH);
+        cctx.lineTo(point.x, point.y - 2);
+        cctx.stroke();
+      });
+
+      cctx.restore();
+    }
+  };
 
   new Chart(ctx, {
     type: 'line',
@@ -732,7 +914,10 @@
         borderWidth: 2.5,
         fill: true,
         tension: 0.35,
-        pointRadius: 0,
+        pointRadius: pointRadiusArr,
+        pointBackgroundColor: pointBgArr,
+        pointBorderColor: pointBorderArr,
+        pointBorderWidth: 2,
         pointHoverRadius: 6,
         pointHoverBackgroundColor: '#28a745',
         pointHoverBorderColor: '#fff',
@@ -743,6 +928,9 @@
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      layout: {
+        padding: { top: 26, right: 28, left: 4, bottom: 0 }
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -782,7 +970,8 @@
           grid: { color: 'rgba(255,255,255,0.06)' }
         }
       }
-    }
+    },
+    plugins: [anchorLabelsPlugin]
   });
 </script>
 {% endblock %}
