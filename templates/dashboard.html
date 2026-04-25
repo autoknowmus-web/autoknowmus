@@ -246,7 +246,6 @@
   .info-tooltip {
     visibility: hidden; opacity: 0;
     position: absolute;
-    /* Default: above the icon */
     bottom: calc(100% + 10px);
     left: 50%;
     transform: translateX(-50%);
@@ -269,7 +268,6 @@
     pointer-events: none;
     box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   }
-  /* Arrow pointing down when tooltip is above icon */
   .info-tooltip::after {
     content: '';
     position: absolute;
@@ -278,7 +276,6 @@
     border: 6px solid transparent;
     border-top-color: #000;
   }
-  /* When tooltip is flipped below icon */
   .info-tooltip.flip-down {
     bottom: auto;
     top: calc(100% + 10px);
@@ -299,7 +296,6 @@
     border-color: #4eb0ff;
   }
 
-  /* Phase-explanation rows (used inside estimate tooltip) */
   .phase-tip-row {
     display: grid;
     grid-template-columns: 110px 1fr;
@@ -319,7 +315,6 @@
     margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
-  /* Confidence tooltip rows */
   .conf-tip-row {
     display: grid;
     grid-template-columns: 62px 1fr;
@@ -340,7 +335,6 @@
     margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
-  /* Market Demand tooltip rows — same structure as Confidence */
   .demand-tip-row {
     display: grid;
     grid-template-columns: 78px 1fr;
@@ -375,6 +369,205 @@
   }
   .market-stats strong { color: #e9ecef; }
   .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.76rem; }
+
+  /* ============================================================
+     SELLER ALERT SUBSCRIBE STRIP — compact, expandable on click
+     ============================================================ */
+  .alert-strip {
+    background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
+    border: 1px solid #28a745;
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    color: #e6e6e6;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+  }
+  .alert-strip-collapsed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .alert-strip-collapsed .strip-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .alert-strip-collapsed .strip-icon { font-size: 1rem; }
+  .alert-strip-collapsed .strip-msg { line-height: 1.3; }
+  .alert-strip-collapsed .strip-msg strong { color: #28a745; font-weight: 700; }
+
+  .strip-btn {
+    background: #28a745;
+    color: #fff;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .strip-btn:hover { background: #2bb84d; }
+  .strip-btn:disabled,
+  .strip-btn.disabled {
+    background: #2a2d34;
+    color: #6c757d;
+    cursor: not-allowed;
+  }
+  .strip-btn-secondary {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2d34;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.15s;
+  }
+  .strip-btn-secondary:hover {
+    border-color: #6c757d;
+    color: #fff;
+  }
+  .strip-btn-cancel {
+    background: transparent;
+    color: #ff6b6b;
+    border: 1px solid #ff6b6b40;
+  }
+  .strip-btn-cancel:hover {
+    background: rgba(255,107,107,0.1);
+    border-color: #ff6b6b;
+    color: #ff6b6b;
+  }
+
+  /* Active subscription state — green badge */
+  .alert-strip.is-active { border-color: #28a745; }
+  .alert-strip.is-active .strip-msg strong { color: #28a745; }
+
+  /* Cap-reached state — orange */
+  .alert-strip.is-capped { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
+  .alert-strip.is-capped .strip-msg strong { color: #ff8c00; }
+
+  /* Insufficient credits state — orange */
+  .alert-strip.is-need-credits { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
+  .alert-strip.is-need-credits .strip-msg strong { color: #ff8c00; }
+
+  /* Expanded form */
+  .alert-strip-expanded {
+    display: none;
+  }
+  .alert-strip.is-expanded .alert-strip-collapsed { display: none; }
+  .alert-strip.is-expanded .alert-strip-expanded { display: block; }
+
+  .strip-expanded-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .strip-expanded-header h4 {
+    margin: 0;
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .strip-close-btn {
+    background: transparent;
+    border: none;
+    color: #adb5bd;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1;
+  }
+  .strip-close-btn:hover { color: #fff; }
+
+  .strip-channel-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #2a2d34;
+    font-size: 0.85rem;
+  }
+  .strip-channel-row:last-of-type { border-bottom: none; }
+  .strip-channel-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #28a745;
+    cursor: pointer;
+  }
+  .strip-channel-row input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+  }
+  .strip-channel-row .ch-label { color: #e6e6e6; flex: 1; }
+  .strip-channel-row .ch-value {
+    background: #14171d;
+    color: #adb5bd;
+    padding: 3px 9px;
+    border-radius: 5px;
+    font-size: 0.78rem;
+    font-family: ui-monospace, 'SF Mono', monospace;
+  }
+  /* Disabled WhatsApp — dark bg + grey text per UI rule 9 */
+  .strip-channel-row.is-disabled {
+    opacity: 1;
+  }
+  .strip-channel-row.is-disabled .ch-label,
+  .strip-channel-row.is-disabled .ch-value {
+    color: #6c757d;
+    background: #1a1d24;
+  }
+  .coming-soon-pill {
+    display: inline-block;
+    background: #1a1d24;
+    color: #6c757d;
+    border: 1px solid #2a2d34;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-left: 6px;
+  }
+
+  .strip-cost-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0 4px;
+    margin-top: 6px;
+    border-top: 1px solid #2a2d34;
+    font-size: 0.85rem;
+  }
+  .strip-cost-row .cost-label { color: #adb5bd; }
+  .strip-cost-row .cost-value { color: #28a745; font-weight: 700; }
+
+  .strip-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+
+  .alert-strip-meta {
+    color: #6c757d;
+    font-size: 0.74rem;
+    margin-top: 6px;
+    line-height: 1.4;
+  }
 
   .bottom-row {
     display: grid;
@@ -650,6 +843,145 @@
     &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000)</span>
   </div>
 
+  <!-- ============================================================
+       SELLER ALERT SUBSCRIBE STRIP
+       Compact one-line by default; expands inline on click.
+       Backend: POST /subscribe-seller-alert with role='seller'
+       ============================================================ -->
+  {% if user %}
+    {% set car_label = val.make ~ ' ' ~ val.model ~ ' ' ~ val.variant %}
+    {% set user_credits = user.credits | default(0) %}
+
+    {% if active_sub %}
+      <!-- STATE: Already subscribed -->
+      <div class="alert-strip is-active" id="alert-strip">
+        <div class="alert-strip-collapsed">
+          <div class="strip-text">
+            <span class="strip-icon">✅</span>
+            <span class="strip-msg">
+              <strong>Email alerts active</strong> for {{ car_label }} until {{ active_sub.expires_at | ddmmmyyyy }}
+              · {{ active_alerts_count }} of {{ max_alerts }} alerts active
+            </span>
+          </div>
+          <form action="{{ url_for('cancel_alert', alert_id=active_sub.id) }}" method="POST" style="display:inline;"
+                onsubmit="return confirm('Cancel email alerts for {{ car_label }}? You will not get a credit refund, but the slot will be freed.');">
+            <button type="submit" class="strip-btn-secondary strip-btn-cancel">Cancel alerts</button>
+          </form>
+        </div>
+      </div>
+
+    {% elif active_alerts_count >= max_alerts %}
+      <!-- STATE: Alert cap reached -->
+      <div class="alert-strip is-capped" id="alert-strip">
+        <div class="alert-strip-collapsed">
+          <div class="strip-text">
+            <span class="strip-icon">⚠️</span>
+            <span class="strip-msg">
+              <strong>Maximum {{ max_alerts }} alerts reached.</strong>
+              Cancel an existing alert before subscribing to {{ car_label }}.
+            </span>
+          </div>
+          <a href="{{ url_for('my_alerts') }}" class="strip-btn-secondary">Manage alerts</a>
+        </div>
+      </div>
+
+    {% elif user_credits < alert_cost %}
+      <!-- STATE: Insufficient credits -->
+      <div class="alert-strip is-need-credits" id="alert-strip">
+        <div class="alert-strip-collapsed">
+          <div class="strip-text">
+            <span class="strip-icon">💰</span>
+            <span class="strip-msg">
+              <strong>Need ({{ alert_cost }} Credits) to subscribe</strong>
+              for {{ car_label }} alerts. You have {{ user_credits }} credits.
+            </span>
+          </div>
+          <form action="{{ url_for('request_credits') }}" method="POST" style="display:inline;">
+            <input type="hidden" name="return_to" value="seller_dashboard_keep">
+            <input type="hidden" name="valuation_id" value="{{ val.id }}">
+            <button type="submit" class="strip-btn">Get 500 Free Credits</button>
+          </form>
+        </div>
+      </div>
+
+    {% else %}
+      <!-- STATE: Can subscribe — show compact strip + expandable form -->
+      <div class="alert-strip" id="alert-strip">
+        <div class="alert-strip-collapsed">
+          <div class="strip-text">
+            <span class="strip-icon">🔔</span>
+            <span class="strip-msg">
+              Get <strong>email alerts</strong> when a similar {{ car_label }} sells —
+              valuable market signal for timing your sale.
+            </span>
+          </div>
+          <button type="button" class="strip-btn" onclick="document.getElementById('alert-strip').classList.add('is-expanded')">
+            Subscribe ({{ alert_cost }} Credits)
+          </button>
+        </div>
+
+        <div class="alert-strip-expanded">
+          <div class="strip-expanded-header">
+            <h4>🔔 Subscribe to seller deal alerts</h4>
+            <button type="button" class="strip-close-btn" onclick="document.getElementById('alert-strip').classList.remove('is-expanded')" aria-label="Close">×</button>
+          </div>
+
+          <form action="{{ url_for('subscribe_seller_alert') }}" method="POST">
+            <!-- Hidden inputs to recreate sub on backend + redirect back -->
+            <input type="hidden" name="valuation_id" value="{{ val.id }}">
+            <input type="hidden" name="make"      value="{{ val.make }}">
+            <input type="hidden" name="model"     value="{{ val.model }}">
+            <input type="hidden" name="variant"   value="{{ val.variant }}">
+            <input type="hidden" name="fuel"      value="{{ val.fuel }}">
+            <input type="hidden" name="year"      value="{{ val.year }}">
+            <input type="hidden" name="owner"     value="{{ val.owner }}">
+            <input type="hidden" name="mileage"   value="{{ val.mileage }}">
+            <input type="hidden" name="condition" value="{{ val.condition }}">
+            <input type="hidden" name="email_enabled" value="on">
+
+            <p style="color:#adb5bd; font-size:0.82rem; margin:0 0 10px; line-height:1.45;">
+              You'll get an email when a verified deal is submitted on AutoKnowMus
+              for a <strong style="color:#28a745;">{{ car_label }}</strong>.
+              Use it to gauge timing and confirm your asking price.
+            </p>
+
+            <div class="strip-channel-row">
+              <input type="checkbox" id="ch-email" checked disabled>
+              <span class="ch-label">Email alerts</span>
+              <span class="ch-value">{{ user.email }}</span>
+            </div>
+
+            <div class="strip-channel-row is-disabled">
+              <input type="checkbox" id="ch-whatsapp" disabled>
+              <span class="ch-label">
+                WhatsApp alerts
+                <span class="coming-soon-pill">Coming Soon</span>
+              </span>
+              {% if user.whatsapp_phone %}
+                <span class="ch-value">+91 {{ user.whatsapp_phone }}</span>
+              {% endif %}
+            </div>
+
+            <div class="strip-cost-row">
+              <span class="cost-label">Cost · valid for {{ alert_days }} days</span>
+              <span class="cost-value">({{ alert_cost }} Credits)</span>
+            </div>
+
+            <div class="strip-actions">
+              <button type="button" class="strip-btn-secondary" onclick="document.getElementById('alert-strip').classList.remove('is-expanded')">Cancel</button>
+              <button type="submit" class="strip-btn">Confirm — Pay ({{ alert_cost }} Credits)</button>
+            </div>
+
+            <div class="alert-strip-meta">
+              {{ active_alerts_count }} of {{ max_alerts }} alerts currently active.
+              Subscriptions auto-expire after {{ alert_days }} days. No credit refund on cancellation.
+            </div>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+  {% endif %}
+
   <!-- Distribution + Verdict -->
   <div class="bottom-row">
     <div class="card">
@@ -847,7 +1179,7 @@
   });
 
   // ================================================
-  // Smart-position ALL info tooltips — flip down when near viewport top
+  // Smart-position info tooltips — flip down when near viewport top
   // ================================================
   function setupTooltipFlip() {
     const wraps = document.querySelectorAll('.info-wrap');
@@ -860,7 +1192,6 @@
         tip.style.right = '';
         tip.style.transform = 'translateX(-50%)';
 
-        // Force layout so we can measure
         tip.style.visibility = 'hidden';
         tip.style.opacity = '0';
         const tmpDisplay = tip.style.display;
@@ -873,12 +1204,10 @@
 
         const iconRect = wrap.getBoundingClientRect();
 
-        // Flip below icon if not enough room above
         if (iconRect.top < tipHeight + 20) {
           tip.classList.add('flip-down');
         }
 
-        // Horizontal overflow protection
         const viewW = window.innerWidth;
         const halfTip = tipWidth / 2;
         const iconCenterX = iconRect.left + iconRect.width / 2;
