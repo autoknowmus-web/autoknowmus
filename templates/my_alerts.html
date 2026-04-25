@@ -42,7 +42,7 @@
   .cap-banner {
     background: #1a1d24;
     border: 1px solid #2a2d34;
-    border-left: 3px solid #4e54ff;
+    border-left: 3px solid #28a745;
     border-radius: 8px;
     padding: 12px 16px;
     margin-bottom: 28px;
@@ -80,9 +80,9 @@
     flex-shrink: 0;
   }
   .cap-banner .cap-count.ok {
-    background: rgba(78,84,255,0.15);
-    color: #8a90ff;
-    border: 1px solid rgba(78,84,255,0.4);
+    background: rgba(40,167,69,0.15);
+    color: #5bd47b;
+    border: 1px solid rgba(40,167,69,0.4);
   }
   .cap-banner .cap-count.full {
     background: rgba(255,140,0,0.15);
@@ -399,7 +399,7 @@
   <h1 class="page-title">My Deal Alerts</h1>
   <p class="page-subtitle">
     Manage your active deal alert subscriptions. You'll get an email when a verified deal is submitted on AutoKnowMus
-    for a matching car. Buyer alerts help you avoid overpaying; seller alerts help you time your sale better.
+    for a matching car. Seller alerts help you time your sale better; buyer alerts help you avoid overpaying.
   </p>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -420,7 +420,7 @@
     <div class="cap-banner is-full">
       <span class="cap-icon">⚠️</span>
       <div class="cap-text">
-        <strong>You've reached the {{ max_alerts }}-deal-alert limit (combined buyer + seller).</strong>
+        <strong>You've reached the {{ max_alerts }}-deal-alert limit (combined seller + buyer).</strong>
         Cancel an existing alert below to free a slot before subscribing to a new car.
       </div>
       <span class="cap-count full">{{ active_count }} of {{ max_alerts }}</span>
@@ -429,7 +429,7 @@
     <div class="cap-banner">
       <span class="cap-icon">●</span>
       <div class="cap-text">
-        <strong>{{ active_count }} of {{ max_alerts }} deal alerts active</strong> — buyer and seller subscriptions share this limit.
+        <strong>{{ active_count }} of {{ max_alerts }} deal alerts active</strong> — seller and buyer subscriptions share this limit.
         You have {{ max_alerts - active_count }} slot{{ '' if (max_alerts - active_count) == 1 else 's' }} remaining.
       </div>
       <span class="cap-count ok">{{ active_count }} of {{ max_alerts }}</span>
@@ -437,73 +437,7 @@
   {% endif %}
 
   <!-- ==========================================================
-       BUYER DEAL ALERTS — blue theme
-       ========================================================== -->
-  <div class="section-block">
-    <div class="section-header buyer">
-      <h2 class="section-title">
-        <span class="dot">●</span>
-        🔵 Buyer Deal Alerts
-      </h2>
-      <span class="section-purpose">Avoid overpaying — see what other buyers actually pay for the same car</span>
-      <span class="section-count">{{ active_buyer_subs|length }} active</span>
-    </div>
-
-    {% if active_buyer_subs and active_buyer_subs|length > 0 %}
-      <div class="alerts-grid">
-        {% for sub in active_buyer_subs %}
-          <div class="alert-card buyer">
-            <h3 class="car-name">{{ sub.make }} {{ sub.model }} {{ sub.variant }}</h3>
-
-            <div class="meta-row">
-              <span class="label">Channels</span>
-              <span class="channels">
-                {% if sub.email_enabled %}<span class="channel-badge">📧 Email</span>{% endif %}
-                <span class="channel-badge coming">💬 WhatsApp · Coming Soon</span>
-              </span>
-            </div>
-
-            <div class="meta-row">
-              <span class="label">Created</span>
-              <span class="value">{{ sub.created_display }}</span>
-            </div>
-
-            <div class="meta-row">
-              <span class="label">Expires</span>
-              <span class="value">{{ sub.expires_display }}</span>
-            </div>
-
-            <div class="meta-row">
-              <span class="label">Remaining</span>
-              <span class="value">
-                {% if sub.days_remaining > 7 %}
-                  <span class="days-pill green">{{ sub.days_remaining }} days</span>
-                {% elif sub.days_remaining > 2 %}
-                  <span class="days-pill amber">{{ sub.days_remaining }} days</span>
-                {% else %}
-                  <span class="days-pill red">{{ sub.days_remaining }} day{% if sub.days_remaining != 1 %}s{% endif %}</span>
-                {% endif %}
-              </span>
-            </div>
-
-            <button type="button"
-                    class="btn-cancel"
-                    onclick="openCancelModal('{{ sub.id }}', '{{ sub.make }} {{ sub.model }} {{ sub.variant }}', 'Buyer')">
-              Cancel deal alert
-            </button>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <div class="empty-state buyer">
-        <p>No active buyer deal alerts. Subscribe from any buyer search result to get notified when a matching deal is submitted.</p>
-        <a href="{{ url_for('buyer') }}" class="btn-go buyer">Start a buyer search</a>
-      </div>
-    {% endif %}
-  </div>
-
-  <!-- ==========================================================
-       SELLER DEAL ALERTS — green theme
+       SELLER DEAL ALERTS — green theme (shown first)
        ========================================================== -->
   <div class="section-block">
     <div class="section-header seller">
@@ -564,6 +498,72 @@
       <div class="empty-state seller">
         <p>No active seller deal alerts. Run a valuation on your car to subscribe and get notified when a similar car sells.</p>
         <a href="{{ url_for('seller') }}" class="btn-go seller">Start a valuation</a>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- ==========================================================
+       BUYER DEAL ALERTS — blue theme (shown second)
+       ========================================================== -->
+  <div class="section-block">
+    <div class="section-header buyer">
+      <h2 class="section-title">
+        <span class="dot">●</span>
+        🔵 Buyer Deal Alerts
+      </h2>
+      <span class="section-purpose">Avoid overpaying — see what other buyers actually pay for the same car</span>
+      <span class="section-count">{{ active_buyer_subs|length }} active</span>
+    </div>
+
+    {% if active_buyer_subs and active_buyer_subs|length > 0 %}
+      <div class="alerts-grid">
+        {% for sub in active_buyer_subs %}
+          <div class="alert-card buyer">
+            <h3 class="car-name">{{ sub.make }} {{ sub.model }} {{ sub.variant }}</h3>
+
+            <div class="meta-row">
+              <span class="label">Channels</span>
+              <span class="channels">
+                {% if sub.email_enabled %}<span class="channel-badge">📧 Email</span>{% endif %}
+                <span class="channel-badge coming">💬 WhatsApp · Coming Soon</span>
+              </span>
+            </div>
+
+            <div class="meta-row">
+              <span class="label">Created</span>
+              <span class="value">{{ sub.created_display }}</span>
+            </div>
+
+            <div class="meta-row">
+              <span class="label">Expires</span>
+              <span class="value">{{ sub.expires_display }}</span>
+            </div>
+
+            <div class="meta-row">
+              <span class="label">Remaining</span>
+              <span class="value">
+                {% if sub.days_remaining > 7 %}
+                  <span class="days-pill green">{{ sub.days_remaining }} days</span>
+                {% elif sub.days_remaining > 2 %}
+                  <span class="days-pill amber">{{ sub.days_remaining }} days</span>
+                {% else %}
+                  <span class="days-pill red">{{ sub.days_remaining }} day{% if sub.days_remaining != 1 %}s{% endif %}</span>
+                {% endif %}
+              </span>
+            </div>
+
+            <button type="button"
+                    class="btn-cancel"
+                    onclick="openCancelModal('{{ sub.id }}', '{{ sub.make }} {{ sub.model }} {{ sub.variant }}', 'Buyer')">
+              Cancel deal alert
+            </button>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state buyer">
+        <p>No active buyer deal alerts. Subscribe from any buyer search result to get notified when a matching deal is submitted.</p>
+        <a href="{{ url_for('buyer') }}" class="btn-go buyer">Start a buyer search</a>
       </div>
     {% endif %}
   </div>
