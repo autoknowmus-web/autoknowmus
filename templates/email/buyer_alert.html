@@ -177,41 +177,6 @@
         <p class="verdict-explanation">{{ verdict.verdict_explanation }}</p>
       </div>
 
-      <!-- What you subscribed for -->
-      <p class="section-heading">What you subscribed for</p>
-      <table class="details" cellpadding="0" cellspacing="0">
-        <tr>
-          <td>Car</td>
-          <td>{{ car_label }}</td>
-        </tr>
-        <tr>
-          <td>Year</td>
-          <td>{{ sub_criteria.year }}</td>
-        </tr>
-        <tr>
-          <td>Fuel</td>
-          <td>{{ sub_criteria.fuel }}</td>
-        </tr>
-        <tr>
-          <td>Owner</td>
-          <td>{{ sub_criteria.owner }}</td>
-        </tr>
-        <tr>
-          <td>Condition</td>
-          <td>{{ sub_criteria.condition }}</td>
-        </tr>
-        <tr>
-          <td>Mileage</td>
-          <td>{{ sub_criteria.mileage_display }}</td>
-        </tr>
-        {% if sub_criteria.asking_price_display %}
-        <tr>
-          <td>Reference asking price</td>
-          <td>{{ sub_criteria.asking_price_display }}</td>
-        </tr>
-        {% endif %}
-      </table>
-
       <!-- The deal that just sold -->
       <p class="section-heading">The deal that just sold</p>
       <table class="details" cellpadding="0" cellspacing="0">
@@ -257,10 +222,44 @@
         {% endif %}
       </table>
 
+      <!-- What you subscribed for -->
+      <p class="section-heading">What you subscribed for</p>
+      <table class="details" cellpadding="0" cellspacing="0">
+        <tr>
+          <td>Car</td>
+          <td>{{ car_label }}</td>
+        </tr>
+        <tr>
+          <td>Year</td>
+          <td>{{ sub_criteria.year }}</td>
+        </tr>
+        <tr>
+          <td>Fuel</td>
+          <td>{{ sub_criteria.fuel }}</td>
+        </tr>
+        <tr>
+          <td>Owner</td>
+          <td>{{ sub_criteria.owner }}</td>
+        </tr>
+        <tr>
+          <td>Condition</td>
+          <td>{{ sub_criteria.condition }}</td>
+        </tr>
+        <tr>
+          <td>Mileage</td>
+          <td>{{ sub_criteria.mileage_display }}</td>
+        </tr>
+        {% if sub_criteria.asking_price_display %}
+        <tr>
+          <td>Reference asking price</td>
+          <td>{{ sub_criteria.asking_price_display }}</td>
+        </tr>
+        {% endif %}
+      </table>
+
       <!-- CTA -->
       <div class="cta-wrap">
         <a href="{{ cta_url or (app_url + '/role') }}" class="cta">See full market analysis</a>
-        <p class="cta-note">One-tap access &mdash; no need to log in.</p>
       </div>
 
     </div>
