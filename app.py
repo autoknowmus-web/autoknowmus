@@ -46,6 +46,13 @@ ADMIN_EMAILS = {
 }
 
 
+def _is_admin_email(email):
+    """Helper — case-insensitive admin allowlist check."""
+    if not email:
+        return False
+    return email.lower() in {e.lower() for e in ADMIN_EMAILS}
+
+
 # ---------- Jinja filters ----------
 @app.template_filter('firstname')
 def firstname_filter(full_name):
@@ -284,6 +291,7 @@ def count_active_alert_subscriptions(user_id):
         return 0
 
 def count_recent_deals(user_id, days=7):
+    """Count user's recent deals — INCLUDING test data, since this drives the per-user weekly cap."""
     try:
         cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
         r = (supabase.table('deals')
@@ -573,7 +581,7 @@ def admin_required(f):
         if session.get('is_guest'):
             return redirect(url_for('role'))
         user = current_user()
-        if not user or (user.get('email') or '').lower() not in {e.lower() for e in ADMIN_EMAILS}:
+        if not user or not _is_admin_email(user.get('email')):
             return redirect(url_for('role'))
         return f(*args, **kwargs)
     return decorated
@@ -594,6 +602,8 @@ def log_credit_transaction(user_id, type_, description, amount, balance_after):
 
 # ============================================================
 # PHASE + COMPS HELPERS
+# v2.3: All queries below filter out is_test_data=true rows so admin
+# test deals don't pollute real users' valuations / phase / market stats.
 # ============================================================
 
 def fetch_similar_deals(make, model, variant, fuel, year, window_years=2,
@@ -610,6 +620,7 @@ def fetch_similar_deals(make, model, variant, fuel, year, window_years=2,
              .eq('variant', variant)
              .eq('fuel', fuel)
              .eq('verified', True)
+             .eq('is_test_data', False)
              .gte('year', year_low)
              .lte('year', year_high)
              .gte('created_at', cutoff)
@@ -625,6 +636,7 @@ def fetch_similar_deals(make, model, variant, fuel, year, window_years=2,
              .eq('model', model)
              .eq('fuel', fuel)
              .eq('verified', True)
+             .eq('is_test_data', False)
              .gte('year', year_low)
              .lte('year', year_high)
              .gte('created_at', cutoff)
@@ -643,6 +655,7 @@ def compute_model_phase_data(make, model):
              .eq('make', make)
              .eq('model', model)
              .eq('verified', True)
+             .eq('is_test_data', False)
              .gte('created_at', cutoff)
              .execute())
         rows = r.data or []
@@ -760,6 +773,7 @@ def compute_buyer_distribution(price_low, price_high, confidence):
 
 
 def get_market_stats(make, model):
+    """Public market stats — exclude test data."""
     try:
         cutoff = (datetime.utcnow() - timedelta(days=180)).isoformat()
         r_recent = (supabase.table('deals')
@@ -767,6 +781,7 @@ def get_market_stats(make, model):
                     .eq('make', make)
                     .eq('model', model)
                     .eq('verified', True)
+                    .eq('is_test_data', False)
                     .gte('created_at', cutoff)
                     .execute())
         recent = r_recent.count or 0
@@ -780,6 +795,7 @@ def get_market_stats(make, model):
                  .eq('make', make)
                  .eq('model', model)
                  .eq('verified', True)
+                 .eq('is_test_data', False)
                  .execute())
         all_time = r_all.count or 0
     except Exception as e:
@@ -1082,7 +1098,7 @@ def role():
     show_welcome = session.pop('show_welcome', False)
     active_alerts_count = count_active_alert_subscriptions(user['id'])
 
-    is_admin = (user.get('email') or '').lower() in {e.lower() for e in ADMIN_EMAILS}
+    is_admin = _is_admin_email(user.get('email'))
 
     return render_template('role.html', user=user, first_name=first_name,
                            show_welcome=show_welcome,
@@ -2047,6 +2063,9 @@ def submit_deal():
     if not user:
         return redirect(url_for('index'))
 
+    # v2.3: Admin bypass — admins skip the weekly cap so they can run real-flow tests
+    is_admin = _is_admin_email(user.get('email'))
+
     def render_form(form_data, error='', weekly_count=None):
         return render_template(
             'submit_deal.html',
@@ -2109,7 +2128,14 @@ def submit_deal():
     }
 
     weekly_count = count_recent_deals(user['id'], 7)
-    if weekly_count >= MAX_DEALS_PER_WEEK:
+    # v2.3: Admins bypass the weekly cap. Non-admins get a flash message
+    # explaining why their submission was rejected (was a silent redirect bug).
+    if not is_admin and weekly_count >= MAX_DEALS_PER_WEEK:
+        flash(
+            f'You have already submitted {weekly_count} deals in the past 7 days. '
+            f'Weekly limit is {MAX_DEALS_PER_WEEK}. Please try again next week.',
+            'error'
+        )
         return redirect(url_for('role'))
 
     required = ['make', 'fuel', 'model', 'variant', 'year', 'owner',
@@ -2214,6 +2240,9 @@ def submit_deal():
         'reg_number':        form_data['reg_number'],
         'has_proof':         form_data['has_proof'],
         'verified':          verified_flag,
+        # v2.3: Mark admin submissions as test data so they don't pollute
+        # phase / valuation / market-stats queries for real users.
+        'is_test_data':      is_admin,
     }
 
     try:
@@ -2249,8 +2278,9 @@ def submit_deal():
         app.logger.error(f"Deal reward credit award failed: {e}")
 
     verified_msg = '' if verified_flag else ' Flagged as unverified — thanks for contributing!'
+    test_msg = ' [TEST DATA — excluded from public market stats]' if is_admin else ''
     flash(
-        f"Deal recorded! +{DEAL_REWARD_AMOUNT} credits awarded. New balance: {new_balance} credits.{verified_msg}",
+        f"Deal recorded! +{DEAL_REWARD_AMOUNT} credits awarded. New balance: {new_balance} credits.{verified_msg}{test_msg}",
         'success'
     )
     return redirect(url_for('role'))
@@ -2576,6 +2606,8 @@ def admin_test_digest():
 
 # ============================================================
 # ADMIN — DATA HEALTH DASHBOARD
+# v2.3: Admin queries also exclude is_test_data so admin's own
+# test deals don't pollute their admin metrics.
 # ============================================================
 
 def _fetch_all_deals_180d():
@@ -2584,6 +2616,7 @@ def _fetch_all_deals_180d():
         r = (supabase.table('deals')
              .select('id, user_id, make, model, variant, sale_price, created_at, verified')
              .eq('verified', True)
+             .eq('is_test_data', False)
              .gte('created_at', cutoff)
              .execute())
         return r.data or []
@@ -2598,6 +2631,7 @@ def _fetch_all_deals_30d():
         r = (supabase.table('deals')
              .select('id', count='exact')
              .eq('verified', True)
+             .eq('is_test_data', False)
              .gte('created_at', cutoff)
              .execute())
         return r.count or 0
@@ -2613,6 +2647,7 @@ def _fetch_all_deals_30_to_60d():
         r = (supabase.table('deals')
              .select('id', count='exact')
              .eq('verified', True)
+             .eq('is_test_data', False)
              .gte('created_at', cutoff_start)
              .lt('created_at', cutoff_end)
              .execute())
@@ -2713,6 +2748,7 @@ def _compute_broker_signals(lookback_days=60):
         cutoff = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
         r = (supabase.table('deals')
              .select('id, user_id, make, model, sale_price, created_at')
+             .eq('is_test_data', False)
              .gte('created_at', cutoff)
              .execute())
         deals = r.data or []
@@ -2814,6 +2850,7 @@ def admin_data_health():
         r = (supabase.table('deals')
              .select('make, model')
              .eq('verified', True)
+             .eq('is_test_data', False)
              .gte('created_at', cutoff_90d)
              .execute())
         recent_model_keys = {(d.get('make'), d.get('model')) for d in (r.data or [])}
