@@ -284,7 +284,6 @@
     border-color: #4eb0ff;
   }
 
-  /* Phase-explanation rows (estimate tooltip) */
   .phase-tip-row {
     display: grid;
     grid-template-columns: 110px 1fr;
@@ -304,7 +303,6 @@
     margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
-  /* Confidence tooltip rows */
   .conf-mini-row {
     display: grid;
     grid-template-columns: 62px 1fr;
@@ -339,7 +337,6 @@
     display: block;
   }
 
-  /* Market Demand tooltip rows */
   .demand-tip-row {
     display: grid;
     grid-template-columns: 78px 1fr;
@@ -375,72 +372,199 @@
   .market-stats strong { color: #e9ecef; }
   .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.72rem; }
 
-  /* Alert card — Subscribe button forced to right */
-  .alert-card {
-    background: linear-gradient(135deg, #1a2030 0%, #14171d 100%);
+  /* ============================================================
+     BUYER DEAL ALERT SUBSCRIBE STRIP — blue theme, mirrors seller
+     ============================================================ */
+  .alert-strip {
+    background: linear-gradient(135deg, #1a1f35 0%, #14171d 100%);
     border: 1px solid #4e54ff;
     border-radius: 10px;
     padding: 9px 14px;
     margin-bottom: 8px;
+    color: #e6e6e6;
+    font-size: 0.83rem;
+    transition: all 0.2s ease;
   }
-  .alert-card-title-row {
-    color: #8a90ff; font-weight: 700; font-size: 0.88rem;
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    margin-bottom: 3px;
+  .alert-strip-collapsed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
   }
-  .alert-card-title-row .alert-pill {
-    margin-left: auto;
-    background: rgba(40,167,69,0.15);
-    color: #28a745;
-    padding: 2px 9px; border-radius: 18px;
-    font-size: 0.7rem; font-weight: 600;
-    border: 1px solid #28a745;
-  }
-  .alert-card-title-row .alert-pill.expired { background: rgba(108,117,125,0.15); color: #adb5bd; border-color: #6c757d; }
-  .alert-card-sub {
-    color: #adb5bd; font-size: 0.74rem;
-    margin-bottom: 5px;
-    line-height: 1.35;
-  }
-  .alert-form {
-    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-    width: 100%;
-    margin-top: 4px;
-  }
-  .alert-channels {
-    display: flex; gap: 10px; color: #e6e6e6; font-size: 0.78rem; flex-wrap: wrap;
-    flex: 1 1 auto;
+  .alert-strip-collapsed .strip-text {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1;
     min-width: 0;
   }
-  .alert-channels label {
-    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-    padding: 3px 8px; background: #14171d; border-radius: 5px; border: 1px solid #2a2d34;
+  .alert-strip-collapsed .strip-icon { font-size: 1rem; line-height: 1.4; flex-shrink: 0; }
+  .alert-strip-collapsed .strip-msg { line-height: 1.35; }
+  .alert-strip-collapsed .strip-msg strong { color: #8a90ff; font-weight: 700; }
+
+  .strip-btn {
+    background: #4e54ff;
+    color: #fff;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
   }
-  .alert-channels input[type="checkbox"] {
-    width: 14px; height: 14px; accent-color: #4e54ff; cursor: pointer;
+  .strip-btn:hover { background: #3a3fd0; }
+  .strip-btn:disabled,
+  .strip-btn.disabled {
+    background: #2a2d34;
+    color: #6c757d;
+    cursor: not-allowed;
   }
-  .btn-alert-subscribe {
-    background: #4e54ff; color: #fff; border: none;
-    padding: 7px 16px; border-radius: 7px;
-    font-weight: 700; font-size: 0.82rem; cursor: pointer;
-    letter-spacing: 0.3px;
-    flex-shrink: 0;
-    margin-left: auto;
+  .strip-btn-secondary {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2d34;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.15s;
   }
-  .btn-alert-subscribe:hover { background: #3a3fd0; color: #fff; }
-  .btn-alert-subscribe:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
-  .btn-alert-topup {
-    background: #ffa500; color: #1a1d24; border: none;
-    padding: 7px 14px; border-radius: 7px;
-    font-weight: 700; font-size: 0.78rem; cursor: pointer;
-    margin-left: auto;
+  .strip-btn-secondary:hover {
+    border-color: #6c757d;
+    color: #fff;
   }
-  .btn-alert-topup:hover { background: #e69500; color: #1a1d24; }
-  .alert-footnote {
-    color: #6c757d; font-size: 0.66rem; margin-top: 4px; line-height: 1.3;
+  .strip-btn-cancel {
+    background: transparent;
+    color: #ff6b6b;
+    border: 1px solid #ff6b6b40;
   }
-  .alert-error {
-    color: #ff6b6b; font-size: 0.76rem; margin-top: 4px;
+  .strip-btn-cancel:hover {
+    background: rgba(255,107,107,0.1);
+    border-color: #ff6b6b;
+    color: #ff6b6b;
+  }
+
+  /* Active subscription state */
+  .alert-strip.is-active { border-color: #4e54ff; }
+  .alert-strip.is-active .strip-msg strong { color: #8a90ff; }
+
+  /* Cap-reached state */
+  .alert-strip.is-capped { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
+  .alert-strip.is-capped .strip-msg strong { color: #ff8c00; }
+
+  /* Insufficient credits state */
+  .alert-strip.is-need-credits { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
+  .alert-strip.is-need-credits .strip-msg strong { color: #ff8c00; }
+
+  /* Expanded form */
+  .alert-strip-expanded { display: none; }
+  .alert-strip.is-expanded .alert-strip-collapsed { display: none; }
+  .alert-strip.is-expanded .alert-strip-expanded { display: block; }
+
+  .strip-expanded-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .strip-expanded-header h4 {
+    margin: 0;
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .strip-close-btn {
+    background: transparent;
+    border: none;
+    color: #adb5bd;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1;
+  }
+  .strip-close-btn:hover { color: #fff; }
+
+  .strip-channel-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #2a2d34;
+    font-size: 0.85rem;
+  }
+  .strip-channel-row:last-of-type { border-bottom: none; }
+  .strip-channel-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #4e54ff;
+    cursor: pointer;
+  }
+  .strip-channel-row input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+  }
+  .strip-channel-row .ch-label { color: #e6e6e6; flex: 1; }
+  .strip-channel-row .ch-value {
+    background: #14171d;
+    color: #adb5bd;
+    padding: 3px 9px;
+    border-radius: 5px;
+    font-size: 0.78rem;
+    font-family: ui-monospace, 'SF Mono', monospace;
+  }
+  /* Disabled WhatsApp — dark bg + grey text per UI rule 9 */
+  .strip-channel-row.is-disabled { opacity: 1; }
+  .strip-channel-row.is-disabled .ch-label,
+  .strip-channel-row.is-disabled .ch-value {
+    color: #6c757d;
+    background: #1a1d24;
+  }
+  .coming-soon-pill {
+    display: inline-block;
+    background: #1a1d24;
+    color: #6c757d;
+    border: 1px solid #2a2d34;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-left: 6px;
+  }
+
+  .strip-cost-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0 4px;
+    margin-top: 6px;
+    border-top: 1px solid #2a2d34;
+    font-size: 0.85rem;
+  }
+  .strip-cost-row .cost-label { color: #adb5bd; }
+  .strip-cost-row .cost-value { color: #8a90ff; font-weight: 700; }
+
+  .strip-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 10px;
+  }
+
+  .alert-strip-meta {
+    color: #6c757d;
+    font-size: 0.74rem;
+    margin-top: 6px;
+    line-height: 1.4;
   }
 
   .flash-success-dash {
@@ -695,7 +819,7 @@
           Cars bought at premium prices lose more rupees in the first 2–3 years than mid-range purchases — you absorb the full depreciation curve from a higher start point.<br><br>
           <span id="caution-numbers"></span>
           <br><br>
-          Tip: negotiate closer to the midpoint or wait for a better-priced listing. Use the "Get Notified" card below to catch one.
+          Tip: negotiate closer to the midpoint or wait for a better-priced deal — subscribe for deal alerts to catch one when it's submitted on AutoKnowMus.
         </div>
       </div>
 
@@ -801,87 +925,59 @@
     &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000)</span>
   </div>
 
-  <div class="alert-card">
+  <!-- ============================================================
+       BUYER DEAL ALERT SUBSCRIBE STRIP — 4 conditional states
+       Posts to existing /subscribe-alert (buyer endpoint)
+       ============================================================ -->
+  {% if user %}
+    {% set car_label = make ~ ' ' ~ model ~ ' ' ~ variant %}
+    {% set user_credits = user.credits | default(0) %}
+
     {% if active_sub %}
-      <div class="alert-card-title-row">
-        🔔 Listing Alerts Active
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            We'll notify you when a similar {{ make }} {{ model }} {{ variant }} is listed on supported marketplaces, with our deal evaluation attached. Alerts begin within 24 hours of subscription.
-          </span>
-        </span>
-        <span class="alert-pill">✓ Subscribed</span>
-      </div>
-      <div class="alert-card-sub">
-        Channels:
-        {% if active_sub.email_enabled %}<strong style="color:#8a90ff;">Email</strong>{% endif %}
-        {% if active_sub.email_enabled and active_sub.whatsapp_enabled %} + {% endif %}
-        {% if active_sub.whatsapp_enabled %}<strong style="color:#25d366;">WhatsApp</strong>{% endif %}
-        &nbsp;·&nbsp;
-        Active until <strong>{{ active_sub.expires_at | ddmmmyyyy }}</strong>
-      </div>
-      <div class="alert-footnote">
-        You'll get notified when a similar {{ make }} {{ model }} {{ variant }} appears in any supported marketplace listing, along with our Great Deal / Fair / Overpriced / Too Good To Be True evaluation.
-      </div>
-    {% else %}
-      <div class="alert-card-title-row">
-        🔔 Get Notified About Similar Listings
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            When a similar {{ make }} {{ model }} {{ variant }} is listed on supported marketplaces, we'll send you the listing along with our deal evaluation (Great Deal / Fair / Overpriced / Too Good to Be True) so you can act fast.
-          </span>
-        </span>
-      </div>
-      <div class="alert-card-sub">
-        We'll alert you when a similar <strong>{{ make }} {{ model }} {{ variant }}</strong> is listed anywhere, with our deal evaluation attached.
-      </div>
-
-      {% set user_credits = session.credits|default(0) %}
-      {% if user_credits >= alert_cost %}
-        <form method="POST" action="{{ url_for('subscribe_alert') }}" class="alert-form" id="subscribe-alert-form">
-          <input type="hidden" name="make"      value="{{ make }}">
-          <input type="hidden" name="model"     value="{{ model }}">
-          <input type="hidden" name="variant"   value="{{ variant }}">
-          <input type="hidden" name="fuel"      value="{{ fuel }}">
-          <input type="hidden" name="year"      value="{{ year }}">
-          <input type="hidden" name="owner"     value="{{ owner }}">
-          <input type="hidden" name="mileage"   value="{{ mileage }}">
-          <input type="hidden" name="condition" value="{{ condition }}">
-          <input type="hidden" name="asking_price" value="{{ asking_price if asking_price is not none else '' }}">
-
-          <div class="alert-channels">
-            <label>
-              <input type="checkbox" name="email_enabled" checked>
-              📧 Email
-              <span style="color:#8a90ff; font-weight:500;">({{ user.email }})</span>
-            </label>
-            <label>
-              <input type="checkbox" name="whatsapp_enabled" {% if user.whatsapp_phone %}checked{% endif %} {% if not user.whatsapp_phone %}disabled{% endif %}>
-              💬 WhatsApp
-              {% if user.whatsapp_phone %}
-                <span style="color:#25d366; font-weight:500;">(+91 {{ user.whatsapp_phone }})</span>
-              {% else %}
-                <span style="color:#6c757d;">(no WhatsApp on file)</span>
-              {% endif %}
-            </label>
+      <!-- STATE: Already subscribed -->
+      <div class="alert-strip is-active" id="alert-strip">
+        <div class="alert-strip-collapsed">
+          <div class="strip-text">
+            <span class="strip-icon">✅</span>
+            <span class="strip-msg">
+              <strong>Email deal alerts active</strong> for {{ car_label }} until {{ active_sub.expires_at | ddmmmyyyy }}
+              · {{ active_alerts_count }} of {{ max_alerts }} alerts active
+            </span>
           </div>
-
-          <button type="submit" class="btn-alert-subscribe">
-            Subscribe ({{ alert_cost }} Credits · {{ alert_days }} days)
-          </button>
-        </form>
-        <div class="alert-error" id="alert-error" style="display:none;">Please select at least one channel (Email or WhatsApp).</div>
-        <div class="alert-footnote">
-          Alerts begin within 24 hours of subscription. You can subscribe to multiple cars by running separate searches.
+          <form action="{{ url_for('cancel_alert', alert_id=active_sub.id) }}" method="POST" style="display:inline;"
+                onsubmit="return confirm('Cancel deal alerts for {{ car_label }}? You will not get a credit refund, but the slot will be freed.');">
+            <button type="submit" class="strip-btn-secondary strip-btn-cancel">Cancel deal alerts</button>
+          </form>
         </div>
-      {% else %}
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:4px 0 6px;">
-          <div style="color:#ffa500; font-size:0.78rem; flex:1 1 auto; min-width: 0;">
-            You need <strong>{{ alert_cost }} credits</strong> to subscribe. You currently have <strong>{{ user_credits }} credits</strong>.
+      </div>
+
+    {% elif active_alerts_count >= max_alerts %}
+      <!-- STATE: Alert cap reached -->
+      <div class="alert-strip is-capped" id="alert-strip">
+        <div class="alert-strip-collapsed">
+          <div class="strip-text">
+            <span class="strip-icon">⚠️</span>
+            <span class="strip-msg">
+              <strong>Maximum {{ max_alerts }} deal alerts active.</strong>
+              Cancel an existing alert before subscribing to deal alerts for {{ car_label }}.
+            </span>
           </div>
-          <form method="POST" action="{{ url_for('request_credits') }}" style="margin-left:auto;">
+          <a href="{{ url_for('my_alerts') }}" class="strip-btn-secondary">Manage alerts</a>
+        </div>
+      </div>
+
+    {% elif user_credits < alert_cost %}
+      <!-- STATE: Insufficient credits -->
+      <div class="alert-strip is-need-credits" id="alert-strip">
+        <div class="alert-strip-collapsed">
+          <div class="strip-text">
+            <span class="strip-icon">💰</span>
+            <span class="strip-msg">
+              <strong>Need ({{ alert_cost }} Credits) to subscribe</strong>
+              for deal alerts on {{ car_label }}. You have {{ user_credits }} credits.
+            </span>
+          </div>
+          <form method="POST" action="{{ url_for('request_credits') }}" style="display:inline;">
             <input type="hidden" name="return_to" value="buyer_dashboard">
             <input type="hidden" name="keep_make"         value="{{ make }}">
             <input type="hidden" name="keep_fuel"         value="{{ fuel }}">
@@ -892,17 +988,88 @@
             <input type="hidden" name="keep_mileage"      value="{{ mileage }}">
             <input type="hidden" name="keep_condition"    value="{{ condition }}">
             <input type="hidden" name="keep_asking_price" value="{{ asking_price if asking_price is not none else '' }}">
-            <button type="submit" class="btn-alert-topup">
-              🎁 Get 500 Free Credits (Auto-approved)
-            </button>
+            <button type="submit" class="strip-btn">Get 500 Free Credits</button>
           </form>
         </div>
-        <div class="alert-footnote">
-          Credits added instantly. You'll return to this dashboard so you can subscribe right away.
+      </div>
+
+    {% else %}
+      <!-- STATE: Can subscribe — compact strip + expandable form -->
+      <div class="alert-strip" id="alert-strip">
+        <div class="alert-strip-collapsed">
+          <div class="strip-text">
+            <span class="strip-icon">🔔</span>
+            <span class="strip-msg">
+              <strong>Subscribe for deal alerts</strong> — Avoid overpaying for your next car.
+              See what other buyers are actually paying for similar cars to the one you're looking for.
+            </span>
+          </div>
+          <button type="button" class="strip-btn" onclick="document.getElementById('alert-strip').classList.add('is-expanded')">
+            Subscribe ({{ alert_cost }} Credits)
+          </button>
         </div>
-      {% endif %}
+
+        <div class="alert-strip-expanded">
+          <div class="strip-expanded-header">
+            <h4>🔔 Subscribe to buyer deal alerts for {{ car_label }}</h4>
+            <button type="button" class="strip-close-btn" onclick="document.getElementById('alert-strip').classList.remove('is-expanded')" aria-label="Close">×</button>
+          </div>
+
+          <form method="POST" action="{{ url_for('subscribe_alert') }}">
+            <!-- Hidden inputs preserve all car details for redirect-back -->
+            <input type="hidden" name="make"         value="{{ make }}">
+            <input type="hidden" name="fuel"         value="{{ fuel }}">
+            <input type="hidden" name="model"        value="{{ model }}">
+            <input type="hidden" name="variant"      value="{{ variant }}">
+            <input type="hidden" name="year"         value="{{ year }}">
+            <input type="hidden" name="owner"        value="{{ owner }}">
+            <input type="hidden" name="mileage"      value="{{ mileage }}">
+            <input type="hidden" name="condition"    value="{{ condition }}">
+            <input type="hidden" name="asking_price" value="{{ asking_price if asking_price is not none else '' }}">
+            <input type="hidden" name="email_enabled" value="on">
+
+            <p style="color:#adb5bd; font-size:0.82rem; margin:0 0 10px; line-height:1.45;">
+              You'll get an email when a verified deal is submitted on AutoKnowMus
+              for a <strong style="color:#8a90ff;">{{ car_label }}</strong>.
+              Use these real transaction prices to avoid overpaying — and to know if a seller's asking price is fair.
+            </p>
+
+            <div class="strip-channel-row">
+              <input type="checkbox" id="ch-email" checked disabled>
+              <span class="ch-label">Email alerts</span>
+              <span class="ch-value">{{ user.email }}</span>
+            </div>
+
+            <div class="strip-channel-row is-disabled">
+              <input type="checkbox" id="ch-whatsapp" disabled>
+              <span class="ch-label">
+                WhatsApp alerts
+                <span class="coming-soon-pill">Coming Soon</span>
+              </span>
+              {% if user.whatsapp_phone %}
+                <span class="ch-value">+91 {{ user.whatsapp_phone }}</span>
+              {% endif %}
+            </div>
+
+            <div class="strip-cost-row">
+              <span class="cost-label">Cost · valid for {{ alert_days }} days</span>
+              <span class="cost-value">({{ alert_cost }} Credits)</span>
+            </div>
+
+            <div class="strip-actions">
+              <button type="button" class="strip-btn-secondary" onclick="document.getElementById('alert-strip').classList.remove('is-expanded')">Cancel</button>
+              <button type="submit" class="strip-btn">Confirm — Pay ({{ alert_cost }} Credits)</button>
+            </div>
+
+            <div class="alert-strip-meta">
+              {{ active_alerts_count }} of {{ max_alerts }} deal alerts currently active (combined buyer + seller).
+              Subscriptions auto-expire after {{ alert_days }} days. No credit refund on cancellation.
+            </div>
+          </form>
+        </div>
+      </div>
     {% endif %}
-  </div>
+  {% endif %}
 
   <div class="bottom-row">
     <div class="card">
@@ -1070,24 +1237,7 @@
 
   document.getElementById('verdict-body').innerHTML = generateBuyerVerdict();
 
-  const subForm = document.getElementById('subscribe-alert-form');
-  if (subForm) {
-    subForm.addEventListener('submit', function(e) {
-      const email = subForm.querySelector('input[name="email_enabled"]');
-      const wa    = subForm.querySelector('input[name="whatsapp_enabled"]');
-      const errEl = document.getElementById('alert-error');
-      const emailChecked = email && email.checked;
-      const waChecked    = wa && wa.checked && !wa.disabled;
-      if (!emailChecked && !waChecked) {
-        e.preventDefault();
-        if (errEl) errEl.style.display = 'block';
-      }
-    });
-  }
-
-  // ================================================
-  // Smart-position ALL info tooltips — flip down when near viewport top
-  // ================================================
+  // Smart-position info tooltips — flip down when near viewport top
   function setupTooltipFlip() {
     const wraps = document.querySelectorAll('.info-wrap');
     wraps.forEach(function(wrap) {
