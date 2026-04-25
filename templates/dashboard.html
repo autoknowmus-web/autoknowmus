@@ -229,7 +229,7 @@
   .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
   @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
-  /* Info icon + tooltip — supports flip-down when near viewport top */
+  /* Info icon + tooltip — supports flip-down */
   .info-wrap { position: relative; display: inline-flex; }
   .info-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -371,7 +371,7 @@
   .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.76rem; }
 
   /* ============================================================
-     SELLER ALERT SUBSCRIBE STRIP — compact, expandable on click
+     SELLER DEAL ALERT SUBSCRIBE STRIP
      ============================================================ */
   .alert-strip {
     background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
@@ -392,13 +392,13 @@
   }
   .alert-strip-collapsed .strip-text {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     flex: 1;
     min-width: 0;
   }
-  .alert-strip-collapsed .strip-icon { font-size: 1rem; }
-  .alert-strip-collapsed .strip-msg { line-height: 1.3; }
+  .alert-strip-collapsed .strip-icon { font-size: 1rem; line-height: 1.4; flex-shrink: 0; }
+  .alert-strip-collapsed .strip-msg { line-height: 1.35; }
   .alert-strip-collapsed .strip-msg strong { color: #28a745; font-weight: 700; }
 
   .strip-btn {
@@ -448,15 +448,15 @@
     color: #ff6b6b;
   }
 
-  /* Active subscription state — green badge */
+  /* Active subscription state */
   .alert-strip.is-active { border-color: #28a745; }
   .alert-strip.is-active .strip-msg strong { color: #28a745; }
 
-  /* Cap-reached state — orange */
+  /* Cap-reached state */
   .alert-strip.is-capped { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
   .alert-strip.is-capped .strip-msg strong { color: #ff8c00; }
 
-  /* Insufficient credits state — orange */
+  /* Insufficient credits state */
   .alert-strip.is-need-credits { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
   .alert-strip.is-need-credits .strip-msg strong { color: #ff8c00; }
 
@@ -844,9 +844,7 @@
   </div>
 
   <!-- ============================================================
-       SELLER ALERT SUBSCRIBE STRIP
-       Compact one-line by default; expands inline on click.
-       Backend: POST /subscribe-seller-alert with role='seller'
+       SELLER DEAL ALERT SUBSCRIBE STRIP — copy refresh
        ============================================================ -->
   {% if user %}
     {% set car_label = val.make ~ ' ' ~ val.model ~ ' ' ~ val.variant %}
@@ -859,13 +857,13 @@
           <div class="strip-text">
             <span class="strip-icon">✅</span>
             <span class="strip-msg">
-              <strong>Email alerts active</strong> for {{ car_label }} until {{ active_sub.expires_at | ddmmmyyyy }}
+              <strong>Email deal alerts active</strong> for {{ car_label }} until {{ active_sub.expires_at | ddmmmyyyy }}
               · {{ active_alerts_count }} of {{ max_alerts }} alerts active
             </span>
           </div>
           <form action="{{ url_for('cancel_alert', alert_id=active_sub.id) }}" method="POST" style="display:inline;"
-                onsubmit="return confirm('Cancel email alerts for {{ car_label }}? You will not get a credit refund, but the slot will be freed.');">
-            <button type="submit" class="strip-btn-secondary strip-btn-cancel">Cancel alerts</button>
+                onsubmit="return confirm('Cancel deal alerts for {{ car_label }}? You will not get a credit refund, but the slot will be freed.');">
+            <button type="submit" class="strip-btn-secondary strip-btn-cancel">Cancel deal alerts</button>
           </form>
         </div>
       </div>
@@ -877,8 +875,8 @@
           <div class="strip-text">
             <span class="strip-icon">⚠️</span>
             <span class="strip-msg">
-              <strong>Maximum {{ max_alerts }} alerts reached.</strong>
-              Cancel an existing alert before subscribing to {{ car_label }}.
+              <strong>Maximum {{ max_alerts }} deal alerts active.</strong>
+              Cancel an existing alert before subscribing to deal alerts for {{ car_label }}.
             </span>
           </div>
           <a href="{{ url_for('my_alerts') }}" class="strip-btn-secondary">Manage alerts</a>
@@ -893,7 +891,7 @@
             <span class="strip-icon">💰</span>
             <span class="strip-msg">
               <strong>Need ({{ alert_cost }} Credits) to subscribe</strong>
-              for {{ car_label }} alerts. You have {{ user_credits }} credits.
+              for deal alerts on {{ car_label }}. You have {{ user_credits }} credits.
             </span>
           </div>
           <form action="{{ url_for('request_credits') }}" method="POST" style="display:inline;">
@@ -911,8 +909,8 @@
           <div class="strip-text">
             <span class="strip-icon">🔔</span>
             <span class="strip-msg">
-              Get <strong>email alerts</strong> when a similar {{ car_label }} sells —
-              valuable market signal for timing your sale.
+              <strong>Subscribe for deal alerts</strong> — Avoid the waiting game to sell at your price.
+              Know real market prices based on buyers' verified transactions on AutoKnowMus.
             </span>
           </div>
           <button type="button" class="strip-btn" onclick="document.getElementById('alert-strip').classList.add('is-expanded')">
@@ -922,12 +920,12 @@
 
         <div class="alert-strip-expanded">
           <div class="strip-expanded-header">
-            <h4>🔔 Subscribe to seller deal alerts</h4>
+            <h4>🔔 Subscribe to seller deal alerts for {{ car_label }}</h4>
             <button type="button" class="strip-close-btn" onclick="document.getElementById('alert-strip').classList.remove('is-expanded')" aria-label="Close">×</button>
           </div>
 
           <form action="{{ url_for('subscribe_seller_alert') }}" method="POST">
-            <!-- Hidden inputs to recreate sub on backend + redirect back -->
+            <!-- Hidden inputs to preserve sub context + valuation back-redirect -->
             <input type="hidden" name="valuation_id" value="{{ val.id }}">
             <input type="hidden" name="make"      value="{{ val.make }}">
             <input type="hidden" name="model"     value="{{ val.model }}">
@@ -942,7 +940,7 @@
             <p style="color:#adb5bd; font-size:0.82rem; margin:0 0 10px; line-height:1.45;">
               You'll get an email when a verified deal is submitted on AutoKnowMus
               for a <strong style="color:#28a745;">{{ car_label }}</strong>.
-              Use it to gauge timing and confirm your asking price.
+              Use these real transaction prices to time your sale better — before depreciation eats into your asking price.
             </p>
 
             <div class="strip-channel-row">
@@ -973,7 +971,7 @@
             </div>
 
             <div class="alert-strip-meta">
-              {{ active_alerts_count }} of {{ max_alerts }} alerts currently active.
+              {{ active_alerts_count }} of {{ max_alerts }} deal alerts currently active (combined buyer + seller).
               Subscriptions auto-expire after {{ alert_days }} days. No credit refund on cancellation.
             </div>
           </form>
@@ -1178,9 +1176,7 @@
     verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
   });
 
-  // ================================================
   // Smart-position info tooltips — flip down when near viewport top
-  // ================================================
   function setupTooltipFlip() {
     const wraps = document.querySelectorAll('.info-wrap');
     wraps.forEach(function(wrap) {
@@ -1227,9 +1223,7 @@
   }
   setupTooltipFlip();
 
-  // ================================================
   // Depreciation chart
-  // ================================================
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 220);
   grad.addColorStop(0, 'rgba(40, 167, 69, 0.35)');
