@@ -10,7 +10,7 @@ import bcrypt
 from datetime import datetime, timedelta
 from functools import wraps
 from collections import Counter, defaultdict
-from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, make_response
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, make_response, jsonify
 from authlib.integrations.flask_client import OAuth
 from supabase import create_client, Client
 
@@ -21,10 +21,12 @@ from car_data import (
     determine_phase, CURRENT_YEAR,
     BASE_PRICE_DATA_VERSION, BASE_PRICE_LAST_UPDATED,
     PHASE_THRESHOLDS, PHASE_BLEND,
-    # Google Sheets integration
     refresh_prices, refresh_module_constants, get_cache_status,
 )
 import car_data as _car_data_module
+
+# Alerts dispatcher (v1 email alerts)
+from alert_dispatcher import dispatch_deal_alerts_async, send_weekly_digest
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-change-me')
@@ -37,7 +39,7 @@ app.logger.setLevel(logging.INFO)
 # TODO: migrate to a role flag on users table when you add a second admin
 # ============================================================
 ADMIN_EMAILS = {
-    'autoknowmus@gmail.com',   # <-- REPLACE WITH YOUR EMAIL
+    'autoknowmus@gmail.com',
 }
 
 
@@ -162,6 +164,9 @@ GUEST_LOCKOUT_DAYS = 30
 GUEST_COOKIE_NAME = 'ak_guest_token'
 GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * GUEST_LOCKOUT_DAYS
 
+# Weekly digest cron token (for /internal/send-weekly-digest)
+ALERT_DISPATCH_TOKEN = os.environ.get('ALERT_DISPATCH_TOKEN', '')
+
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
 LUXURY_BRANDS = {'Audi', 'BMW', 'Mercedes-Benz', 'Jaguar', 'Land Rover', 'Lexus', 'Volvo'}
@@ -189,7 +194,6 @@ def _format_txn_date(iso_str):
 
 
 def _live_data_version():
-    """Read latest data_version from car_data cache (updated from Google Sheet meta tab)."""
     try:
         return _car_data_module.BASE_PRICE_DATA_VERSION or BASE_PRICE_DATA_VERSION
     except Exception:
@@ -197,7 +201,6 @@ def _live_data_version():
 
 
 def _live_last_updated():
-    """Read latest last_updated from car_data cache (updated from Google Sheet meta tab)."""
     try:
         return _car_data_module.BASE_PRICE_LAST_UPDATED or BASE_PRICE_LAST_UPDATED
     except Exception:
@@ -261,6 +264,7 @@ def touch_last_login(user_id):
         app.logger.warning(f"touch_last_login failed: {e}")
 
 def count_active_alert_subscriptions(user_id):
+    """Count ALL active subscriptions (buyer + seller combined — per locked design)."""
     try:
         r = (supabase.table('alert_subscriptions')
              .select('id', count='exact')
@@ -407,14 +411,12 @@ def no_guest(redirect_endpoint='signup', message=None):
 
 
 def admin_required(f):
-    """Only users whose email is in ADMIN_EMAILS can access."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if session.get('is_guest'):
             return redirect(url_for('role'))
         user = current_user()
         if not user or (user.get('email') or '').lower() not in {e.lower() for e in ADMIN_EMAILS}:
-            # Silently redirect to role — don't reveal admin route exists
             return redirect(url_for('role'))
         return f(*args, **kwargs)
     return decorated
@@ -439,11 +441,6 @@ def log_credit_transaction(user_id, type_, description, amount, balance_after):
 
 def fetch_similar_deals(make, model, variant, fuel, year, window_years=2,
                         lookback_days=PHASE_LOOKBACK_DAYS):
-    """
-    Fetch verified deals matching make+model+variant+fuel within year±2,
-    submitted in last `lookback_days`.
-    Fallback: if fewer than 3 variant-specific deals, widen to model-level.
-    """
     try:
         year_low = int(year) - window_years
         year_high = int(year) + window_years
@@ -482,9 +479,6 @@ def fetch_similar_deals(make, model, variant, fuel, year, window_years=2,
 
 
 def compute_model_phase_data(make, model):
-    """
-    Compute phase for a (make, model) using verified deals in last 180 days.
-    """
     try:
         cutoff = (datetime.utcnow() - timedelta(days=PHASE_LOOKBACK_DAYS)).isoformat()
         r = (supabase.table('deals')
@@ -609,9 +603,6 @@ def compute_buyer_distribution(price_low, price_high, confidence):
 
 
 def get_market_stats(make, model):
-    """
-    Returns (verified_180d, verified_all_time) — HONEST counts only.
-    """
     try:
         cutoff = (datetime.utcnow() - timedelta(days=180)).isoformat()
         r_recent = (supabase.table('deals')
@@ -642,6 +633,11 @@ def get_market_stats(make, model):
 
 
 def get_active_alert_subscription(user_id, make, model, variant):
+    """
+    Find active sub matching (user, make, model, variant).
+    NOTE: per locked design, one sub per car across both roles, so role is NOT
+    filtered here — existence in ANY role blocks a new subscription.
+    """
     try:
         r = (supabase.table('alert_subscriptions')
              .select('*')
@@ -1122,6 +1118,14 @@ def seller_dashboard(valuation_id):
     buyer_dist   = compute_buyer_distribution(price_low, price_high, confidence)
     verified_180d, verified_all_time = get_market_stats(val['make'], val['model'])
 
+    # Seller subscription status (guests can't subscribe)
+    if is_guest:
+        active_sub = None
+        active_alerts_count = 0
+    else:
+        active_sub = get_active_alert_subscription(user['id'], val['make'], val['model'], val['variant'])
+        active_alerts_count = count_active_alert_subscriptions(user['id'])
+
     back_prefill = {
         'make':      val['make'],
         'fuel':      val['fuel'],
@@ -1150,6 +1154,12 @@ def seller_dashboard(valuation_id):
         back_prefill=back_prefill,
         phase_data=phase_data,
         data_version=_live_data_version(),
+        # Seller alert subscription context (new)
+        active_sub=active_sub,
+        active_alerts_count=active_alerts_count,
+        alert_cost=ALERT_SUBSCRIPTION_COST,
+        alert_days=ALERT_SUBSCRIPTION_DAYS,
+        max_alerts=MAX_ACTIVE_ALERTS,
     )
 
 
@@ -1507,61 +1517,63 @@ def buyer_dashboard():
         active_alerts_count=active_alerts_count,
         alert_cost=ALERT_SUBSCRIPTION_COST,
         alert_days=ALERT_SUBSCRIPTION_DAYS,
+        max_alerts=MAX_ACTIVE_ALERTS,
         phase_data=phase_data,
         data_version=_live_data_version(),
     )
 
 
-@app.route('/subscribe-alert', methods=['POST'])
-@login_required
-@no_guest(message='Sign up to set alert subscriptions on cars — free with 500 signup credits.')
-def subscribe_alert():
-    user = current_user()
-    if not user:
-        return redirect(url_for('index'))
+# ============================================================
+# ALERT SUBSCRIPTIONS — shared helper (buyer + seller both call this)
+# ============================================================
 
-    make     = (request.form.get('make') or '').strip()
-    model    = (request.form.get('model') or '').strip()
-    variant  = (request.form.get('variant') or '').strip()
-    fuel     = (request.form.get('fuel') or '').strip()
-    year_raw = (request.form.get('year') or '').strip()
-    owner    = (request.form.get('owner') or '').strip()
-    mileage_raw   = (request.form.get('mileage') or '').strip()
-    condition     = (request.form.get('condition') or '').strip()
-    asking_price_raw = (request.form.get('asking_price') or '').strip()
+def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_fn):
+    """
+    Shared logic for creating either a buyer or seller alert subscription.
+    Returns a redirect Response.
 
-    email_enabled    = request.form.get('email_enabled') == 'on'
-    whatsapp_enabled = request.form.get('whatsapp_enabled') == 'on'
+    Per locked design:
+      - One sub per (user, make, model, variant) across BOTH roles
+      - Combined cap of 5 active across both roles
+      - WhatsApp forced to False in v1 (coming soon)
+      - role saved on insert ('buyer' or 'seller')
+    """
+    make    = (form.get('make') or '').strip()
+    model   = (form.get('model') or '').strip()
+    variant = (form.get('variant') or '').strip()
+    fuel    = (form.get('fuel') or '').strip()
+    year_raw = (form.get('year') or '').strip()
+    owner    = (form.get('owner') or '').strip()
+    mileage_raw   = (form.get('mileage') or '').strip()
+    condition     = (form.get('condition') or '').strip()
+    asking_price_raw = (form.get('asking_price') or '').strip()
 
-    return_kwargs = {
-        'make': make, 'fuel': fuel, 'model': model, 'variant': variant,
-        'year': year_raw, 'owner': owner, 'mileage': mileage_raw,
-        'condition': condition, 'asking_price': asking_price_raw,
-    }
-    return_kwargs = {k: v for k, v in return_kwargs.items() if v}
+    return_kwargs = return_kwargs_fn(form) if return_kwargs_fn else {}
 
     if not all([make, model, variant]):
         flash('Missing car details. Please try again from the dashboard.', 'error')
-        return redirect(url_for('buyer'))
+        return redirect(url_for(return_endpoint, **return_kwargs))
 
-    if not (email_enabled or whatsapp_enabled):
-        flash('Please select at least one alert channel (Email or WhatsApp).', 'error')
-        return redirect(url_for('buyer_dashboard', **return_kwargs))
-
+    # One sub per car across roles
     existing = get_active_alert_subscription(user['id'], make, model, variant)
     if existing:
-        flash(f'You already have an active alert subscription for {make} {model} {variant}.', 'success')
-        return redirect(url_for('buyer_dashboard', **return_kwargs))
+        existing_role = existing.get('role', 'buyer')
+        flash(f'You already have an active {existing_role} alert subscription for {make} {model} {variant}. '
+              f'One subscription per car is allowed across both buyer and seller roles.', 'success')
+        return redirect(url_for(return_endpoint, **return_kwargs))
 
+    # Combined cap
     active_count = count_active_alert_subscriptions(user['id'])
     if active_count >= MAX_ACTIVE_ALERTS:
-        flash(f'Maximum {MAX_ACTIVE_ALERTS} active alerts reached. Cancel an existing alert or wait for one to expire before subscribing to a new car.', 'error')
-        return redirect(url_for('buyer_dashboard', **return_kwargs))
+        flash(f'Maximum {MAX_ACTIVE_ALERTS} active alerts reached (combined across buyer and seller). '
+              f'Cancel an existing alert or wait for one to expire before subscribing to a new car.', 'error')
+        return redirect(url_for(return_endpoint, **return_kwargs))
 
     current_credits = user.get('credits', 0) or 0
     if current_credits < ALERT_SUBSCRIPTION_COST:
-        flash(f'Insufficient credits. You need {ALERT_SUBSCRIPTION_COST} credits to subscribe. Tap "Get {CREDIT_REQUEST_AMOUNT} Free Credits" below.', 'error')
-        return redirect(url_for('buyer_dashboard', **return_kwargs))
+        flash(f'Insufficient credits. You need {ALERT_SUBSCRIPTION_COST} credits to subscribe. '
+              f'Tap "Get {CREDIT_REQUEST_AMOUNT} Free Credits" below.', 'error')
+        return redirect(url_for(return_endpoint, **return_kwargs))
 
     try:
         year_int = int(year_raw) if year_raw else None
@@ -1581,6 +1593,7 @@ def subscribe_alert():
 
     payload = {
         'user_id': user['id'],
+        'role': role,                             # 'buyer' or 'seller'
         'make': make,
         'model': model,
         'variant': variant,
@@ -1590,8 +1603,8 @@ def subscribe_alert():
         'mileage': mileage_int,
         'condition': condition or None,
         'reference_asking_price': asking_price_int,
-        'email_enabled': bool(email_enabled),
-        'whatsapp_enabled': bool(whatsapp_enabled),
+        'email_enabled': True,                    # always True in v1
+        'whatsapp_enabled': False,                # forced False in v1 (coming soon)
         'email_at_subscribe': user.get('email'),
         'whatsapp_at_subscribe': user.get('whatsapp_phone'),
         'created_at': now.isoformat(),
@@ -1606,11 +1619,11 @@ def subscribe_alert():
     except Exception as e:
         app.logger.error(f"Alert subscription insert failed: {e}")
         flash('Could not create subscription. Please try again.', 'error')
-        return redirect(url_for('buyer_dashboard', **return_kwargs))
+        return redirect(url_for(return_endpoint, **return_kwargs))
 
     if not sub_row:
         flash('Could not create subscription. Please try again.', 'error')
-        return redirect(url_for('buyer_dashboard', **return_kwargs))
+        return redirect(url_for(return_endpoint, **return_kwargs))
 
     new_balance = current_credits - ALERT_SUBSCRIPTION_COST
     try:
@@ -1618,7 +1631,7 @@ def subscribe_alert():
         log_credit_transaction(
             user_id=user['id'],
             type_='alert_subscription',
-            description=f"Alert subscription ({ALERT_SUBSCRIPTION_DAYS} days): {make} {model} {variant}",
+            description=f"Alert subscription ({role}, {ALERT_SUBSCRIPTION_DAYS} days): {make} {model} {variant}",
             amount=-ALERT_SUBSCRIPTION_COST,
             balance_after=new_balance,
         )
@@ -1629,12 +1642,66 @@ def subscribe_alert():
     except Exception as e:
         app.logger.error(f"Alert subscription credit deduction failed: {e}")
 
-    channels = []
-    if email_enabled:    channels.append('Email')
-    if whatsapp_enabled: channels.append('WhatsApp')
-    channels_str = ' and '.join(channels)
-    flash(f"✅ Alerts active for {make} {model} {variant} via {channels_str} until {expires.strftime('%d-%b-%Y')}.", 'success')
-    return redirect(url_for('buyer_dashboard', **return_kwargs))
+    role_label = 'Buyer' if role == 'buyer' else 'Seller'
+    flash(f"✅ {role_label} alerts active for {make} {model} {variant} via Email until {expires.strftime('%d-%b-%Y')}. "
+          f"You'll get an email when a matching deal is submitted on AutoKnowMus.", 'success')
+    return redirect(url_for(return_endpoint, **return_kwargs))
+
+
+@app.route('/subscribe-alert', methods=['POST'])
+@login_required
+@no_guest(message='Sign up to set deal alerts on cars — free with 500 signup credits.')
+def subscribe_alert():
+    """Buyer alert subscription (from buyer_dashboard)."""
+    user = current_user()
+    if not user:
+        return redirect(url_for('index'))
+
+    def _return_kwargs(form):
+        return_kwargs = {
+            'make':         (form.get('make') or '').strip(),
+            'fuel':         (form.get('fuel') or '').strip(),
+            'model':        (form.get('model') or '').strip(),
+            'variant':      (form.get('variant') or '').strip(),
+            'year':         (form.get('year') or '').strip(),
+            'owner':        (form.get('owner') or '').strip(),
+            'mileage':      (form.get('mileage') or '').strip(),
+            'condition':    (form.get('condition') or '').strip(),
+            'asking_price': (form.get('asking_price') or '').strip(),
+        }
+        return {k: v for k, v in return_kwargs.items() if v}
+
+    return _create_alert_subscription(
+        user=user,
+        role='buyer',
+        form=request.form,
+        return_endpoint='buyer_dashboard',
+        return_kwargs_fn=_return_kwargs,
+    )
+
+
+@app.route('/subscribe-seller-alert', methods=['POST'])
+@login_required
+@no_guest(message='Sign up to set deal alerts on your car — free with 500 signup credits.')
+def subscribe_seller_alert():
+    """Seller alert subscription (inline on seller_dashboard)."""
+    user = current_user()
+    if not user:
+        return redirect(url_for('index'))
+
+    valuation_id = (request.form.get('valuation_id') or '').strip()
+
+    def _return_kwargs(form):
+        # Seller dashboard is routed by /seller-dashboard/<valuation_id>
+        return {'valuation_id': valuation_id or '0'}
+
+    return _create_alert_subscription(
+        user=user,
+        role='seller',
+        form=request.form,
+        return_endpoint='seller_dashboard',
+        return_kwargs_fn=_return_kwargs,
+    )
 
 
 @app.route('/my-alerts')
@@ -1679,6 +1746,10 @@ def my_alerts():
 
         days_remaining = (expires_dt - now).days
         sub['days_remaining'] = max(days_remaining, 0)
+
+        # Normalize role for display
+        sub['role'] = sub.get('role') or 'buyer'
+        sub['role_label'] = 'Buyer' if sub['role'] == 'buyer' else 'Seller'
 
         if is_active_flag and expires_dt > now:
             active_subs.append(sub)
@@ -1830,8 +1901,6 @@ def submit_deal():
         'has_proof':         request.form.get('has_proof') == 'on',
     }
 
-    # Silent backend enforcement of weekly cap — no user-visible error.
-    # A user cannot submit a 4th deal in 7 days even if they bypass the frontend.
     weekly_count = count_recent_deals(user['id'], 7)
     if weekly_count >= MAX_DEALS_PER_WEEK:
         return redirect(url_for('role'))
@@ -1949,6 +2018,16 @@ def submit_deal():
 
     if not deal_row:
         return render_form(form_data, error='Could not save your deal. Please try again.')
+
+    # ============================================================
+    # FIRE EMAIL ALERTS (background, fail-silent) — per hybrid design,
+    # all deals trigger alerts. Email copy flags unverified deals.
+    # ============================================================
+    try:
+        dispatch_deal_alerts_async(supabase, deal_row, app_instance=app)
+    except Exception as e:
+        # Never fail the user's submit flow over alert dispatch.
+        app.logger.warning(f"dispatch_deal_alerts_async raised at call site: {e}")
 
     current_credits = user.get('credits', 0) or 0
     new_balance = current_credits + DEAL_REWARD_AMOUNT
@@ -2118,6 +2197,39 @@ def credit_history_export():
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename={filename}'},
     )
+
+
+# ============================================================
+# INTERNAL — WEEKLY DIGEST ENDPOINT (cron-job.org)
+# ============================================================
+
+@app.route('/internal/send-weekly-digest', methods=['GET', 'POST'])
+def internal_send_weekly_digest():
+    """
+    Token-gated endpoint for cron-job.org to trigger weekly digest.
+    Call with: /internal/send-weekly-digest?token=<ALERT_DISPATCH_TOKEN>
+
+    Monday 9am IST = 03:30 UTC. Set that schedule on cron-job.org.
+
+    Returns JSON with counts. Never raises — fail-silent internally.
+    """
+    provided_token = request.args.get('token') or request.headers.get('X-Dispatch-Token') or ''
+
+    if not ALERT_DISPATCH_TOKEN:
+        app.logger.error("internal_send_weekly_digest: ALERT_DISPATCH_TOKEN not configured")
+        return jsonify({"ok": False, "error": "server_not_configured"}), 503
+
+    if provided_token != ALERT_DISPATCH_TOKEN:
+        app.logger.warning("internal_send_weekly_digest: invalid token attempt")
+        return jsonify({"ok": False, "error": "invalid_token"}), 403
+
+    try:
+        counts = send_weekly_digest(supabase)
+        app.logger.info(f"Weekly digest dispatched: {counts}")
+        return jsonify({"ok": True, "counts": counts}), 200
+    except Exception as e:
+        app.logger.exception("Weekly digest crashed")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ============================================================
@@ -2372,7 +2484,6 @@ def admin_data_health():
         if (make, model) not in recent_model_keys
     )
 
-    # Live cache status for admin visibility
     try:
         cache_status = get_cache_status()
     except Exception as e:
@@ -2438,11 +2549,6 @@ def admin_flag_user(user_id):
 @login_required
 @admin_required
 def admin_refresh_prices():
-    """
-    Force immediate reload of Google Sheets price data.
-    Useful after editing the sheet — avoids waiting up to 1 hour for cache TTL.
-    GET request works too so it can be triggered by clicking a link.
-    """
     try:
         result = refresh_prices(force=True)
         refresh_module_constants()
