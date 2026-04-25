@@ -48,7 +48,6 @@
   .price-hero .hero-mid strong { color: #ffa500; font-weight: 600; }
   @media (min-width: 1200px) { .price-hero .hero-range { font-size: 2rem; } }
 
-  /* Phase badge */
   .phase-badge-wrap {
     position: relative;
     display: inline-flex;
@@ -110,7 +109,6 @@
     visibility: visible; opacity: 1;
   }
 
-  /* Slider */
   .slider-section { border-top: 1px solid #2a2d34; padding-top: 12px; }
   .slider-labels { display: flex; justify-content: space-between; color: #b0b0b0; font-size: 0.76rem; margin-bottom: 4px; }
   .slider-labels .left  { color: #ffa500; font-weight: 600; }
@@ -229,7 +227,6 @@
   .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
   @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
-  /* Info icon + tooltip — supports flip-down */
   .info-wrap { position: relative; display: inline-flex; }
   .info-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -357,7 +354,6 @@
     margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
-  /* Market stats */
   .market-stats {
     background: #14171d;
     border-radius: 8px;
@@ -370,9 +366,6 @@
   .market-stats strong { color: #e9ecef; }
   .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.76rem; }
 
-  /* ============================================================
-     SELLER DEAL ALERT SUBSCRIBE STRIP
-     ============================================================ */
   .alert-strip {
     background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
     border: 1px solid #28a745;
@@ -448,22 +441,16 @@
     color: #ff6b6b;
   }
 
-  /* Active subscription state */
   .alert-strip.is-active { border-color: #28a745; }
   .alert-strip.is-active .strip-msg strong { color: #28a745; }
 
-  /* Cap-reached state */
   .alert-strip.is-capped { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
   .alert-strip.is-capped .strip-msg strong { color: #ff8c00; }
 
-  /* Insufficient credits state */
   .alert-strip.is-need-credits { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
   .alert-strip.is-need-credits .strip-msg strong { color: #ff8c00; }
 
-  /* Expanded form */
-  .alert-strip-expanded {
-    display: none;
-  }
+  .alert-strip-expanded { display: none; }
   .alert-strip.is-expanded .alert-strip-collapsed { display: none; }
   .alert-strip.is-expanded .alert-strip-expanded { display: block; }
 
@@ -520,10 +507,7 @@
     font-size: 0.78rem;
     font-family: ui-monospace, 'SF Mono', monospace;
   }
-  /* Disabled WhatsApp — dark bg + grey text per UI rule 9 */
-  .strip-channel-row.is-disabled {
-    opacity: 1;
-  }
+  .strip-channel-row.is-disabled { opacity: 1; }
   .strip-channel-row.is-disabled .ch-label,
   .strip-channel-row.is-disabled .ch-value {
     color: #6c757d;
@@ -634,10 +618,13 @@
 {% endblock %}
 
 {% block content %}
+{# Unified price formatter macro: K for sub-lakh, L for lakh, Cr for crore #}
 {% macro l2dp(v) -%}
   {%- if v is none -%}—
   {%- elif v|int >= 10000000 -%}{{ '%.2f'|format(v / 10000000) }}Cr
-  {%- else -%}{{ '%.2f'|format(v / 100000) }}L
+  {%- elif v|int >= 100000 -%}{{ '%.2f'|format(v / 100000) }}L
+  {%- elif v|int >= 1000 -%}{{ ((v / 1000) | round(0) | int) }}K
+  {%- else -%}—
   {%- endif %}
 {%- endmacro %}
 
@@ -662,7 +649,6 @@
     </div>
   </div>
 
-  <!-- TOP ROW: Price+Slider (left) + Graph (right) -->
   <div class="top-row">
     <div class="card hero-combined">
       <div class="price-hero">
@@ -722,7 +708,6 @@
       </div>
     </div>
 
-    <!-- Depreciation graph -->
     <div class="card chart-card">
       <div class="card-title">
         Depreciation Forecast
@@ -754,7 +739,6 @@
     </div>
   </div>
 
-  <!-- KPIs -->
   <div class="kpi-row">
     <div class="kpi-card">
       <div class="kpi-label">
@@ -836,22 +820,17 @@
     </div>
   </div>
 
-  <!-- Market stats -->
   <div class="market-stats">
     <strong>{{ verified_180d }}</strong> Verified transactions in last 6 months
     {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
-    &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000)</span>
+    &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000) · K = Thousands</span>
   </div>
 
-  <!-- ============================================================
-       SELLER DEAL ALERT SUBSCRIBE STRIP — copy refresh
-       ============================================================ -->
   {% if user %}
     {% set car_label = val.make ~ ' ' ~ val.model ~ ' ' ~ val.variant %}
     {% set user_credits = user.credits | default(0) %}
 
     {% if active_sub %}
-      <!-- STATE: Already subscribed -->
       <div class="alert-strip is-active" id="alert-strip">
         <div class="alert-strip-collapsed">
           <div class="strip-text">
@@ -869,7 +848,6 @@
       </div>
 
     {% elif active_alerts_count >= max_alerts %}
-      <!-- STATE: Alert cap reached -->
       <div class="alert-strip is-capped" id="alert-strip">
         <div class="alert-strip-collapsed">
           <div class="strip-text">
@@ -884,7 +862,6 @@
       </div>
 
     {% elif user_credits < alert_cost %}
-      <!-- STATE: Insufficient credits -->
       <div class="alert-strip is-need-credits" id="alert-strip">
         <div class="alert-strip-collapsed">
           <div class="strip-text">
@@ -903,7 +880,6 @@
       </div>
 
     {% else %}
-      <!-- STATE: Can subscribe — show compact strip + expandable form -->
       <div class="alert-strip" id="alert-strip">
         <div class="alert-strip-collapsed">
           <div class="strip-text">
@@ -925,7 +901,6 @@
           </div>
 
           <form action="{{ url_for('subscribe_seller_alert') }}" method="POST">
-            <!-- Hidden inputs to preserve sub context + valuation back-redirect -->
             <input type="hidden" name="valuation_id" value="{{ val.id }}">
             <input type="hidden" name="make"      value="{{ val.make }}">
             <input type="hidden" name="model"     value="{{ val.model }}">
@@ -980,7 +955,6 @@
     {% endif %}
   {% endif %}
 
-  <!-- Distribution + Verdict -->
   <div class="bottom-row">
     <div class="card">
       <div class="card-title">Buyer Price-Band Distribution <span class="sub">where buyers are concentrated</span></div>
@@ -1032,11 +1006,14 @@
 
   const ANCHOR_DAYS = [30, 60, 90];
 
+  // Unified price formatter: K for sub-lakh, L for lakh, Cr for crore
   function lakh2dp(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
     if (n >= 10000000) return (n / 10000000).toFixed(2) + 'Cr';
-    return (n / 100000).toFixed(2) + 'L';
+    if (n >= 100000)   return (n / 100000).toFixed(2) + 'L';
+    if (n >= 1000)     return Math.round(n / 1000) + 'K';
+    return '—';
   }
 
   function priceAtDay(day) {
@@ -1176,7 +1153,6 @@
     verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
   });
 
-  // Smart-position info tooltips — flip down when near viewport top
   function setupTooltipFlip() {
     const wraps = document.querySelectorAll('.info-wrap');
     wraps.forEach(function(wrap) {
@@ -1223,7 +1199,6 @@
   }
   setupTooltipFlip();
 
-  // Depreciation chart
   const ctx = document.getElementById('dep-chart').getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 220);
   grad.addColorStop(0, 'rgba(40, 167, 69, 0.35)');
