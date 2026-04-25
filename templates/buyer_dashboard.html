@@ -219,7 +219,6 @@
   .kpi-card .kpi-value.demand-LOW    { color: #ff6b6b; }
   @media (max-width: 600px) { .kpi-row { grid-template-columns: 1fr; } }
 
-  /* Info icon + tooltip — supports flip-down */
   .info-wrap { position: relative; display: inline-flex; }
   .info-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -359,7 +358,6 @@
     margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
-  /* Market stats */
   .market-stats {
     background: #14171d;
     border-radius: 7px;
@@ -372,9 +370,6 @@
   .market-stats strong { color: #e9ecef; }
   .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.72rem; }
 
-  /* ============================================================
-     BUYER DEAL ALERT SUBSCRIBE STRIP — blue theme, mirrors seller
-     ============================================================ */
   .alert-strip {
     background: linear-gradient(135deg, #1a1f35 0%, #14171d 100%);
     border: 1px solid #4e54ff;
@@ -450,19 +445,15 @@
     color: #ff6b6b;
   }
 
-  /* Active subscription state */
   .alert-strip.is-active { border-color: #4e54ff; }
   .alert-strip.is-active .strip-msg strong { color: #8a90ff; }
 
-  /* Cap-reached state */
   .alert-strip.is-capped { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
   .alert-strip.is-capped .strip-msg strong { color: #ff8c00; }
 
-  /* Insufficient credits state */
   .alert-strip.is-need-credits { border-color: #ff8c00; background: linear-gradient(135deg, #2a2118 0%, #14171d 100%); }
   .alert-strip.is-need-credits .strip-msg strong { color: #ff8c00; }
 
-  /* Expanded form */
   .alert-strip-expanded { display: none; }
   .alert-strip.is-expanded .alert-strip-collapsed { display: none; }
   .alert-strip.is-expanded .alert-strip-expanded { display: block; }
@@ -520,7 +511,6 @@
     font-size: 0.78rem;
     font-family: ui-monospace, 'SF Mono', monospace;
   }
-  /* Disabled WhatsApp — dark bg + grey text per UI rule 9 */
   .strip-channel-row.is-disabled { opacity: 1; }
   .strip-channel-row.is-disabled .ch-label,
   .strip-channel-row.is-disabled .ch-value {
@@ -644,10 +634,13 @@
 {% endblock %}
 
 {% block content %}
+{# Unified price formatter macro: K for sub-lakh, L for lakh, Cr for crore #}
 {% macro l2dp(v) -%}
   {%- if v is none -%}—
   {%- elif v|int >= 10000000 -%}{{ '%.2f'|format(v / 10000000) }}Cr
-  {%- else -%}{{ '%.2f'|format(v / 100000) }}L
+  {%- elif v|int >= 100000 -%}{{ '%.2f'|format(v / 100000) }}L
+  {%- elif v|int >= 1000 -%}{{ ((v / 1000) | round(0) | int) }}K
+  {%- else -%}—
   {%- endif %}
 {%- endmacro %}
 
@@ -918,23 +911,17 @@
     </div>
   </div>
 
-  <!-- Market stats -->
   <div class="market-stats">
     <strong>{{ verified_180d }}</strong> Verified transactions in last 6 months
     {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
-    &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000)</span>
+    &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000) · K = Thousands</span>
   </div>
 
-  <!-- ============================================================
-       BUYER DEAL ALERT SUBSCRIBE STRIP — 4 conditional states
-       Posts to existing /subscribe-alert (buyer endpoint)
-       ============================================================ -->
   {% if user %}
     {% set car_label = make ~ ' ' ~ model ~ ' ' ~ variant %}
     {% set user_credits = user.credits | default(0) %}
 
     {% if active_sub %}
-      <!-- STATE: Already subscribed -->
       <div class="alert-strip is-active" id="alert-strip">
         <div class="alert-strip-collapsed">
           <div class="strip-text">
@@ -952,7 +939,6 @@
       </div>
 
     {% elif active_alerts_count >= max_alerts %}
-      <!-- STATE: Alert cap reached -->
       <div class="alert-strip is-capped" id="alert-strip">
         <div class="alert-strip-collapsed">
           <div class="strip-text">
@@ -967,7 +953,6 @@
       </div>
 
     {% elif user_credits < alert_cost %}
-      <!-- STATE: Insufficient credits -->
       <div class="alert-strip is-need-credits" id="alert-strip">
         <div class="alert-strip-collapsed">
           <div class="strip-text">
@@ -994,7 +979,6 @@
       </div>
 
     {% else %}
-      <!-- STATE: Can subscribe — compact strip + expandable form -->
       <div class="alert-strip" id="alert-strip">
         <div class="alert-strip-collapsed">
           <div class="strip-text">
@@ -1016,7 +1000,6 @@
           </div>
 
           <form method="POST" action="{{ url_for('subscribe_alert') }}">
-            <!-- Hidden inputs preserve all car details for redirect-back -->
             <input type="hidden" name="make"         value="{{ make }}">
             <input type="hidden" name="fuel"         value="{{ fuel }}">
             <input type="hidden" name="model"        value="{{ model }}">
@@ -1132,11 +1115,14 @@
 
   const ANCHOR_MONTHS = [12, 36, 60];
 
+  // Unified price formatter: K for sub-lakh, L for lakh, Cr for crore
   function lakh2dp(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
     if (n >= 10000000) return (n / 10000000).toFixed(2) + 'Cr';
-    return (n / 100000).toFixed(2) + 'L';
+    if (n >= 100000)   return (n / 100000).toFixed(2) + 'L';
+    if (n >= 1000)     return Math.round(n / 1000) + 'K';
+    return '—';
   }
 
   function monthLabel(month) {
@@ -1237,7 +1223,6 @@
 
   document.getElementById('verdict-body').innerHTML = generateBuyerVerdict();
 
-  // Smart-position info tooltips — flip down when near viewport top
   function setupTooltipFlip() {
     const wraps = document.querySelectorAll('.info-wrap');
     wraps.forEach(function(wrap) {
