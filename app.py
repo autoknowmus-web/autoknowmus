@@ -5,6 +5,7 @@ import io
 import uuid
 import json
 import math
+import secrets
 import logging
 import bcrypt
 from datetime import datetime, timedelta
@@ -27,6 +28,9 @@ import car_data as _car_data_module
 
 # Alerts dispatcher (v1 email alerts)
 from alert_dispatcher import dispatch_deal_alerts_async, send_weekly_digest
+
+# Test dispatcher functions are imported lazily inside admin endpoints
+# so this module loads even if alert_dispatcher hasn't been updated yet.
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-change-me')
@@ -162,6 +166,12 @@ GUEST_COOKIE_NAME = 'ak_guest_token'
 GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * GUEST_LOCKOUT_DAYS
 
 ALERT_DISPATCH_TOKEN = os.environ.get('ALERT_DISPATCH_TOKEN', '')
+APP_BASE_URL = os.environ.get('APP_BASE_URL', 'https://autoknowmus.com').rstrip('/')
+
+# Magic link expiry policy (locked: 24h instant, 7d digest, 24h admin test)
+MAGIC_LINK_EXPIRY_HOURS_ALERT = 24
+MAGIC_LINK_EXPIRY_DAYS_DIGEST = 7
+MAGIC_LINK_EXPIRY_HOURS_ADMIN_TEST = 24
 
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
@@ -285,6 +295,157 @@ def count_recent_deals(user_id, days=7):
     except Exception as e:
         app.logger.warning(f"count_recent_deals failed: {e}")
         return 0
+
+
+# ============================================================
+# MAGIC LINK HELPERS — single-use email-to-app auto-login tokens
+# ============================================================
+
+def generate_magic_link(user_id, purpose, redirect_path):
+    """
+    Create a single-use magic-link token, store in Supabase, return full URL.
+
+    Args:
+        user_id: BIGINT, the user this token can log in as
+        purpose: 'alert' | 'digest' | 'admin_test'
+        redirect_path: relative path to redirect to after auto-login (e.g. '/buyer-dashboard?make=Maruti')
+
+    Returns:
+        Full URL string to embed in email, or None on failure.
+    """
+    if purpose not in ('alert', 'digest', 'admin_test'):
+        app.logger.error(f"generate_magic_link: invalid purpose '{purpose}'")
+        return None
+
+    if not user_id:
+        app.logger.error("generate_magic_link: user_id is required")
+        return None
+
+    # Determine expiry based on purpose
+    now = datetime.utcnow()
+    if purpose == 'digest':
+        expires = now + timedelta(days=MAGIC_LINK_EXPIRY_DAYS_DIGEST)
+    else:  # alert or admin_test
+        expires = now + timedelta(hours=MAGIC_LINK_EXPIRY_HOURS_ALERT)
+
+    # Generate cryptographically random URL-safe token (43 chars)
+    token = secrets.token_urlsafe(32)
+
+    # Store in Supabase
+    try:
+        supabase.table('email_magic_links').insert({
+            'token': token,
+            'user_id': user_id,
+            'purpose': purpose,
+            'redirect_path': redirect_path or '/role',
+            'created_at': now.isoformat(),
+            'expires_at': expires.isoformat(),
+        }).execute()
+    except Exception as e:
+        app.logger.error(f"generate_magic_link insert failed: {e}")
+        return None
+
+    # Return full URL
+    return f"{APP_BASE_URL}/m/{token}?after={purpose}"
+
+
+def consume_magic_link(token, ip_address=None, user_agent=None):
+    """
+    Validate token, mark as used, return (user_id, redirect_path) on success.
+    Single-use enforced via atomic update with WHERE used_at IS NULL.
+
+    Returns:
+        (user_id, redirect_path) tuple on success
+        None if token invalid/expired/used
+    """
+    if not token:
+        return None
+
+    # Look up token
+    try:
+        r = (supabase.table('email_magic_links')
+             .select('*')
+             .eq('token', token)
+             .limit(1)
+             .execute())
+        record = r.data[0] if r.data else None
+    except Exception as e:
+        app.logger.error(f"consume_magic_link lookup failed: {e}")
+        return None
+
+    if not record:
+        app.logger.info(f"consume_magic_link: token not found")
+        return None
+
+    # Check expiry
+    try:
+        exp_str = (record.get('expires_at') or '').replace('Z', '').split('+')[0].split('.')[0]
+        expires_dt = datetime.fromisoformat(exp_str)
+        if expires_dt < datetime.utcnow():
+            app.logger.info(f"consume_magic_link: token expired")
+            return None
+    except (ValueError, AttributeError, TypeError):
+        app.logger.warning(f"consume_magic_link: bad expires_at format")
+        return None
+
+    # Check single-use
+    if record.get('used_at') is not None:
+        app.logger.info(f"consume_magic_link: token already used")
+        return None
+
+    # Mark used (atomic — only succeeds if used_at is still NULL)
+    now = datetime.utcnow()
+    try:
+        update_result = (supabase.table('email_magic_links')
+                         .update({
+                             'used_at': now.isoformat(),
+                             'ip_at_use': (ip_address or '')[:100],
+                             'user_agent_at_use': (user_agent or '')[:500],
+                         })
+                         .eq('token', token)
+                         .is_('used_at', 'null')
+                         .execute())
+        # If no rows updated, race condition: someone else used it first
+        if not update_result.data:
+            app.logger.info(f"consume_magic_link: token consumed by concurrent request")
+            return None
+    except Exception as e:
+        app.logger.error(f"consume_magic_link update failed: {e}")
+        return None
+
+    return (record['user_id'], record.get('redirect_path') or '/role')
+
+
+def cleanup_expired_magic_links():
+    """
+    Delete all expired unused magic-link tokens.
+    Called by /internal/cleanup-magic-links cron endpoint.
+
+    Returns:
+        Count of tokens deleted (or -1 on failure).
+    """
+    try:
+        now_iso = datetime.utcnow().isoformat()
+        # Delete unused tokens that are past expiry
+        r = (supabase.table('email_magic_links')
+             .delete()
+             .lt('expires_at', now_iso)
+             .is_('used_at', 'null')
+             .execute())
+        deleted = len(r.data) if r.data else 0
+
+        # Also delete used tokens older than 30 days (audit retention)
+        cutoff_30d = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        r2 = (supabase.table('email_magic_links')
+              .delete()
+              .lt('used_at', cutoff_30d)
+              .execute())
+        deleted_old = len(r2.data) if r2.data else 0
+
+        return deleted + deleted_old
+    except Exception as e:
+        app.logger.error(f"cleanup_expired_magic_links failed: {e}")
+        return -1
 
 
 # ========== GUEST HELPERS ==========
@@ -659,6 +820,45 @@ def index():
     prefill_email = request.args.get('email', '')
     error = request.args.get('error', '')
     return render_template('index.html', prefill_email=prefill_email, error=error)
+
+
+# ============================================================
+# MAGIC LINK CONSUMER ROUTE — public, validates token, auto-logs in
+# ============================================================
+
+@app.route('/m/<token>')
+def magic_link_consume(token):
+    """
+    Consume a magic-link token from an email CTA.
+    Validates token (existence, expiry, single-use), logs user in, redirects to stored path.
+    """
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '')
+    ua = request.user_agent.string or ''
+
+    result = consume_magic_link(token, ip_address=ip, user_agent=ua)
+
+    if not result:
+        # Token invalid/expired/used — graceful fallback
+        flash('This link has expired or already been used. Please log in to continue.', 'error')
+        return redirect(url_for('index'))
+
+    user_id, redirect_path = result
+
+    # Look up user and log in
+    user = get_user_by_id(user_id)
+    if not user:
+        app.logger.warning(f"magic_link_consume: user_id {user_id} not found")
+        flash('Account not found. Please log in normally.', 'error')
+        return redirect(url_for('index'))
+
+    login_user_session(user)
+    app.logger.info(f"magic_link_consume: user {user_id} auto-logged in, redirecting to {redirect_path}")
+
+    # Validate redirect_path is a relative URL (security: prevent open redirect)
+    if not redirect_path.startswith('/'):
+        redirect_path = '/role'
+
+    return redirect(redirect_path)
 
 
 # ========== GUEST ACCESS ==========
@@ -1533,6 +1733,7 @@ def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_
       - WhatsApp forced to False in v1 (coming soon)
       - role saved on insert ('buyer' or 'seller')
       - All flash messages use 'deal alerts' framing for clarity
+      - Order: 'seller and buyer' (per locked strategic ordering)
     """
     make    = (form.get('make') or '').strip()
     model   = (form.get('model') or '').strip()
@@ -1556,13 +1757,13 @@ def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_
     if existing:
         existing_role = existing.get('role', 'buyer')
         flash(f'You already have active {existing_role} deal alerts for {car_label}. '
-              f'One subscription per car is allowed across both buyer and seller roles.', 'success')
+              f'One subscription per car is allowed across both seller and buyer roles.', 'success')
         return redirect(url_for(return_endpoint, **return_kwargs))
 
     # Combined cap
     active_count = count_active_alert_subscriptions(user['id'])
     if active_count >= MAX_ACTIVE_ALERTS:
-        flash(f'Maximum {MAX_ACTIVE_ALERTS} deal alerts already active (combined across buyer and seller). '
+        flash(f'Maximum {MAX_ACTIVE_ALERTS} deal alerts already active (combined across seller and buyer). '
               f'Cancel an existing alert before subscribing to deal alerts for {car_label}.', 'error')
         return redirect(url_for(return_endpoint, **return_kwargs))
 
@@ -2226,6 +2427,150 @@ def internal_send_weekly_digest():
         return jsonify({"ok": True, "counts": counts}), 200
     except Exception as e:
         app.logger.exception("Weekly digest crashed")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ============================================================
+# INTERNAL — CLEANUP MAGIC LINKS ENDPOINT (cron-job.org)
+# ============================================================
+
+@app.route('/internal/cleanup-magic-links', methods=['GET', 'POST'])
+def internal_cleanup_magic_links():
+    """
+    Token-gated endpoint for cron-job.org to trigger magic-link token cleanup.
+    Deletes expired unused tokens + used tokens older than 30 days.
+    Call with: /internal/cleanup-magic-links?token=<ALERT_DISPATCH_TOKEN>
+
+    Recommended schedule: daily at 03:00 UTC (08:30 IST).
+    """
+    provided_token = request.args.get('token') or request.headers.get('X-Dispatch-Token') or ''
+
+    if not ALERT_DISPATCH_TOKEN:
+        app.logger.error("internal_cleanup_magic_links: ALERT_DISPATCH_TOKEN not configured")
+        return jsonify({"ok": False, "error": "server_not_configured"}), 503
+
+    if provided_token != ALERT_DISPATCH_TOKEN:
+        app.logger.warning("internal_cleanup_magic_links: invalid token attempt")
+        return jsonify({"ok": False, "error": "invalid_token"}), 403
+
+    deleted = cleanup_expired_magic_links()
+    if deleted < 0:
+        return jsonify({"ok": False, "error": "cleanup_failed"}), 500
+
+    app.logger.info(f"Magic-link cleanup: {deleted} tokens deleted")
+    return jsonify({"ok": True, "deleted": deleted}), 200
+
+
+# ============================================================
+# ADMIN — TEST EMAIL ENDPOINTS (on-demand testing)
+# ============================================================
+
+@app.route('/admin/test-email-buyer-alert')
+@login_required
+@admin_required
+def admin_test_buyer_alert():
+    """
+    Send a test buyer alert email to admin's inbox.
+    Uses real subscription data if admin has any, otherwise hardcoded fake data.
+    """
+    user = current_user()
+    if not user:
+        return jsonify({"ok": False, "error": "no_user"}), 401
+
+    try:
+        # Lazy import to avoid breaking if dispatcher hasn't been updated yet
+        from alert_dispatcher import send_test_buyer_alert
+    except ImportError:
+        return jsonify({
+            "ok": False,
+            "error": "dispatcher_not_updated",
+            "hint": "alert_dispatcher.py needs to be updated to v2 (Batch 3) before this works."
+        }), 503
+
+    try:
+        result = send_test_buyer_alert(supabase, user, app_instance=app)
+        return jsonify({"ok": True, "result": result}), 200
+    except AttributeError as e:
+        return jsonify({
+            "ok": False,
+            "error": "dispatcher_missing_function",
+            "details": str(e),
+            "hint": "alert_dispatcher.py needs send_test_buyer_alert() function (Batch 3)."
+        }), 503
+    except Exception as e:
+        app.logger.exception("admin_test_buyer_alert failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/admin/test-email-seller-alert')
+@login_required
+@admin_required
+def admin_test_seller_alert():
+    """
+    Send a test seller alert email to admin's inbox.
+    Uses real subscription data if admin has any, otherwise hardcoded fake data.
+    """
+    user = current_user()
+    if not user:
+        return jsonify({"ok": False, "error": "no_user"}), 401
+
+    try:
+        from alert_dispatcher import send_test_seller_alert
+    except ImportError:
+        return jsonify({
+            "ok": False,
+            "error": "dispatcher_not_updated",
+            "hint": "alert_dispatcher.py needs to be updated to v2 (Batch 3) before this works."
+        }), 503
+
+    try:
+        result = send_test_seller_alert(supabase, user, app_instance=app)
+        return jsonify({"ok": True, "result": result}), 200
+    except AttributeError as e:
+        return jsonify({
+            "ok": False,
+            "error": "dispatcher_missing_function",
+            "details": str(e),
+            "hint": "alert_dispatcher.py needs send_test_seller_alert() function (Batch 3)."
+        }), 503
+    except Exception as e:
+        app.logger.exception("admin_test_seller_alert failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/admin/test-email-digest')
+@login_required
+@admin_required
+def admin_test_digest():
+    """
+    Send a test weekly digest email to admin's inbox.
+    Uses admin's real subscriptions if any, otherwise hardcoded fake data.
+    """
+    user = current_user()
+    if not user:
+        return jsonify({"ok": False, "error": "no_user"}), 401
+
+    try:
+        from alert_dispatcher import send_test_digest
+    except ImportError:
+        return jsonify({
+            "ok": False,
+            "error": "dispatcher_not_updated",
+            "hint": "alert_dispatcher.py needs to be updated to v2 (Batch 3) before this works."
+        }), 503
+
+    try:
+        result = send_test_digest(supabase, user, app_instance=app)
+        return jsonify({"ok": True, "result": result}), 200
+    except AttributeError as e:
+        return jsonify({
+            "ok": False,
+            "error": "dispatcher_missing_function",
+            "details": str(e),
+            "hint": "alert_dispatcher.py needs send_test_digest() function (Batch 3)."
+        }), 503
+    except Exception as e:
+        app.logger.exception("admin_test_digest failed")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
