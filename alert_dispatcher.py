@@ -1,7 +1,7 @@
 """
 alert_dispatcher.py
 -------------------
-AutoKnowMus Email Alerts v2 — Dispatcher with Magic-Link Auto-Login
+AutoKnowMus Email Alerts v2.1 — Dispatcher with Magic-Link Auto-Login
 
 Triggers:
   1. Buyer match — on /submit-deal, matching buyer subs (make+model+variant) get email
@@ -18,18 +18,18 @@ Design contract:
   - Magic links: every CTA gets a single-use, time-limited auto-login URL
   - Graceful degradation: if magic-link generation fails, email still sends with plain login URL
 
-v2 additions:
+v2 additions (vs v1):
   - generate_magic_link wired into all CTAs (instant alerts + digest)
   - first_name + subscription_age_days personalization in render context
   - LOGO_URL constant for email branding
   - 3 admin test functions: send_test_buyer_alert, send_test_seller_alert, send_test_digest
 
-Env vars required (set in Render dashboard):
-  RESEND_API_KEY
-  ALERT_FROM_EMAIL     (default: alerts@autoknowmus.com)
-  ALERT_FROM_NAME      (default: AutoKnowMus Alerts)
-  APP_BASE_URL         (default: https://autoknowmus.com)
-  ALERT_DISPATCH_TOKEN (secures /internal/send-weekly-digest, /internal/cleanup-magic-links)
+v2.1 fixes (vs v2):
+  - format_inr() now uses lakh/K format ('₹6.80L', '₹95K') matching dashboard rule
+  - _first_name() properly capitalizes (handles 'rajeev', 'RAJEEV', 'RaJeEv' all → 'Rajeev')
+  - Render context now includes 'sub_criteria' dict (year, fuel, owner, condition, mileage)
+  - Render context now includes 'year_mismatch' flag (True when deal.year != sub.year)
+  - format_inr_precise() retained for cases where exact rupee value is needed
 """
 
 import os
@@ -43,7 +43,6 @@ import resend
 from flask import render_template
 from supabase import Client
 
-# Import the SAME pricing pipeline the dashboard uses, so email verdicts match.
 from car_data import (
     compute_base_valuation,
     compute_price_range,
@@ -62,14 +61,12 @@ ALERT_FROM_NAME  = os.environ.get("ALERT_FROM_NAME", "AutoKnowMus Alerts")
 APP_BASE_URL     = os.environ.get("APP_BASE_URL", "https://autoknowmus.com").rstrip("/")
 REPLY_TO_EMAIL   = "autoknowmus@gmail.com"
 
-# Logo URL (3-color split: Auto=dark, Know=green, Mus=purple)
 LOGO_URL = f"{APP_BASE_URL}/static/logo-email.png"
 
 SELLER_COOLDOWN_HOURS = 6
 PHASE_LOOKBACK_DAYS   = 180
-DEAL_YEAR_WINDOW      = 2  # ±2 years for similar-deal matching
+DEAL_YEAR_WINDOW      = 2
 
-# Configure Resend only if API key is present; allows local dev without it.
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
 else:
@@ -77,15 +74,10 @@ else:
 
 
 # ──────────────────────────────────────────────────────────────
-# Magic link helper — lazy import to avoid circular imports
+# Magic link helpers
 # ──────────────────────────────────────────────────────────────
 
 def _get_magic_link_func():
-    """
-    Lazy import of generate_magic_link from app.py.
-    Called at runtime (not module load) to avoid circular import.
-    Returns the function or None if app.py doesn't have it (graceful degradation).
-    """
     try:
         from app import generate_magic_link
         return generate_magic_link
@@ -95,38 +87,19 @@ def _get_magic_link_func():
 
 
 def _build_cta_url(user_id, purpose: str, redirect_path: str) -> str:
-    """
-    Build a magic-link CTA URL. Falls back to plain login URL if magic-link
-    generation fails — never lets auth issues block email delivery.
-
-    Args:
-        user_id: BIGINT, subscription owner
-        purpose: 'alert' | 'digest' | 'admin_test'
-        redirect_path: path to redirect after auto-login (e.g. '/buyer-dashboard?make=...')
-
-    Returns:
-        Full URL string. Either a magic-link URL (preferred) or plain login URL (fallback).
-    """
     generate_magic_link = _get_magic_link_func()
     if generate_magic_link is None:
         return f"{APP_BASE_URL}/role"
-
     try:
         url = generate_magic_link(user_id, purpose, redirect_path)
         if url:
             return url
     except Exception as e:
         log.warning("Magic link generation failed for user %s: %s", user_id, e)
-
-    # Graceful fallback — user logs in manually
     return f"{APP_BASE_URL}/role"
 
 
 def _build_dashboard_redirect_path(role: str, sub: dict) -> str:
-    """
-    Build the redirect path for a sub's dashboard (where the user lands after
-    clicking the magic link).
-    """
     params = {
         "make":    sub.get("make") or "",
         "fuel":    sub.get("fuel") or "",
@@ -139,37 +112,33 @@ def _build_dashboard_redirect_path(role: str, sub: dict) -> str:
     }
     if sub.get("reference_asking_price"):
         params["asking_price"] = sub["reference_asking_price"]
-
-    # Drop empties
     params = {k: v for k, v in params.items() if v not in (None, "", 0)}
     qs = urlencode(params)
-
     if role == "seller":
-        # Sellers re-run a fresh valuation; can't deep-link to a specific valuation_id
         return f"/seller?{qs}" if qs else "/seller"
-    else:
-        return f"/buyer-dashboard?{qs}" if qs else "/buyer-dashboard"
+    return f"/buyer-dashboard?{qs}" if qs else "/buyer-dashboard"
 
 
 # ──────────────────────────────────────────────────────────────
-# Personalization helpers (v2)
+# Personalization helpers (v2 / v2.1)
 # ──────────────────────────────────────────────────────────────
 
-def _first_name(user_or_email: dict) -> str:
-    """Extract first name from a user dict. Returns '' if not available."""
+def _first_name(user_or_email) -> str:
+    """
+    Extract first name from a user dict, properly capitalized.
+    Handles all of: 'rajeev', 'RAJEEV', 'rAjEeV' → 'Rajeev'.
+    Returns empty string if name not available.
+    """
     if not user_or_email:
         return ""
-    name = (user_or_email.get("name") or "").strip()
-    if name:
-        return name.split(" ")[0]
-    return ""
+    name = (user_or_email.get("name") or "").strip() if isinstance(user_or_email, dict) else ""
+    if not name:
+        return ""
+    first_word = name.split(" ")[0]
+    return first_word.capitalize()
 
 
 def _get_user_for_sub(sb: Client, sub: dict) -> dict:
-    """
-    Fetch the user record for a subscription. Returns {} if lookup fails.
-    Used to get first_name for email personalization.
-    """
     if not sub or not sub.get("user_id"):
         return {}
     try:
@@ -181,7 +150,6 @@ def _get_user_for_sub(sb: Client, sub: dict) -> dict:
 
 
 def _subscription_age_days(sub: dict) -> int:
-    """Days since the subscription was created. Returns 0 if unparseable."""
     created = sub.get("created_at")
     if not created:
         return 0
@@ -203,12 +171,77 @@ def _subscription_age_days(sub: dict) -> int:
     return max(0, delta.days)
 
 
+def _build_sub_criteria(sub: dict) -> dict:
+    """
+    Build a dict of pre-formatted strings describing what the user subscribed for.
+    Used by templates to show "What you subscribed for" boxes.
+    """
+    year = sub.get("year")
+    fuel = sub.get("fuel") or "—"
+    owner = sub.get("owner") or "—"
+    condition = sub.get("condition") or "—"
+    mileage = sub.get("mileage")
+    asking_price = sub.get("reference_asking_price")
+
+    return {
+        "year": str(year) if year else "—",
+        "fuel": fuel,
+        "owner": owner,
+        "condition": condition,
+        "mileage_display": f"~{mileage:,} km" if mileage else "—",
+        "asking_price_display": format_inr(asking_price) if asking_price else None,
+    }
+
+
+def _is_year_mismatch(sub: dict, deal: dict) -> bool:
+    """True if user subscribed for one year but deal's car is a different year."""
+    sub_year = sub.get("year")
+    deal_year = deal.get("year")
+    if not sub_year or not deal_year:
+        return False
+    try:
+        return int(sub_year) != int(deal_year)
+    except (ValueError, TypeError):
+        return False
+
+
 # ──────────────────────────────────────────────────────────────
-# Formatting helpers (mirror app.py's Jinja filters)
+# Formatting helpers (v2.1: lakh/K format matching dashboard)
 # ──────────────────────────────────────────────────────────────
 
 def format_inr(value) -> str:
-    """680000 -> '₹6,80,000' (Indian numbering)."""
+    """
+    Format INR using lakh/K convention (matches dashboard's lakh2dp filter):
+      < 1,000:        '₹680'
+      1K – 1L:        '₹95K'  (1 decimal: '₹95.5K')
+      1L – 1Cr:       '₹6.80L' (always 2 decimals)
+      ≥ 1Cr:          '₹1.25 Crore' (always 2 decimals)
+    """
+    if value is None:
+        return "—"
+    try:
+        n = int(value)
+    except (ValueError, TypeError):
+        return str(value)
+
+    abs_n = abs(n)
+    sign = "-" if n < 0 else ""
+
+    if abs_n >= 10000000:
+        return f"{sign}₹{abs_n / 10000000:.2f} Crore"
+    elif abs_n >= 100000:
+        return f"{sign}₹{abs_n / 100000:.2f}L"
+    elif abs_n >= 1000:
+        k_value = abs_n / 1000
+        if k_value == int(k_value):
+            return f"{sign}₹{int(k_value)}K"
+        return f"{sign}₹{k_value:.1f}K"
+    else:
+        return f"{sign}₹{abs_n}"
+
+
+def format_inr_precise(value) -> str:
+    """Precise INR with Indian commas: 680000 -> '₹6,80,000'. Used rarely."""
     if value is None:
         return "—"
     try:
@@ -232,7 +265,6 @@ def format_inr(value) -> str:
 
 
 def format_date_ddmmmyyyy(value) -> str:
-    """18-Apr-2026 format. Accepts datetime, date, or ISO string."""
     if not value:
         return "—"
     if isinstance(value, str):
@@ -249,11 +281,10 @@ def format_date_ddmmmyyyy(value) -> str:
 
 
 # ──────────────────────────────────────────────────────────────
-# Full valuation pipeline — mirrors app.py's seller/buyer flow
+# Full valuation pipeline — mirrors app.py
 # ──────────────────────────────────────────────────────────────
 
 def _fetch_similar_deals(sb: Client, make, model, variant, fuel, year) -> list:
-    """Mirror of app.py fetch_similar_deals — variant first, model fallback if <3."""
     try:
         year_low = int(year) - DEAL_YEAR_WINDOW
         year_high = int(year) + DEAL_YEAR_WINDOW
@@ -261,28 +292,20 @@ def _fetch_similar_deals(sb: Client, make, model, variant, fuel, year) -> list:
 
         r = (sb.table("deals")
              .select("sale_price")
-             .eq("make", make)
-             .eq("model", model)
-             .eq("variant", variant)
-             .eq("fuel", fuel)
+             .eq("make", make).eq("model", model).eq("variant", variant).eq("fuel", fuel)
              .eq("verified", True)
-             .gte("year", year_low)
-             .lte("year", year_high)
+             .gte("year", year_low).lte("year", year_high)
              .gte("created_at", cutoff)
              .execute())
         variant_deals = [row["sale_price"] for row in (r.data or []) if row.get("sale_price")]
-
         if len(variant_deals) >= 3:
             return variant_deals
 
         r = (sb.table("deals")
              .select("sale_price")
-             .eq("make", make)
-             .eq("model", model)
-             .eq("fuel", fuel)
+             .eq("make", make).eq("model", model).eq("fuel", fuel)
              .eq("verified", True)
-             .gte("year", year_low)
-             .lte("year", year_high)
+             .gte("year", year_low).lte("year", year_high)
              .gte("created_at", cutoff)
              .execute())
         return [row["sale_price"] for row in (r.data or []) if row.get("sale_price")]
@@ -292,15 +315,12 @@ def _fetch_similar_deals(sb: Client, make, model, variant, fuel, year) -> list:
 
 
 def _compute_phase(sb: Client, make, model) -> int:
-    """Mirror of app.py compute_model_phase_data — returns phase int 1–4."""
     try:
         from car_data import determine_phase
         cutoff = (datetime.utcnow() - timedelta(days=PHASE_LOOKBACK_DAYS)).isoformat()
         r = (sb.table("deals")
              .select("user_id")
-             .eq("make", make)
-             .eq("model", model)
-             .eq("verified", True)
+             .eq("make", make).eq("model", model).eq("verified", True)
              .gte("created_at", cutoff)
              .execute())
         rows = r.data or []
@@ -313,22 +333,6 @@ def _compute_phase(sb: Client, make, model) -> int:
 
 
 def compute_verdict_for_deal(sb: Client, deal: dict) -> dict:
-    """
-    Run the FULL AutoKnowMus pipeline for a deal's car specs and classify
-    the deal's sale_price against the computed fair range.
-
-    Returns:
-      {
-        "estimated_price": int,
-        "price_low": int,
-        "price_high": int,
-        "phase": int,
-        "confidence": int,
-        "verdict_code": "below" | "fair" | "above",
-        "verdict_label": str,
-        "verdict_explanation": str,
-      }
-    """
     make    = deal["make"]
     model   = deal["model"]
     variant = deal.get("variant")
@@ -338,35 +342,23 @@ def compute_verdict_for_deal(sb: Client, deal: dict) -> dict:
     condition = deal.get("condition") or "Good"
     owner     = deal.get("owner") or "1st Owner"
 
-    # Step 1: formula price
     formula_price = compute_base_valuation(
         make=make, model=model, variant=variant, fuel=fuel,
         year=year, mileage=mileage, condition=condition, owner=owner,
     )
     if formula_price is None:
-        # Can't compute a range — return a minimal verdict that degrades gracefully
         return {
-            "estimated_price": None,
-            "price_low": None,
-            "price_high": None,
-            "phase": 1,
-            "confidence": 0,
-            "verdict_code": "unknown",
-            "verdict_label": "Range unavailable",
+            "estimated_price": None, "price_low": None, "price_high": None,
+            "phase": 1, "confidence": 0,
+            "verdict_code": "unknown", "verdict_label": "Range unavailable",
             "verdict_explanation": "Fair price range could not be computed for this configuration.",
         }
 
-    # Step 2: phase based on last 180 days of verified deals
     phase = _compute_phase(sb, make, model)
-
-    # Step 3: fetch similar deals + blend
     similar = _fetch_similar_deals(sb, make, model, variant, fuel, year)
     blended, confidence = adjust_with_deals(formula_price, similar, phase=phase)
-
-    # Step 4: compute range from blended price
     price_low, price_high = compute_price_range(blended, phase=phase)
 
-    # Step 5: classify sale_price vs range
     sale_price = deal.get("sale_price") or 0
     if price_low is None or price_high is None:
         code = "unknown"
@@ -375,15 +367,15 @@ def compute_verdict_for_deal(sb: Client, deal: dict) -> dict:
     elif sale_price < price_low:
         code = "below"
         label = "Below fair market"
-        explanation = "This price sits below our estimated fair range — a strong deal for the buyer."
+        explanation = "This price sits below the estimated fair range — a strong deal for the buyer."
     elif sale_price > price_high:
         code = "above"
         label = "Above market"
-        explanation = "This price exceeds our estimated fair range — likely a premium for low mileage or special condition."
+        explanation = "This price exceeds the estimated fair range — likely a premium for low mileage or special condition."
     else:
         code = "fair"
         label = "Fair price"
-        explanation = "This price sits within our estimated fair market range."
+        explanation = "This price sits within the estimated fair market range."
 
     return {
         "estimated_price": blended,
@@ -402,23 +394,14 @@ def compute_verdict_for_deal(sb: Client, deal: dict) -> dict:
 # ──────────────────────────────────────────────────────────────
 
 def _find_matching_subscriptions(sb: Client, deal: dict, role: str) -> list:
-    """
-    Active, email-enabled, non-expired subscriptions matching deal on
-    (make, model, variant) for the given role.
-    Deals with NULL variant are skipped (can't match exactly).
-    """
     if not deal.get("variant"):
         return []
     now_iso = datetime.utcnow().isoformat()
     try:
         r = (sb.table("alert_subscriptions")
              .select("*")
-             .eq("role", role)
-             .eq("active", True)
-             .eq("email_enabled", True)
-             .eq("make", deal["make"])
-             .eq("model", deal["model"])
-             .eq("variant", deal["variant"])
+             .eq("role", role).eq("active", True).eq("email_enabled", True)
+             .eq("make", deal["make"]).eq("model", deal["model"]).eq("variant", deal["variant"])
              .gt("expires_at", now_iso)
              .execute())
         return r.data or []
@@ -444,21 +427,11 @@ def _already_sent(sb: Client, subscription_id, trigger_ref, trigger_type) -> boo
         return bool(r.data)
     except Exception as e:
         log.warning("_already_sent check failed: %s", e)
-        return False  # On error, allow send — better than silent drop
+        return False
 
 
-def _log_sent_alert(
-    sb: Client,
-    subscription_id: Optional[int],
-    user_id: int,
-    trigger_type: str,
-    trigger_ref: Optional[str],
-    recipient: str,
-    subject: Optional[str],
-    status: str,
-    provider_id: Optional[str] = None,
-    error_message: Optional[str] = None,
-) -> None:
+def _log_sent_alert(sb: Client, subscription_id, user_id, trigger_type, trigger_ref,
+                    recipient, subject, status, provider_id=None, error_message=None):
     try:
         sb.table("sent_alerts").insert({
             "subscription_id": subscription_id,
@@ -481,7 +454,6 @@ def _log_sent_alert(
 # ──────────────────────────────────────────────────────────────
 
 def _seller_cooldown_active(sub: dict) -> bool:
-    """True if this sub's last_alerted_at is within the 6h cooldown window."""
     last = sub.get("last_alerted_at")
     if not last:
         return False
@@ -491,7 +463,6 @@ def _seller_cooldown_active(sub: dict) -> bool:
             last_dt = datetime.fromisoformat(clean)
         else:
             last_dt = last
-        # Normalize to naive UTC for comparison
         if last_dt.tzinfo is not None:
             last_dt = last_dt.astimezone(timezone.utc).replace(tzinfo=None)
     except Exception:
@@ -501,13 +472,9 @@ def _seller_cooldown_active(sub: dict) -> bool:
 
 
 def _bump_sub_counters(sb: Client, subscription_id: int) -> None:
-    """Update last_alerted_at + alert_count after a successful send."""
     try:
         cur = (sb.table("alert_subscriptions")
-               .select("alert_count")
-               .eq("id", subscription_id)
-               .single()
-               .execute())
+               .select("alert_count").eq("id", subscription_id).single().execute())
         current_count = (cur.data or {}).get("alert_count", 0) or 0
         sb.table("alert_subscriptions").update({
             "last_alerted_at": datetime.utcnow().isoformat(),
@@ -522,7 +489,6 @@ def _bump_sub_counters(sb: Client, subscription_id: int) -> None:
 # ──────────────────────────────────────────────────────────────
 
 def _send_email(to: str, subject: str, html: str) -> Tuple[bool, Optional[str], Optional[str]]:
-    """Returns (ok, provider_id, error_message). Never raises."""
     if not RESEND_API_KEY:
         return False, None, "RESEND_API_KEY not configured"
     try:
@@ -542,19 +508,19 @@ def _send_email(to: str, subject: str, html: str) -> Tuple[bool, Optional[str], 
 
 
 # ──────────────────────────────────────────────────────────────
-# Email body rendering (v2 — with magic links + personalization)
+# Email body rendering (v2.1 — full personalization + criteria)
 # ──────────────────────────────────────────────────────────────
 
 def _render_buyer_email(sub: dict, deal: dict, verdict: dict, sb: Client = None) -> Tuple[str, str]:
     car_label = f"{sub['make']} {sub['model']} {sub['variant']}"
     subject = f"Deal alert: {car_label} sold at {format_inr(deal['sale_price'])}"
 
-    # Personalization (v2)
     user = _get_user_for_sub(sb, sub) if sb else {}
     first_name = _first_name(user)
     sub_age_days = _subscription_age_days(sub)
+    sub_criteria = _build_sub_criteria(sub)
+    year_mismatch = _is_year_mismatch(sub, deal)
 
-    # Magic link CTA (v2) — buyer goes to buyer dashboard
     redirect_path = _build_dashboard_redirect_path("buyer", sub)
     cta_url = _build_cta_url(sub.get("user_id"), purpose="alert", redirect_path=redirect_path)
 
@@ -571,11 +537,12 @@ def _render_buyer_email(sub: dict, deal: dict, verdict: dict, sb: Client = None)
         deal_date_fmt=format_date_ddmmmyyyy(deal.get("transaction_date") or deal.get("created_at")),
         is_verified=bool(deal.get("verified")),
         app_url=APP_BASE_URL,
-        # v2 additions:
         first_name=first_name,
         subscription_age_days=sub_age_days,
         cta_url=cta_url,
         logo_url=LOGO_URL,
+        sub_criteria=sub_criteria,
+        year_mismatch=year_mismatch,
     )
     return subject, html
 
@@ -584,12 +551,12 @@ def _render_seller_email(sub: dict, deal: dict, verdict: dict, sb: Client = None
     car_label = f"{sub['make']} {sub['model']} {sub['variant']}"
     subject = f"Market signal: A {car_label} just sold for {format_inr(deal['sale_price'])}"
 
-    # Personalization (v2)
     user = _get_user_for_sub(sb, sub) if sb else {}
     first_name = _first_name(user)
     sub_age_days = _subscription_age_days(sub)
+    sub_criteria = _build_sub_criteria(sub)
+    year_mismatch = _is_year_mismatch(sub, deal)
 
-    # Magic link CTA (v2) — seller goes to fresh valuation flow
     redirect_path = _build_dashboard_redirect_path("seller", sub)
     cta_url = _build_cta_url(sub.get("user_id"), purpose="alert", redirect_path=redirect_path)
 
@@ -607,11 +574,12 @@ def _render_seller_email(sub: dict, deal: dict, verdict: dict, sb: Client = None
         reference_price_fmt=format_inr(sub.get("reference_asking_price")),
         is_verified=bool(deal.get("verified")),
         app_url=APP_BASE_URL,
-        # v2 additions:
         first_name=first_name,
         subscription_age_days=sub_age_days,
         cta_url=cta_url,
         logo_url=LOGO_URL,
+        sub_criteria=sub_criteria,
+        year_mismatch=year_mismatch,
     )
     return subject, html
 
@@ -620,22 +588,10 @@ def _render_seller_email(sub: dict, deal: dict, verdict: dict, sb: Client = None
 # Per-role dispatch
 # ──────────────────────────────────────────────────────────────
 
-def _dispatch_one(
-    sb: Client,
-    deal: dict,
-    verdict: dict,
-    sub: dict,
-    trigger_type: str,
-    render_fn,
-) -> str:
-    """
-    Dispatch one email for one subscription. Returns status string:
-    'sent' | 'skipped' | 'failed'.
-    """
+def _dispatch_one(sb, deal, verdict, sub, trigger_type, render_fn) -> str:
     trigger_ref = f"deal_{deal['id']}"
     recipient = sub.get("email_at_subscribe")
 
-    # Cooldown check (sellers only)
     if trigger_type == "seller_match" and _seller_cooldown_active(sub):
         _log_sent_alert(sb, sub["id"], sub["user_id"], trigger_type,
                         trigger_ref, recipient or "", None,
@@ -643,7 +599,6 @@ def _dispatch_one(
                         error_message=f"Cooldown active ({SELLER_COOLDOWN_HOURS}h)")
         return "skipped"
 
-    # Dedup check
     if _already_sent(sb, sub["id"], trigger_ref, trigger_type):
         return "skipped"
 
@@ -654,7 +609,6 @@ def _dispatch_one(
         return "failed"
 
     try:
-        # Pass sb for v2 personalization (first_name lookup, magic link generation)
         subject, html = render_fn(sub, deal, verdict, sb)
     except Exception as e:
         log.exception("%s email render failed", trigger_type)
@@ -693,22 +647,12 @@ def _dispatch_role(sb: Client, deal: dict, verdict: dict, role: str) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────
-# PUBLIC: called synchronously by /submit-deal background thread
+# PUBLIC: called by /submit-deal
 # ──────────────────────────────────────────────────────────────
 
 def dispatch_deal_alerts_async(sb: Client, deal: dict, app_instance=None) -> None:
-    """
-    Fire-and-forget entry point. Spawns a daemon thread so /submit-deal
-    returns to the user instantly. Must be called with the full deal row
-    (including id) already inserted in Supabase.
-
-    app_instance: pass `app` from Flask so we can push an app context inside
-    the thread — Jinja render_template requires it.
-    """
     def _run():
         try:
-            # Flask's render_template requires an app context. Without it,
-            # the background thread crashes on the first template render.
             if app_instance is not None:
                 ctx = app_instance.app_context()
                 ctx.push()
@@ -731,18 +675,10 @@ def dispatch_deal_alerts_async(sb: Client, deal: dict, app_instance=None) -> Non
 
 
 # ──────────────────────────────────────────────────────────────
-# Weekly digest (v2 — with magic links + personalization)
+# Weekly digest (v2.1)
 # ──────────────────────────────────────────────────────────────
 
 def send_weekly_digest(sb: Client) -> dict:
-    """
-    Send weekly digest to every user with at least one active, email-enabled,
-    non-expired subscription — even if no matches in the last 7 days.
-    One email per user, summarizing all their subs (buyer + seller) together.
-
-    v2: each digest item gets its own magic-link CTA URL pointing to the
-    relevant dashboard (seller or buyer flow).
-    """
     now = datetime.utcnow()
     now_iso = now.isoformat()
     week_ago_iso = (now - timedelta(days=7)).isoformat()
@@ -750,8 +686,7 @@ def send_weekly_digest(sb: Client) -> dict:
     try:
         resp = (sb.table("alert_subscriptions")
                 .select("*")
-                .eq("active", True)
-                .eq("email_enabled", True)
+                .eq("active", True).eq("email_enabled", True)
                 .gt("expires_at", now_iso)
                 .execute())
         subs = resp.data or []
@@ -759,7 +694,6 @@ def send_weekly_digest(sb: Client) -> dict:
         log.exception("Weekly digest: failed to fetch subscriptions: %s", e)
         return {"users": 0, "sent": 0, "failed": 0, "skipped": 0}
 
-    # Group by user
     user_subs = {}
     for s in subs:
         user_subs.setdefault(s["user_id"], []).append(s)
@@ -781,11 +715,9 @@ def send_weekly_digest(sb: Client) -> dict:
             counts["skipped"] += 1
             continue
 
-        # Personalization (v2) — fetch user once for this digest
         user = _get_user_for_sub(sb, user_sub_list[0])
         first_name = _first_name(user)
 
-        # Build digest items — one per sub, with last-7-day matching deals + magic-link CTA
         digest_items = []
         seller_count = 0
         buyer_count = 0
@@ -793,10 +725,8 @@ def send_weekly_digest(sb: Client) -> dict:
         for s in user_sub_list:
             try:
                 deals_resp = (sb.table("deals")
-                              .select("id, make, model, variant, sale_price, transaction_date, verified, buyer_type")
-                              .eq("make", s["make"])
-                              .eq("model", s["model"])
-                              .eq("variant", s["variant"])
+                              .select("id, make, model, variant, year, sale_price, transaction_date, verified, buyer_type")
+                              .eq("make", s["make"]).eq("model", s["model"]).eq("variant", s["variant"])
                               .gte("created_at", week_ago_iso)
                               .order("created_at", desc=True)
                               .limit(5)
@@ -812,12 +742,12 @@ def send_weekly_digest(sb: Client) -> dict:
             else:
                 buyer_count += 1
 
-            # Magic link CTA per item (v2)
             redirect_path = _build_dashboard_redirect_path(role, s)
             item_cta_url = _build_cta_url(user_id, purpose="digest", redirect_path=redirect_path)
 
             digest_items.append({
                 "sub": s,
+                "sub_criteria": _build_sub_criteria(s),
                 "deals": week_deals,
                 "car_label": f"{s['make']} {s['model']} {s['variant']}",
                 "role": role,
@@ -825,10 +755,8 @@ def send_weekly_digest(sb: Client) -> dict:
                 "subscription_age_days": _subscription_age_days(s),
             })
 
-        # Sort: seller items first, then buyer (per locked strategic ordering)
         digest_items.sort(key=lambda x: (0 if x["role"] == "seller" else 1))
 
-        # Top-level CTA (footer) — magic link to /role
         top_cta_url = _build_cta_url(user_id, purpose="digest", redirect_path="/role")
 
         try:
@@ -840,7 +768,6 @@ def send_weekly_digest(sb: Client) -> dict:
                 week_start=format_date_ddmmmyyyy(now - timedelta(days=7)),
                 week_end=format_date_ddmmmyyyy(now),
                 app_url=APP_BASE_URL,
-                # v2 additions:
                 first_name=first_name,
                 logo_url=LOGO_URL,
                 cta_url=top_cta_url,
@@ -871,13 +798,12 @@ def send_weekly_digest(sb: Client) -> dict:
 
 
 # ══════════════════════════════════════════════════════════════
-# v2 — ADMIN TEST FUNCTIONS (called by /admin/test-email-* endpoints)
+# ADMIN TEST FUNCTIONS
 # ══════════════════════════════════════════════════════════════
 
-# Hardcoded fallback data for when admin has no active subscriptions
 _FAKE_SUB_BUYER = {
     "id": 99999,
-    "user_id": None,  # filled in at call time
+    "user_id": None,
     "role": "buyer",
     "make": "Maruti Suzuki",
     "model": "Baleno",
@@ -890,7 +816,7 @@ _FAKE_SUB_BUYER = {
     "reference_asking_price": 720000,
     "email_enabled": True,
     "whatsapp_enabled": False,
-    "email_at_subscribe": None,  # filled at call time
+    "email_at_subscribe": None,
     "created_at": (datetime.utcnow() - timedelta(days=5)).isoformat(),
     "expires_at": (datetime.utcnow() + timedelta(days=25)).isoformat(),
     "active": True,
@@ -924,35 +850,25 @@ _FAKE_DEAL = {
 
 
 def _get_admin_test_sub(sb: Client, user: dict, role: str) -> dict:
-    """
-    Get a real active sub for the admin user, or fall back to hardcoded fake.
-    Always returns a sub-shaped dict with user_id and email_at_subscribe set
-    to the admin's values.
-    """
     if not user or not user.get("id"):
         raise ValueError("Admin user required for test email")
 
-    # Try to find a real active sub of the requested role first
     try:
         now_iso = datetime.utcnow().isoformat()
         r = (sb.table("alert_subscriptions")
              .select("*")
-             .eq("user_id", user["id"])
-             .eq("role", role)
-             .eq("active", True)
+             .eq("user_id", user["id"]).eq("role", role).eq("active", True)
              .gt("expires_at", now_iso)
              .order("created_at", desc=True)
              .limit(1)
              .execute())
         if r.data:
             real_sub = r.data[0]
-            # Ensure email is set to admin's email (even if old sub had different)
             real_sub["email_at_subscribe"] = user.get("email") or real_sub.get("email_at_subscribe")
             return real_sub
     except Exception as e:
         log.warning("_get_admin_test_sub real lookup failed: %s", e)
 
-    # Fall back to hardcoded fake — deep copy, then override identity fields
     fake = (_FAKE_SUB_SELLER if role == "seller" else _FAKE_SUB_BUYER).copy()
     fake["user_id"] = user["id"]
     fake["email_at_subscribe"] = user.get("email")
@@ -960,11 +876,6 @@ def _get_admin_test_sub(sb: Client, user: dict, role: str) -> dict:
 
 
 def _get_admin_test_deal(sub: dict) -> dict:
-    """
-    Build a realistic dummy deal that matches the given sub's car details.
-    Sale price is set to ~5% below the sub's reference asking price (or
-    falls back to a tier-appropriate guess if no reference).
-    """
     deal = _FAKE_DEAL.copy()
     deal["make"] = sub["make"]
     deal["model"] = sub["model"]
@@ -980,7 +891,6 @@ def _get_admin_test_deal(sub: dict) -> dict:
         deal["sale_price"] = int(ref_price * 0.95)
         deal["asking_price"] = int(ref_price)
     else:
-        # Fallback: use a sensible tier-based price
         deal["sale_price"] = 680000
         deal["asking_price"] = 720000
 
@@ -988,29 +898,15 @@ def _get_admin_test_deal(sub: dict) -> dict:
 
 
 def send_test_buyer_alert(sb: Client, user: dict, app_instance=None) -> dict:
-    """
-    Send a test buyer alert email to the admin user.
-    Returns:
-        {
-            "ok": bool,
-            "recipient": str,
-            "subject": str,
-            "provider_id": str | None,
-            "error": str | None,
-            "used_real_data": bool,
-            "car_label": str,
-        }
-    """
     if not user or not user.get("email"):
         return {"ok": False, "error": "Admin user has no email", "used_real_data": False}
 
     sub = _get_admin_test_sub(sb, user, role="buyer")
-    used_real = sub["id"] != 99999  # the fake's id
+    used_real = sub["id"] != 99999
     deal = _get_admin_test_deal(sub)
     verdict = compute_verdict_for_deal(sb, deal)
 
     try:
-        # Already in Flask context if called via @app.route, but ensure for safety
         if app_instance is not None:
             with app_instance.app_context():
                 subject, html = _render_buyer_email(sub, deal, verdict, sb)
@@ -1019,18 +915,14 @@ def send_test_buyer_alert(sb: Client, user: dict, app_instance=None) -> dict:
     except Exception as e:
         log.exception("Test buyer email render failed")
         return {
-            "ok": False,
-            "recipient": user["email"],
-            "subject": None,
-            "provider_id": None,
-            "error": f"Render failed: {e}",
+            "ok": False, "recipient": user["email"], "subject": None,
+            "provider_id": None, "error": f"Render failed: {e}",
             "used_real_data": used_real,
             "car_label": f"{sub['make']} {sub['model']} {sub['variant']}",
         }
 
     ok, provider_id, err = _send_email(user["email"], subject, html)
 
-    # Audit log (always logged for tests, with admin_test trigger_type)
     try:
         _log_sent_alert(
             sb, None, user["id"], "admin_test_buyer",
@@ -1039,24 +931,17 @@ def send_test_buyer_alert(sb: Client, user: dict, app_instance=None) -> dict:
             provider_id, err
         )
     except Exception:
-        pass  # Audit failure shouldn't break the test response
+        pass
 
     return {
-        "ok": ok,
-        "recipient": user["email"],
-        "subject": subject,
-        "provider_id": provider_id,
-        "error": err,
+        "ok": ok, "recipient": user["email"], "subject": subject,
+        "provider_id": provider_id, "error": err,
         "used_real_data": used_real,
         "car_label": f"{sub['make']} {sub['model']} {sub['variant']}",
     }
 
 
 def send_test_seller_alert(sb: Client, user: dict, app_instance=None) -> dict:
-    """
-    Send a test seller alert email to the admin user.
-    Same return shape as send_test_buyer_alert.
-    """
     if not user or not user.get("email"):
         return {"ok": False, "error": "Admin user has no email", "used_real_data": False}
 
@@ -1074,11 +959,8 @@ def send_test_seller_alert(sb: Client, user: dict, app_instance=None) -> dict:
     except Exception as e:
         log.exception("Test seller email render failed")
         return {
-            "ok": False,
-            "recipient": user["email"],
-            "subject": None,
-            "provider_id": None,
-            "error": f"Render failed: {e}",
+            "ok": False, "recipient": user["email"], "subject": None,
+            "provider_id": None, "error": f"Render failed: {e}",
             "used_real_data": used_real,
             "car_label": f"{sub['make']} {sub['model']} {sub['variant']}",
         }
@@ -1096,36 +978,26 @@ def send_test_seller_alert(sb: Client, user: dict, app_instance=None) -> dict:
         pass
 
     return {
-        "ok": ok,
-        "recipient": user["email"],
-        "subject": subject,
-        "provider_id": provider_id,
-        "error": err,
+        "ok": ok, "recipient": user["email"], "subject": subject,
+        "provider_id": provider_id, "error": err,
         "used_real_data": used_real,
         "car_label": f"{sub['make']} {sub['model']} {sub['variant']}",
     }
 
 
 def send_test_digest(sb: Client, user: dict, app_instance=None) -> dict:
-    """
-    Send a test weekly digest email to the admin user.
-    Uses admin's real subs if any, otherwise builds a digest with one fake
-    seller sub + one fake buyer sub so admin sees the full layout.
-    """
     if not user or not user.get("email"):
         return {"ok": False, "error": "Admin user has no email", "used_real_data": False}
 
     now = datetime.utcnow()
     week_ago_iso = (now - timedelta(days=7)).isoformat()
 
-    # Try to fetch admin's real active subs first
     real_subs = []
     try:
         now_iso = now.isoformat()
         r = (sb.table("alert_subscriptions")
              .select("*")
-             .eq("user_id", user["id"])
-             .eq("active", True)
+             .eq("user_id", user["id"]).eq("active", True)
              .gt("expires_at", now_iso)
              .execute())
         real_subs = r.data or []
@@ -1137,7 +1009,6 @@ def send_test_digest(sb: Client, user: dict, app_instance=None) -> dict:
     if used_real:
         sub_list = real_subs
     else:
-        # Build TWO fake subs so the digest layout (seller-first then buyer) is exercised
         fake_seller = _FAKE_SUB_SELLER.copy()
         fake_seller["user_id"] = user["id"]
         fake_seller["email_at_subscribe"] = user["email"]
@@ -1152,13 +1023,10 @@ def send_test_digest(sb: Client, user: dict, app_instance=None) -> dict:
     buyer_count = 0
 
     for s in sub_list:
-        # Try fetching real recent deals for this car
         try:
             deals_resp = (sb.table("deals")
-                          .select("id, make, model, variant, sale_price, transaction_date, verified, buyer_type")
-                          .eq("make", s["make"])
-                          .eq("model", s["model"])
-                          .eq("variant", s["variant"])
+                          .select("id, make, model, variant, year, sale_price, transaction_date, verified, buyer_type")
+                          .eq("make", s["make"]).eq("model", s["model"]).eq("variant", s["variant"])
                           .gte("created_at", week_ago_iso)
                           .order("created_at", desc=True)
                           .limit(5)
@@ -1167,7 +1035,6 @@ def send_test_digest(sb: Client, user: dict, app_instance=None) -> dict:
         except Exception:
             week_deals = []
 
-        # If no real deals and using fake subs, inject a fake deal so digest isn't empty
         if not week_deals and not used_real:
             fake_deal_for_item = _get_admin_test_deal(s)
             week_deals = [{
@@ -1175,6 +1042,7 @@ def send_test_digest(sb: Client, user: dict, app_instance=None) -> dict:
                 "make": fake_deal_for_item["make"],
                 "model": fake_deal_for_item["model"],
                 "variant": fake_deal_for_item["variant"],
+                "year": fake_deal_for_item["year"],
                 "sale_price": fake_deal_for_item["sale_price"],
                 "transaction_date": fake_deal_for_item["transaction_date"],
                 "verified": True,
@@ -1192,6 +1060,7 @@ def send_test_digest(sb: Client, user: dict, app_instance=None) -> dict:
 
         digest_items.append({
             "sub": s,
+            "sub_criteria": _build_sub_criteria(s),
             "deals": week_deals,
             "car_label": f"{s['make']} {s['model']} {s['variant']}",
             "role": role,
@@ -1199,7 +1068,6 @@ def send_test_digest(sb: Client, user: dict, app_instance=None) -> dict:
             "subscription_age_days": _subscription_age_days(s),
         })
 
-    # Sort: seller first then buyer (per locked strategic ordering)
     digest_items.sort(key=lambda x: (0 if x["role"] == "seller" else 1))
 
     top_cta_url = _build_cta_url(user["id"], purpose="admin_test", redirect_path="/role")
@@ -1240,13 +1108,9 @@ def send_test_digest(sb: Client, user: dict, app_instance=None) -> dict:
     except Exception as e:
         log.exception("Test digest render failed")
         return {
-            "ok": False,
-            "recipient": user["email"],
-            "subject": None,
-            "provider_id": None,
-            "error": f"Render failed: {e}",
-            "used_real_data": used_real,
-            "items_count": len(digest_items),
+            "ok": False, "recipient": user["email"], "subject": None,
+            "provider_id": None, "error": f"Render failed: {e}",
+            "used_real_data": used_real, "items_count": len(digest_items),
         }
 
     ok, provider_id, err = _send_email(user["email"], subject, html)
@@ -1262,13 +1126,8 @@ def send_test_digest(sb: Client, user: dict, app_instance=None) -> dict:
         pass
 
     return {
-        "ok": ok,
-        "recipient": user["email"],
-        "subject": subject,
-        "provider_id": provider_id,
-        "error": err,
-        "used_real_data": used_real,
-        "items_count": len(digest_items),
-        "seller_count": seller_count,
-        "buyer_count": buyer_count,
+        "ok": ok, "recipient": user["email"], "subject": subject,
+        "provider_id": provider_id, "error": err,
+        "used_real_data": used_real, "items_count": len(digest_items),
+        "seller_count": seller_count, "buyer_count": buyer_count,
     }
