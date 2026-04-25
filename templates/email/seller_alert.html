@@ -176,59 +176,6 @@
         <p class="verdict-explanation">{{ verdict.verdict_explanation }}</p>
       </div>
 
-      <!-- Seller insight (restructured — clean rows, no inline-bold whitespace issues) -->
-      {% if verdict.estimated_price %}
-      <div class="seller-insight">
-        <p class="seller-insight-title">What this means for your car</p>
-        <p class="seller-insight-row">
-          <span class="label">Estimated value:</span>
-          <span class="value">{{ estimated_fmt }}</span>
-        </p>
-        <p class="seller-insight-row">
-          <span class="label">Fair market range:</span>
-          <span class="value">{{ price_low_fmt }} &ndash; {{ price_high_fmt }}</span>
-        </p>
-        <p class="seller-insight-row" style="margin-top:12px; color:#1a1d24;">
-          If you're planning to sell, this is a useful benchmark for your asking price.
-        </p>
-      </div>
-      {% endif %}
-
-      <!-- What you subscribed for -->
-      <p class="section-heading">What you subscribed for</p>
-      <table class="details" cellpadding="0" cellspacing="0">
-        <tr>
-          <td>Car</td>
-          <td>{{ car_label }}</td>
-        </tr>
-        <tr>
-          <td>Year</td>
-          <td>{{ sub_criteria.year }}</td>
-        </tr>
-        <tr>
-          <td>Fuel</td>
-          <td>{{ sub_criteria.fuel }}</td>
-        </tr>
-        <tr>
-          <td>Owner</td>
-          <td>{{ sub_criteria.owner }}</td>
-        </tr>
-        <tr>
-          <td>Condition</td>
-          <td>{{ sub_criteria.condition }}</td>
-        </tr>
-        <tr>
-          <td>Mileage</td>
-          <td>{{ sub_criteria.mileage_display }}</td>
-        </tr>
-        {% if sub_criteria.asking_price_display %}
-        <tr>
-          <td>Your asking price</td>
-          <td>{{ sub_criteria.asking_price_display }}</td>
-        </tr>
-        {% endif %}
-      </table>
-
       <!-- The deal that just sold -->
       <p class="section-heading">The deal that just sold</p>
       <table class="details" cellpadding="0" cellspacing="0">
@@ -274,10 +221,62 @@
         {% endif %}
       </table>
 
+      <!-- What you subscribed for -->
+      <p class="section-heading">What you subscribed for</p>
+      <table class="details" cellpadding="0" cellspacing="0">
+        <tr>
+          <td>Car</td>
+          <td>{{ car_label }}</td>
+        </tr>
+        <tr>
+          <td>Year</td>
+          <td>{{ sub_criteria.year }}</td>
+        </tr>
+        <tr>
+          <td>Fuel</td>
+          <td>{{ sub_criteria.fuel }}</td>
+        </tr>
+        <tr>
+          <td>Owner</td>
+          <td>{{ sub_criteria.owner }}</td>
+        </tr>
+        <tr>
+          <td>Condition</td>
+          <td>{{ sub_criteria.condition }}</td>
+        </tr>
+        <tr>
+          <td>Mileage</td>
+          <td>{{ sub_criteria.mileage_display }}</td>
+        </tr>
+        {% if sub_criteria.asking_price_display %}
+        <tr>
+          <td>Your asking price</td>
+          <td>{{ sub_criteria.asking_price_display }}</td>
+        </tr>
+        {% endif %}
+      </table>
+
+      <!-- Seller insight (restructured — clean rows, no inline-bold whitespace issues) -->
+      {% if verdict.estimated_price %}
+      <div class="seller-insight">
+        <p class="seller-insight-title">What this means for your car</p>
+        <p class="seller-insight-row">
+          <span class="label">Estimated value:</span>
+          <span class="value">{{ estimated_fmt }}</span>
+        </p>
+        <p class="seller-insight-row">
+          <span class="label">Fair market range:</span>
+          <span class="value">{{ price_low_fmt }} &ndash; {{ price_high_fmt }}</span>
+        </p>
+        <p class="seller-insight-row" style="margin-top:12px; color:#1a1d24;">
+          If you're planning to sell, this is a useful benchmark for your asking price.
+        </p>
+      </div>
+      {% endif %}
+
       <!-- CTA -->
       <div class="cta-wrap">
         <a href="{{ cta_url or (app_url + '/role') }}" class="cta">Refresh your valuation</a>
-        <p class="cta-note">One-tap access &mdash; no need to log in.</p>
       </div>
 
     </div>
