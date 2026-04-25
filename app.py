@@ -35,8 +35,7 @@ logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
 
 # ============================================================
-# ADMIN ALLOWLIST — swap this placeholder with your email(s)
-# TODO: migrate to a role flag on users table when you add a second admin
+# ADMIN ALLOWLIST
 # ============================================================
 ADMIN_EMAILS = {
     'autoknowmus@gmail.com',
@@ -155,16 +154,13 @@ MAX_ACTIVE_ALERTS = 5
 DEAL_REWARD_AMOUNT = 100
 MAX_DEALS_PER_WEEK = 3
 
-# Phase detection lookback window
 PHASE_LOOKBACK_DAYS = 180
 
-# Guest access
 GUEST_CREDITS = 100
 GUEST_LOCKOUT_DAYS = 30
 GUEST_COOKIE_NAME = 'ak_guest_token'
 GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * GUEST_LOCKOUT_DAYS
 
-# Weekly digest cron token (for /internal/send-weekly-digest)
 ALERT_DISPATCH_TOKEN = os.environ.get('ALERT_DISPATCH_TOKEN', '')
 
 HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Kia', 'Mahindra'}
@@ -175,10 +171,10 @@ TRANSACTION_TYPE_LABELS = {
     'signup_bonus': 'Signup Bonus',
     'valuation_charge': 'Seller Valuation',
     'buyer_search': 'Buyer Search',
-    'alert_subscription': 'Alert Subscription',
+    'alert_subscription': 'Deal Alert Subscription',
     'credit_request_approved': 'Credit Top-up',
     'deal_reward': 'Deal Reward',
-    'alert_cancelled': 'Alert Cancelled',
+    'alert_cancelled': 'Deal Alert Cancelled',
 }
 
 
@@ -635,8 +631,7 @@ def get_market_stats(make, model):
 def get_active_alert_subscription(user_id, make, model, variant):
     """
     Find active sub matching (user, make, model, variant).
-    NOTE: per locked design, one sub per car across both roles, so role is NOT
-    filtered here — existence in ANY role blocks a new subscription.
+    Per locked design: one sub per car across BOTH roles, so role NOT filtered.
     """
     try:
         r = (supabase.table('alert_subscriptions')
@@ -1011,7 +1006,6 @@ def seller():
     if estimated is None:
         return render_form(form_data, error='Could not compute a price for this combination. Please check inputs.')
 
-    # === PHASE + BLEND ===
     phase_data = compute_model_phase_data(form_data['make'], form_data['model'])
     phase = phase_data['phase']
 
@@ -1118,7 +1112,6 @@ def seller_dashboard(valuation_id):
     buyer_dist   = compute_buyer_distribution(price_low, price_high, confidence)
     verified_180d, verified_all_time = get_market_stats(val['make'], val['model'])
 
-    # Seller subscription status (guests can't subscribe)
     if is_guest:
         active_sub = None
         active_alerts_count = 0
@@ -1154,7 +1147,6 @@ def seller_dashboard(valuation_id):
         back_prefill=back_prefill,
         phase_data=phase_data,
         data_version=_live_data_version(),
-        # Seller alert subscription context (new)
         active_sub=active_sub,
         active_alerts_count=active_alerts_count,
         alert_cost=ALERT_SUBSCRIPTION_COST,
@@ -1234,6 +1226,10 @@ def request_credits():
         }
         kwargs = {k: v for k, v in kwargs.items() if v}
         return redirect(url_for('buyer_dashboard', **kwargs))
+
+    if return_to == 'seller_dashboard_keep':
+        valuation_id = request.form.get('valuation_id', '0')
+        return redirect(url_for('seller_dashboard', valuation_id=valuation_id))
 
     ref = request.referrer or url_for('seller')
     return redirect(ref)
@@ -1529,14 +1525,14 @@ def buyer_dashboard():
 
 def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_fn):
     """
-    Shared logic for creating either a buyer or seller alert subscription.
-    Returns a redirect Response.
+    Shared logic for creating either a buyer or seller deal alert subscription.
 
     Per locked design:
       - One sub per (user, make, model, variant) across BOTH roles
       - Combined cap of 5 active across both roles
       - WhatsApp forced to False in v1 (coming soon)
       - role saved on insert ('buyer' or 'seller')
+      - All flash messages use 'deal alerts' framing for clarity
     """
     make    = (form.get('make') or '').strip()
     model   = (form.get('model') or '').strip()
@@ -1549,6 +1545,7 @@ def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_
     asking_price_raw = (form.get('asking_price') or '').strip()
 
     return_kwargs = return_kwargs_fn(form) if return_kwargs_fn else {}
+    car_label = f"{make} {model} {variant}".strip()
 
     if not all([make, model, variant]):
         flash('Missing car details. Please try again from the dashboard.', 'error')
@@ -1558,20 +1555,21 @@ def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_
     existing = get_active_alert_subscription(user['id'], make, model, variant)
     if existing:
         existing_role = existing.get('role', 'buyer')
-        flash(f'You already have an active {existing_role} alert subscription for {make} {model} {variant}. '
+        flash(f'You already have active {existing_role} deal alerts for {car_label}. '
               f'One subscription per car is allowed across both buyer and seller roles.', 'success')
         return redirect(url_for(return_endpoint, **return_kwargs))
 
     # Combined cap
     active_count = count_active_alert_subscriptions(user['id'])
     if active_count >= MAX_ACTIVE_ALERTS:
-        flash(f'Maximum {MAX_ACTIVE_ALERTS} active alerts reached (combined across buyer and seller). '
-              f'Cancel an existing alert or wait for one to expire before subscribing to a new car.', 'error')
+        flash(f'Maximum {MAX_ACTIVE_ALERTS} deal alerts already active (combined across buyer and seller). '
+              f'Cancel an existing alert before subscribing to deal alerts for {car_label}.', 'error')
         return redirect(url_for(return_endpoint, **return_kwargs))
 
     current_credits = user.get('credits', 0) or 0
     if current_credits < ALERT_SUBSCRIPTION_COST:
-        flash(f'Insufficient credits. You need {ALERT_SUBSCRIPTION_COST} credits to subscribe. '
+        flash(f'Need ({ALERT_SUBSCRIPTION_COST} Credits) to subscribe for deal alerts on {car_label}. '
+              f'You currently have {current_credits} credits. '
               f'Tap "Get {CREDIT_REQUEST_AMOUNT} Free Credits" below.', 'error')
         return redirect(url_for(return_endpoint, **return_kwargs))
 
@@ -1593,7 +1591,7 @@ def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_
 
     payload = {
         'user_id': user['id'],
-        'role': role,                             # 'buyer' or 'seller'
+        'role': role,
         'make': make,
         'model': model,
         'variant': variant,
@@ -1618,11 +1616,11 @@ def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_
         sub_row = ins.data[0] if ins.data else None
     except Exception as e:
         app.logger.error(f"Alert subscription insert failed: {e}")
-        flash('Could not create subscription. Please try again.', 'error')
+        flash('Could not create deal alert subscription. Please try again.', 'error')
         return redirect(url_for(return_endpoint, **return_kwargs))
 
     if not sub_row:
-        flash('Could not create subscription. Please try again.', 'error')
+        flash('Could not create deal alert subscription. Please try again.', 'error')
         return redirect(url_for(return_endpoint, **return_kwargs))
 
     new_balance = current_credits - ALERT_SUBSCRIPTION_COST
@@ -1631,7 +1629,7 @@ def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_
         log_credit_transaction(
             user_id=user['id'],
             type_='alert_subscription',
-            description=f"Alert subscription ({role}, {ALERT_SUBSCRIPTION_DAYS} days): {make} {model} {variant}",
+            description=f"Deal alert subscription ({role}, {ALERT_SUBSCRIPTION_DAYS} days): {car_label}",
             amount=-ALERT_SUBSCRIPTION_COST,
             balance_after=new_balance,
         )
@@ -1643,8 +1641,12 @@ def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_
         app.logger.error(f"Alert subscription credit deduction failed: {e}")
 
     role_label = 'Buyer' if role == 'buyer' else 'Seller'
-    flash(f"✅ {role_label} alerts active for {make} {model} {variant} via Email until {expires.strftime('%d-%b-%Y')}. "
-          f"You'll get an email when a matching deal is submitted on AutoKnowMus.", 'success')
+    flash(
+        f"✅ {role_label} deal alerts active for {car_label} until "
+        f"{expires.strftime('%d-%b-%Y')}. You'll get an email when a verified deal "
+        f"is submitted on AutoKnowMus for a matching car.",
+        'success'
+    )
     return redirect(url_for(return_endpoint, **return_kwargs))
 
 
@@ -1652,7 +1654,7 @@ def _create_alert_subscription(user, role, form, return_endpoint, return_kwargs_
 @login_required
 @no_guest(message='Sign up to set deal alerts on cars — free with 500 signup credits.')
 def subscribe_alert():
-    """Buyer alert subscription (from buyer_dashboard)."""
+    """Buyer deal alert subscription (from buyer_dashboard)."""
     user = current_user()
     if not user:
         return redirect(url_for('index'))
@@ -1684,7 +1686,7 @@ def subscribe_alert():
 @login_required
 @no_guest(message='Sign up to set deal alerts on your car — free with 500 signup credits.')
 def subscribe_seller_alert():
-    """Seller alert subscription (inline on seller_dashboard)."""
+    """Seller deal alert subscription (inline on seller_dashboard)."""
     user = current_user()
     if not user:
         return redirect(url_for('index'))
@@ -1692,7 +1694,6 @@ def subscribe_seller_alert():
     valuation_id = (request.form.get('valuation_id') or '').strip()
 
     def _return_kwargs(form):
-        # Seller dashboard is routed by /seller-dashboard/<valuation_id>
         return {'valuation_id': valuation_id or '0'}
 
     return _create_alert_subscription(
@@ -1706,7 +1707,7 @@ def subscribe_seller_alert():
 
 @app.route('/my-alerts')
 @login_required
-@no_guest(message='Sign up to manage alert subscriptions.')
+@no_guest(message='Sign up to manage deal alert subscriptions.')
 def my_alerts():
     user = current_user()
     if not user:
@@ -1725,7 +1726,8 @@ def my_alerts():
         app.logger.error(f"Load alerts failed: {e}")
         all_subs = []
 
-    active_subs = []
+    active_buyer_subs = []
+    active_seller_subs = []
     expired_subs = []
 
     for sub in all_subs:
@@ -1747,12 +1749,14 @@ def my_alerts():
         days_remaining = (expires_dt - now).days
         sub['days_remaining'] = max(days_remaining, 0)
 
-        # Normalize role for display
         sub['role'] = sub.get('role') or 'buyer'
         sub['role_label'] = 'Buyer' if sub['role'] == 'buyer' else 'Seller'
 
         if is_active_flag and expires_dt > now:
-            active_subs.append(sub)
+            if sub['role'] == 'seller':
+                active_seller_subs.append(sub)
+            else:
+                active_buyer_subs.append(sub)
         else:
             if not is_active_flag:
                 sub['expired_reason'] = 'Cancelled'
@@ -1760,14 +1764,15 @@ def my_alerts():
                 sub['expired_reason'] = 'Expired'
             expired_subs.append(sub)
 
-    active_count = len(active_subs)
+    active_count = len(active_buyer_subs) + len(active_seller_subs)
     session['active_alerts_count'] = active_count
 
     return render_template(
         'my_alerts.html',
         user=user,
         first_name=firstname_filter(user.get('name')),
-        active_subs=active_subs,
+        active_buyer_subs=active_buyer_subs,
+        active_seller_subs=active_seller_subs,
         expired_subs=expired_subs,
         active_count=active_count,
         max_alerts=MAX_ACTIVE_ALERTS
@@ -1776,7 +1781,7 @@ def my_alerts():
 
 @app.route('/cancel-alert/<alert_id>', methods=['POST'])
 @login_required
-@no_guest(message='Sign up to manage alerts.')
+@no_guest(message='Sign up to manage deal alerts.')
 def cancel_alert(alert_id):
     user = current_user()
     if not user:
@@ -1796,7 +1801,7 @@ def cancel_alert(alert_id):
         return redirect(url_for('my_alerts'))
 
     if not subs:
-        flash('Alert not found or already cancelled.', 'error')
+        flash('Deal alert not found or already cancelled.', 'error')
         return redirect(url_for('my_alerts'))
 
     sub = subs[0]
@@ -1809,24 +1814,25 @@ def cancel_alert(alert_id):
             .execute()
     except Exception as e:
         app.logger.error(f"Cancel alert update failed: {e}")
-        flash('Could not cancel alert. Please try again.', 'error')
+        flash('Could not cancel deal alert. Please try again.', 'error')
         return redirect(url_for('my_alerts'))
 
     car_label = f"{sub.get('make', '')} {sub.get('model', '')} {sub.get('variant', '')}".strip()
+    role_label = 'Buyer' if sub.get('role') == 'buyer' else 'Seller'
     try:
         supabase.table('transactions').insert({
             'user_id': user['id'],
             'type': 'alert_cancelled',
             'amount': 0,
             'balance_after': user.get('credits', 0),
-            'description': f'Cancelled alert for {car_label} (no refund)'
+            'description': f'Cancelled {role_label.lower()} deal alert for {car_label} (no refund)'
         }).execute()
     except Exception as e:
         app.logger.warning(f"Log cancel transaction failed: {e}")
 
     session['active_alerts_count'] = count_active_alert_subscriptions(user['id'])
 
-    flash(f'Alert for {car_label} cancelled. Slot freed (no credit refund).', 'success')
+    flash(f'{role_label} deal alert for {car_label} cancelled. Slot freed (no credit refund).', 'success')
     return redirect(url_for('my_alerts'))
 
 
@@ -2019,14 +2025,9 @@ def submit_deal():
     if not deal_row:
         return render_form(form_data, error='Could not save your deal. Please try again.')
 
-    # ============================================================
-    # FIRE EMAIL ALERTS (background, fail-silent) — per hybrid design,
-    # all deals trigger alerts. Email copy flags unverified deals.
-    # ============================================================
     try:
         dispatch_deal_alerts_async(supabase, deal_row, app_instance=app)
     except Exception as e:
-        # Never fail the user's submit flow over alert dispatch.
         app.logger.warning(f"dispatch_deal_alerts_async raised at call site: {e}")
 
     current_credits = user.get('credits', 0) or 0
@@ -2208,10 +2209,6 @@ def internal_send_weekly_digest():
     """
     Token-gated endpoint for cron-job.org to trigger weekly digest.
     Call with: /internal/send-weekly-digest?token=<ALERT_DISPATCH_TOKEN>
-
-    Monday 9am IST = 03:30 UTC. Set that schedule on cron-job.org.
-
-    Returns JSON with counts. Never raises — fail-silent internally.
     """
     provided_token = request.args.get('token') or request.headers.get('X-Dispatch-Token') or ''
 
