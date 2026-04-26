@@ -3043,20 +3043,34 @@ def _format_admin_relative_date(dt_or_str):
 
 
 def _compute_user_activity_stats():
-    """Aggregate stats across 7d, 30d, all-time windows."""
+    """
+    Aggregate stats across 1d, 3d, 7d, 30d, all-time windows.
+    All time-based windows are rolling (e.g. "1d" = last 24 hours from now).
+    """
     now = datetime.utcnow()
+    cutoff_1d = (now - timedelta(days=1)).isoformat()
+    cutoff_3d = (now - timedelta(days=3)).isoformat()
     cutoff_7d = (now - timedelta(days=7)).isoformat()
     cutoff_30d = (now - timedelta(days=30)).isoformat()
 
     stats = {
+        'stats_1d': {'signups': 0, 'searches': 0, 'deals': 0, 'alert_subs': 0},
+        'stats_3d': {'signups': 0, 'searches': 0, 'deals': 0, 'alert_subs': 0},
         'stats_7d': {'signups': 0, 'searches': 0, 'deals': 0, 'alert_subs': 0},
         'stats_30d': {'signups': 0, 'searches': 0, 'deals': 0, 'alert_subs': 0},
         'stats_all': {'signups': 0, 'searches': 0, 'deals': 0, 'alert_subs': 0},
     }
 
+    windows = [
+        ('stats_1d', cutoff_1d),
+        ('stats_3d', cutoff_3d),
+        ('stats_7d', cutoff_7d),
+        ('stats_30d', cutoff_30d),
+    ]
+
     # Signups
     try:
-        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+        for window_key, cutoff in windows:
             r = (supabase.table('users')
                  .select('id', count='exact')
                  .gte('created_at', cutoff)
@@ -3069,7 +3083,7 @@ def _compute_user_activity_stats():
 
     # Seller searches (valuations table)
     try:
-        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+        for window_key, cutoff in windows:
             r = (supabase.table('valuations')
                  .select('id', count='exact')
                  .gte('created_at', cutoff)
@@ -3082,7 +3096,7 @@ def _compute_user_activity_stats():
 
     # Buyer searches (transactions table, type=buyer_search)
     try:
-        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+        for window_key, cutoff in windows:
             r = (supabase.table('transactions')
                  .select('id', count='exact')
                  .eq('type', 'buyer_search')
@@ -3099,7 +3113,7 @@ def _compute_user_activity_stats():
 
     # Deals submitted
     try:
-        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+        for window_key, cutoff in windows:
             r = (supabase.table('deals')
                  .select('id', count='exact')
                  .gte('created_at', cutoff)
@@ -3112,7 +3126,7 @@ def _compute_user_activity_stats():
 
     # Alert subscriptions
     try:
-        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+        for window_key, cutoff in windows:
             r = (supabase.table('alert_subscriptions')
                  .select('id', count='exact')
                  .gte('created_at', cutoff)
@@ -3368,6 +3382,8 @@ def admin_user_activity():
         user=user,
         first_name=firstname_filter(user.get('name')),
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+        stats_1d=stats['stats_1d'],
+        stats_3d=stats['stats_3d'],
         stats_7d=stats['stats_7d'],
         stats_30d=stats['stats_30d'],
         stats_all=stats['stats_all'],
