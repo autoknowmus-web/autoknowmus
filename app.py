@@ -184,6 +184,12 @@ HIGH_DEMAND_BRANDS = {'Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Ki
 MEDIUM_DEMAND_BRANDS = {'Ford', 'Renault', 'Nissan', 'Volkswagen', 'Skoda', 'MG'}
 LUXURY_BRANDS = {'Audi', 'BMW', 'Mercedes-Benz', 'Jaguar', 'Land Rover', 'Lexus', 'Volvo'}
 
+# v2.8: Used-car valuation cap as a fraction of new ex-showroom price.
+# Even a barely-driven car loses some value the moment it leaves the showroom
+# (registration tax, depreciation, "showroom premium" gone). 0.95 = 95% cap.
+# Tighten to 0.90 if too many edge cases still overshoot.
+EX_SHOWROOM_USED_CEILING = 0.95
+
 TRANSACTION_TYPE_LABELS = {
     'signup_bonus': 'Signup Bonus',
     'valuation_charge': 'Seller Valuation',
@@ -218,6 +224,73 @@ def _live_last_updated():
         return _car_data_module.BASE_PRICE_LAST_UPDATED or BASE_PRICE_LAST_UPDATED
     except Exception:
         return BASE_PRICE_LAST_UPDATED
+
+
+# ============================================================
+# v2.8: EX-SHOWROOM CEILING — prevents used > new anomaly
+# ============================================================
+def _apply_ex_showroom_ceiling(make, model, variant, fuel, estimated, price_low, price_high):
+    """
+    Cap used-car valuation at EX_SHOWROOM_USED_CEILING (95%) of new ex-showroom price.
+
+    Why: For very recent model years (e.g. 2026 cars valued in April 2026), the
+    depreciation curve is near-zero, so positive adjustments for "Excellent +
+    1st Owner + low km" can push the estimate ABOVE the new ex-showroom price.
+    A used car can NEVER realistically exceed the new ex-showroom price.
+
+    The ceiling clamps:
+      - estimated (point estimate / "most likely")
+      - price_high (top of the range)
+      - price_low is also adjusted if needed to stay below ceiling
+
+    Returns (estimated, price_low, price_high) — possibly unchanged if no cap hit.
+
+    Falls back to original values if ex-showroom price is unavailable for this
+    variant (e.g. old discontinued model, missing from price data).
+    """
+    # Try variant-specific price first (most accurate), fall back to model base
+    ex_showroom = None
+    try:
+        ex_showroom = get_variant_base_price(make, model, variant, fuel)
+    except Exception:
+        pass
+    if not ex_showroom:
+        try:
+            ex_showroom = get_base_price(make, model)
+        except Exception:
+            ex_showroom = None
+
+    if not ex_showroom or ex_showroom <= 0:
+        # No ex-showroom data available — fall back to original behavior
+        return estimated, price_low, price_high
+
+    ceiling = int(round(ex_showroom * EX_SHOWROOM_USED_CEILING))
+
+    # If nothing exceeds the ceiling, return as-is
+    if estimated <= ceiling and (price_high or 0) <= ceiling:
+        return estimated, price_low, price_high
+
+    # Cap the estimate
+    capped_estimated = min(estimated, ceiling)
+
+    # Cap the upper bound
+    capped_high = min(price_high, ceiling) if price_high else ceiling
+
+    # Adjust lower bound if it ended up above the new upper bound (rare but possible)
+    capped_low = price_low
+    if capped_low and capped_low > capped_high:
+        capped_low = capped_high
+
+    # Log when cap activates so admin can audit
+    if estimated != capped_estimated or price_high != capped_high:
+        app.logger.info(
+            f"v2.8 ex-showroom ceiling applied: {make} {model} {variant} {fuel} | "
+            f"new={ex_showroom} ceiling={ceiling} | "
+            f"estimated {estimated}->{capped_estimated} | "
+            f"high {price_high}->{capped_high}"
+        )
+
+    return capped_estimated, capped_low, capped_high
 
 
 def hash_password(plain: str) -> str:
@@ -1233,6 +1306,14 @@ def seller():
     adjusted, confidence = adjust_with_deals(estimated, similar_prices, phase=phase)
     price_low, price_high = compute_price_range(adjusted, phase=phase)
 
+    # v2.8: Cap used-car valuation at 95% of new ex-showroom price.
+    # Prevents the "used > new" anomaly visible for very recent model years.
+    adjusted, price_low, price_high = _apply_ex_showroom_ceiling(
+        make=form_data['make'], model=form_data['model'],
+        variant=form_data['variant'], fuel=form_data['fuel'],
+        estimated=adjusted, price_low=price_low, price_high=price_high,
+    )
+
     val_payload = {
         'make': form_data['make'],
         'model': form_data['model'],
@@ -1664,6 +1745,13 @@ def buyer_dashboard():
     )
     adjusted, confidence = adjust_with_deals(estimated, similar_prices, phase=phase)
     price_low, price_high = compute_price_range(adjusted, phase=phase)
+
+    # v2.8: Cap used-car valuation at 95% of new ex-showroom price.
+    # Prevents the "used > new" anomaly visible for very recent model years.
+    adjusted, price_low, price_high = _apply_ex_showroom_ceiling(
+        make=make, model=model, variant=variant, fuel=fuel,
+        estimated=adjusted, price_low=price_low, price_high=price_high,
+    )
 
     asking_position = None
     asking_pct_diff = None
