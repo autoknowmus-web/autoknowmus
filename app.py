@@ -3009,6 +3009,382 @@ def admin_flag_user(user_id):
 
 
 # ============================================================
+# v2.9: ADMIN — USER ACTIVITY DASHBOARD
+# Tracks who signed up, who searched, who hit a wall, who's a power user.
+# Uses existing tables only (users, valuations, transactions, deals,
+# alert_subscriptions) — no schema changes required.
+# ============================================================
+
+def _format_admin_relative_date(dt_or_str):
+    """Format a datetime as '26-Apr-26 (3d ago)' for admin views."""
+    if not dt_or_str:
+        return '—'
+    try:
+        if isinstance(dt_or_str, str):
+            clean = dt_or_str.replace('Z', '').split('+')[0].split('.')[0]
+            dt = datetime.fromisoformat(clean)
+        else:
+            dt = dt_or_str
+        delta = datetime.utcnow() - dt
+        days = delta.days
+        if days == 0:
+            rel = 'today'
+        elif days == 1:
+            rel = '1d ago'
+        elif days < 30:
+            rel = f'{days}d ago'
+        elif days < 365:
+            rel = f'{days // 30}mo ago'
+        else:
+            rel = f'{days // 365}y ago'
+        return f"{dt.strftime('%d-%b-%y')} ({rel})"
+    except (ValueError, AttributeError, TypeError):
+        return str(dt_or_str)
+
+
+def _compute_user_activity_stats():
+    """Aggregate stats across 7d, 30d, all-time windows."""
+    now = datetime.utcnow()
+    cutoff_7d = (now - timedelta(days=7)).isoformat()
+    cutoff_30d = (now - timedelta(days=30)).isoformat()
+
+    stats = {
+        'stats_7d': {'signups': 0, 'searches': 0, 'deals': 0, 'alert_subs': 0},
+        'stats_30d': {'signups': 0, 'searches': 0, 'deals': 0, 'alert_subs': 0},
+        'stats_all': {'signups': 0, 'searches': 0, 'deals': 0, 'alert_subs': 0},
+    }
+
+    # Signups
+    try:
+        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+            r = (supabase.table('users')
+                 .select('id', count='exact')
+                 .gte('created_at', cutoff)
+                 .execute())
+            stats[window_key]['signups'] = r.count or 0
+        r_all = supabase.table('users').select('id', count='exact').execute()
+        stats['stats_all']['signups'] = r_all.count or 0
+    except Exception as e:
+        app.logger.warning(f"user activity signups query failed: {e}")
+
+    # Seller searches (valuations table)
+    try:
+        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+            r = (supabase.table('valuations')
+                 .select('id', count='exact')
+                 .gte('created_at', cutoff)
+                 .execute())
+            stats[window_key]['searches'] += r.count or 0
+        r_all = supabase.table('valuations').select('id', count='exact').execute()
+        stats['stats_all']['searches'] += r_all.count or 0
+    except Exception as e:
+        app.logger.warning(f"user activity valuations query failed: {e}")
+
+    # Buyer searches (transactions table, type=buyer_search)
+    try:
+        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+            r = (supabase.table('transactions')
+                 .select('id', count='exact')
+                 .eq('type', 'buyer_search')
+                 .gte('created_at', cutoff)
+                 .execute())
+            stats[window_key]['searches'] += r.count or 0
+        r_all = (supabase.table('transactions')
+                 .select('id', count='exact')
+                 .eq('type', 'buyer_search')
+                 .execute())
+        stats['stats_all']['searches'] += r_all.count or 0
+    except Exception as e:
+        app.logger.warning(f"user activity buyer_search query failed: {e}")
+
+    # Deals submitted
+    try:
+        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+            r = (supabase.table('deals')
+                 .select('id', count='exact')
+                 .gte('created_at', cutoff)
+                 .execute())
+            stats[window_key]['deals'] = r.count or 0
+        r_all = supabase.table('deals').select('id', count='exact').execute()
+        stats['stats_all']['deals'] = r_all.count or 0
+    except Exception as e:
+        app.logger.warning(f"user activity deals query failed: {e}")
+
+    # Alert subscriptions
+    try:
+        for window_key, cutoff in [('stats_7d', cutoff_7d), ('stats_30d', cutoff_30d)]:
+            r = (supabase.table('alert_subscriptions')
+                 .select('id', count='exact')
+                 .gte('created_at', cutoff)
+                 .execute())
+            stats[window_key]['alert_subs'] = r.count or 0
+        r_all = supabase.table('alert_subscriptions').select('id', count='exact').execute()
+        stats['stats_all']['alert_subs'] = r_all.count or 0
+    except Exception as e:
+        app.logger.warning(f"user activity alert_subs query failed: {e}")
+
+    return stats
+
+
+def _compute_user_activity_rows():
+    """
+    Build per-user activity profile by joining users with their
+    valuations, transactions, deals, and active alert subscriptions.
+    Returns list of dicts ready for the template.
+    """
+    now = datetime.utcnow()
+
+    # 1. Fetch all users
+    try:
+        r = (supabase.table('users')
+             .select('id, name, email, phone, credits, created_at, last_login_at, auth_method')
+             .order('created_at', desc=True)
+             .execute())
+        users = r.data or []
+    except Exception as e:
+        app.logger.error(f"user activity fetch users failed: {e}")
+        return []
+
+    # 2. Fetch all valuations (seller searches) — for counts + last search per user
+    try:
+        r = (supabase.table('valuations')
+             .select('user_id, make, model, variant, fuel, year, created_at')
+             .order('created_at', desc=True)
+             .execute())
+        all_valuations = r.data or []
+    except Exception as e:
+        app.logger.warning(f"user activity fetch valuations failed: {e}")
+        all_valuations = []
+
+    valuations_by_user = defaultdict(list)
+    for v in all_valuations:
+        if v.get('user_id') is not None:
+            valuations_by_user[v['user_id']].append(v)
+
+    # 3. Fetch buyer searches from transactions
+    try:
+        r = (supabase.table('transactions')
+             .select('user_id, description, created_at')
+             .eq('type', 'buyer_search')
+             .order('created_at', desc=True)
+             .execute())
+        all_buyer_searches = r.data or []
+    except Exception as e:
+        app.logger.warning(f"user activity fetch buyer_search failed: {e}")
+        all_buyer_searches = []
+
+    buyer_searches_by_user = defaultdict(list)
+    for t in all_buyer_searches:
+        if t.get('user_id') is not None:
+            buyer_searches_by_user[t['user_id']].append(t)
+
+    # 4. Fetch deals (counts only)
+    try:
+        r = (supabase.table('deals')
+             .select('user_id')
+             .execute())
+        deals = r.data or []
+    except Exception as e:
+        app.logger.warning(f"user activity fetch deals failed: {e}")
+        deals = []
+
+    deals_count_by_user = Counter(d['user_id'] for d in deals if d.get('user_id') is not None)
+
+    # 5. Fetch active alert subscriptions per user
+    try:
+        r = (supabase.table('alert_subscriptions')
+             .select('user_id')
+             .eq('active', True)
+             .gt('expires_at', now.isoformat())
+             .execute())
+        alerts = r.data or []
+    except Exception as e:
+        app.logger.warning(f"user activity fetch alerts failed: {e}")
+        alerts = []
+
+    alerts_count_by_user = Counter(a['user_id'] for a in alerts if a.get('user_id') is not None)
+
+    # 6. Build rows
+    rows = []
+    cutoff_30d = now - timedelta(days=30)
+
+    for u in users:
+        uid = u.get('id')
+        seller_searches = len(valuations_by_user.get(uid, []))
+        buyer_searches = len(buyer_searches_by_user.get(uid, []))
+        deals_count = deals_count_by_user.get(uid, 0)
+        active_alerts = alerts_count_by_user.get(uid, 0)
+        total_searches = seller_searches + buyer_searches
+
+        # Determine cohorts
+        is_dead_cohort = total_searches == 0
+        is_active_cohort = total_searches >= 1
+        is_power_cohort = (deals_count >= 1) or (active_alerts >= 1)
+
+        # Days since signup (for dead-cohort context)
+        days_since_signup = 0
+        try:
+            cre = (u.get('created_at') or '').replace('Z', '').split('+')[0].split('.')[0]
+            if cre:
+                cre_dt = datetime.fromisoformat(cre)
+                days_since_signup = (now - cre_dt).days
+        except (ValueError, AttributeError, TypeError):
+            pass
+
+        # 30-day inactivity flag
+        is_inactive_30d = False
+        try:
+            last = (u.get('last_login_at') or '').replace('Z', '').split('+')[0].split('.')[0]
+            if last:
+                last_dt = datetime.fromisoformat(last)
+                if last_dt < cutoff_30d:
+                    is_inactive_30d = True
+        except (ValueError, AttributeError, TypeError):
+            pass
+
+        # Last search label (whichever is most recent across seller/buyer)
+        last_search_label = None
+        last_search_date = None
+        last_search_dt = None
+
+        # Most recent seller search
+        seller_recent = valuations_by_user.get(uid, [])
+        if seller_recent:
+            v = seller_recent[0]  # already sorted desc
+            try:
+                s_str = (v.get('created_at') or '').replace('Z', '').split('+')[0].split('.')[0]
+                s_dt = datetime.fromisoformat(s_str) if s_str else None
+                if s_dt and (last_search_dt is None or s_dt > last_search_dt):
+                    last_search_dt = s_dt
+                    last_search_label = f"{v.get('make','')} {v.get('model','')} {v.get('variant','')} ({v.get('fuel','')})"
+            except (ValueError, AttributeError, TypeError):
+                pass
+
+        # Most recent buyer search
+        buyer_recent = buyer_searches_by_user.get(uid, [])
+        if buyer_recent:
+            t = buyer_recent[0]
+            try:
+                t_str = (t.get('created_at') or '').replace('Z', '').split('+')[0].split('.')[0]
+                t_dt = datetime.fromisoformat(t_str) if t_str else None
+                if t_dt and (last_search_dt is None or t_dt > last_search_dt):
+                    last_search_dt = t_dt
+                    # Description format: "Buyer search: 2018 Maruti Swift VXi"
+                    desc = t.get('description', '') or ''
+                    label = desc.replace('Buyer search:', '').strip() or '(buyer search)'
+                    last_search_label = label
+            except (ValueError, AttributeError, TypeError):
+                pass
+
+        if last_search_dt:
+            last_search_date = last_search_dt.strftime('%d-%b-%y')
+
+        rows.append({
+            'id': uid,
+            'name': u.get('name'),
+            'email': u.get('email'),
+            'phone': u.get('phone'),
+            'credits': u.get('credits', 0),
+            'auth_method': u.get('auth_method'),
+            'is_admin': _is_admin_email(u.get('email')),
+            'signup_display': _format_admin_relative_date(u.get('created_at')),
+            'last_login_display': _format_admin_relative_date(u.get('last_login_at')) if u.get('last_login_at') else 'never',
+            'seller_searches': seller_searches,
+            'buyer_searches': buyer_searches,
+            'deals_submitted': deals_count,
+            'active_alerts': active_alerts,
+            'total_searches': total_searches,
+            'is_dead_cohort': is_dead_cohort,
+            'is_active_cohort': is_active_cohort,
+            'is_power_cohort': is_power_cohort,
+            'is_inactive_30d': is_inactive_30d,
+            'days_since_signup': days_since_signup,
+            'last_search_label': last_search_label,
+            'last_search_date': last_search_date,
+            # internal sort keys
+            '_signup_dt': u.get('created_at') or '',
+            '_last_login_dt': u.get('last_login_at') or '',
+        })
+
+    return rows
+
+
+@app.route('/admin/user-activity')
+@login_required
+@admin_required
+def admin_user_activity():
+    """User activity dashboard — who signed up, who searched, who hit a wall."""
+    user = current_user()
+
+    active_filter = (request.args.get('f') or 'all').strip().lower()
+    if active_filter not in ('all', 'active', 'dead', 'power'):
+        active_filter = 'all'
+
+    active_sort = (request.args.get('sort') or 'recent').strip().lower()
+    if active_sort not in ('recent', 'last_login', 'most_active'):
+        active_sort = 'recent'
+
+    # Compute aggregate stats (across all users — admin & test included per locked design)
+    stats = _compute_user_activity_stats()
+
+    # Build per-user rows
+    all_rows = _compute_user_activity_rows()
+    total_users = len(all_rows)
+
+    # Cohort counts (computed from all_rows BEFORE filtering, so percentages are stable)
+    cohort_active = sum(1 for r in all_rows if r['is_active_cohort'])
+    cohort_dead = sum(1 for r in all_rows if r['is_dead_cohort'])
+    cohort_power = sum(1 for r in all_rows if r['is_power_cohort'])
+
+    def _pct(n, total):
+        if total <= 0:
+            return 0
+        return round((n / total) * 100, 1)
+
+    cohort_active_pct = _pct(cohort_active, total_users)
+    cohort_dead_pct = _pct(cohort_dead, total_users)
+    cohort_power_pct = _pct(cohort_power, total_users)
+
+    # Apply filter
+    if active_filter == 'active':
+        rows = [r for r in all_rows if r['is_active_cohort']]
+    elif active_filter == 'dead':
+        rows = [r for r in all_rows if r['is_dead_cohort']]
+    elif active_filter == 'power':
+        rows = [r for r in all_rows if r['is_power_cohort']]
+    else:
+        rows = list(all_rows)
+
+    # Apply sort
+    if active_sort == 'last_login':
+        rows.sort(key=lambda r: r['_last_login_dt'] or '', reverse=True)
+    elif active_sort == 'most_active':
+        rows.sort(key=lambda r: (r['total_searches'] + r['deals_submitted'] + r['active_alerts']), reverse=True)
+    else:  # recent
+        rows.sort(key=lambda r: r['_signup_dt'] or '', reverse=True)
+
+    return render_template(
+        'admin_user_activity.html',
+        user=user,
+        first_name=firstname_filter(user.get('name')),
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+        stats_7d=stats['stats_7d'],
+        stats_30d=stats['stats_30d'],
+        stats_all=stats['stats_all'],
+        users=rows,
+        total_users=total_users,
+        cohort_active=cohort_active,
+        cohort_dead=cohort_dead,
+        cohort_power=cohort_power,
+        cohort_active_pct=cohort_active_pct,
+        cohort_dead_pct=cohort_dead_pct,
+        cohort_power_pct=cohort_power_pct,
+        active_filter=active_filter,
+        active_sort=active_sort,
+    )
+
+
+# ============================================================
 # ADMIN — PRICE CACHE REFRESH
 # ============================================================
 
