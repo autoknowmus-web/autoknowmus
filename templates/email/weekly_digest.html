@@ -5,17 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
-<title>Deal alert — {{ car_label }}</title>
+<title>Your AutoKnowMus weekly digest</title>
 <style>
-  /* Reset */
   body, table, td, p, a, li, blockquote { -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
   table, td { mso-table-lspace:0pt; mso-table-rspace:0pt; }
   img { -ms-interpolation-mode:bicubic; border:0; outline:none; text-decoration:none; max-width:100%; }
   body { margin:0; padding:0; width:100%!important; height:100%!important; background-color:#f5f6f8; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
 
-  /* Container */
   .wrapper { background-color:#f5f6f8; padding:24px 12px; }
-  .container { max-width:600px; margin:0 auto; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+  .container { max-width:640px; margin:0 auto; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
 
   /* Logo header */
   .logo-header { padding:24px 28px 16px; text-align:center; background-color:#ffffff; border-bottom:1px solid #eef0f5; }
@@ -25,56 +23,60 @@
   .logo-know { color:#28a745; }
   .logo-mus { color:#4e54ff; }
 
-  /* Title bar (buyer = blue) */
-  .title-bar { background-color:#4e54ff; padding:18px 28px; color:#ffffff; }
+  /* Title bar (digest = gradient because it covers both roles) */
+  .title-bar { background:linear-gradient(135deg, #28a745 0%, #4e54ff 100%); padding:20px 28px; color:#ffffff; }
   .title-eyebrow { font-size:13px; font-weight:600; letter-spacing:0.4px; opacity:0.92; text-transform:uppercase; }
-  .title-main { font-size:20px; font-weight:700; margin-top:6px; line-height:1.3; }
+  .title-main { font-size:22px; font-weight:700; margin-top:6px; line-height:1.3; }
+  .title-dates { font-size:13px; margin-top:4px; opacity:0.92; }
 
-  /* Body */
   .body { padding:28px; color:#1a1d24; font-size:15px; line-height:1.55; }
   .greet { font-size:16px; color:#1a1d24; margin:0 0 18px; }
-  .intro { margin:0 0 20px; }
 
-  /* Price hero */
-  .price-hero { background-color:#f7f8fb; border:1px solid #e5e7ee; border-radius:10px; padding:22px; text-align:center; margin:0 0 24px; }
-  .price-label { font-size:12px; color:#6c757d; text-transform:uppercase; letter-spacing:0.8px; margin:0 0 6px; }
-  .price-value { font-size:32px; font-weight:700; color:#1a1d24; margin:0; line-height:1.1; }
-  .price-sub { font-size:13px; color:#6c757d; margin:8px 0 0; }
+  /* Summary banner */
+  .summary-banner { background-color:#f7f8fb; border:1px solid #e5e7ee; border-radius:10px; padding:14px 18px; margin:0 0 22px; font-size:14px; color:#1a1d24; text-align:center; line-height:1.5; }
+  .summary-banner strong { color:#1a1d24; }
 
-  /* Year mismatch note */
-  .year-mismatch { background-color:#fffbeb; border:1px solid #fde68a; color:#7c5e00; padding:12px 16px; border-radius:8px; font-size:13px; margin:0 0 20px; line-height:1.5; }
-  .year-mismatch strong { color:#7c5e00; }
+  /* Section divider (Seller / Buyer headings) */
+  .role-divider { font-size:13px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; padding:8px 0; margin:24px 0 12px; }
+  .role-divider-seller { color:#28a745; border-bottom:2px solid #28a745; }
+  .role-divider-buyer { color:#4e54ff; border-bottom:2px solid #4e54ff; }
+  .role-divider:first-child { margin-top:0; }
 
-  /* Verdict card */
-  .verdict { border-radius:10px; padding:18px 20px; margin:0 0 24px; }
-  .verdict-below { background-color:#e8f5e9; border-left:4px solid #28a745; }
-  .verdict-fair  { background-color:#e3f2fd; border-left:4px solid #4e54ff; }
-  .verdict-above { background-color:#fff4e5; border-left:4px solid #ff8c00; }
-  .verdict-unknown { background-color:#f7f8fb; border-left:4px solid #6c757d; }
-  .verdict-label { font-size:15px; font-weight:700; color:#1a1d24; margin:0 0 6px; }
-  .verdict-explanation { font-size:14px; color:#1a1d24; margin:0; line-height:1.55; }
+  /* Sub item */
+  .sub-item { border:1px solid #e5e7ee; border-radius:10px; padding:18px 20px; margin:0 0 14px; background-color:#ffffff; }
+  .sub-item-seller { border-left:4px solid #28a745; }
+  .sub-item-buyer { border-left:4px solid #4e54ff; }
 
-  /* Section heading */
-  .section-heading { font-size:13px; font-weight:600; color:#6c757d; text-transform:uppercase; letter-spacing:0.5px; margin:24px 0 10px; }
+  .sub-car { font-size:16px; font-weight:700; color:#1a1d24; margin:0 0 6px; }
+  .sub-criteria-line { font-size:13px; color:#6c757d; margin:0 0 14px; line-height:1.5; }
 
-  /* Detail list (deal details + subscribed criteria — same style) */
-  .details { width:100%; border-collapse:collapse; margin:0 0 8px; background-color:#fafbfd; border-radius:8px; overflow:hidden; }
-  .details td { padding:12px 16px; font-size:14px; vertical-align:top; border-bottom:1px solid #eef0f5; }
-  .details td:first-child { color:#6c757d; width:45%; }
-  .details td:last-child { color:#1a1d24; font-weight:600; text-align:right; }
-  .details tr:last-child td { border-bottom:none; }
+  /* Deal rows inside sub */
+  .deal-list { margin:0 0 12px; }
+  .deal-row { padding:10px 0; border-top:1px solid #eef0f5; font-size:14px; }
+  .deal-row:first-child { border-top:none; padding-top:6px; }
+  .deal-row table { width:100%; border-collapse:collapse; }
+  .deal-row td { padding:0; vertical-align:top; }
+  .deal-left { width:65%; color:#1a1d24; }
+  .deal-right { width:35%; text-align:right; color:#1a1d24; font-weight:600; }
+  .deal-meta { font-size:12px; color:#6c757d; margin-top:3px; }
+  .unverified-tag { display:inline-block; background-color:#fff4e5; color:#8a5200; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; margin-left:6px; }
 
-  /* Range pill */
-  .range-pill { display:inline-block; background-color:#ffffff; color:#1a1d24; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:600; border:1px solid #e5e7ee; }
+  /* Empty state */
+  .empty-state { padding:8px 0 0; color:#6c757d; font-size:13px; font-style:italic; line-height:1.5; }
 
-  /* Unverified flag */
-  .unverified-flag { background-color:#fff4e5; border:1px solid #ffd9a8; color:#8a5200; padding:12px 16px; border-radius:8px; font-size:13px; margin:0 0 20px; line-height:1.5; }
-  .unverified-flag strong { color:#8a5200; }
+  /* Item-level CTA */
+  .item-cta-wrap { margin-top:14px; padding-top:14px; border-top:1px solid #eef0f5; text-align:right; }
+  .item-cta { font-size:13px; font-weight:600; text-decoration:none; }
+  .item-cta-seller { color:#28a745; }
+  .item-cta-buyer { color:#4e54ff; }
+  .item-cta-arrow { display:inline-block; margin-left:4px; }
 
-  /* CTA */
+  /* Top-level CTA (footer area) */
   .cta-wrap { text-align:center; margin:28px 0 8px; }
-  .cta { display:inline-block; background-color:#4e54ff; color:#ffffff!important; text-decoration:none; padding:13px 28px; border-radius:8px; font-size:15px; font-weight:600; }
+  .cta { display:inline-block; background-color:#1a1d24; color:#ffffff!important; text-decoration:none; padding:13px 28px; border-radius:8px; font-size:15px; font-weight:600; }
   .cta-note { font-size:12px; color:#6c757d; margin-top:10px; line-height:1.5; }
+
+  .footer-note { font-size:13px; color:#6c757d; margin-top:24px; margin-bottom:0; line-height:1.5; }
 
   /* Footer */
   .footer { padding:20px 28px; background-color:#f7f8fb; border-top:1px solid #eef0f5; font-size:12px; color:#6c757d; line-height:1.6; text-align:center; }
@@ -88,37 +90,34 @@
     .logo-auto { color:#e8eaed!important; }
     .body { color:#e8eaed!important; }
     .greet { color:#e8eaed!important; }
-    .price-hero { background-color:#232730!important; border-color:#2e3340!important; }
-    .price-value { color:#e8eaed!important; }
-    .price-label, .price-sub { color:#a0a6b0!important; }
-    .details { background-color:#232730!important; }
-    .details td { border-bottom-color:#2e3340!important; }
-    .details td:first-child { color:#a0a6b0!important; }
-    .details td:last-child { color:#e8eaed!important; }
-    .range-pill { background-color:#1a1d24!important; border-color:#2e3340!important; color:#e8eaed!important; }
-    .verdict-label, .verdict-explanation { color:#e8eaed!important; }
-    .verdict-below { background-color:#1a2e20!important; }
-    .verdict-fair  { background-color:#1a1f35!important; }
-    .verdict-above { background-color:#2e2418!important; }
-    .verdict-unknown { background-color:#232730!important; }
-    .year-mismatch { background-color:#2e2418!important; border-color:#4a3820!important; color:#ffc078!important; }
-    .year-mismatch strong { color:#ffc078!important; }
-    .unverified-flag { background-color:#2e2418!important; border-color:#4a3820!important; color:#ffc078!important; }
-    .unverified-flag strong { color:#ffc078!important; }
-    .section-heading { color:#a0a6b0!important; }
+    .summary-banner { background-color:#232730!important; border-color:#2e3340!important; color:#e8eaed!important; }
+    .summary-banner strong { color:#e8eaed!important; }
+    .sub-item { background-color:#232730!important; border-color:#2e3340!important; }
+    .sub-car { color:#e8eaed!important; }
+    .sub-criteria-line { color:#a0a6b0!important; }
+    .deal-row { border-top-color:#2e3340!important; }
+    .deal-left, .deal-right { color:#e8eaed!important; }
+    .deal-meta { color:#a0a6b0!important; }
+    .empty-state { color:#a0a6b0!important; }
+    .item-cta-wrap { border-top-color:#2e3340!important; }
+    .unverified-tag { background-color:#2e2418!important; color:#ffc078!important; }
+    .cta { background-color:#4e54ff!important; }
+    .footer-note { color:#a0a6b0!important; }
+    .cta-note { color:#a0a6b0!important; }
     .footer { background-color:#1a1d24!important; border-top-color:#2e3340!important; color:#a0a6b0!important; }
     .footer a { color:#a0a6b0!important; }
-    .cta-note { color:#a0a6b0!important; }
   }
 
   /* Mobile */
   @media only screen and (max-width:480px) {
     .body { padding:22px 18px!important; }
-    .title-bar { padding:16px 18px!important; }
+    .title-bar { padding:18px!important; }
     .logo-header { padding:20px 18px 12px!important; }
-    .price-value { font-size:26px!important; }
-    .title-main { font-size:18px!important; }
-    .details td { padding:10px 12px!important; font-size:13px!important; }
+    .title-main { font-size:19px!important; }
+    .sub-item { padding:14px 16px!important; }
+    .sub-car { font-size:15px!important; }
+    .deal-left { width:60%!important; }
+    .deal-right { width:40%!important; }
   }
 </style>
 </head>
@@ -138,126 +137,130 @@
 
       <p class="greet">Hi {{ first_name or 'there' }},</p>
 
-      <p class="intro">A verified deal just landed for the <strong>{{ car_label }}</strong> you're tracking. Here are the details:</p>
+      {% set ns = namespace(total_deals=0) %}
+      {% for item in digest_items %}
+        {% set ns.total_deals = ns.total_deals + item.deals|length %}
+      {% endfor %}
 
-      <!-- Price hero -->
-      <div class="price-hero">
-        <p class="price-label">Sold at</p>
-        <p class="price-value">{{ sale_price_fmt }}</p>
-        <p class="price-sub">on {{ deal_date_fmt }} &middot; {{ deal.buyer_type or 'Private' }} buyer</p>
+      <div class="summary-banner">
+        {% if ns.total_deals == 0 %}
+          No new deals matched your <strong>{{ digest_items|length }}</strong> active
+          {% if digest_items|length == 1 %}subscription{% else %}subscriptions{% endif %} this week.
+          Activity ebbs and flows &mdash; check back next Monday.
+        {% else %}
+          <strong>{{ ns.total_deals }} new deal{% if ns.total_deals != 1 %}s{% endif %}</strong>
+          across your <strong>{{ digest_items|length }}</strong> active
+          {% if digest_items|length == 1 %}subscription{% else %}subscriptions{% endif %}.
+        {% endif %}
       </div>
 
-      <!-- Year mismatch note (only if deal year != sub year) -->
-      {% if year_mismatch %}
-      <div class="year-mismatch">
-        <strong>Year note:</strong> You subscribed for a <strong>{{ sub_criteria.year }}</strong> {{ sub.make }} {{ sub.model }}. This deal is for a <strong>{{ deal.year }}</strong> model. Year-adjacent sales (&plusmn;2 years) are still useful market signals because they share similar demand patterns.
-      </div>
+      <!-- Seller section first (per locked strategic ordering) -->
+      {% if seller_count and seller_count > 0 %}
+        <div class="role-divider role-divider-seller">
+          Seller alerts &mdash; {{ seller_count }} active
+        </div>
+
+        {% for item in digest_items if item.role == 'seller' %}
+          <div class="sub-item sub-item-seller">
+            <p class="sub-car">{{ item.car_label }}</p>
+            <p class="sub-criteria-line">
+              {{ item.sub_criteria.year }}
+              &middot; {{ item.sub_criteria.fuel }}
+              &middot; {{ item.sub_criteria.owner }}
+              &middot; {{ item.sub_criteria.condition }} condition
+              &middot; {{ item.sub_criteria.mileage_display }}
+            </p>
+
+            <div class="deal-list">
+              {% if item.deals %}
+                {% for d in item.deals %}
+                  <div class="deal-row">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td class="deal-left">
+                          {{ d.year }} model sold on {{ format_date(d.transaction_date) }}
+                          {% if not d.verified %}<span class="unverified-tag">Unverified</span>{% endif %}
+                          <div class="deal-meta">{{ d.buyer_type or 'Private' }} buyer</div>
+                        </td>
+                        <td class="deal-right">{{ format_inr(d.sale_price) }}</td>
+                      </tr>
+                    </table>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <p class="empty-state">No new deals this week. Sellers get an alert the moment a similar car sells.</p>
+              {% endif %}
+            </div>
+
+            <div class="item-cta-wrap">
+              <a href="{{ item.cta_url }}" class="item-cta item-cta-seller">
+                Refresh your valuation<span class="item-cta-arrow">&rarr;</span>
+              </a>
+            </div>
+          </div>
+        {% endfor %}
       {% endif %}
 
-      <!-- Unverified flag -->
-      {% if not is_verified %}
-      <div class="unverified-flag">
-        <strong>Note:</strong> this deal was submitted without proof of sale. Treat the price as a directional signal, not a confirmed benchmark.
-      </div>
+      <!-- Buyer section second -->
+      {% if buyer_count and buyer_count > 0 %}
+        <div class="role-divider role-divider-buyer">
+          Buyer alerts &mdash; {{ buyer_count }} active
+        </div>
+
+        {% for item in digest_items if item.role == 'buyer' %}
+          <div class="sub-item sub-item-buyer">
+            <p class="sub-car">{{ item.car_label }}</p>
+            <p class="sub-criteria-line">
+              {{ item.sub_criteria.year }}
+              &middot; {{ item.sub_criteria.fuel }}
+              &middot; {{ item.sub_criteria.owner }}
+              &middot; {{ item.sub_criteria.condition }} condition
+              &middot; {{ item.sub_criteria.mileage_display }}
+            </p>
+
+            <div class="deal-list">
+              {% if item.deals %}
+                {% for d in item.deals %}
+                  <div class="deal-row">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td class="deal-left">
+                          {{ d.year }} model sold on {{ format_date(d.transaction_date) }}
+                          {% if not d.verified %}<span class="unverified-tag">Unverified</span>{% endif %}
+                          <div class="deal-meta">{{ d.buyer_type or 'Private' }} buyer</div>
+                        </td>
+                        <td class="deal-right">{{ format_inr(d.sale_price) }}</td>
+                      </tr>
+                    </table>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <p class="empty-state">No new deals this week. Buyers get an alert the moment a matching car sells.</p>
+              {% endif %}
+            </div>
+
+            <div class="item-cta-wrap">
+              <a href="{{ item.cta_url }}" class="item-cta item-cta-buyer">
+                See full market analysis<span class="item-cta-arrow">&rarr;</span>
+              </a>
+            </div>
+          </div>
+        {% endfor %}
       {% endif %}
 
-      <!-- Verdict card -->
-      {% set verdict_class = 'verdict-' + (verdict.verdict_code or 'unknown') %}
-      <div class="verdict {{ verdict_class }}">
-        <p class="verdict-label">{{ verdict.verdict_label }}</p>
-        <p class="verdict-explanation">{{ verdict.verdict_explanation }}</p>
-      </div>
-
-      <!-- The deal that just sold -->
-      <p class="section-heading">The deal that just sold</p>
-      <table class="details" cellpadding="0" cellspacing="0">
-        <tr>
-          <td>Sale price</td>
-          <td>{{ sale_price_fmt }}</td>
-        </tr>
-        {% if deal.year %}
-        <tr>
-          <td>Year</td>
-          <td>{{ deal.year }}</td>
-        </tr>
-        {% endif %}
-        {% if deal.fuel %}
-        <tr>
-          <td>Fuel</td>
-          <td>{{ deal.fuel }}</td>
-        </tr>
-        {% endif %}
-        {% if deal.mileage %}
-        <tr>
-          <td>Mileage</td>
-          <td>{{ '{:,}'.format(deal.mileage) }} km</td>
-        </tr>
-        {% endif %}
-        {% if deal.condition %}
-        <tr>
-          <td>Condition</td>
-          <td>{{ deal.condition }}</td>
-        </tr>
-        {% endif %}
-        {% if deal.owner %}
-        <tr>
-          <td>Owner</td>
-          <td>{{ deal.owner }}</td>
-        </tr>
-        {% endif %}
-        {% if verdict.price_low and verdict.price_high %}
-        <tr>
-          <td>Fair market range</td>
-          <td><span class="range-pill">{{ price_low_fmt }} &ndash; {{ price_high_fmt }}</span></td>
-        </tr>
-        {% endif %}
-      </table>
-
-      <!-- What you subscribed for -->
-      <p class="section-heading">What you subscribed for</p>
-      <table class="details" cellpadding="0" cellspacing="0">
-        <tr>
-          <td>Car</td>
-          <td>{{ car_label }}</td>
-        </tr>
-        <tr>
-          <td>Year</td>
-          <td>{{ sub_criteria.year }}</td>
-        </tr>
-        <tr>
-          <td>Fuel</td>
-          <td>{{ sub_criteria.fuel }}</td>
-        </tr>
-        <tr>
-          <td>Owner</td>
-          <td>{{ sub_criteria.owner }}</td>
-        </tr>
-        <tr>
-          <td>Condition</td>
-          <td>{{ sub_criteria.condition }}</td>
-        </tr>
-        <tr>
-          <td>Mileage</td>
-          <td>{{ sub_criteria.mileage_display }}</td>
-        </tr>
-        {% if sub_criteria.asking_price_display %}
-        <tr>
-          <td>Reference asking price</td>
-          <td>{{ sub_criteria.asking_price_display }}</td>
-        </tr>
-        {% endif %}
-      </table>
-
-      <!-- CTA -->
+      <!-- Top-level CTA -->
       <div class="cta-wrap">
-        <a href="{{ cta_url or (app_url + '/role') }}" class="cta">See full market analysis</a>
+        <a href="{{ cta_url or (app_url + '/role') }}" class="cta">View all your alerts</a>
       </div>
 
+      <p class="footer-note">
+        Subscriptions expire 30 days from purchase. Renew or cancel any time from your alerts page.
+      </p>
     </div>
 
     <!-- Footer -->
     <div class="footer">
-      You're receiving this because you have an active buyer alert for {{ car_label }}.<br>
+      You're receiving this because you have active alert subscriptions on AutoKnowMus.<br>
       <a href="{{ app_url }}/my-alerts">Manage your alerts</a> &middot; Reply to this email to reach us.
     </div>
 
