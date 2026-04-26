@@ -1,0 +1,645 @@
+{% extends "layout.html" %}
+
+{% block title %}User Activity — Admin · AutoKnowMus{% endblock %}
+
+{% block content %}
+<style>
+  .admin-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 18px 20px 60px;
+    color: #e4e6eb;
+  }
+
+  .btn-back {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 14px;
+  }
+
+  .btn-back:hover { background: #5a6168; }
+
+  /* Admin nav strip — switch between admin pages */
+  .admin-nav-strip {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .admin-nav-strip a {
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    color: #8b92a5;
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    transition: all 0.15s;
+  }
+
+  .admin-nav-strip a:hover {
+    color: #e4e6eb;
+    border-color: #3a3f4a;
+  }
+
+  .admin-nav-strip a.active {
+    color: #ffa500;
+    border-color: rgba(255,165,0,0.4);
+    background: rgba(255,165,0,0.08);
+  }
+
+  .admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #2a2f3a;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .admin-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+    color: #ffa500;
+  }
+
+  .admin-header .meta {
+    font-size: 12px;
+    color: #8b92a5;
+  }
+
+  /* Flash messages */
+  .flash-container { margin-bottom: 18px; }
+
+  .flash-msg {
+    position: relative;
+    padding: 12px 40px 12px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  .flash-msg.success {
+    background: rgba(40, 167, 69, 0.12);
+    border: 1px solid rgba(40, 167, 69, 0.35);
+    color: #5fd37a;
+  }
+
+  .flash-msg.error {
+    background: rgba(220, 53, 69, 0.12);
+    border: 1px solid rgba(220, 53, 69, 0.35);
+    color: #ff6b7a;
+  }
+
+  .flash-close {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 18px;
+    cursor: pointer;
+    opacity: 0.7;
+    padding: 0 6px;
+    line-height: 1;
+  }
+
+  .flash-close:hover { opacity: 1; }
+
+  /* Top stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .stat-card {
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+
+  .stat-card-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #8b92a5;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .stat-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    font-size: 13px;
+    border-bottom: 1px solid #242832;
+  }
+
+  .stat-card-row:last-child { border-bottom: none; }
+
+  .stat-card-row .lbl { color: #b4b8c3; }
+  .stat-card-row .val { color: #e4e6eb; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* Cohort cards */
+  .cohort-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .cohort-card {
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 14px 16px;
+    border-left-width: 4px;
+  }
+
+  .cohort-card.active-good { border-left-color: #28a745; }
+  .cohort-card.warning     { border-left-color: #ffa500; }
+  .cohort-card.power       { border-left-color: #4e54ff; }
+
+  .cohort-card .label {
+    font-size: 11px;
+    color: #8b92a5;
+    margin-bottom: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .cohort-card .number {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cohort-card.active-good .number { color: #5fd37a; }
+  .cohort-card.warning     .number { color: #ffa500; }
+  .cohort-card.power       .number { color: #7a80ff; }
+
+  .cohort-card .pct {
+    font-size: 11px;
+    color: #8b92a5;
+    margin-bottom: 6px;
+  }
+
+  .cohort-card .desc {
+    font-size: 11.5px;
+    color: #b4b8c3;
+    line-height: 1.4;
+  }
+
+  /* User list card */
+  .users-card {
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+
+  .users-card h2 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffa500;
+    margin: 0 0 12px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  /* Filter bar */
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    align-items: center;
+  }
+
+  .filter-bar a {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-decoration: none;
+    color: #8b92a5;
+    background: #0d0f14;
+    border: 1px solid #2a2f3a;
+    transition: all 0.15s;
+  }
+
+  .filter-bar a:hover {
+    color: #e4e6eb;
+    border-color: #3a3f4a;
+  }
+
+  .filter-bar a.active {
+    color: #ffa500;
+    border-color: rgba(255,165,0,0.4);
+    background: rgba(255,165,0,0.08);
+  }
+
+  .filter-bar .filter-label {
+    font-size: 11px;
+    color: #6c757d;
+    margin-right: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+  }
+
+  /* User row */
+  .user-row {
+    padding: 14px 0;
+    border-bottom: 1px solid #242832;
+  }
+
+  .user-row:last-child { border-bottom: none; }
+
+  .user-row-top {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: start;
+    margin-bottom: 8px;
+  }
+
+  .user-row-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #e4e6eb;
+    margin-bottom: 3px;
+  }
+
+  .user-row-name .badge-admin {
+    display: inline-block;
+    padding: 1px 6px;
+    background: rgba(255,165,0,0.18);
+    border: 1px solid rgba(255,165,0,0.4);
+    color: #ffa500;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .user-row-contact {
+    font-size: 11.5px;
+    color: #8b92a5;
+    margin-bottom: 2px;
+  }
+
+  .user-row-meta {
+    text-align: right;
+    font-size: 11px;
+    color: #8b92a5;
+  }
+
+  .user-row-meta .credits {
+    color: #ffa500;
+    font-weight: 700;
+    font-size: 12px;
+  }
+
+  .user-row-meta .auth {
+    display: inline-block;
+    padding: 1px 6px;
+    background: rgba(78,84,255,0.12);
+    border: 1px solid rgba(78,84,255,0.3);
+    color: #7a80ff;
+    border-radius: 3px;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-left: 4px;
+  }
+
+  .user-row-meta .auth.manual {
+    background: rgba(108,117,125,0.12);
+    border-color: rgba(108,117,125,0.3);
+    color: #8b92a5;
+  }
+
+  .user-row-activity {
+    font-size: 12px;
+    color: #b4b8c3;
+    padding: 4px 0;
+    line-height: 1.6;
+  }
+
+  .user-row-activity .arrow {
+    color: #6c757d;
+    margin-right: 4px;
+  }
+
+  .activity-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 3px;
+    font-size: 10.5px;
+    font-weight: 600;
+    margin-right: 5px;
+  }
+
+  .activity-pill.seller   { background: rgba(40,167,69,0.12);  color: #5fd37a; border: 1px solid rgba(40,167,69,0.3); }
+  .activity-pill.buyer    { background: rgba(78,84,255,0.12);  color: #7a80ff; border: 1px solid rgba(78,84,255,0.3); }
+  .activity-pill.deals    { background: rgba(255,165,0,0.12);  color: #ffa500; border: 1px solid rgba(255,165,0,0.4); }
+  .activity-pill.alerts   { background: rgba(108,117,125,0.12); color: #8b92a5; border: 1px solid rgba(108,117,125,0.3); }
+  .activity-pill.zero     { background: transparent; color: #6c757d; border: 1px solid #2a2f3a; }
+
+  .last-search {
+    font-size: 11.5px;
+    color: #8b92a5;
+    margin-top: 3px;
+  }
+
+  .last-search strong { color: #b4b8c3; font-weight: 600; }
+
+  .flag-line {
+    margin-top: 4px;
+    padding: 5px 10px;
+    background: rgba(255,165,0,0.06);
+    border-left: 2px solid rgba(255,165,0,0.5);
+    color: #ffa500;
+    font-size: 11.5px;
+    border-radius: 0 4px 4px 0;
+    font-weight: 500;
+  }
+
+  .flag-line.critical {
+    background: rgba(220,53,69,0.06);
+    border-left-color: rgba(220,53,69,0.5);
+    color: #ff6b7a;
+  }
+
+  .flag-line.power {
+    background: rgba(40,167,69,0.06);
+    border-left-color: rgba(40,167,69,0.5);
+    color: #5fd37a;
+  }
+
+  .empty-state {
+    color: #6c757d;
+    font-size: 12px;
+    font-style: italic;
+    padding: 20px 0;
+    text-align: center;
+  }
+
+  .footer-version {
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px solid #2a2f3a;
+    font-size: 11px;
+    color: #6c757d;
+    text-align: center;
+  }
+
+  @media (max-width: 900px) {
+    .stats-grid, .cohort-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 520px) {
+    .admin-header h1 { font-size: 18px; }
+    .user-row-top { grid-template-columns: 1fr; }
+    .user-row-meta { text-align: left; }
+  }
+</style>
+
+<div class="admin-wrap">
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+
+  <!-- Admin nav strip — switch between admin pages -->
+  <div class="admin-nav-strip">
+    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
+    <a href="{{ url_for('admin_user_activity') }}" class="active">👥 User Activity</a>
+  </div>
+
+  <div class="admin-header">
+    <h1>👥 AutoKnowMus — User Activity</h1>
+    <div class="meta">Updated: {{ now_display }}</div>
+  </div>
+
+  <!-- FLASH MESSAGES -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, msg in messages %}
+          <div class="flash-msg {{ category }}">
+            {{ msg }}
+            <button type="button" class="flash-close" onclick="this.parentElement.style.display='none'" aria-label="Dismiss">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- Top stats grid: signups, searches, deals across time windows -->
+  <div class="stats-grid">
+
+    <div class="stat-card">
+      <div class="stat-card-label">📅 Last 7 Days</div>
+      <div class="stat-card-row">
+        <span class="lbl">New signups</span>
+        <span class="val">{{ stats_7d.signups }}</span>
+      </div>
+      <div class="stat-card-row">
+        <span class="lbl">Searches (seller + buyer)</span>
+        <span class="val">{{ stats_7d.searches }}</span>
+      </div>
+      <div class="stat-card-row">
+        <span class="lbl">Deals submitted</span>
+        <span class="val">{{ stats_7d.deals }}</span>
+      </div>
+      <div class="stat-card-row">
+        <span class="lbl">Active alert subs</span>
+        <span class="val">{{ stats_7d.alert_subs }}</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-card-label">📅 Last 30 Days</div>
+      <div class="stat-card-row">
+        <span class="lbl">New signups</span>
+        <span class="val">{{ stats_30d.signups }}</span>
+      </div>
+      <div class="stat-card-row">
+        <span class="lbl">Searches (seller + buyer)</span>
+        <span class="val">{{ stats_30d.searches }}</span>
+      </div>
+      <div class="stat-card-row">
+        <span class="lbl">Deals submitted</span>
+        <span class="val">{{ stats_30d.deals }}</span>
+      </div>
+      <div class="stat-card-row">
+        <span class="lbl">Active alert subs</span>
+        <span class="val">{{ stats_30d.alert_subs }}</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-card-label">🌐 All Time</div>
+      <div class="stat-card-row">
+        <span class="lbl">Total users</span>
+        <span class="val">{{ stats_all.signups }}</span>
+      </div>
+      <div class="stat-card-row">
+        <span class="lbl">Total searches</span>
+        <span class="val">{{ stats_all.searches }}</span>
+      </div>
+      <div class="stat-card-row">
+        <span class="lbl">Total deals</span>
+        <span class="val">{{ stats_all.deals }}</span>
+      </div>
+      <div class="stat-card-row">
+        <span class="lbl">Total alert subs</span>
+        <span class="val">{{ stats_all.alert_subs }}</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Cohort cards: how users segment by behavior -->
+  <div class="cohort-grid">
+
+    <div class="cohort-card active-good">
+      <div class="label">✅ Got Past Door</div>
+      <div class="number">{{ cohort_active }}</div>
+      <div class="pct">{{ cohort_active_pct }}% of all users</div>
+      <div class="desc">Signed up AND ran ≥1 search. The activated cohort.</div>
+    </div>
+
+    <div class="cohort-card warning">
+      <div class="label">⚠️ Hit Wall</div>
+      <div class="number">{{ cohort_dead }}</div>
+      <div class="pct">{{ cohort_dead_pct }}% of all users</div>
+      <div class="desc">Signed up but never searched. Critical funnel leak.</div>
+    </div>
+
+    <div class="cohort-card power">
+      <div class="label">🎯 Power Users</div>
+      <div class="number">{{ cohort_power }}</div>
+      <div class="pct">{{ cohort_power_pct }}% of all users</div>
+      <div class="desc">Submitted ≥1 deal OR set ≥1 alert. Most engaged.</div>
+    </div>
+
+  </div>
+
+  <!-- User list -->
+  <div class="users-card">
+    <h2>All Users · {{ total_users }} total</h2>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <span class="filter-label">Filter:</span>
+      <a href="{{ url_for('admin_user_activity') }}"           class="{% if active_filter == 'all'    %}active{% endif %}">All</a>
+      <a href="{{ url_for('admin_user_activity', f='active')   }}" class="{% if active_filter == 'active' %}active{% endif %}">Got Past Door</a>
+      <a href="{{ url_for('admin_user_activity', f='dead')     }}" class="{% if active_filter == 'dead'   %}active{% endif %}">Hit Wall</a>
+      <a href="{{ url_for('admin_user_activity', f='power')    }}" class="{% if active_filter == 'power'  %}active{% endif %}">Power Users</a>
+
+      <span class="filter-label" style="margin-left: 14px;">Sort:</span>
+      <a href="{{ url_for('admin_user_activity', f=active_filter, sort='recent')      }}" class="{% if active_sort == 'recent'      %}active{% endif %}">Recent signup</a>
+      <a href="{{ url_for('admin_user_activity', f=active_filter, sort='last_login')  }}" class="{% if active_sort == 'last_login'  %}active{% endif %}">Last login</a>
+      <a href="{{ url_for('admin_user_activity', f=active_filter, sort='most_active') }}" class="{% if active_sort == 'most_active' %}active{% endif %}">Most active</a>
+    </div>
+
+    {% if users %}
+      {% for u in users %}
+      <div class="user-row">
+        <div class="user-row-top">
+          <div>
+            <div class="user-row-name">
+              {{ u.name or '—' }}
+              {% if u.is_admin %}<span class="badge-admin">ADMIN</span>{% endif %}
+            </div>
+            <div class="user-row-contact">📧 {{ u.email or '—' }}</div>
+            {% if u.phone %}<div class="user-row-contact">📱 +91 {{ u.phone }}</div>{% endif %}
+          </div>
+          <div class="user-row-meta">
+            <div>Signed up {{ u.signup_display }}</div>
+            <div>Last login {{ u.last_login_display }}</div>
+            <div style="margin-top: 4px;">
+              <span class="credits">{{ u.credits }} credits</span>
+              <span class="auth {% if u.auth_method == 'manual' %}manual{% endif %}">{{ u.auth_method or 'manual' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="user-row-activity">
+          <span class="arrow">↳</span>
+          {% if u.seller_searches > 0 %}
+            <span class="activity-pill seller">🚗 {{ u.seller_searches }} seller</span>
+          {% else %}
+            <span class="activity-pill zero">0 seller</span>
+          {% endif %}
+          {% if u.buyer_searches > 0 %}
+            <span class="activity-pill buyer">🔍 {{ u.buyer_searches }} buyer</span>
+          {% else %}
+            <span class="activity-pill zero">0 buyer</span>
+          {% endif %}
+          {% if u.deals_submitted > 0 %}
+            <span class="activity-pill deals">📝 {{ u.deals_submitted }} deal{% if u.deals_submitted > 1 %}s{% endif %}</span>
+          {% endif %}
+          {% if u.active_alerts > 0 %}
+            <span class="activity-pill alerts">🔔 {{ u.active_alerts }} alert{% if u.active_alerts > 1 %}s{% endif %}</span>
+          {% endif %}
+        </div>
+
+        {% if u.last_search_label %}
+        <div class="last-search">
+          <span class="arrow">↳</span> Last search: <strong>{{ u.last_search_label }}</strong> on {{ u.last_search_date }}
+        </div>
+        {% endif %}
+
+        <!-- Flag lines: warnings or notable patterns -->
+        {% if u.is_dead_cohort %}
+        <div class="flag-line">⚠️ Signed up but never searched ({{ u.days_since_signup }} day{{ 's' if u.days_since_signup != 1 else '' }} ago)</div>
+        {% endif %}
+
+        {% if u.is_power_cohort %}
+        <div class="flag-line power">🎯 Power user — engaged with the platform</div>
+        {% endif %}
+
+        {% if u.is_inactive_30d %}
+        <div class="flag-line critical">💤 No login in 30+ days</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+    <div class="empty-state">No users match this filter.</div>
+    {% endif %}
+  </div>
+
+  <div class="footer-version">
+    Cohort definitions: <strong>Got Past Door</strong> = signed up + ≥1 search ·
+    <strong>Hit Wall</strong> = signed up + 0 searches ·
+    <strong>Power Users</strong> = ≥1 deal OR ≥1 alert subscription
+  </div>
+</div>
+{% endblock %}
