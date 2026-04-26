@@ -27,6 +27,37 @@
 
   .btn-back:hover { background: #5a6168; }
 
+  /* Admin nav strip — switch between admin pages */
+  .admin-nav-strip {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .admin-nav-strip a {
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    color: #8b92a5;
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    transition: all 0.15s;
+  }
+
+  .admin-nav-strip a:hover {
+    color: #e4e6eb;
+    border-color: #3a3f4a;
+  }
+
+  .admin-nav-strip a.active {
+    color: #ffa500;
+    border-color: rgba(255,165,0,0.4);
+    background: rgba(255,165,0,0.08);
+  }
+
   .admin-header {
     display: flex;
     justify-content: space-between;
@@ -423,6 +454,12 @@
 
 <div class="admin-wrap">
   <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+
+  <!-- Admin nav strip — switch between admin pages -->
+  <div class="admin-nav-strip">
+    <a href="{{ url_for('admin_data_health') }}" class="active">📊 Data Health</a>
+    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
+  </div>
 
   <div class="admin-header">
     <h1>🛠️ AutoKnowMus — Data Health</h1>
