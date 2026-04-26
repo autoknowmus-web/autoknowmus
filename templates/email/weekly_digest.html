@@ -125,14 +125,23 @@
 <div class="wrapper">
   <div class="container">
 
-    <!-- Logo header -->
+    <!-- Logo header: inline SVG shield + colored text (matches website branding) -->
     <div class="logo-header">
-      {% if logo_url %}
-      <img src="{{ logo_url }}" alt="AutoKnowMus" class="logo-img" width="180" style="display:inline-block; max-height:40px;">
-      {% endif %}
-      <div class="logo-text">
-        <span class="logo-auto">Auto</span><span class="logo-know">Know</span><span class="logo-mus">Mus</span>
-      </div>
+      <table cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto; border-collapse:collapse;">
+        <tr>
+          <td valign="middle" style="padding-right:12px; line-height:0;">
+            <svg viewBox="0 0 40 40" width="36" height="36" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+              <path d="M20 2 L36 8 V20 C36 29 28 36 20 38 C12 36 4 29 4 20 V8 Z" fill="#28a745"/>
+              <text x="20" y="27" text-anchor="middle" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#ffffff">A</text>
+            </svg>
+          </td>
+          <td valign="middle">
+            <span class="logo-text">
+              <span class="logo-auto">Auto</span><span class="logo-know">Know</span><span class="logo-mus">Mus</span>
+            </span>
+          </td>
+        </tr>
+      </table>
     </div>
 
     <!-- Title bar -->
