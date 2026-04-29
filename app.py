@@ -23,8 +23,13 @@ from car_data import (
     BASE_PRICE_DATA_VERSION, BASE_PRICE_LAST_UPDATED,
     PHASE_THRESHOLDS, PHASE_BLEND,
     refresh_prices, refresh_module_constants, get_cache_status,
+    get_listings_for_car,  # v3.0: listings cache for market engine routing
 )
 import car_data as _car_data_module
+
+# v3.0: Market pricing engine — invoked by router when N>=5 listings available.
+# Falls back to depreciation engine (compute_base_valuation) otherwise.
+from pricing_engine import compute_market_valuation, MIN_EFFECTIVE_LISTINGS
 
 # Alerts dispatcher (v1 email alerts)
 from alert_dispatcher import dispatch_deal_alerts_async, send_weekly_digest
@@ -190,6 +195,12 @@ LUXURY_BRANDS = {'Audi', 'BMW', 'Mercedes-Benz', 'Jaguar', 'Land Rover', 'Lexus'
 # Tighten to 0.90 if too many edge cases still overshoot.
 EX_SHOWROOM_USED_CEILING = 0.95
 
+# v3.0: Listing matching window for the market engine. We accept listings
+# within +/- LISTING_YEAR_WINDOW years of the user's car year. If too many
+# listings are pulled, the older ones get filtered by listing freshness in
+# car_data.get_listings_for_car() (default 60 days).
+LISTING_YEAR_WINDOW = 2
+
 TRANSACTION_TYPE_LABELS = {
     'signup_bonus': 'Signup Bonus',
     'valuation_charge': 'Seller Valuation',
@@ -291,6 +302,189 @@ def _apply_ex_showroom_ceiling(make, model, variant, fuel, estimated, price_low,
         )
 
     return capped_estimated, capped_low, capped_high
+
+
+# ============================================================
+# v3.0: BINARY ENGINE ROUTER
+# ----------------------------------------------------
+# Single point of control over which pricing engine runs for any given car.
+# Decision rule (locked):
+#   if N_effective_listings >= MIN_EFFECTIVE_LISTINGS:   → market engine
+#   else:                                                 → depreciation engine
+#
+# Both engines produce comparable output shapes. The router unifies them into
+# a result dict that callers (seller, buyer_dashboard) can read uniformly,
+# plus an audit dict that gets written to the valuations table.
+#
+# Ex-showroom ceiling is applied on whichever engine's output, so used > new
+# anomalies are prevented for both engines.
+# ============================================================
+def _route_valuation(make, model, variant, fuel, year, mileage, condition, owner,
+                     allow_market_engine=True):
+    """
+    Decide which engine to run, run it, apply ex-showroom ceiling, and return
+    a unified (result, audit) tuple.
+
+    Args:
+        make, model, variant, fuel, year, mileage, condition, owner: user inputs
+        allow_market_engine: set False to force depreciation engine (admin debug)
+
+    Returns:
+        (result, audit) tuple, or (None, None) if BOTH engines fail to compute.
+
+        result = {
+            'estimated': int (rupees, post-ceiling),
+            'price_low': int,
+            'price_high': int,
+            'confidence': int (0-100),
+            'phase': int (1-4),               # for templates/PHASE_BLEND lookups
+            'phase_data': dict,                # full phase data with display info
+        }
+
+        audit = {                              # 1:1 with valuations table audit cols
+            'engine_used': 'market_v1' | 'depreciation_fallback',
+            'phase_at_valuation': int,
+            'confidence': int,
+            'n_listings_used': int | None,
+            'n_deals_used': int | None,
+            'data_version': str,
+            'market_avg_km': int | None,
+            'price_per_km_elasticity': float | None,
+            'median_listing_price': int | None,
+            'repair_cost_applied': int | None,
+            'negotiation_buffer_pct': float | None,
+            'nmp_f37': int | None,
+            'selling_price_f38': int | None,
+            'purchase_price_f39': int | None,
+        }
+    """
+    phase_data = compute_model_phase_data(make, model)
+    phase = phase_data['phase']
+    data_version = _live_data_version()
+
+    # ------------------------------------------------------------
+    # 1. Try to fetch listings (cheap — in-memory cache lookup)
+    # ------------------------------------------------------------
+    listings = []
+    if allow_market_engine:
+        try:
+            listings = get_listings_for_car(
+                make=make, model=model, variant=variant, fuel=fuel,
+                year=int(year), year_window=LISTING_YEAR_WINDOW,
+            )
+        except Exception as e:
+            app.logger.warning(f"_route_valuation: get_listings_for_car failed: {e}")
+            listings = []
+
+    n_listings = len(listings)
+
+    # ------------------------------------------------------------
+    # 2. If listings >= MIN_EFFECTIVE_LISTINGS, run market engine
+    # ------------------------------------------------------------
+    if allow_market_engine and n_listings >= MIN_EFFECTIVE_LISTINGS:
+        try:
+            engine_result = compute_market_valuation(
+                listings=listings,
+                user_year=int(year),
+                user_mileage=int(mileage),
+                user_condition=condition,
+                user_owner=owner,
+                user_fuel=fuel,
+            )
+        except Exception as e:
+            app.logger.error(f"_route_valuation: market engine raised: {e}")
+            engine_result = None
+
+        if engine_result is not None:
+            estimated = engine_result['estimated_price']
+            price_low = engine_result['price_low']
+            price_high = engine_result['price_high']
+            confidence = engine_result['confidence']
+
+            # Apply ex-showroom ceiling (v2.8) — same as depreciation path
+            estimated, price_low, price_high = _apply_ex_showroom_ceiling(
+                make=make, model=model, variant=variant, fuel=fuel,
+                estimated=estimated, price_low=price_low, price_high=price_high,
+            )
+
+            result = {
+                'estimated': estimated,
+                'price_low': price_low,
+                'price_high': price_high,
+                'confidence': confidence,
+                'phase': phase,
+                'phase_data': phase_data,
+            }
+            audit = {
+                'engine_used': engine_result['engine_used'],   # 'market_v1'
+                'phase_at_valuation': phase,
+                'confidence': confidence,
+                'n_listings_used': engine_result['n_listings_used'],
+                'n_deals_used': None,
+                'data_version': data_version,
+                'market_avg_km': engine_result['market_avg_km'],
+                'price_per_km_elasticity': engine_result['price_per_km_elasticity'],
+                'median_listing_price': engine_result['median_listing_price'],
+                'repair_cost_applied': engine_result['repair_cost_applied'],
+                'negotiation_buffer_pct': engine_result['negotiation_buffer_pct'],
+                'nmp_f37': engine_result['nmp_F37'],
+                'selling_price_f38': engine_result['selling_price_F38'],
+                'purchase_price_f39': engine_result['purchase_price_F39'],
+            }
+            app.logger.info(
+                f"_route_valuation: market engine fired | {make} {model} {variant} {fuel} "
+                f"{year} | N_listings={n_listings} | estimated={estimated}"
+            )
+            return result, audit
+
+    # ------------------------------------------------------------
+    # 3. Fallback: depreciation engine (existing behavior)
+    # ------------------------------------------------------------
+    estimated_raw = compute_base_valuation(
+        make=make, model=model, variant=variant, fuel=fuel,
+        year=int(year), mileage=int(mileage),
+        condition=condition, owner=owner,
+    )
+    if estimated_raw is None:
+        return None, None
+
+    similar_prices = fetch_similar_deals(
+        make=make, model=model, variant=variant, fuel=fuel, year=int(year),
+    )
+    adjusted, confidence = adjust_with_deals(estimated_raw, similar_prices, phase=phase)
+    price_low, price_high = compute_price_range(adjusted, phase=phase)
+
+    # Apply ex-showroom ceiling
+    adjusted, price_low, price_high = _apply_ex_showroom_ceiling(
+        make=make, model=model, variant=variant, fuel=fuel,
+        estimated=adjusted, price_low=price_low, price_high=price_high,
+    )
+
+    result = {
+        'estimated': adjusted,
+        'price_low': price_low,
+        'price_high': price_high,
+        'confidence': confidence,
+        'phase': phase,
+        'phase_data': phase_data,
+    }
+    audit = {
+        'engine_used': 'depreciation_fallback',
+        'phase_at_valuation': phase,
+        'confidence': confidence,
+        'n_listings_used': n_listings,                # 0 or <5 when this path fires
+        'n_deals_used': len(similar_prices) if similar_prices else 0,
+        'data_version': data_version,
+        'market_avg_km': None,
+        'price_per_km_elasticity': None,
+        'median_listing_price': None,
+        'repair_cost_applied': None,
+        'negotiation_buffer_pct': None,
+        'nmp_f37': None,
+        'selling_price_f38': None,
+        'purchase_price_f39': None,
+    }
+    return result, audit
 
 
 def hash_password(plain: str) -> str:
@@ -1287,32 +1481,22 @@ def seller():
                            error=f'Insufficient credits. You need {VALUATION_COST} credits to run a valuation.',
                            show_credit_request=not is_guest)
 
-    estimated = compute_base_valuation(
-        make=form_data['make'], model=form_data['model'], variant=form_data['variant'],
-        fuel=form_data['fuel'], year=year_int, mileage=mileage_int,
+    # ========================================================
+    # v3.0: Binary engine router (was: 6 lines of inline engine logic)
+    # Picks market engine if N>=5 listings, else depreciation fallback.
+    # ========================================================
+    result, audit = _route_valuation(
+        make=form_data['make'], model=form_data['model'],
+        variant=form_data['variant'], fuel=form_data['fuel'],
+        year=year_int, mileage=mileage_int,
         condition=form_data['condition'], owner=form_data['owner'],
     )
-    if estimated is None:
+    if result is None:
         return render_form(form_data, error='Could not compute a price for this combination. Please check inputs.')
 
-    phase_data = compute_model_phase_data(form_data['make'], form_data['model'])
-    phase = phase_data['phase']
-
-    similar_prices = fetch_similar_deals(
-        make=form_data['make'], model=form_data['model'],
-        variant=form_data['variant'], fuel=form_data['fuel'],
-        year=year_int,
-    )
-    adjusted, confidence = adjust_with_deals(estimated, similar_prices, phase=phase)
-    price_low, price_high = compute_price_range(adjusted, phase=phase)
-
-    # v2.8: Cap used-car valuation at 95% of new ex-showroom price.
-    # Prevents the "used > new" anomaly visible for very recent model years.
-    adjusted, price_low, price_high = _apply_ex_showroom_ceiling(
-        make=form_data['make'], model=form_data['model'],
-        variant=form_data['variant'], fuel=form_data['fuel'],
-        estimated=adjusted, price_low=price_low, price_high=price_high,
-    )
+    adjusted = result['estimated']
+    price_low = result['price_low']
+    price_high = result['price_high']
 
     val_payload = {
         'make': form_data['make'],
@@ -1326,6 +1510,21 @@ def seller():
         'estimated_price': adjusted,
         'price_low': price_low,
         'price_high': price_high,
+        # v3.0: Audit columns (added by migration_phase_1A.sql)
+        'engine_used':              audit['engine_used'],
+        'phase_at_valuation':       audit['phase_at_valuation'],
+        'confidence':               audit['confidence'],
+        'n_listings_used':          audit['n_listings_used'],
+        'n_deals_used':             audit['n_deals_used'],
+        'data_version':             audit['data_version'],
+        'market_avg_km':            audit['market_avg_km'],
+        'price_per_km_elasticity':  audit['price_per_km_elasticity'],
+        'median_listing_price':     audit['median_listing_price'],
+        'repair_cost_applied':      audit['repair_cost_applied'],
+        'negotiation_buffer_pct':   audit['negotiation_buffer_pct'],
+        'nmp_f37':                  audit['nmp_f37'],
+        'selling_price_f38':        audit['selling_price_f38'],
+        'purchase_price_f39':       audit['purchase_price_f39'],
     }
 
     if not is_guest:
@@ -1396,12 +1595,16 @@ def seller_dashboard(valuation_id):
     phase_data = compute_model_phase_data(val['make'], val['model'])
     phase = phase_data['phase']
 
-    similar_prices = fetch_similar_deals(
-        make=val['make'], model=val['model'],
-        variant=val['variant'], fuel=val['fuel'],
-        year=val['year'],
-    )
-    _, confidence = adjust_with_deals(estimated, similar_prices, phase=phase)
+    # v3.0: Confidence prefers stored value (from engine that ran at submit time).
+    # Fallback to recomputed value for old rows that predate audit columns.
+    confidence = val.get('confidence')
+    if confidence is None:
+        similar_prices = fetch_similar_deals(
+            make=val['make'], model=val['model'],
+            variant=val['variant'], fuel=val['fuel'],
+            year=val['year'],
+        )
+        _, confidence = adjust_with_deals(estimated, similar_prices, phase=phase)
 
     demand       = compute_demand(val['make'], val['year'])
     days_to_sell = compute_days_to_sell(demand, estimated)
@@ -1726,32 +1929,24 @@ def buyer_dashboard():
         except (ValueError, TypeError):
             asking_price_int = None
 
-    estimated = compute_base_valuation(
+    # ========================================================
+    # v3.0: Binary engine router (was: 6 lines of inline engine logic)
+    # ========================================================
+    result, audit = _route_valuation(
         make=make, model=model, variant=variant, fuel=fuel,
         year=year_int, mileage=mileage_int,
         condition=condition, owner=owner,
     )
-
-    if estimated is None:
+    if result is None:
         return render_template('placeholder.html', user=user,
                                page_title='Analysis Unavailable',
                                message='Could not compute market analysis for this combination. Please try different filters.')
 
-    phase_data = compute_model_phase_data(make, model)
-    phase = phase_data['phase']
-
-    similar_prices = fetch_similar_deals(
-        make=make, model=model, variant=variant, fuel=fuel, year=year_int,
-    )
-    adjusted, confidence = adjust_with_deals(estimated, similar_prices, phase=phase)
-    price_low, price_high = compute_price_range(adjusted, phase=phase)
-
-    # v2.8: Cap used-car valuation at 95% of new ex-showroom price.
-    # Prevents the "used > new" anomaly visible for very recent model years.
-    adjusted, price_low, price_high = _apply_ex_showroom_ceiling(
-        make=make, model=model, variant=variant, fuel=fuel,
-        estimated=adjusted, price_low=price_low, price_high=price_high,
-    )
+    adjusted = result['estimated']
+    price_low = result['price_low']
+    price_high = result['price_high']
+    confidence = result['confidence']
+    phase_data = result['phase_data']
 
     asking_position = None
     asking_pct_diff = None
