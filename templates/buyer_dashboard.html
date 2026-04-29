@@ -11,6 +11,45 @@
   .car-summary .car-meta { color: #b0b0b0; font-size: 0.78rem; margin-top: 1px; }
   .car-summary .car-meta .lbl { color: #6c757d; font-weight: 400; }
 
+  /* ============================================================
+     v3.1: Anchor strip — "₹X.XL when new (Y yrs old) → ₹Z.ZL today"
+     Public arithmetic only. Shown on both market_v1 and fallback paths.
+     Buyer theme: blue accent on "Today" value.
+     ============================================================ */
+  .anchor-strip {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 7px;
+    padding: 7px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: #adb5bd;
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+  .anchor-strip .anchor-segment { display: inline-flex; align-items: center; gap: 5px; }
+  .anchor-strip .anchor-label { color: #6c757d; font-size: 0.74rem; }
+  .anchor-strip .anchor-value { color: #e6e6e6; font-weight: 600; }
+  .anchor-strip .anchor-now { color: #4e54ff; font-weight: 700; }
+  .anchor-strip .anchor-arrow { color: #6c757d; font-size: 0.9rem; }
+  .anchor-strip .anchor-pct {
+    color: #ffa500;
+    font-weight: 600;
+    background: rgba(255,165,0,0.1);
+    padding: 2px 7px;
+    border-radius: 9px;
+    font-size: 0.74rem;
+  }
+  /* When the car is older than 7 years, swap the warm-orange chip for a stronger amber to flag steep depreciation */
+  .anchor-strip.is-aged .anchor-pct {
+    color: #ff8c00;
+    background: rgba(255,140,0,0.12);
+  }
+
   .top-row {
     display: grid;
     grid-template-columns: 1fr 1.25fr;
@@ -143,6 +182,18 @@
   @media (max-width: 900px) { .graph-wrap { height: 180px; } }
 
   .chart-card { position: relative; }
+
+  /* v3.1: Chart caption directly under chart */
+  .chart-caption {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    margin-top: 5px;
+    text-align: center;
+    font-style: italic;
+  }
+  .chart-caption strong { color: #ff6b6b; font-weight: 600; font-style: normal; }
+
   .chart-caution-chip {
     position: absolute;
     top: 8px;
@@ -186,6 +237,134 @@
   }
   .chart-caution-chip:hover .chart-caution-tooltip {
     visibility: visible; opacity: 1;
+  }
+
+  /* ============================================================
+     v3.1: "Why this price?" panel (buyer flavor — blue accents)
+     ============================================================ */
+  .why-price-panel {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+  }
+  .why-price-panel .why-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .why-price-panel .why-title .sub {
+    color: #b0b0b0;
+    font-size: 0.72rem;
+    font-weight: 400;
+    margin-left: 6px;
+  }
+
+  .why-baseline-row,
+  .why-final-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 9px;
+    background: #14171d;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    margin-bottom: 7px;
+  }
+  .why-baseline-row .why-bl-label,
+  .why-final-row .why-fn-label {
+    color: #adb5bd;
+  }
+  .why-baseline-row .why-bl-value {
+    color: #e6e6e6;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .why-final-row {
+    background: rgba(78,84,255,0.08);
+    border: 1px solid rgba(78,84,255,0.3);
+    margin-top: 7px;
+    margin-bottom: 0;
+  }
+  .why-final-row .why-fn-label { color: #8a90ff; font-weight: 600; }
+  .why-final-row .why-fn-value {
+    color: #8a90ff;
+    font-weight: 700;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .why-no-baseline {
+    color: #6c757d;
+    font-size: 0.74rem;
+    font-style: italic;
+    text-align: center;
+    padding: 3px 0 7px;
+    border-bottom: 1px dashed #2a2d34;
+    margin-bottom: 7px;
+  }
+
+  .adjustment-row {
+    display: grid;
+    grid-template-columns: 22px 130px 1fr 36px;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 9px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.8rem;
+  }
+  .adjustment-row:last-of-type { border-bottom: none; }
+  .adjustment-row .adj-icon {
+    font-size: 0.95rem;
+    text-align: center;
+  }
+  .adjustment-row .adj-label-block {
+    line-height: 1.2;
+  }
+  .adjustment-row .adj-label {
+    color: #e6e6e6;
+    font-weight: 600;
+    font-size: 0.8rem;
+  }
+  .adjustment-row .adj-value {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    margin-left: 5px;
+    font-weight: 400;
+  }
+  .adjustment-row .adj-desc {
+    color: #adb5bd;
+    font-size: 0.76rem;
+    line-height: 1.3;
+  }
+  .adjustment-row .adj-arrow {
+    text-align: right;
+    font-weight: 700;
+    font-size: 0.92rem;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    letter-spacing: -1px;
+  }
+  .adjustment-row.dir-up_strong .adj-arrow { color: #28a745; }
+  .adjustment-row.dir-up        .adj-arrow { color: #5bd47b; }
+  .adjustment-row.dir-neutral   .adj-arrow { color: #6c757d; }
+  .adjustment-row.dir-down      .adj-arrow { color: #ffa500; }
+  .adjustment-row.dir-down_strong .adj-arrow { color: #ff6b6b; }
+
+  @media (max-width: 600px) {
+    .adjustment-row {
+      grid-template-columns: 20px 1fr 30px;
+      grid-template-rows: auto auto;
+      gap: 5px 8px;
+    }
+    .adjustment-row .adj-icon { grid-row: 1 / span 2; }
+    .adjustment-row .adj-label-block { grid-column: 2; grid-row: 1; }
+    .adjustment-row .adj-arrow { grid-column: 3; grid-row: 1 / span 2; }
+    .adjustment-row .adj-desc { grid-column: 2; grid-row: 2; }
   }
 
   .kpi-row {
@@ -369,6 +548,72 @@
   }
   .market-stats strong { color: #e9ecef; }
   .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.72rem; }
+
+  /* ============================================================
+     v3.1: Listings table (buyer theme — same structure as seller, blue accent)
+     ============================================================ */
+  .listings-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 9px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+  }
+  .listings-card .listings-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 7px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .listings-card .listings-title .sub {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    font-weight: 400;
+    margin-left: 6px;
+  }
+  .listings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  .listings-table th {
+    color: #6c757d;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    text-align: left;
+    padding: 5px 7px 4px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .listings-table th.num,
+  .listings-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .listings-table td {
+    padding: 6px 7px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .listings-table tr:last-child td { border-bottom: none; }
+  .listings-table .listing-price { color: #8a90ff; font-weight: 600; }
+  .listings-extra {
+    margin-top: 5px;
+    padding: 4px 0 0;
+    color: #6c757d;
+    font-size: 0.72rem;
+    text-align: center;
+    font-style: italic;
+  }
+
+  @media (max-width: 600px) {
+    .listings-table th:nth-child(3),
+    .listings-table td:nth-child(3) { display: none; }
+  }
 
   .alert-strip {
     background: linear-gradient(135deg, #1a1f35 0%, #14171d 100%);
@@ -644,6 +889,19 @@
   {%- endif %}
 {%- endmacro %}
 
+{# v3.1: Direction arrow macro for "Why this price?" panel.
+   Single ↑ = up, double ↑↑ = up_strong, single ↓ = down, double ↓↓ = down_strong, → = neutral.
+   No multipliers exposed. Direction only. #}
+{% macro dir_arrow(direction) -%}
+  {%- if direction == 'up_strong' -%}↑↑
+  {%- elif direction == 'up' -%}↑
+  {%- elif direction == 'neutral' -%}→
+  {%- elif direction == 'down' -%}↓
+  {%- elif direction == 'down_strong' -%}↓↓
+  {%- else -%}→
+  {%- endif -%}
+{%- endmacro %}
+
 <div class="dashboard-wrap">
 
   <div class="dash-header">
@@ -665,6 +923,24 @@
       </div>
     </div>
   </div>
+
+  {# v3.1: New car anchor strip — public arithmetic, shown on both engine paths.
+     For buyer: "is-aged" class flagged on cars older than 7 years. #}
+  {% if anchor_data %}
+    <div class="anchor-strip {% if anchor_data.years_old > 7 %}is-aged{% endif %}">
+      <span class="anchor-segment">
+        <span class="anchor-label">When new:</span>
+        <span class="anchor-value">₹ {{ l2dp(anchor_data.ex_showroom) }}</span>
+        <span class="anchor-label">({{ anchor_data.years_old }} yr{{ '' if anchor_data.years_old == 1 else 's' }} old)</span>
+      </span>
+      <span class="anchor-arrow">→</span>
+      <span class="anchor-segment">
+        <span class="anchor-label">Today:</span>
+        <span class="anchor-now">₹ {{ l2dp(estimated) }}</span>
+      </span>
+      <span class="anchor-pct">~{{ anchor_data.pct_off_new }}% off new</span>
+    </div>
+  {% endif %}
 
   {% with flash_success = get_flashed_messages(category_filter=['success']) %}
     {% if flash_success %}
@@ -819,6 +1095,48 @@
       <div class="graph-wrap">
         <canvas id="dep-chart"></canvas>
       </div>
+
+      {# v3.1: Chart caption — buyer flavor (cost-of-ownership framing) #}
+      <div class="chart-caption">
+        This car will lose another <strong>~{{ chart_loss_pct }}%</strong> of its value over 5 years — factor this into your buying decision.
+      </div>
+    </div>
+  </div>
+
+  {# v3.1: "Why this price?" panel — buyer framing.
+     Hybrid baseline disclosure: shows starting number ONLY when market_v1 fired. #}
+  <div class="why-price-panel">
+    <div class="why-title">
+      Why this price?
+      <span class="sub">how we got from baseline to your fair market value</span>
+    </div>
+
+    {% if starting_baseline %}
+      <div class="why-baseline-row">
+        <span class="why-bl-label">Starting point — typical {{ year }} {{ make }} {{ model }}</span>
+        <span class="why-bl-value">₹ {{ l2dp(starting_baseline) }}</span>
+      </div>
+    {% else %}
+      <div class="why-no-baseline">
+        Starting from a typical {{ year }} {{ make }} {{ model }}, then adjusted for this car's specifics:
+      </div>
+    {% endif %}
+
+    {% for adj in qual_adjustments %}
+      <div class="adjustment-row dir-{{ adj.direction }}">
+        <div class="adj-icon">{{ adj.icon }}</div>
+        <div class="adj-label-block">
+          <span class="adj-label">{{ adj.label }}</span>
+          <span class="adj-value">· {{ adj.value }}</span>
+        </div>
+        <div class="adj-desc">{{ adj.description }}</div>
+        <div class="adj-arrow">{{ dir_arrow(adj.direction) }}</div>
+      </div>
+    {% endfor %}
+
+    <div class="why-final-row">
+      <span class="why-fn-label">Final estimate — fair market value</span>
+      <span class="why-fn-value">₹ {{ l2dp(estimated) }}</span>
     </div>
   </div>
 
@@ -916,6 +1234,41 @@
     {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
     &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000) · K = Thousands</span>
   </div>
+
+  {# v3.1: Listings table — shows actual listings the market engine used #}
+  {% if listings_data %}
+    <div class="listings-card">
+      <div class="listings-title">
+        🚗 Similar cars currently for sale
+        <span class="sub">based on {{ listings_data.total_count }} active listing{{ '' if listings_data.total_count == 1 else 's' }} we tracked</span>
+      </div>
+      <table class="listings-table">
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th class="num">Mileage</th>
+            <th>Condition</th>
+            <th>Owner</th>
+            <th class="num">Asking</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in listings_data.rows %}
+            <tr>
+              <td>{{ row.year }}</td>
+              <td class="num">{{ row.mileage_str }}</td>
+              <td>{{ row.condition }}</td>
+              <td>{{ row.owner_short }}</td>
+              <td class="num listing-price">₹ {{ l2dp(row.price) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if listings_data.extra_count > 0 %}
+        <div class="listings-extra">+ {{ listings_data.extra_count }} more verified listing{{ '' if listings_data.extra_count == 1 else 's' }} factored into your estimate</div>
+      {% endif %}
+    </div>
+  {% endif %}
 
   {% if user %}
     {% set car_label = make ~ ' ' ~ model ~ ' ' ~ variant %}
