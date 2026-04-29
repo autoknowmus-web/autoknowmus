@@ -11,6 +11,39 @@
   .car-summary .car-meta { color: #b0b0b0; font-size: 0.82rem; margin-top: 2px; }
   .car-summary .car-meta .lbl { color: #6c757d; font-weight: 400; }
 
+  /* ============================================================
+     v3.1: Anchor strip — "₹X.XL when new (Y yrs old) → ₹Z.ZL today"
+     Public arithmetic only. Shown on both market_v1 and fallback paths.
+     ============================================================ */
+  .anchor-strip {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    color: #adb5bd;
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+  .anchor-strip .anchor-segment { display: inline-flex; align-items: center; gap: 5px; }
+  .anchor-strip .anchor-label { color: #6c757d; font-size: 0.78rem; }
+  .anchor-strip .anchor-value { color: #e6e6e6; font-weight: 600; }
+  .anchor-strip .anchor-now { color: #28a745; font-weight: 700; }
+  .anchor-strip .anchor-arrow { color: #6c757d; font-size: 0.95rem; }
+  .anchor-strip .anchor-pct {
+    color: #ffa500;
+    font-weight: 600;
+    background: rgba(255,165,0,0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+  }
+
   .top-row {
     display: grid;
     grid-template-columns: 1fr 1.25fr;
@@ -152,6 +185,17 @@
   .graph-wrap { position: relative; height: 220px; }
   @media (max-width: 900px) { .graph-wrap { height: 200px; } }
 
+  /* v3.1: Chart caption directly under chart */
+  .chart-caption {
+    color: #adb5bd;
+    font-size: 0.76rem;
+    line-height: 1.4;
+    margin-top: 6px;
+    text-align: center;
+    font-style: italic;
+  }
+  .chart-caption strong { color: #ffa500; font-weight: 600; font-style: normal; }
+
   .chart-caution-chip {
     position: absolute;
     top: 10px;
@@ -195,6 +239,134 @@
   }
   .chart-caution-chip:hover .chart-caution-tooltip {
     visibility: visible; opacity: 1;
+  }
+
+  /* ============================================================
+     v3.1: "Why this price?" panel
+     ============================================================ */
+  .why-price-panel {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  .why-price-panel .why-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .why-price-panel .why-title .sub {
+    color: #b0b0b0;
+    font-size: 0.75rem;
+    font-weight: 400;
+    margin-left: 6px;
+  }
+
+  .why-baseline-row,
+  .why-final-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: #14171d;
+    border-radius: 7px;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+  }
+  .why-baseline-row .why-bl-label,
+  .why-final-row .why-fn-label {
+    color: #adb5bd;
+  }
+  .why-baseline-row .why-bl-value {
+    color: #e6e6e6;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .why-final-row {
+    background: rgba(40,167,69,0.08);
+    border: 1px solid rgba(40,167,69,0.3);
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+  .why-final-row .why-fn-label { color: #28a745; font-weight: 600; }
+  .why-final-row .why-fn-value {
+    color: #28a745;
+    font-weight: 700;
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .why-no-baseline {
+    color: #6c757d;
+    font-size: 0.75rem;
+    font-style: italic;
+    text-align: center;
+    padding: 4px 0 8px;
+    border-bottom: 1px dashed #2a2d34;
+    margin-bottom: 8px;
+  }
+
+  .adjustment-row {
+    display: grid;
+    grid-template-columns: 24px 130px 1fr 38px;
+    gap: 10px;
+    align-items: center;
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.83rem;
+  }
+  .adjustment-row:last-of-type { border-bottom: none; }
+  .adjustment-row .adj-icon {
+    font-size: 1rem;
+    text-align: center;
+  }
+  .adjustment-row .adj-label-block {
+    line-height: 1.25;
+  }
+  .adjustment-row .adj-label {
+    color: #e6e6e6;
+    font-weight: 600;
+    font-size: 0.83rem;
+  }
+  .adjustment-row .adj-value {
+    color: #adb5bd;
+    font-size: 0.74rem;
+    margin-left: 6px;
+    font-weight: 400;
+  }
+  .adjustment-row .adj-desc {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+  .adjustment-row .adj-arrow {
+    text-align: right;
+    font-weight: 700;
+    font-size: 0.95rem;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    letter-spacing: -1px;
+  }
+  .adjustment-row.dir-up_strong .adj-arrow { color: #28a745; }
+  .adjustment-row.dir-up        .adj-arrow { color: #5bd47b; }
+  .adjustment-row.dir-neutral   .adj-arrow { color: #6c757d; }
+  .adjustment-row.dir-down      .adj-arrow { color: #ffa500; }
+  .adjustment-row.dir-down_strong .adj-arrow { color: #ff6b6b; }
+
+  @media (max-width: 600px) {
+    .adjustment-row {
+      grid-template-columns: 22px 1fr 32px;
+      grid-template-rows: auto auto;
+      gap: 6px 10px;
+    }
+    .adjustment-row .adj-icon { grid-row: 1 / span 2; }
+    .adjustment-row .adj-label-block { grid-column: 2; grid-row: 1; }
+    .adjustment-row .adj-arrow { grid-column: 3; grid-row: 1 / span 2; }
+    .adjustment-row .adj-desc { grid-column: 2; grid-row: 2; }
   }
 
   .kpi-row {
@@ -365,6 +537,72 @@
   }
   .market-stats strong { color: #e9ecef; }
   .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.76rem; }
+
+  /* ============================================================
+     v3.1: Listings table — only renders when market engine fires
+     ============================================================ */
+  .listings-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+  }
+  .listings-card .listings-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .listings-card .listings-title .sub {
+    color: #adb5bd;
+    font-size: 0.74rem;
+    font-weight: 400;
+    margin-left: 6px;
+  }
+  .listings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+  .listings-table th {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    text-align: left;
+    padding: 6px 8px 4px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .listings-table th.num,
+  .listings-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .listings-table td {
+    padding: 7px 8px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .listings-table tr:last-child td { border-bottom: none; }
+  .listings-table .listing-price { color: #28a745; font-weight: 600; }
+  .listings-extra {
+    margin-top: 6px;
+    padding: 5px 0 0;
+    color: #6c757d;
+    font-size: 0.74rem;
+    text-align: center;
+    font-style: italic;
+  }
+
+  @media (max-width: 600px) {
+    .listings-table th:nth-child(3),
+    .listings-table td:nth-child(3) { display: none; }
+  }
 
   .alert-strip {
     background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
@@ -574,11 +812,22 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
-  .dist-bar .dist-track { background: #14171d; border-radius: 5px; height: 11px; overflow: hidden; }
+  /* v3.1: Bar height bumped 11px → 16px for better readability */
+  .dist-bar .dist-track { background: #14171d; border-radius: 5px; height: 16px; overflow: hidden; }
   .dist-bar .dist-fill  { height: 100%; border-radius: 5px; transition: width 0.8s ease; }
   .dist-bar .dist-pct   { color: #e6e6e6; font-weight: 600; text-align: left; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
   @media (max-width: 600px) {
     .dist-bar { grid-template-columns: 120px 1fr 40px; gap: 8px; font-size: 0.72rem; }
+  }
+  /* v3.1: Caption under distribution row explaining normalized bars */
+  .dist-caption {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid #2a2d34;
+    color: #6c757d;
+    font-size: 0.72rem;
+    font-style: italic;
+    text-align: center;
   }
 
   .verdict-card {
@@ -628,6 +877,19 @@
   {%- endif %}
 {%- endmacro %}
 
+{# v3.1: Direction arrow macro for "Why this price?" panel.
+   Single ↑ = up, double ↑↑ = up_strong, single ↓ = down, double ↓↓ = down_strong, → = neutral.
+   No multipliers exposed. Direction only. #}
+{% macro dir_arrow(direction) -%}
+  {%- if direction == 'up_strong' -%}↑↑
+  {%- elif direction == 'up' -%}↑
+  {%- elif direction == 'neutral' -%}→
+  {%- elif direction == 'down' -%}↓
+  {%- elif direction == 'down_strong' -%}↓↓
+  {%- else -%}→
+  {%- endif -%}
+{%- endmacro %}
+
 <div class="dashboard-wrap">
 
   <!-- HEADER -->
@@ -648,6 +910,23 @@
       </div>
     </div>
   </div>
+
+  {# v3.1: New car anchor strip — public arithmetic, shown on both engine paths #}
+  {% if anchor_data %}
+    <div class="anchor-strip">
+      <span class="anchor-segment">
+        <span class="anchor-label">When new:</span>
+        <span class="anchor-value">₹ {{ l2dp(anchor_data.ex_showroom) }}</span>
+        <span class="anchor-label">({{ anchor_data.years_old }} yr{{ '' if anchor_data.years_old == 1 else 's' }} old)</span>
+      </span>
+      <span class="anchor-arrow">→</span>
+      <span class="anchor-segment">
+        <span class="anchor-label">Today:</span>
+        <span class="anchor-now">₹ {{ l2dp(estimated) }}</span>
+      </span>
+      <span class="anchor-pct">~{{ anchor_data.pct_off_new }}% off new</span>
+    </div>
+  {% endif %}
 
   <div class="top-row">
     <div class="card hero-combined">
@@ -736,6 +1015,48 @@
       <div class="graph-wrap">
         <canvas id="dep-chart"></canvas>
       </div>
+
+      {# v3.1: Chart caption explaining loss in first 30 days #}
+      <div class="chart-caption">
+        Your car loses around <strong>{{ chart_loss_pct }}%</strong> in the first 30 days alone — every week you wait costs real money.
+      </div>
+    </div>
+  </div>
+
+  {# v3.1: "Why this price?" panel — IP-protected adjustment breakdown.
+     Hybrid baseline disclosure: shows starting number ONLY when market_v1 fired. #}
+  <div class="why-price-panel">
+    <div class="why-title">
+      Why this price?
+      <span class="sub">how we got from baseline to your final estimate</span>
+    </div>
+
+    {% if starting_baseline %}
+      <div class="why-baseline-row">
+        <span class="why-bl-label">Starting point — typical {{ val.year }} {{ val.make }} {{ val.model }}</span>
+        <span class="why-bl-value">₹ {{ l2dp(starting_baseline) }}</span>
+      </div>
+    {% else %}
+      <div class="why-no-baseline">
+        Starting from a typical {{ val.year }} {{ val.make }} {{ val.model }}, then adjusted for your car's specifics:
+      </div>
+    {% endif %}
+
+    {% for adj in qual_adjustments %}
+      <div class="adjustment-row dir-{{ adj.direction }}">
+        <div class="adj-icon">{{ adj.icon }}</div>
+        <div class="adj-label-block">
+          <span class="adj-label">{{ adj.label }}</span>
+          <span class="adj-value">· {{ adj.value }}</span>
+        </div>
+        <div class="adj-desc">{{ adj.description }}</div>
+        <div class="adj-arrow">{{ dir_arrow(adj.direction) }}</div>
+      </div>
+    {% endfor %}
+
+    <div class="why-final-row">
+      <span class="why-fn-label">Final estimate — most likely sale price</span>
+      <span class="why-fn-value">₹ {{ l2dp(estimated) }}</span>
     </div>
   </div>
 
@@ -825,6 +1146,41 @@
     {% if verified_all_time > verified_180d %} · <strong>{{ verified_all_time }}</strong> all-time{% endif %}
     &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000) · K = Thousands</span>
   </div>
+
+  {# v3.1: Listings table — shows actual listings the market engine used #}
+  {% if listings_data %}
+    <div class="listings-card">
+      <div class="listings-title">
+        🚗 Similar cars currently for sale
+        <span class="sub">based on {{ listings_data.total_count }} active listing{{ '' if listings_data.total_count == 1 else 's' }} we tracked</span>
+      </div>
+      <table class="listings-table">
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th class="num">Mileage</th>
+            <th>Condition</th>
+            <th>Owner</th>
+            <th class="num">Asking</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in listings_data.rows %}
+            <tr>
+              <td>{{ row.year }}</td>
+              <td class="num">{{ row.mileage_str }}</td>
+              <td>{{ row.condition }}</td>
+              <td>{{ row.owner_short }}</td>
+              <td class="num listing-price">₹ {{ l2dp(row.price) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if listings_data.extra_count > 0 %}
+        <div class="listings-extra">+ {{ listings_data.extra_count }} more verified listing{{ '' if listings_data.extra_count == 1 else 's' }} factored into your estimate</div>
+      {% endif %}
+    </div>
+  {% endif %}
 
   {% if user %}
     {% set car_label = val.make ~ ' ' ~ val.model ~ ' ' ~ val.variant %}
@@ -958,6 +1314,11 @@
   <div class="bottom-row">
     <div class="card">
       <div class="card-title">Buyer Price-Band Distribution <span class="sub">where buyers are concentrated</span></div>
+
+      {# v3.1: Compute max pct so largest bar fills the row width (normalized).
+         Previously bars used raw pct values, so the biggest bar capped at e.g. 50%. #}
+      {% set max_pct = (buyer_dist | map(attribute='pct') | max) or 1 %}
+
       <div class="dist-row">
         {% for band in buyer_dist %}
         <div class="dist-bar">
@@ -971,12 +1332,13 @@
             {% endif %}
           </div>
           <div class="dist-track">
-            <div class="dist-fill" style="width: {{ band.pct }}%; background: {{ band.color }};"></div>
+            <div class="dist-fill" style="width: {{ ((band.pct / max_pct) * 100) | round | int }}%; background: {{ band.color }};"></div>
           </div>
           <div class="dist-pct">{{ band.pct }}%</div>
         </div>
         {% endfor %}
       </div>
+      <div class="dist-caption">Bar width relative to the largest segment.</div>
     </div>
 
     <div class="verdict-card">
