@@ -201,6 +201,35 @@ EX_SHOWROOM_USED_CEILING = 0.95
 # car_data.get_listings_for_car() (default 60 days).
 LISTING_YEAR_WINDOW = 2
 
+# v3.1: Public-knowledge depreciation curve (NOT engine-internal).
+# Used ONLY for the "starting point" baseline anchor when the market engine
+# fires. These are industry-standard rough numbers anyone could find online.
+# Index = age in years. Beyond index 15 we clamp to the last value.
+PUBLIC_DEPRECIATION_CURVE = [
+    1.00,  # Year 0 (new)
+    0.85,  # Year 1
+    0.75,  # Year 2
+    0.66,  # Year 3
+    0.58,  # Year 4
+    0.51,  # Year 5
+    0.45,  # Year 6
+    0.40,  # Year 7
+    0.36,  # Year 8
+    0.32,  # Year 9
+    0.29,  # Year 10
+    0.26,  # Year 11
+    0.23,  # Year 12
+    0.21,  # Year 13
+    0.19,  # Year 14
+    0.17,  # Year 15+
+]
+
+# v3.1: Public mileage benchmark (industry standard ~10K km/year for personal
+# cars). NOT engine-internal — used only for qualitative descriptions in the
+# "Why this price?" panel. The actual engine uses a different, calibrated
+# benchmark which is NOT exposed in any UI text.
+PUBLIC_KMS_PER_YEAR = 10000
+
 TRANSACTION_TYPE_LABELS = {
     'signup_bonus': 'Signup Bonus',
     'valuation_charge': 'Seller Valuation',
@@ -331,32 +360,6 @@ def _route_valuation(make, model, variant, fuel, year, mileage, condition, owner
 
     Returns:
         (result, audit) tuple, or (None, None) if BOTH engines fail to compute.
-
-        result = {
-            'estimated': int (rupees, post-ceiling),
-            'price_low': int,
-            'price_high': int,
-            'confidence': int (0-100),
-            'phase': int (1-4),               # for templates/PHASE_BLEND lookups
-            'phase_data': dict,                # full phase data with display info
-        }
-
-        audit = {                              # 1:1 with valuations table audit cols
-            'engine_used': 'market_v1' | 'depreciation_fallback',
-            'phase_at_valuation': int,
-            'confidence': int,
-            'n_listings_used': int | None,
-            'n_deals_used': int | None,
-            'data_version': str,
-            'market_avg_km': int | None,
-            'price_per_km_elasticity': float | None,
-            'median_listing_price': int | None,
-            'repair_cost_applied': int | None,
-            'negotiation_buffer_pct': float | None,
-            'nmp_f37': int | None,
-            'selling_price_f38': int | None,
-            'purchase_price_f39': int | None,
-        }
     """
     phase_data = compute_model_phase_data(make, model)
     phase = phase_data['phase']
@@ -414,6 +417,8 @@ def _route_valuation(make, model, variant, fuel, year, mileage, condition, owner
                 'confidence': confidence,
                 'phase': phase,
                 'phase_data': phase_data,
+                # v3.1: Pass listings through so dashboards can render the table
+                'listings_raw': listings,
             }
             audit = {
                 'engine_used': engine_result['engine_used'],   # 'market_v1'
@@ -467,6 +472,8 @@ def _route_valuation(make, model, variant, fuel, year, mileage, condition, owner
         'confidence': confidence,
         'phase': phase,
         'phase_data': phase_data,
+        # v3.1: Empty for fallback path — listings table is hidden in template
+        'listings_raw': [],
     }
     audit = {
         'engine_used': 'depreciation_fallback',
@@ -1094,6 +1101,289 @@ def get_active_alert_subscription(user_id, make, model, variant):
         return None
 
 
+# ============================================================
+# v3.1 DASHBOARD ADDITIONS — new car anchor + Why this price + listings
+# ----------------------------------------------------
+# These helpers compute display-only data for the new dashboard sections.
+# CRITICAL: No engine multipliers/buffers leak from these helpers. The
+# qualitative adjustments use only DIRECTION + plain-English reasoning.
+# Mileage benchmark uses a public 10K/year industry-standard number, not
+# any engine-internal constant.
+# ============================================================
+
+def _get_ex_showroom_safe(make, model, variant, fuel):
+    """
+    Best-effort ex-showroom price lookup.
+    Tries variant-specific first, falls back to model base, returns None if neither.
+    """
+    try:
+        p = get_variant_base_price(make, model, variant, fuel)
+        if p and p > 0:
+            return int(p)
+    except Exception:
+        pass
+    try:
+        p = get_base_price(make, model)
+        if p and p > 0:
+            return int(p)
+    except Exception:
+        pass
+    return None
+
+
+def _compute_anchor_data(make, model, variant, fuel, year, current_estimated):
+    """
+    Compute the new-car anchor strip data.
+    Returns dict with ex_showroom, years_old, pct_off_new (or None if no ex_showroom).
+    Anchor is shown on BOTH market_v1 and depreciation_fallback paths because
+    "₹X.XL when new → ₹Y.YL today" is just public arithmetic, not engine IP.
+    """
+    ex_showroom = _get_ex_showroom_safe(make, model, variant, fuel)
+    if not ex_showroom or not current_estimated:
+        return None
+
+    try:
+        years_old = max(0, CURRENT_YEAR - int(year))
+    except (ValueError, TypeError):
+        years_old = 0
+
+    # pct off new = how much value has been lost vs ex-showroom
+    if ex_showroom > 0:
+        pct_off_new = int(round((1.0 - (current_estimated / ex_showroom)) * 100))
+        # Clamp to sane range
+        pct_off_new = max(0, min(95, pct_off_new))
+    else:
+        pct_off_new = 0
+
+    return {
+        'ex_showroom': ex_showroom,
+        'years_old': years_old,
+        'pct_off_new': pct_off_new,
+    }
+
+
+def _compute_starting_baseline_market_only(make, model, variant, fuel, year, audit):
+    """
+    Hybrid disclosure rule:
+      - When engine_used == 'market_v1': show baseline number
+        (computed from ex_showroom × PUBLIC_DEPRECIATION_CURVE — public knowledge,
+         not engine IP)
+      - When engine_used == 'depreciation_fallback': return None
+        (template hides the rupee number, shows label only)
+
+    Returns int or None.
+    """
+    if not audit or audit.get('engine_used') != 'market_v1':
+        return None
+
+    ex_showroom = _get_ex_showroom_safe(make, model, variant, fuel)
+    if not ex_showroom:
+        return None
+
+    try:
+        age = max(0, CURRENT_YEAR - int(year))
+    except (ValueError, TypeError):
+        age = 0
+
+    idx = min(age, len(PUBLIC_DEPRECIATION_CURVE) - 1)
+    factor = PUBLIC_DEPRECIATION_CURVE[idx]
+    baseline = int(round(ex_showroom * factor))
+    return baseline
+
+
+def _compute_qualitative_adjustments(condition, owner, mileage, year):
+    """
+    Build display rows for the "Why this price?" panel.
+    Returns list of dicts: {icon, label, value, description, direction}
+
+    direction values:
+      'up'         = single ↑ (positive small/normal)
+      'up_strong'  = double ↑↑ (positive strong)
+      'down'       = single ↓ (negative small/normal)
+      'down_strong'= double ↓↓ (negative strong)
+      'neutral'    = single → (no impact)
+
+    NO numerical multipliers exposed. NO engine constants referenced.
+    Mileage compared to PUBLIC_KMS_PER_YEAR (industry-standard 10K/year),
+    not to any engine-internal benchmark.
+    """
+    rows = []
+
+    # -------- Mileage --------
+    try:
+        m = int(mileage)
+        y = int(year)
+        age_years = max(1, CURRENT_YEAR - y)
+        typical_km = age_years * PUBLIC_KMS_PER_YEAR
+
+        if m == 0:
+            mileage_dir = 'up_strong'
+            mileage_desc = "Very low km — well below typical"
+        elif m < typical_km * 0.7:
+            mileage_dir = 'up_strong'
+            mileage_desc = f"Below typical {typical_km:,} km for this age"
+        elif m < typical_km * 0.9:
+            mileage_dir = 'up'
+            mileage_desc = "Slightly below typical for this age"
+        elif m <= typical_km * 1.1:
+            mileage_dir = 'neutral'
+            mileage_desc = "About average for the car's age"
+        elif m <= typical_km * 1.3:
+            mileage_dir = 'down'
+            mileage_desc = "Slightly above typical for this age"
+        else:
+            mileage_dir = 'down_strong'
+            mileage_desc = f"Well above typical {typical_km:,} km for this age"
+
+        m_str = f"{m:,} km"
+    except (ValueError, TypeError):
+        mileage_dir = 'neutral'
+        mileage_desc = "—"
+        m_str = "—"
+
+    rows.append({
+        'icon': '🛣️',
+        'label': 'Mileage',
+        'value': m_str,
+        'description': mileage_desc,
+        'direction': mileage_dir,
+    })
+
+    # -------- Condition --------
+    cond_map = {
+        'Excellent': ('up_strong', 'Better than typical — premium for clean condition'),
+        'Good':      ('up',         'Better than the typical used car at this age'),
+        'Fair':      ('down',       'Below typical — wear and tear visible'),
+    }
+    cond_dir, cond_desc = cond_map.get(condition, ('neutral', '—'))
+    rows.append({
+        'icon': '✨',
+        'label': 'Condition',
+        'value': condition or '—',
+        'description': cond_desc,
+        'direction': cond_dir,
+    })
+
+    # -------- Owner --------
+    owner_map = {
+        '1st Owner':            ('up',         'Buyers value clean ownership chain'),
+        '2nd Owner':            ('neutral',    'Standard for this age'),
+        '3rd Owner or more':    ('down',       'Multiple owners — buyers negotiate harder'),
+    }
+    own_dir, own_desc = owner_map.get(owner, ('neutral', '—'))
+    rows.append({
+        'icon': '👤',
+        'label': 'Owner history',
+        'value': owner or '—',
+        'description': own_desc,
+        'direction': own_dir,
+    })
+
+    return rows
+
+
+def _compute_chart_loss_pct_seller(depreciation_series):
+    """
+    Returns approx % loss between Day 0 and Day 30 (rounded to 1 decimal).
+    Used in the seller depreciation chart caption.
+    """
+    if not depreciation_series or len(depreciation_series) < 31:
+        return 1.5  # safe default
+    try:
+        d0 = depreciation_series[0]['price']
+        d30 = depreciation_series[30]['price']
+        if d0 <= 0:
+            return 1.5
+        loss_pct = ((d0 - d30) / d0) * 100
+        return round(loss_pct, 1)
+    except (KeyError, IndexError, TypeError):
+        return 1.5
+
+
+def _compute_chart_loss_pct_buyer(depreciation_series_monthly):
+    """
+    Returns approx % loss between today and 5-year mark (rounded to nearest int).
+    Used in the buyer depreciation chart caption.
+    """
+    if not depreciation_series_monthly or len(depreciation_series_monthly) < 2:
+        return 42
+    try:
+        today_price = depreciation_series_monthly[0]['price']
+        last_price = depreciation_series_monthly[-1]['price']
+        if today_price <= 0:
+            return 42
+        loss_pct = ((today_price - last_price) / today_price) * 100
+        return int(round(loss_pct))
+    except (KeyError, IndexError, TypeError):
+        return 42
+
+
+def _format_listings_for_display(listings, max_rows=4):
+    """
+    Format raw listings for the dashboard table.
+    Only called when engine_used == 'market_v1' AND len(listings) >= MIN_EFFECTIVE_LISTINGS.
+
+    Returns dict:
+      {
+        'rows': list of {year, mileage_str, condition, owner_short, price},
+        'total_count': int,
+        'shown_count': int,
+        'extra_count': int,
+      }
+    Returns None if listings empty or all rows have unusable data.
+    """
+    if not listings:
+        return None
+
+    safe_rows = []
+    for L in listings:
+        try:
+            yr = L.get('year') or '—'
+            km = L.get('mileage')
+            km_str = f"{int(km):,}" if km else '—'
+            cond = L.get('condition') or '—'
+            own = L.get('owner') or '—'
+            # Shorten owner for table
+            own_str = str(own)
+            if '1st' in own_str:
+                own_short = '1st'
+            elif '2nd' in own_str:
+                own_short = '2nd'
+            elif '3rd' in own_str or 'more' in own_str.lower():
+                own_short = '3rd+'
+            else:
+                own_short = own_str[:6]
+
+            price = L.get('asking_price') or L.get('price')
+            if not price:
+                continue  # skip listings with no price
+            price_int = int(price)
+
+            safe_rows.append({
+                'year': yr,
+                'mileage_str': (km_str + ' km') if km_str != '—' else '—',
+                'condition': cond,
+                'owner_short': own_short,
+                'price': price_int,
+            })
+        except (ValueError, TypeError, AttributeError):
+            continue
+
+    if not safe_rows:
+        return None
+
+    total = len(safe_rows)
+    shown = safe_rows[:max_rows]
+    extra = max(0, total - max_rows)
+
+    return {
+        'rows': shown,
+        'total_count': total,
+        'shown_count': len(shown),
+        'extra_count': extra,
+    }
+
+
 # ========== ROUTES ==========
 
 @app.route('/')
@@ -1630,6 +1920,50 @@ def seller_dashboard(valuation_id):
         'condition': val['condition'],
     }
 
+    # ========================================================
+    # v3.1: Compute new dashboard sections data
+    # ========================================================
+    # Mock audit dict from stored valuation row so we can drive market-vs-fallback
+    # disclosure for old + new valuations uniformly.
+    stored_audit = {
+        'engine_used': val.get('engine_used') or 'depreciation_fallback',
+        'n_listings_used': val.get('n_listings_used') or 0,
+    }
+
+    anchor_data = _compute_anchor_data(
+        make=val['make'], model=val['model'],
+        variant=val['variant'], fuel=val['fuel'],
+        year=val['year'], current_estimated=estimated,
+    )
+
+    starting_baseline = _compute_starting_baseline_market_only(
+        make=val['make'], model=val['model'],
+        variant=val['variant'], fuel=val['fuel'],
+        year=val['year'], audit=stored_audit,
+    )
+
+    qual_adjustments = _compute_qualitative_adjustments(
+        condition=val['condition'], owner=val['owner'],
+        mileage=val['mileage'], year=val['year'],
+    )
+
+    chart_loss_pct = _compute_chart_loss_pct_seller(depreciation)
+
+    # Listings table only when market engine fired AND we have listings cached.
+    # On dashboard refresh we re-fetch so the table reflects current cache state.
+    listings_data = None
+    if stored_audit['engine_used'] == 'market_v1':
+        try:
+            fresh_listings = get_listings_for_car(
+                make=val['make'], model=val['model'],
+                variant=val['variant'], fuel=val['fuel'],
+                year=int(val['year']), year_window=LISTING_YEAR_WINDOW,
+            )
+            listings_data = _format_listings_for_display(fresh_listings, max_rows=4)
+        except Exception as e:
+            app.logger.warning(f"seller_dashboard listings refresh failed: {e}")
+            listings_data = None
+
     return render_template(
         'dashboard.html',
         user=user,
@@ -1652,6 +1986,13 @@ def seller_dashboard(valuation_id):
         alert_cost=ALERT_SUBSCRIPTION_COST,
         alert_days=ALERT_SUBSCRIPTION_DAYS,
         max_alerts=MAX_ACTIVE_ALERTS,
+        # v3.1: New dashboard sections
+        anchor_data=anchor_data,
+        starting_baseline=starting_baseline,
+        qual_adjustments=qual_adjustments,
+        chart_loss_pct=chart_loss_pct,
+        listings_data=listings_data,
+        engine_used=stored_audit['engine_used'],
     )
 
 
@@ -1987,6 +2328,32 @@ def buyer_dashboard():
         'asking_price': asking_price_raw,
     }
 
+    # ========================================================
+    # v3.1: Compute new dashboard sections data
+    # ========================================================
+    anchor_data = _compute_anchor_data(
+        make=make, model=model, variant=variant, fuel=fuel,
+        year=year_int, current_estimated=adjusted,
+    )
+
+    starting_baseline = _compute_starting_baseline_market_only(
+        make=make, model=model, variant=variant, fuel=fuel,
+        year=year_int, audit=audit,
+    )
+
+    qual_adjustments = _compute_qualitative_adjustments(
+        condition=condition, owner=owner,
+        mileage=mileage_int, year=year_int,
+    )
+
+    chart_loss_pct = _compute_chart_loss_pct_buyer(depreciation)
+
+    # Listings table only when market engine fired
+    listings_data = None
+    if audit and audit.get('engine_used') == 'market_v1':
+        listings_raw = result.get('listings_raw') or []
+        listings_data = _format_listings_for_display(listings_raw, max_rows=4)
+
     return render_template(
         'buyer_dashboard.html',
         user=user,
@@ -2015,6 +2382,13 @@ def buyer_dashboard():
         max_alerts=MAX_ACTIVE_ALERTS,
         phase_data=phase_data,
         data_version=_live_data_version(),
+        # v3.1: New dashboard sections
+        anchor_data=anchor_data,
+        starting_baseline=starting_baseline,
+        qual_adjustments=qual_adjustments,
+        chart_loss_pct=chart_loss_pct,
+        listings_data=listings_data,
+        engine_used=(audit.get('engine_used') if audit else 'depreciation_fallback'),
     )
 
 
