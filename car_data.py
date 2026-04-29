@@ -1,18 +1,19 @@
 """
 car_data.py
 -----------
-AutoKnowMus — Used car master data + hybrid pricing engine.
+AutoKnowMus — Used car master data + hybrid pricing engine + listings cache.
 
 DATA SOURCE: Google Sheets (published as CSV) with full bundled fallback.
 
 How it works:
-  1. On first use (and every PRICE_CACHE_TTL_SECONDS), fetches 4 tabs from Google Sheets:
+  1. On first use (and every PRICE_CACHE_TTL_SECONDS), fetches 5 sources:
      - car_prices: make/model/variant/fuel/ex_showroom_price rows
      - depreciation_curve: age → retention % rows
      - multipliers: condition/owner/fuel multiplier rows
      - meta: data_version, last_updated, etc.
-  2. If the Google Sheet is reachable, its data is used.
-  3. If any tab fails to fetch or is empty, falls back to the bundled FALLBACK_*
+     - listings: NEW — current market listings for the 740Li engine
+  2. If a Google Sheet is reachable, its data is used.
+  3. If any tab fails to fetch or is empty, falls back to bundled FALLBACK_*
      data in this file. The app NEVER breaks for users.
   4. Admin can force a refresh via /admin/refresh-prices.
 
@@ -21,9 +22,19 @@ Environment variables required:
   GSHEET_DEPRECIATION_URL
   GSHEET_MULTIPLIERS_URL
   GSHEET_META_URL
+  GSHEET_LISTINGS_URL  ← NEW (separate spreadsheet, single tab named 'listings')
 
 Optional:
   PRICE_CACHE_TTL_SECONDS (default 3600 = 1 hour)
+
+CHANGES IN THIS VERSION (Phase 1A migration):
+  - get_variant_base_price() now accepts optional `fuel` parameter
+    (fixes silent v2.8 ex-showroom ceiling failure in app.py)
+  - get_base_price() now returns the lowest-priced variant deterministically
+    (was: dict iteration order, intermittent across deploys)
+  - NEW: listings cache layer for the 740Li pricing engine
+  - NEW: get_listings_for_car() helper that the engine consumes
+  - NEW: LISTINGS_DATA_FRESH module flag for app.py routing logic
 
 MIGRATION PATH: To move from public CSV to private Google Sheets API later:
   1. Create a GCP service account, enable Google Sheets API
@@ -53,6 +64,14 @@ GSHEET_PRICES_URL       = os.environ.get("GSHEET_PRICES_URL", "")
 GSHEET_DEPRECIATION_URL = os.environ.get("GSHEET_DEPRECIATION_URL", "")
 GSHEET_MULTIPLIERS_URL  = os.environ.get("GSHEET_MULTIPLIERS_URL", "")
 GSHEET_META_URL         = os.environ.get("GSHEET_META_URL", "")
+GSHEET_LISTINGS_URL     = os.environ.get("GSHEET_LISTINGS_URL", "")  # NEW
+
+# Listings engine threshold (locked decision — N>=5 effective listings to use 740Li engine)
+LISTINGS_MIN_FOR_ENGINE = 5
+
+# Default listing freshness window (days). Listings older than this are excluded
+# unless they have an explicit expires_date that overrides this.
+LISTINGS_DEFAULT_FRESHNESS_DAYS = 60
 
 
 # ============================================================
@@ -401,6 +420,12 @@ FALLBACK_META = {
     "notes": "Running on bundled data. Check GSHEET_* env vars to enable live sheet.",
 }
 
+# Listings has no bundled fallback. If the listings sheet is unreachable or
+# empty, get_listings_for_car() returns [] for every query, which causes the
+# binary engine switch in app.py to fall back to the depreciation engine. This
+# is the locked behavior — the 740Li engine ONLY runs when fresh listings exist.
+FALLBACK_LISTINGS: List[Dict] = []
+
 
 # ============================================================
 # IN-MEMORY CACHE (thread-safe)
@@ -411,6 +436,9 @@ _cache = {
     "depreciation": None,
     "multipliers": None,
     "meta": None,
+    "listings": None,           # NEW — list of dicts
+    "listings_source": "uninitialized",  # NEW — "sheet" | "fallback" | "uninitialized"
+    "listings_last_error": None,         # NEW
     "last_fetch": 0,
     "last_error": None,
     "source": "uninitialized",
@@ -507,6 +535,107 @@ def _parse_meta(rows: List[Dict[str, str]]) -> Dict[str, str]:
     return out
 
 
+def _parse_listings(rows: List[Dict[str, str]]) -> List[Dict]:
+    """
+    Parse listings tab into list of normalized dicts.
+
+    Expected columns (per listings_sheet_spec.md):
+      make, model, variant, fuel, year, mileage, condition, owner,
+      asking_price, location_city, location_state,
+      listed_date, expires_date, active, source_url
+
+    Required: make, model, variant, fuel, year, mileage, asking_price, listed_date, active
+    Returns: list of dicts with normalized types (year/mileage/asking_price as ints,
+    listed_date/expires_date as date objects, active as bool, others as stripped strings).
+    """
+    out = []
+    for row in rows:
+        # Filter inactive
+        active_raw = str(row.get("active", "TRUE")).strip().upper()
+        if active_raw not in ("TRUE", "YES", "1"):
+            continue
+
+        make = str(row.get("make", "")).strip()
+        model = str(row.get("model", "")).strip()
+        variant = str(row.get("variant", "")).strip()
+        fuel = str(row.get("fuel", "")).strip()
+        if not (make and model and variant and fuel):
+            continue
+
+        # Required numeric fields
+        try:
+            year = int(str(row.get("year", "")).strip())
+            mileage = int(str(row.get("mileage", "")).replace(",", "").strip())
+            asking_price = int(str(row.get("asking_price", "")).replace(",", "").replace("₹", "").strip())
+        except (ValueError, TypeError):
+            continue
+
+        # Sanity bounds (silently drop obviously bad rows)
+        if year < 1990 or year > CURRENT_YEAR + 1:
+            continue
+        if mileage < 0 or mileage > 1_000_000:
+            continue
+        if asking_price <= 0 or asking_price > 1_000_000_000:  # 100 Cr cap
+            continue
+
+        # Optional fields
+        condition = str(row.get("condition", "")).strip() or None
+        owner = str(row.get("owner", "")).strip() or None
+        location_city = str(row.get("location_city", "")).strip() or None
+        location_state = str(row.get("location_state", "")).strip() or None
+        source_url = str(row.get("source_url", "")).strip() or None
+
+        # Dates — listed_date is required, expires_date optional
+        listed_date_raw = str(row.get("listed_date", "")).strip()
+        listed_date = None
+        if listed_date_raw:
+            try:
+                listed_date = datetime.strptime(listed_date_raw, "%Y-%m-%d").date()
+            except ValueError:
+                # Try other common formats as fallback
+                for fmt in ("%d-%b-%Y", "%d/%m/%Y", "%m/%d/%Y"):
+                    try:
+                        listed_date = datetime.strptime(listed_date_raw, fmt).date()
+                        break
+                    except ValueError:
+                        continue
+        if not listed_date:
+            # Required field — drop row
+            continue
+
+        expires_date_raw = str(row.get("expires_date", "")).strip()
+        expires_date = None
+        if expires_date_raw:
+            try:
+                expires_date = datetime.strptime(expires_date_raw, "%Y-%m-%d").date()
+            except ValueError:
+                for fmt in ("%d-%b-%Y", "%d/%m/%Y", "%m/%d/%Y"):
+                    try:
+                        expires_date = datetime.strptime(expires_date_raw, fmt).date()
+                        break
+                    except ValueError:
+                        continue
+
+        out.append({
+            "make": make,
+            "model": model,
+            "variant": variant,
+            "fuel": fuel,
+            "year": year,
+            "mileage": mileage,
+            "condition": condition,
+            "owner": owner,
+            "asking_price": asking_price,
+            "location_city": location_city,
+            "location_state": location_state,
+            "listed_date": listed_date,
+            "expires_date": expires_date,
+            "source_url": source_url,
+        })
+
+    return out
+
+
 def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
     """
     Merge sheet data on top of fallback. Sheet wins where it has data.
@@ -591,6 +720,30 @@ def _refresh_cache(force: bool = False) -> Dict:
             errors.append(f"meta: {e}")
             _cache["meta"] = FALLBACK_META
 
+        # ============================================================
+        # NEW — Listings fetch (independent failure mode from prices)
+        # If listings fail, the engine simply can't use the 740Li engine
+        # for any car, and falls back to depreciation. Prices/etc still work.
+        # ============================================================
+        try:
+            if not GSHEET_LISTINGS_URL:
+                # Env var not configured yet — silent skip, no error
+                _cache["listings"] = FALLBACK_LISTINGS
+                _cache["listings_source"] = "fallback"
+                _cache["listings_last_error"] = None
+            else:
+                rows = _fetch_csv(GSHEET_LISTINGS_URL)
+                listings = _parse_listings(rows)
+                _cache["listings"] = listings
+                _cache["listings_source"] = "sheet" if listings else "fallback"
+                _cache["listings_last_error"] = None if listings else "Parsed listings tab is empty"
+        except Exception as e:
+            _cache["listings"] = FALLBACK_LISTINGS
+            _cache["listings_source"] = "fallback"
+            _cache["listings_last_error"] = str(e)
+            # Don't append to top-level errors — listings failure is informational only
+            # (engine routing handles it gracefully via N>=5 check)
+
         _cache["last_fetch"] = now
         _cache["last_error"] = "; ".join(errors) if errors else None
         if used_sheet_prices and not errors:
@@ -617,6 +770,10 @@ def _refresh_cache(force: bool = False) -> Dict:
                 for m in sheet_car_data.values()
                 for d in m.values()
             ),
+            # NEW — listings status in admin refresh response
+            "listings_count": len(_cache["listings"]) if _cache["listings"] else 0,
+            "listings_source": _cache["listings_source"],
+            "listings_error": _cache["listings_last_error"],
         }
 
 
@@ -652,6 +809,10 @@ def get_cache_status() -> Dict:
         "makes": len(_cache["car_data"]),
         "data_version": _cache["meta"].get("data_version", "?"),
         "last_updated": _cache["meta"].get("last_updated", "?"),
+        # NEW — listings diagnostics
+        "listings_count": len(_cache["listings"]) if _cache["listings"] else 0,
+        "listings_source": _cache["listings_source"],
+        "listings_last_error": _cache["listings_last_error"],
     }
 
 
@@ -685,7 +846,22 @@ def get_fuels(make: str, model: str) -> List[str]:
         return []
 
 
-def get_variant_base_price(make: str, model: str, variant: str) -> Optional[int]:
+def get_variant_base_price(make: str, model: str, variant: str,
+                           fuel: Optional[str] = None) -> Optional[int]:
+    """
+    Returns the ex-showroom base price for a variant.
+
+    The `fuel` parameter is accepted for backward-compatibility with callers
+    that pass it (e.g. _apply_ex_showroom_ceiling in app.py). In the current
+    data model, prices are stored at (make, model, variant) level and not
+    per-fuel — so fuel is currently ignored. If/when the prices sheet is
+    extended to per-fuel pricing, this function's contract supports it
+    without needing call-site changes.
+
+    NOTE: This signature fix resolves the silent v2.8 ex-showroom ceiling
+    failure where app.py was calling with 4 args but the function only
+    accepted 3, causing TypeError → silent except → ceiling never firing.
+    """
     _ensure_loaded()
     try:
         return _cache["car_data"][make][model]["variants"].get(variant)
@@ -694,11 +870,21 @@ def get_variant_base_price(make: str, model: str, variant: str) -> Optional[int]
 
 
 def get_base_price(make: str, model: str) -> Optional[int]:
-    """Legacy shim — returns base-trim price as rough anchor."""
+    """
+    Returns the LOWEST-priced variant for a model — used as a rough anchor
+    in the v2.8 ex-showroom ceiling fallback path and admin guardrail checks.
+
+    PREVIOUSLY: returned `next(iter(variants.values()))` which depended on
+    Python dict iteration order. Generally stable in CPython 3.7+ but could
+    drift if the prices sheet was re-ordered. Now explicitly returns the
+    minimum, which is deterministic regardless of ordering.
+    """
     _ensure_loaded()
     try:
         variants = _cache["car_data"][make][model]["variants"]
-        return next(iter(variants.values())) if variants else None
+        if not variants:
+            return None
+        return min(variants.values())
     except KeyError:
         return None
 
@@ -726,12 +912,101 @@ def get_multiplier(category: str, key: str) -> float:
 
 
 # ============================================================
-# PRICING FORMULA
+# NEW — LISTINGS API (consumed by 740Li engine in pricing_740Li.py)
+# ============================================================
+
+def get_listings_for_car(make: str, model: str, variant: str, fuel: str,
+                          year: Optional[int] = None,
+                          year_window: int = 2,
+                          freshness_days: Optional[int] = None) -> List[Dict]:
+    """
+    Returns active, fresh listings matching the requested car spec.
+
+    Filters applied (in order):
+      1. Match make + model + variant + fuel exactly (case-sensitive — must match
+         the prices sheet exactly; mismatches are the founder's responsibility)
+      2. If year provided, filter year within +/- year_window (default ±2)
+      3. Drop listings older than freshness_days (default LISTINGS_DEFAULT_FRESHNESS_DAYS)
+         OR past their explicit expires_date
+      4. Already filtered to active=TRUE in _parse_listings()
+
+    Args:
+        make, model, variant, fuel: car spec (must match prices sheet)
+        year: target year (optional). If None, all years included.
+        year_window: tolerance around year (default ±2). Ignored if year is None.
+        freshness_days: max listing age in days. Defaults to 60.
+
+    Returns:
+        List of listing dicts. Empty if nothing matches.
+        Each dict has keys: make, model, variant, fuel, year, mileage, condition,
+        owner, asking_price, location_city, location_state, listed_date, expires_date,
+        source_url.
+    """
+    _ensure_loaded()
+    listings = _cache.get("listings") or []
+    if not listings:
+        return []
+
+    if freshness_days is None:
+        freshness_days = LISTINGS_DEFAULT_FRESHNESS_DAYS
+
+    today = datetime.now().date()
+    cutoff_date = today.replace()  # placeholder
+    from datetime import timedelta
+    cutoff_date = today - timedelta(days=freshness_days)
+
+    matched = []
+    for L in listings:
+        if L["make"] != make: continue
+        if L["model"] != model: continue
+        if L["variant"] != variant: continue
+        if L["fuel"] != fuel: continue
+
+        if year is not None:
+            if abs(L["year"] - int(year)) > year_window:
+                continue
+
+        # Freshness: explicit expires_date wins; else listed_date + freshness_days
+        if L.get("expires_date"):
+            if L["expires_date"] < today:
+                continue
+        else:
+            if L.get("listed_date") and L["listed_date"] < cutoff_date:
+                continue
+
+        matched.append(L)
+
+    return matched
+
+
+def get_listings_freshness_status() -> Dict:
+    """
+    Diagnostic for app.py routing logic — quick check whether listings cache
+    is healthy enough to attempt 740Li engine routing for any car.
+
+    Returns dict with:
+      - has_data: bool — at least 1 fresh listing in cache
+      - total_count: int — total active listings (regardless of car spec)
+      - source: 'sheet' | 'fallback'
+      - last_error: str | None
+    """
+    _ensure_loaded()
+    listings = _cache.get("listings") or []
+    return {
+        "has_data": len(listings) > 0,
+        "total_count": len(listings),
+        "source": _cache.get("listings_source", "uninitialized"),
+        "last_error": _cache.get("listings_last_error"),
+    }
+
+
+# ============================================================
+# PRICING FORMULA (depreciation engine — unchanged)
 # ============================================================
 
 def compute_base_valuation(make, model, variant, fuel, year, mileage, condition, owner):
     """Pure formula-based valuation. Returns int rupees or None."""
-    base = get_variant_base_price(make, model, variant)
+    base = get_variant_base_price(make, model, variant, fuel)
     if base is None:
         return None
 
@@ -792,7 +1067,7 @@ def determine_phase(deal_count: int, distinct_users: int, previous_phase: int = 
 
 
 # ============================================================
-# BLENDING + GUARDRAILS
+# BLENDING + GUARDRAILS (unchanged)
 # ============================================================
 
 def _trim_outliers(sorted_prices, trim_frac=OUTLIER_TRIM_FRAC):
@@ -902,13 +1177,17 @@ CAR_DATA = _LazyDict()
 BASE_PRICE_DATA_VERSION = FALLBACK_META.get("data_version", "?")
 BASE_PRICE_LAST_UPDATED = FALLBACK_META.get("last_updated", "?")
 
+# NEW — module-level flag for app.py routing logic
+LISTINGS_DATA_FRESH = False
+
 
 def refresh_module_constants():
     """Call after a price refresh to sync module-level string constants."""
-    global BASE_PRICE_DATA_VERSION, BASE_PRICE_LAST_UPDATED
+    global BASE_PRICE_DATA_VERSION, BASE_PRICE_LAST_UPDATED, LISTINGS_DATA_FRESH
     _ensure_loaded()
     BASE_PRICE_DATA_VERSION = _cache["meta"].get("data_version", "?")
     BASE_PRICE_LAST_UPDATED = _cache["meta"].get("last_updated", "?")
+    LISTINGS_DATA_FRESH = bool(_cache.get("listings"))
 
 
 # ============================================================
@@ -922,7 +1201,10 @@ try:
     CAR_DATA._sync()
     _src = _cache.get("source", "?")
     _n = len(_cache["car_data"]) if _cache["car_data"] else 0
-    print(f"[car_data] Loaded {_n} makes. Source: {_src}.")
+    _ln = len(_cache["listings"]) if _cache["listings"] else 0
+    _lsrc = _cache.get("listings_source", "?")
+    print(f"[car_data] Loaded {_n} makes. Source: {_src}. "
+          f"Listings: {_ln} ({_lsrc}).")
 except Exception as _e:
     print(f"[car_data] Startup load failed: {_e}. Will retry on first request. "
           f"Fallback data available in FALLBACK_CAR_DATA.")
