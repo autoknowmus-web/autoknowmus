@@ -15,34 +15,35 @@
      v3.1: Anchor strip — "₹X.XL when new (Y yrs old) → ₹Z.ZL today"
      Public arithmetic only. Shown on both market_v1 and fallback paths.
      Buyer theme: blue accent on "Today" value.
+     v3.2: Bumped sizes for visual prominence.
      ============================================================ */
   .anchor-strip {
     background: #14171d;
     border: 1px solid #2a2d34;
-    border-radius: 7px;
-    padding: 7px 12px;
+    border-radius: 9px;
+    padding: 9px 14px;
     margin-bottom: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
     color: #adb5bd;
-    font-size: 0.82rem;
+    font-size: 0.88rem;
     line-height: 1.35;
   }
-  .anchor-strip .anchor-segment { display: inline-flex; align-items: center; gap: 5px; }
-  .anchor-strip .anchor-label { color: #6c757d; font-size: 0.74rem; }
-  .anchor-strip .anchor-value { color: #e6e6e6; font-weight: 600; }
-  .anchor-strip .anchor-now { color: #4e54ff; font-weight: 700; }
-  .anchor-strip .anchor-arrow { color: #6c757d; font-size: 0.9rem; }
+  .anchor-strip .anchor-segment { display: inline-flex; align-items: center; gap: 6px; }
+  .anchor-strip .anchor-label { color: #6c757d; font-size: 0.78rem; }
+  .anchor-strip .anchor-value { color: #e6e6e6; font-weight: 700; font-size: 0.9rem; }
+  .anchor-strip .anchor-now { color: #a5aaff; font-weight: 800; font-size: 1rem; }
+  .anchor-strip .anchor-arrow { color: #6c757d; font-size: 1rem; font-weight: 600; }
   .anchor-strip .anchor-pct {
     color: #ffa500;
-    font-weight: 600;
-    background: rgba(255,165,0,0.1);
-    padding: 2px 7px;
-    border-radius: 9px;
-    font-size: 0.74rem;
+    font-weight: 700;
+    background: rgba(255,165,0,0.12);
+    padding: 3px 9px;
+    border-radius: 11px;
+    font-size: 0.78rem;
   }
   /* When the car is older than 7 years, swap the warm-orange chip for a stronger amber to flag steep depreciation */
   .anchor-strip.is-aged .anchor-pct {
@@ -286,17 +287,19 @@
     font-variant-numeric: tabular-nums;
   }
   .why-final-row {
-    background: rgba(78,84,255,0.08);
-    border: 1px solid rgba(78,84,255,0.3);
+    background: rgba(78,84,255,0.18);
+    border: 1px solid rgba(78,84,255,0.55);
     margin-top: 7px;
     margin-bottom: 0;
+    padding: 10px 12px;
   }
-  .why-final-row .why-fn-label { color: #8a90ff; font-weight: 600; }
+  .why-final-row .why-fn-label { color: #a5aaff; font-weight: 700; font-size: 0.86rem; }
   .why-final-row .why-fn-value {
-    color: #8a90ff;
-    font-weight: 700;
-    font-size: 0.95rem;
+    color: #a5aaff;
+    font-weight: 800;
+    font-size: 1.1rem;
     font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 12px rgba(165,170,255,0.25);
   }
 
   .why-no-baseline {
@@ -309,62 +312,79 @@
     margin-bottom: 7px;
   }
 
+  /* v3.2: Adjustment row redesigned (buyer flavor — tighter padding).
+     - Icon sized up with colored bg circle for visibility
+     - Two-line stacked text (label line 1, description line 2)
+     - Right column = colored BADGE (Premium / Adds value / Typical / Reduces / Big hit) */
   .adjustment-row {
     display: grid;
-    grid-template-columns: 22px 130px 1fr 36px;
-    gap: 8px;
+    grid-template-columns: 32px 1fr auto;
+    gap: 10px;
     align-items: center;
-    padding: 6px 9px;
+    padding: 8px 10px;
     border-bottom: 1px solid rgba(255,255,255,0.05);
-    font-size: 0.8rem;
   }
   .adjustment-row:last-of-type { border-bottom: none; }
   .adjustment-row .adj-icon {
+    width: 28px; height: 28px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 7px;
     font-size: 0.95rem;
-    text-align: center;
+    line-height: 1;
   }
-  .adjustment-row .adj-label-block {
-    line-height: 1.2;
+  .adjustment-row .adj-text {
+    min-width: 0;
+    line-height: 1.3;
   }
-  .adjustment-row .adj-label {
-    color: #e6e6e6;
+  .adjustment-row .adj-label-line {
+    color: #fff;
     font-weight: 600;
-    font-size: 0.8rem;
+    font-size: 0.83rem;
+    margin-bottom: 1px;
   }
-  .adjustment-row .adj-value {
+  .adjustment-row .adj-label-line .adj-value {
     color: #adb5bd;
-    font-size: 0.72rem;
-    margin-left: 5px;
     font-weight: 400;
+    margin-left: 4px;
   }
   .adjustment-row .adj-desc {
     color: #adb5bd;
-    font-size: 0.76rem;
-    line-height: 1.3;
+    font-size: 0.74rem;
+    line-height: 1.35;
   }
-  .adjustment-row .adj-arrow {
-    text-align: right;
+
+  /* Colored badges replacing arrows */
+  .adj-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 9px;
+    border-radius: 11px;
+    font-size: 0.66rem;
     font-weight: 700;
-    font-size: 0.92rem;
-    font-family: ui-monospace, 'SF Mono', monospace;
-    letter-spacing: -1px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    line-height: 1;
   }
-  .adjustment-row.dir-up_strong .adj-arrow { color: #28a745; }
-  .adjustment-row.dir-up        .adj-arrow { color: #5bd47b; }
-  .adjustment-row.dir-neutral   .adj-arrow { color: #6c757d; }
-  .adjustment-row.dir-down      .adj-arrow { color: #ffa500; }
-  .adjustment-row.dir-down_strong .adj-arrow { color: #ff6b6b; }
+  .adj-badge.b-up_strong   { background: rgba(40,167,69,0.18);   color: #5bd47b; border: 1px solid rgba(40,167,69,0.55); }
+  .adj-badge.b-up          { background: rgba(40,167,69,0.10);   color: #87dc9c; border: 1px solid rgba(40,167,69,0.30); }
+  .adj-badge.b-neutral     { background: rgba(108,117,125,0.15); color: #adb5bd; border: 1px solid rgba(108,117,125,0.35); }
+  .adj-badge.b-down        { background: rgba(255,165,0,0.13);   color: #ffa500; border: 1px solid rgba(255,165,0,0.45); }
+  .adj-badge.b-down_strong { background: rgba(255,107,107,0.15); color: #ff8585; border: 1px solid rgba(255,107,107,0.50); }
 
   @media (max-width: 600px) {
     .adjustment-row {
-      grid-template-columns: 20px 1fr 30px;
+      grid-template-columns: 28px 1fr;
       grid-template-rows: auto auto;
       gap: 5px 8px;
+      padding: 7px 9px;
     }
-    .adjustment-row .adj-icon { grid-row: 1 / span 2; }
-    .adjustment-row .adj-label-block { grid-column: 2; grid-row: 1; }
-    .adjustment-row .adj-arrow { grid-column: 3; grid-row: 1 / span 2; }
-    .adjustment-row .adj-desc { grid-column: 2; grid-row: 2; }
+    .adjustment-row .adj-icon { grid-row: 1 / span 2; align-self: flex-start; margin-top: 2px; }
+    .adjustment-row .adj-text { grid-column: 2; grid-row: 1; }
+    .adjustment-row .adj-badge-cell { grid-column: 2; grid-row: 2; justify-self: flex-start; padding-top: 2px; }
   }
 
   .kpi-row {
@@ -845,22 +865,39 @@
     background: linear-gradient(135deg, #1a2030 0%, #14171d 100%);
     border: 1px solid #4e54ff;
     border-radius: 10px;
-    padding: 10px 14px;
+    padding: 11px 15px;
   }
   .verdict-title {
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: #8a90ff;
-    margin-bottom: 6px;
+    font-size: 0.92rem;
+    font-weight: 800;
+    margin-bottom: 8px;
     display: flex; align-items: center; gap: 6px;
+  }
+  /* v3.2: Tri-color brand name in verdict header */
+  .verdict-title .brand-auto { color: #ffffff; }
+  .verdict-title .brand-know { color: #5bd47b; }
+  .verdict-title .brand-mus  { color: #8a90ff; }
+  .verdict-title .verdict-suffix {
+    color: #adb5bd;
+    font-weight: 700;
+    margin-left: 6px;
   }
   .verdict-body p {
     color: #e6e6e6;
-    font-size: 0.78rem;
+    font-size: 0.79rem;
     line-height: 1.45;
-    margin-bottom: 4px;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
   }
   .verdict-body p:last-child { margin-bottom: 0; }
+  .verdict-body p .v-icon {
+    font-size: 0.95rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+  .verdict-body p .v-text { flex: 1; }
   .verdict-body .hi   { color: #ffa500; font-weight: 600; }
   .verdict-body .ok   { color: #28a745; font-weight: 600; }
   .verdict-body .warn { color: #ff6b6b; font-weight: 600; }
@@ -889,16 +926,22 @@
   {%- endif %}
 {%- endmacro %}
 
-{# v3.1: Direction arrow macro for "Why this price?" panel.
-   Single ↑ = up, double ↑↑ = up_strong, single ↓ = down, double ↓↓ = down_strong, → = neutral.
-   No multipliers exposed. Direction only. #}
-{% macro dir_arrow(direction) -%}
-  {%- if direction == 'up_strong' -%}↑↑
-  {%- elif direction == 'up' -%}↑
-  {%- elif direction == 'neutral' -%}→
-  {%- elif direction == 'down' -%}↓
-  {%- elif direction == 'down_strong' -%}↓↓
-  {%- else -%}→
+{# v3.2: Direction badge macro for "Why this price?" panel.
+   Replaces previous arrows (↑↑/↑/→/↓/↓↓) with self-explanatory text badges
+   so users don't need a legend to understand the direction. #}
+{% macro dir_badge(direction) -%}
+  {%- if direction == 'up_strong' -%}
+    <span class="adj-badge b-up_strong">+ Premium</span>
+  {%- elif direction == 'up' -%}
+    <span class="adj-badge b-up">+ Adds value</span>
+  {%- elif direction == 'neutral' -%}
+    <span class="adj-badge b-neutral">— Typical</span>
+  {%- elif direction == 'down' -%}
+    <span class="adj-badge b-down">– Reduces value</span>
+  {%- elif direction == 'down_strong' -%}
+    <span class="adj-badge b-down_strong">– Big hit</span>
+  {%- else -%}
+    <span class="adj-badge b-neutral">— Typical</span>
   {%- endif -%}
 {%- endmacro %}
 
@@ -1096,9 +1139,9 @@
         <canvas id="dep-chart"></canvas>
       </div>
 
-      {# v3.1: Chart caption — buyer flavor (cost-of-ownership framing) #}
+      {# v3.2: Chart caption — buyer flavor (cost-of-ownership framing in rupees) #}
       <div class="chart-caption">
-        This car will lose another <strong>~{{ chart_loss_pct }}%</strong> of its value over 5 years — factor this into your buying decision.
+        This car will lose about <strong>₹ {{ l2dp(chart_loss_pct.total_rupees) }}</strong> in value over 5 years — that's roughly <strong>₹ {{ l2dp(chart_loss_pct.monthly_rupees) }}/month</strong> in ownership cost.
       </div>
     </div>
   </div>
@@ -1125,12 +1168,13 @@
     {% for adj in qual_adjustments %}
       <div class="adjustment-row dir-{{ adj.direction }}">
         <div class="adj-icon">{{ adj.icon }}</div>
-        <div class="adj-label-block">
-          <span class="adj-label">{{ adj.label }}</span>
-          <span class="adj-value">· {{ adj.value }}</span>
+        <div class="adj-text">
+          <div class="adj-label-line">
+            {{ adj.label }}<span class="adj-value">· {{ adj.value }}</span>
+          </div>
+          <div class="adj-desc">{{ adj.description }}</div>
         </div>
-        <div class="adj-desc">{{ adj.description }}</div>
-        <div class="adj-arrow">{{ dir_arrow(adj.direction) }}</div>
+        <div class="adj-badge-cell">{{ dir_badge(adj.direction) }}</div>
       </div>
     {% endfor %}
 
@@ -1182,28 +1226,28 @@
             <span class="conf-mini-row {% if c >= 90 %}active{% endif %}">
               <span class="mini-bracket">90–95%</span>
               <span>
-                Strong match with many verified deals.
+                Backed by 20+ verified deals for this exact car.
                 <span class="mini-benefit">Pay within fair range; don't overpay.</span>
               </span>
             </span>
             <span class="conf-mini-row {% if c >= 75 and c < 90 %}active{% endif %}">
               <span class="mini-bracket">75–89%</span>
               <span>
-                Good match with several similar deals.
+                Backed by 10–19 verified deals.
                 <span class="mini-benefit">Aim mid-range; small negotiation buffer.</span>
               </span>
             </span>
             <span class="conf-mini-row {% if c >= 60 and c < 75 %}active{% endif %}">
               <span class="mini-bracket">60–74%</span>
               <span>
-                Moderate match, limited data.
+                Backed by 5–9 verified deals.
                 <span class="mini-benefit">Negotiate harder — aim below midpoint.</span>
               </span>
             </span>
             <span class="conf-mini-row {% if c < 60 %}active{% endif %}">
               <span class="mini-bracket">50–59%</span>
               <span>
-                Baseline estimate, few comparable deals.
+                Fewer than 5 verified deals — formula-driven estimate.
                 <span class="mini-benefit">Get an independent inspection before buying.</span>
               </span>
             </span>
@@ -1437,7 +1481,7 @@
     </div>
 
     <div class="verdict-card">
-      <div class="verdict-title">🎯 AutoKnowMus Verdict</div>
+      <div class="verdict-title">🎯 <span class="brand-auto">Auto</span><span class="brand-know">Know</span><span class="brand-mus">Mus</span><span class="verdict-suffix">Verdict</span></div>
       <div class="verdict-body" id="verdict-body"></div>
     </div>
   </div>
@@ -1526,50 +1570,56 @@
   updateCaution();
 
   function generateBuyerVerdict() {
+    // v3.2: Tighter buyer verdict — icon per paragraph, fewer words.
+
     const confidenceWord =
       CONFIDENCE >= 90 ? 'strong' :
       CONFIDENCE >= 75 ? 'good' :
       CONFIDENCE >= 60 ? 'moderate' : 'preliminary';
 
     const dataNote = VERIFIED_COUNT === 0
-      ? "Our estimate is formula-based using age, mileage, condition, ownership and fuel type — we don't yet have verified real-world deals for this exact car."
-      : `Our estimate blends the formula with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
+      ? "no verified deals yet — formula-driven."
+      : `<strong>${VERIFIED_COUNT}</strong> verified deals factored in.`;
+    const intro = `<p><span class="v-icon">📊</span><span class="v-text"><strong>${CAR_NAME}</strong> · <span class="info">${CONFIDENCE}%</span> confidence (${confidenceWord}). ${dataNote}</span></p>`;
 
+    // ── Deal verdict ───────────────────────────────────────────
     let dealVerdict = '';
     if (ASKING_PRICE !== null) {
       if (ASKING_POSITION === 'below' && ASKING_PCT_DIFF <= -15) {
-        dealVerdict = `<p><span class="warn">⚠️ Proceed with extreme caution.</span> At ₹ ${lakh2dp(ASKING_PRICE)} this is <strong>${(ASKING_PCT_DIFF * -1).toFixed(1)}% below</strong> fair market — unusually low. Demand full service history, RC book check, and pre-purchase inspection.</p>`;
+        dealVerdict = `<p><span class="v-icon">⚠️</span><span class="v-text"><span class="warn">Too good — be cautious.</span> ₹ ${lakh2dp(ASKING_PRICE)} is <strong>${(ASKING_PCT_DIFF * -1).toFixed(1)}% below</strong> market. Demand service history + RC + pre-purchase inspection.</span></p>`;
       } else if (ASKING_POSITION === 'below') {
-        dealVerdict = `<p><span class="ok">Strong buying opportunity.</span> Asking ₹ ${lakh2dp(ASKING_PRICE)} gives you a <strong>${(ASKING_PCT_DIFF * -1).toFixed(1)}% saving</strong> vs fair market. Inspect thoroughly, then act fast.</p>`;
+        dealVerdict = `<p><span class="v-icon">🎯</span><span class="v-text"><span class="ok">Strong buy.</span> ₹ ${lakh2dp(ASKING_PRICE)} = <strong>${(ASKING_PCT_DIFF * -1).toFixed(1)}% saving</strong>. Inspect, then act fast.</span></p>`;
       } else if (ASKING_POSITION === 'within') {
         const negotiation = Math.round((ASKING_PRICE - PRICE_LOW) / 2 + PRICE_LOW);
-        dealVerdict = `<p><span class="info">Reasonable asking price.</span> ₹ ${lakh2dp(ASKING_PRICE)} is within fair range. Open negotiation at <strong>₹ ${lakh2dp(negotiation)}</strong> — sellers often accept 3–5% below asking.</p>`;
+        dealVerdict = `<p><span class="v-icon">✅</span><span class="v-text"><span class="info">Fair price.</span> ₹ ${lakh2dp(ASKING_PRICE)} is in range. Open negotiation at <strong>₹ ${lakh2dp(negotiation)}</strong> (sellers accept 3–5% below).</span></p>`;
       } else {
-        dealVerdict = `<p><span class="hi">This is overpriced.</span> Asking ₹ ${lakh2dp(ASKING_PRICE)} is <strong>${ASKING_PCT_DIFF.toFixed(1)}% above</strong> fair market. Counter-offer at <strong>₹ ${lakh2dp(ESTIMATED)}</strong> or walk away.</p>`;
+        dealVerdict = `<p><span class="v-icon">💸</span><span class="v-text"><span class="hi">Overpriced.</span> <strong>${ASKING_PCT_DIFF.toFixed(1)}% above</strong> market. Counter at <strong>₹ ${lakh2dp(ESTIMATED)}</strong> or walk away.</span></p>`;
       }
     } else {
-      dealVerdict = `<p><span class="info">💡 Tip:</span> Go back and enter the seller's asking price for a specific deal verdict.</p>`;
+      dealVerdict = `<p><span class="v-icon">💡</span><span class="v-text"><span class="info">Tip:</span> add seller's asking price for a deal verdict.</span></p>`;
     }
 
+    // ── Market demand ─────────────────────────────────────────
     let demandGuidance = '';
     if (DEMAND === 'HIGH') {
-      demandGuidance = `<p>Demand is <span class="hi">HIGH</span> — sellers hold pricing power. Decide quickly on fair listings; don't expect deep discounts.</p>`;
+      demandGuidance = `<p><span class="v-icon">🔥</span><span class="v-text">Demand <span class="hi">HIGH</span> — sellers hold leverage. Move fast on fair listings.</span></p>`;
     } else if (DEMAND === 'MEDIUM') {
-      demandGuidance = `<p>Demand is <span class="info">MEDIUM</span> — balanced market. Expect 5–8% negotiation room below asking.</p>`;
+      demandGuidance = `<p><span class="v-icon">⚖️</span><span class="v-text">Demand <span class="info">MEDIUM</span> — expect 5–8% negotiation room.</span></p>`;
     } else {
-      demandGuidance = `<p>Demand is <span class="ok">LOW</span> — you have leverage. Aim for 10–15% below asking.</p>`;
+      demandGuidance = `<p><span class="v-icon">🧊</span><span class="v-text">Demand <span class="ok">LOW</span> — buyer's market. Aim 10–15% below asking.</span></p>`;
     }
 
+    // ── Dealer vs Private ──────────────────────────────────────
     const diff = DEALER_PRICE - PRIVATE_PRICE;
     const dealerPremiumPct = Math.round((diff / PRIVATE_PRICE) * 100);
-    const dealerVsPrivate = `<p><strong>Where to buy:</strong> Private saves ~<span class="ok">₹ ${lakh2dp(diff)} (${dealerPremiumPct}%)</span> but needs more diligence. Dealers cost more but offer warranty + paperwork — worth it for first-time used-car buyers.</p>`;
+    const dealerVsPrivate = `<p><span class="v-icon">🏢</span><span class="v-text"><strong>Where to buy:</strong> 👤 Private saves ~<span class="ok">₹ ${lakh2dp(diff)} (${dealerPremiumPct}%)</span> · 🏢 Dealer adds warranty + paperwork (worth it for first-timers).</span></p>`;
 
+    // ── Cost of ownership ──────────────────────────────────────
     const priceAt5y = priceAtMonth(DEP_DATA.length - 1);
     const loss5y = ESTIMATED - priceAt5y;
     const pct5y = Math.round((loss5y / ESTIMATED) * 100);
-    const deprecNote = `<p><strong>Cost of ownership:</strong> Over 5 years this car depreciates ~<span class="hi">₹ ${lakh2dp(loss5y)} (${pct5y}%)</span>. This IS your cost of owning it — factor this in when comparing against other cars, even cheaper ones that may depreciate faster.</p>`;
-
-    const intro = `<p>Target <strong>${CAR_NAME}</strong> has a ${confidenceWord} analysis (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>`;
+    const monthlyCost = Math.round(loss5y / 60);
+    const deprecNote = `<p><span class="v-icon">📉</span><span class="v-text"><strong>5-yr cost:</strong> ~<span class="hi">₹ ${lakh2dp(loss5y)}</span> total · <span class="hi">₹ ${lakh2dp(monthlyCost)}/month</span> in depreciation. Compare against other cars before deciding.</span></p>`;
 
     return intro + dealVerdict + demandGuidance + dealerVsPrivate + deprecNote;
   }
