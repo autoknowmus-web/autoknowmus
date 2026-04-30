@@ -14,34 +14,35 @@
   /* ============================================================
      v3.1: Anchor strip — "₹X.XL when new (Y yrs old) → ₹Z.ZL today"
      Public arithmetic only. Shown on both market_v1 and fallback paths.
+     v3.2: Bumped sizes for visual prominence.
      ============================================================ */
   .anchor-strip {
     background: #14171d;
     border: 1px solid #2a2d34;
-    border-radius: 8px;
-    padding: 8px 14px;
+    border-radius: 10px;
+    padding: 11px 16px;
     margin-bottom: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 14px;
     color: #adb5bd;
-    font-size: 0.85rem;
+    font-size: 0.92rem;
     line-height: 1.4;
   }
-  .anchor-strip .anchor-segment { display: inline-flex; align-items: center; gap: 5px; }
-  .anchor-strip .anchor-label { color: #6c757d; font-size: 0.78rem; }
-  .anchor-strip .anchor-value { color: #e6e6e6; font-weight: 600; }
-  .anchor-strip .anchor-now { color: #28a745; font-weight: 700; }
-  .anchor-strip .anchor-arrow { color: #6c757d; font-size: 0.95rem; }
+  .anchor-strip .anchor-segment { display: inline-flex; align-items: center; gap: 6px; }
+  .anchor-strip .anchor-label { color: #6c757d; font-size: 0.82rem; }
+  .anchor-strip .anchor-value { color: #e6e6e6; font-weight: 700; font-size: 0.95rem; }
+  .anchor-strip .anchor-now { color: #5bd47b; font-weight: 800; font-size: 1.05rem; }
+  .anchor-strip .anchor-arrow { color: #6c757d; font-size: 1.1rem; font-weight: 600; }
   .anchor-strip .anchor-pct {
     color: #ffa500;
-    font-weight: 600;
-    background: rgba(255,165,0,0.1);
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 0.78rem;
+    font-weight: 700;
+    background: rgba(255,165,0,0.12);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.82rem;
   }
 
   .top-row {
@@ -288,17 +289,19 @@
     font-variant-numeric: tabular-nums;
   }
   .why-final-row {
-    background: rgba(40,167,69,0.08);
-    border: 1px solid rgba(40,167,69,0.3);
+    background: rgba(40,167,69,0.18);
+    border: 1px solid rgba(40,167,69,0.55);
     margin-top: 8px;
     margin-bottom: 0;
+    padding: 11px 14px;
   }
-  .why-final-row .why-fn-label { color: #28a745; font-weight: 600; }
+  .why-final-row .why-fn-label { color: #5bd47b; font-weight: 700; font-size: 0.9rem; }
   .why-final-row .why-fn-value {
-    color: #28a745;
-    font-weight: 700;
-    font-size: 1rem;
+    color: #5bd47b;
+    font-weight: 800;
+    font-size: 1.2rem;
     font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 12px rgba(91,212,123,0.25);
   }
 
   .why-no-baseline {
@@ -311,62 +314,81 @@
     margin-bottom: 8px;
   }
 
+  /* v3.2: Adjustment row redesigned.
+     - Icon sized up and given a colored bg circle so it actually reads
+     - Label (e.g. "Mileage · 50,000 km") sits on line 1
+     - Description on line 2 (was previously cramped on one line)
+     - Right column = colored BADGE (Premium / Adds value / Typical / Reduces / Big hit)
+       instead of the arrow which nobody understood without a legend */
   .adjustment-row {
     display: grid;
-    grid-template-columns: 24px 130px 1fr 38px;
-    gap: 10px;
+    grid-template-columns: 36px 1fr auto;
+    gap: 12px;
     align-items: center;
-    padding: 7px 10px;
+    padding: 10px 12px;
     border-bottom: 1px solid rgba(255,255,255,0.05);
-    font-size: 0.83rem;
   }
   .adjustment-row:last-of-type { border-bottom: none; }
   .adjustment-row .adj-icon {
-    font-size: 1rem;
-    text-align: center;
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    line-height: 1;
   }
-  .adjustment-row .adj-label-block {
-    line-height: 1.25;
+  .adjustment-row .adj-text {
+    min-width: 0;
+    line-height: 1.35;
   }
-  .adjustment-row .adj-label {
-    color: #e6e6e6;
+  .adjustment-row .adj-label-line {
+    color: #fff;
     font-weight: 600;
-    font-size: 0.83rem;
+    font-size: 0.86rem;
+    margin-bottom: 2px;
   }
-  .adjustment-row .adj-value {
+  .adjustment-row .adj-label-line .adj-value {
     color: #adb5bd;
-    font-size: 0.74rem;
-    margin-left: 6px;
     font-weight: 400;
+    margin-left: 4px;
   }
   .adjustment-row .adj-desc {
     color: #adb5bd;
-    font-size: 0.78rem;
-    line-height: 1.35;
+    font-size: 0.76rem;
+    line-height: 1.4;
   }
-  .adjustment-row .adj-arrow {
-    text-align: right;
+
+  /* Colored badges replacing arrows */
+  .adj-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
     font-weight: 700;
-    font-size: 0.95rem;
-    font-family: ui-monospace, 'SF Mono', monospace;
-    letter-spacing: -1px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    line-height: 1;
   }
-  .adjustment-row.dir-up_strong .adj-arrow { color: #28a745; }
-  .adjustment-row.dir-up        .adj-arrow { color: #5bd47b; }
-  .adjustment-row.dir-neutral   .adj-arrow { color: #6c757d; }
-  .adjustment-row.dir-down      .adj-arrow { color: #ffa500; }
-  .adjustment-row.dir-down_strong .adj-arrow { color: #ff6b6b; }
+  .adj-badge.b-up_strong   { background: rgba(40,167,69,0.18);   color: #5bd47b; border: 1px solid rgba(40,167,69,0.55); }
+  .adj-badge.b-up          { background: rgba(40,167,69,0.10);   color: #87dc9c; border: 1px solid rgba(40,167,69,0.30); }
+  .adj-badge.b-neutral     { background: rgba(108,117,125,0.15); color: #adb5bd; border: 1px solid rgba(108,117,125,0.35); }
+  .adj-badge.b-down        { background: rgba(255,165,0,0.13);   color: #ffa500; border: 1px solid rgba(255,165,0,0.45); }
+  .adj-badge.b-down_strong { background: rgba(255,107,107,0.15); color: #ff8585; border: 1px solid rgba(255,107,107,0.50); }
 
   @media (max-width: 600px) {
     .adjustment-row {
-      grid-template-columns: 22px 1fr 32px;
+      grid-template-columns: 32px 1fr;
       grid-template-rows: auto auto;
       gap: 6px 10px;
+      padding: 8px 10px;
     }
-    .adjustment-row .adj-icon { grid-row: 1 / span 2; }
-    .adjustment-row .adj-label-block { grid-column: 2; grid-row: 1; }
-    .adjustment-row .adj-arrow { grid-column: 3; grid-row: 1 / span 2; }
-    .adjustment-row .adj-desc { grid-column: 2; grid-row: 2; }
+    .adjustment-row .adj-icon { grid-row: 1 / span 2; align-self: flex-start; margin-top: 2px; }
+    .adjustment-row .adj-text { grid-column: 2; grid-row: 1; }
+    .adjustment-row .adj-badge-cell { grid-column: 2; grid-row: 2; justify-self: flex-start; padding-top: 2px; }
   }
 
   .kpi-row {
@@ -838,18 +860,35 @@
   }
   .verdict-title {
     font-size: 0.95rem;
-    font-weight: 700;
-    color: #28a745;
-    margin-bottom: 8px;
+    font-weight: 800;
+    margin-bottom: 10px;
     display: flex; align-items: center; gap: 6px;
+  }
+  /* v3.2: Tri-color brand name in verdict header */
+  .verdict-title .brand-auto { color: #ffffff; }
+  .verdict-title .brand-know { color: #5bd47b; }
+  .verdict-title .brand-mus  { color: #8a90ff; }
+  .verdict-title .verdict-suffix {
+    color: #adb5bd;
+    font-weight: 700;
+    margin-left: 6px;
   }
   .verdict-body p {
     color: #e6e6e6;
     font-size: 0.83rem;
     line-height: 1.55;
     margin-bottom: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
   }
   .verdict-body p:last-child { margin-bottom: 0; }
+  .verdict-body p .v-icon {
+    font-size: 1rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+  .verdict-body p .v-text { flex: 1; }
   .verdict-body .hi { color: #ffa500; font-weight: 600; }
   .verdict-body .ok { color: #28a745; font-weight: 600; }
   .verdict-body .warn { color: #ff6b6b; font-weight: 600; }
@@ -877,16 +916,22 @@
   {%- endif %}
 {%- endmacro %}
 
-{# v3.1: Direction arrow macro for "Why this price?" panel.
-   Single ↑ = up, double ↑↑ = up_strong, single ↓ = down, double ↓↓ = down_strong, → = neutral.
-   No multipliers exposed. Direction only. #}
-{% macro dir_arrow(direction) -%}
-  {%- if direction == 'up_strong' -%}↑↑
-  {%- elif direction == 'up' -%}↑
-  {%- elif direction == 'neutral' -%}→
-  {%- elif direction == 'down' -%}↓
-  {%- elif direction == 'down_strong' -%}↓↓
-  {%- else -%}→
+{# v3.2: Direction badge macro for "Why this price?" panel.
+   Replaces previous arrows (↑↑/↑/→/↓/↓↓) with self-explanatory text badges
+   so users don't need a legend to understand the direction. #}
+{% macro dir_badge(direction) -%}
+  {%- if direction == 'up_strong' -%}
+    <span class="adj-badge b-up_strong">+ Premium</span>
+  {%- elif direction == 'up' -%}
+    <span class="adj-badge b-up">+ Adds value</span>
+  {%- elif direction == 'neutral' -%}
+    <span class="adj-badge b-neutral">— Typical</span>
+  {%- elif direction == 'down' -%}
+    <span class="adj-badge b-down">– Reduces value</span>
+  {%- elif direction == 'down_strong' -%}
+    <span class="adj-badge b-down_strong">– Big hit</span>
+  {%- else -%}
+    <span class="adj-badge b-neutral">— Typical</span>
   {%- endif -%}
 {%- endmacro %}
 
@@ -1018,7 +1063,7 @@
 
       {# v3.1: Chart caption explaining loss in first 30 days #}
       <div class="chart-caption">
-        Your car loses around <strong>{{ chart_loss_pct }}%</strong> in the first 30 days alone — every week you wait costs real money.
+        Your car loses about <strong>₹ {{ l2dp(chart_loss_pct.total_rupees) }}</strong> in value over the next 30 days. Every week you wait costs roughly <strong>₹ {{ l2dp(chart_loss_pct.weekly_rupees) }}</strong>.
       </div>
     </div>
   </div>
@@ -1045,12 +1090,13 @@
     {% for adj in qual_adjustments %}
       <div class="adjustment-row dir-{{ adj.direction }}">
         <div class="adj-icon">{{ adj.icon }}</div>
-        <div class="adj-label-block">
-          <span class="adj-label">{{ adj.label }}</span>
-          <span class="adj-value">· {{ adj.value }}</span>
+        <div class="adj-text">
+          <div class="adj-label-line">
+            {{ adj.label }}<span class="adj-value">· {{ adj.value }}</span>
+          </div>
+          <div class="adj-desc">{{ adj.description }}</div>
         </div>
-        <div class="adj-desc">{{ adj.description }}</div>
-        <div class="adj-arrow">{{ dir_arrow(adj.direction) }}</div>
+        <div class="adj-badge-cell">{{ dir_badge(adj.direction) }}</div>
       </div>
     {% endfor %}
 
@@ -1097,25 +1143,25 @@
             {% set c = confidence | int %}
             <div class="conf-tip-row {% if c >= 90 %}active{% endif %}">
               <span class="tip-bracket">90–95%</span>
-              <span>Strong match with many verified deals.
+              <span>Backed by 20+ verified deals for this exact car.
                 <span class="tip-benefit">List confidently — minimal haggling room.</span>
               </span>
             </div>
             <div class="conf-tip-row {% if c >= 75 and c < 90 %}active{% endif %}">
               <span class="tip-bracket">75–89%</span>
-              <span>Good match with several similar deals.
+              <span>Backed by 10–19 verified deals.
                 <span class="tip-benefit">Price is dependable — small buffer is safe.</span>
               </span>
             </div>
             <div class="conf-tip-row {% if c >= 60 and c < 75 %}active{% endif %}">
               <span class="tip-bracket">60–74%</span>
-              <span>Moderate match, limited verified deals.
+              <span>Backed by 5–9 verified deals.
                 <span class="tip-benefit">Use as a guideline — expect 5–8% swing.</span>
               </span>
             </div>
             <div class="conf-tip-row {% if c < 60 %}active{% endif %}">
               <span class="tip-bracket">50–59%</span>
-              <span>Baseline estimate, few comparable deals.
+              <span>Fewer than 5 verified deals — formula-driven estimate.
                 <span class="tip-benefit">Treat as a starting point — verify with other sources.</span>
               </span>
             </div>
@@ -1342,7 +1388,7 @@
     </div>
 
     <div class="verdict-card">
-      <div class="verdict-title">🎯 AutoKnowMus Verdict</div>
+      <div class="verdict-title">🎯 <span class="brand-auto">Auto</span><span class="brand-know">Know</span><span class="brand-mus">Mus</span><span class="verdict-suffix">Verdict</span></div>
       <div class="verdict-body" id="verdict-body"></div>
     </div>
   </div>
@@ -1407,55 +1453,55 @@
   }
 
   function generateVerdict(price, demand, days) {
+    // v3.2: Tighter verdict — icon per paragraph, fewer words, same insight density.
+    // 4 paragraphs, each led by a relevant emoji icon.
+
     const confidenceWord =
       CONFIDENCE >= 90 ? 'strong' :
       CONFIDENCE >= 75 ? 'good' :
       CONFIDENCE >= 60 ? 'moderate' : 'preliminary';
 
+    // ── 📊 Data confidence line ────────────────────────────────
     const dataNote = VERIFIED_COUNT === 0
-      ? "Our estimate is formula-based using age, mileage, condition, ownership and fuel type. We don't yet have verified real-world deals for this exact car."
-      : `Our estimate blends the formula with ${VERIFIED_COUNT} verified real-world deals for similar cars.`;
+      ? "no verified deals yet for this exact car — formula-driven."
+      : `blends formula with <strong>${VERIFIED_COUNT}</strong> verified real-world deals.`;
+    const intro = `<p><span class="v-icon">📊</span><span class="v-text"><strong>${CAR_NAME}</strong> · <span class="ok">${CONFIDENCE}%</span> confidence (${confidenceWord}). ${dataNote}</span></p>`;
 
-    let pricingStrategy;
+    // ── 💰 Pricing strategy + ⏱ time line ──────────────────────
+    let priceLine;
     const pct = (price - PRICE_LOW) / (PRICE_HIGH - PRICE_LOW);
     if (pct < 0.33) {
-      pricingStrategy = `<span class="ok">Priced for a quick sale.</span> At ₹ ${lakh2dp(price)}, demand is <span class="ok">${demand}</span> — expect serious interest within a week or two.`;
+      priceLine = `<span class="ok">Quick sale price.</span> ₹ ${lakh2dp(price)} → <span class="ok">${demand}</span> demand → expect interest in 1–2 weeks.`;
     } else if (pct < 0.66) {
-      pricingStrategy = `<span class="ok">Priced at fair market value.</span> At ₹ ${lakh2dp(price)}, you'll see <span class="ok">${demand}</span> demand — balanced approach.`;
+      priceLine = `<span class="ok">Fair market price.</span> ₹ ${lakh2dp(price)} → <span class="ok">${demand}</span> demand → balanced approach.`;
     } else {
-      pricingStrategy = `<span class="hi">Priced at the upper end.</span> At ₹ ${lakh2dp(price)}, demand drops to <span class="hi">${demand}</span> — you may wait longer but could fetch top value.`;
+      priceLine = `<span class="hi">Top of range.</span> ₹ ${lakh2dp(price)} → <span class="hi">${demand}</span> demand → longer wait, top value.`;
     }
+    const timeIcon = days <= 20 ? '⚡' : days <= 35 ? '⏱️' : '🐢';
+    const timeClass = days <= 20 ? 'ok' : days <= 35 ? '' : 'hi';
+    const pricing = `<p><span class="v-icon">💰</span><span class="v-text">${priceLine} <span class="v-icon" style="font-size:0.85rem">${timeIcon}</span> Sells in ~<strong class="${timeClass}">${days} days</strong>.</span></p>`;
 
-    const timeGuidance = days <= 20
-      ? `Expect to sell in around <strong class="ok">${days} days</strong>.`
-      : days <= 35
-      ? `Expect to sell in around <strong>${days} days</strong>.`
-      : `This price may take around <strong class="hi">${days} days</strong> to find a buyer.`;
-
+    // ── ⚠ Waiting cost line ─────────────────────────────────────
     const priceAtDay30 = priceAtDay(30);
     const priceAtDay90 = priceAtDay(90);
-    const loss30  = price - priceAtDay30;
-    const loss90  = price - priceAtDay90;
-    const pctLoss30 = Math.round((loss30 / price) * 100);
-    const pctLoss90 = Math.round((loss90 / price) * 100);
+    const loss30 = price - priceAtDay30;
+    const loss90 = price - priceAtDay90;
 
-    let depreciationNote;
+    let waitNote;
     if (days <= 20) {
-      depreciationNote = `<strong>Waiting cost:</strong> Not a concern at this price — you'll sell before depreciation bites.`;
+      waitNote = `<span class="v-icon">✅</span><span class="v-text"><strong>Waiting cost:</strong> minimal — you'll sell before depreciation bites.</span>`;
     } else if (days <= 45) {
-      depreciationNote = `<strong>Waiting cost:</strong> If it takes ~30 days to sell, you'd lose around <span class="hi">₹ ${lakh2dp(loss30)} (${pctLoss30}%)</span> to depreciation. Factor this in.`;
+      waitNote = `<span class="v-icon">⚠️</span><span class="v-text"><strong>30-day wait cost:</strong> ~<span class="hi">₹ ${lakh2dp(loss30)}</span> in lost value.</span>`;
     } else {
-      depreciationNote = `<strong>Waiting cost:</strong> At this price, selling could stretch past 45 days. Over 90 days, your car could lose <span class="warn">₹ ${lakh2dp(loss90)} (${pctLoss90}%)</span> in value. Selling faster at a fairer price may net you more overall.`;
+      waitNote = `<span class="v-icon">🚨</span><span class="v-text"><strong>90-day wait cost:</strong> ~<span class="warn">₹ ${lakh2dp(loss90)}</span> in lost value. Faster sale may net more overall.</span>`;
     }
+    const depreciation = `<p>${waitNote}</p>`;
 
-    const actionable = `<strong>Recommendation:</strong> For a balanced sale aim for ₹ ${lakh2dp(Math.round((PRICE_LOW + PRICE_HIGH) / 2))}. Need cash fast? List at ₹ ${lakh2dp(PRICE_LOW)}. Can wait 2+ months? Try ₹ ${lakh2dp(PRICE_HIGH)} — but remember depreciation.`;
+    // ── 🎯 Recommendation line ──────────────────────────────────
+    const mid = Math.round((PRICE_LOW + PRICE_HIGH) / 2);
+    const actionable = `<p><span class="v-icon">🎯</span><span class="v-text"><strong>Pricing guide:</strong> 💵 Cash-fast → ₹ ${lakh2dp(PRICE_LOW)} · ⚖️ Balanced → ₹ ${lakh2dp(mid)} · 💎 Top dollar → ₹ ${lakh2dp(PRICE_HIGH)}.</span></p>`;
 
-    return `
-      <p>Your <strong>${CAR_NAME}</strong> has a ${confidenceWord} valuation (<strong>${CONFIDENCE}%</strong> confidence). ${dataNote}</p>
-      <p>${pricingStrategy} ${timeGuidance}</p>
-      <p>${depreciationNote}</p>
-      <p>${actionable}</p>
-    `;
+    return intro + pricing + depreciation + actionable;
   }
 
   const slider       = document.getElementById('price-slider');
