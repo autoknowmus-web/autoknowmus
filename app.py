@@ -1284,38 +1284,68 @@ def _compute_qualitative_adjustments(condition, owner, mileage, year):
 
 def _compute_chart_loss_pct_seller(depreciation_series):
     """
-    Returns approx % loss between Day 0 and Day 30 (rounded to 1 decimal).
-    Used in the seller depreciation chart caption.
+    Compute seller-side chart caption data: 30-day loss in % AND in rupees.
+    Returns dict: {pct, total_rupees, weekly_rupees}
+      - pct = % loss from Day 0 to Day 30 (rounded to 1 decimal)
+      - total_rupees = absolute ₹ lost from Day 0 to Day 30
+      - weekly_rupees = approximate ₹ lost per week (total / 4.3)
+
+    Sellers don't think in % — they think in rupees. The template uses both:
+    rupee values lead, % is supporting context.
     """
+    safe = {'pct': 1.5, 'total_rupees': 0, 'weekly_rupees': 0}
     if not depreciation_series or len(depreciation_series) < 31:
-        return 1.5  # safe default
+        return safe
     try:
         d0 = depreciation_series[0]['price']
         d30 = depreciation_series[30]['price']
         if d0 <= 0:
-            return 1.5
+            return safe
         loss_pct = ((d0 - d30) / d0) * 100
-        return round(loss_pct, 1)
+        total_rupees = max(0, int(round(d0 - d30)))
+        # 30 days ≈ 4.286 weeks. Use 4.3 as the divisor.
+        weekly_rupees = int(round(total_rupees / 4.3)) if total_rupees > 0 else 0
+        return {
+            'pct': round(loss_pct, 1),
+            'total_rupees': total_rupees,
+            'weekly_rupees': weekly_rupees,
+        }
     except (KeyError, IndexError, TypeError):
-        return 1.5
+        return safe
 
 
 def _compute_chart_loss_pct_buyer(depreciation_series_monthly):
     """
-    Returns approx % loss between today and 5-year mark (rounded to nearest int).
-    Used in the buyer depreciation chart caption.
+    Compute buyer-side chart caption data: 5-year loss in % AND in rupees.
+    Returns dict: {pct, total_rupees, monthly_rupees}
+      - pct = % loss from today to last data point (~60 months) (rounded to int)
+      - total_rupees = absolute ₹ depreciation over the full 5-year horizon
+      - monthly_rupees = total_rupees / number-of-months-in-series
+
+    Buyers think in monthly cost-of-ownership. The template uses both:
+    5-yr total leads, monthly is the actionable framing.
     """
+    safe = {'pct': 42, 'total_rupees': 0, 'monthly_rupees': 0}
     if not depreciation_series_monthly or len(depreciation_series_monthly) < 2:
-        return 42
+        return safe
     try:
         today_price = depreciation_series_monthly[0]['price']
-        last_price = depreciation_series_monthly[-1]['price']
+        last_entry = depreciation_series_monthly[-1]
+        last_price = last_entry['price']
         if today_price <= 0:
-            return 42
+            return safe
         loss_pct = ((today_price - last_price) / today_price) * 100
-        return int(round(loss_pct))
+        total_rupees = max(0, int(round(today_price - last_price)))
+        # Use the last month index in the series (typically 60 for a 5-yr chart)
+        months_in_series = max(1, last_entry.get('month') or (len(depreciation_series_monthly) - 1))
+        monthly_rupees = int(round(total_rupees / months_in_series)) if total_rupees > 0 else 0
+        return {
+            'pct': int(round(loss_pct)),
+            'total_rupees': total_rupees,
+            'monthly_rupees': monthly_rupees,
+        }
     except (KeyError, IndexError, TypeError):
-        return 42
+        return safe
 
 
 def _format_listings_for_display(listings, max_rows=4):
