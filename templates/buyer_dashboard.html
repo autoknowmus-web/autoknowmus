@@ -873,14 +873,20 @@
     margin-bottom: 8px;
     display: flex; align-items: center; gap: 6px;
   }
-  /* v3.2: Tri-color brand name in verdict header */
+  /* v3.2: Tri-color brand name in verdict header.
+     Brand spans wrapped in .brand-name so the parent flex gap doesn't
+     split "Auto", "Know", "Mus" into separate visual chunks. */
+  .verdict-title .brand-name {
+    display: inline-flex;
+    align-items: baseline;
+    /* explicitly NO gap — the three colored spans must read as one word */
+  }
   .verdict-title .brand-auto { color: #ffffff; }
   .verdict-title .brand-know { color: #5bd47b; }
   .verdict-title .brand-mus  { color: #8a90ff; }
   .verdict-title .verdict-suffix {
     color: #adb5bd;
     font-weight: 700;
-    margin-left: 6px;
   }
   .verdict-body p {
     color: #e6e6e6;
@@ -1481,7 +1487,7 @@
     </div>
 
     <div class="verdict-card">
-      <div class="verdict-title">🎯 <span class="brand-auto">Auto</span><span class="brand-know">Know</span><span class="brand-mus">Mus</span><span class="verdict-suffix">Verdict</span></div>
+      <div class="verdict-title">🎯 <span class="brand-name"><span class="brand-auto">Auto</span><span class="brand-know">Know</span><span class="brand-mus">Mus</span></span> <span class="verdict-suffix">Verdict</span></div>
       <div class="verdict-body" id="verdict-body"></div>
     </div>
   </div>
