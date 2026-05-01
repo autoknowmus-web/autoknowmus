@@ -12,9 +12,12 @@
   .car-summary .car-meta .lbl { color: #6c757d; font-weight: 400; }
 
   /* ============================================================
-     v3.1: Anchor strip — "₹X.XL when new (Y yrs old) → ₹Z.ZL today"
+     v3.1: Anchor strip — "Ex-showroom (Bangalore): ₹X.XL → ₹Z.ZL today"
      Public arithmetic only. Shown on both market_v1 and fallback paths.
      v3.2: Bumped sizes for visual prominence.
+     v3.3: Restructured — 2-row layout with greyed sub-text clarifying
+     that the ex-showroom price is the latest published price for the
+     new version of this car (works for in-production AND discontinued).
      ============================================================ */
   .anchor-strip {
     background: #14171d;
@@ -23,13 +26,20 @@
     padding: 11px 16px;
     margin-bottom: 10px;
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: #adb5bd;
+    font-size: 0.92rem;
+    line-height: 1.4;
+  }
+  .anchor-strip .anchor-row {
+    display: flex;
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
     gap: 14px;
-    color: #adb5bd;
-    font-size: 0.92rem;
-    line-height: 1.4;
+    width: 100%;
   }
   .anchor-strip .anchor-segment { display: inline-flex; align-items: center; gap: 6px; }
   .anchor-strip .anchor-label { color: #6c757d; font-size: 0.82rem; }
@@ -43,6 +53,13 @@
     padding: 3px 10px;
     border-radius: 12px;
     font-size: 0.82rem;
+  }
+  .anchor-strip .anchor-subtext {
+    color: #6c757d;
+    font-size: 0.72rem;
+    font-style: italic;
+    text-align: center;
+    line-height: 1.3;
   }
 
   .top-row {
@@ -332,11 +349,12 @@
   .adjustment-row .adj-icon {
     width: 32px; height: 32px;
     display: inline-flex; align-items: center; justify-content: center;
-    background: #14171d;
-    border: 1px solid #2a2d34;
+    background: #2a2d34;
+    border: 1px solid #3d4250;
     border-radius: 8px;
-    font-size: 1.05rem;
+    font-size: 1.15rem;
     line-height: 1;
+    filter: saturate(1.2) brightness(1.15);
   }
   .adjustment-row .adj-text {
     min-width: 0;
@@ -485,6 +503,16 @@
     width: 310px;
     max-width: 340px;
     border-color: #4eb0ff;
+  }
+
+  /* v3.3: Cap tooltip width on small viewports so it can never exceed
+     the viewport even with positioning corrections. JS still nudges
+     position; CSS is the safety net for very wide tooltips. */
+  @media (max-width: 480px) {
+    .info-tooltip { width: auto; max-width: calc(100vw - 32px); }
+    .info-tooltip.wide { width: auto; max-width: calc(100vw - 32px); }
+    .phase-tooltip { width: auto; max-width: calc(100vw - 32px); }
+    .chart-caution-tooltip { width: auto; max-width: calc(100vw - 32px); }
   }
 
   .phase-tip-row {
@@ -962,20 +990,25 @@
     </div>
   </div>
 
-  {# v3.1: New car anchor strip — public arithmetic, shown on both engine paths #}
+  {# v3.1: New car anchor strip — public arithmetic, shown on both engine paths.
+     v3.3: Replaced "When new" label with "Ex-showroom (Bangalore)"; added
+     greyed sub-text clarifying this is the latest price for the new version. #}
   {% if anchor_data %}
     <div class="anchor-strip">
-      <span class="anchor-segment">
-        <span class="anchor-label">When new:</span>
-        <span class="anchor-value">₹ {{ l2dp(anchor_data.ex_showroom) }}</span>
-        <span class="anchor-label">({{ anchor_data.years_old }} yr{{ '' if anchor_data.years_old == 1 else 's' }} old)</span>
-      </span>
-      <span class="anchor-arrow">→</span>
-      <span class="anchor-segment">
-        <span class="anchor-label">Today:</span>
-        <span class="anchor-now">₹ {{ l2dp(estimated) }}</span>
-      </span>
-      <span class="anchor-pct">~{{ anchor_data.pct_off_new }}% off new</span>
+      <div class="anchor-row">
+        <span class="anchor-segment">
+          <span class="anchor-label">Ex-showroom (Bangalore):</span>
+          <span class="anchor-value">₹ {{ l2dp(anchor_data.ex_showroom) }}</span>
+          <span class="anchor-label">({{ anchor_data.years_old }} yr{{ '' if anchor_data.years_old == 1 else 's' }} old)</span>
+        </span>
+        <span class="anchor-arrow">→</span>
+        <span class="anchor-segment">
+          <span class="anchor-label">Today:</span>
+          <span class="anchor-now">₹ {{ l2dp(estimated) }}</span>
+        </span>
+        <span class="anchor-pct">~{{ anchor_data.pct_off_new }}% off new</span>
+      </div>
+      <div class="anchor-subtext">Latest ex-showroom price for the new version of this car</div>
     </div>
   {% endif %}
 
@@ -1122,15 +1155,15 @@
             <span class="demand-tip-header">Market demand — what each level means</span>
             <div class="demand-tip-row demand-high {% if demand == 'HIGH' %}active{% endif %}">
               <span class="tip-label">HIGH</span>
-              <span class="tip-body">Many active buyers. Expect to sell fast with minimal price flexibility.</span>
+              <span class="tip-body">Strong buyer interest — typically sells in 15–25 days at fair price.</span>
             </div>
             <div class="demand-tip-row demand-medium {% if demand == 'MEDIUM' %}active{% endif %}">
               <span class="tip-label">MEDIUM</span>
-              <span class="tip-body">Balanced market. Modest negotiation expected from interested buyers.</span>
+              <span class="tip-body">Moderate interest — typically sells in 30–45 days at fair price.</span>
             </div>
             <div class="demand-tip-row demand-low {% if demand == 'LOW' %}active{% endif %}">
               <span class="tip-label">LOW</span>
-              <span class="tip-body">Fewer buyers. You may need patience or a lower price to close the sale.</span>
+              <span class="tip-body">Limited buyer interest — may take 60+ days to sell, or need price reduction.</span>
             </div>
           </span>
         </span>
@@ -1462,16 +1495,20 @@
     // v3.2: Tighter verdict — icon per paragraph, fewer words, same insight density.
     // 4 paragraphs, each led by a relevant emoji icon.
 
-    const confidenceWord =
-      CONFIDENCE >= 90 ? 'strong' :
-      CONFIDENCE >= 75 ? 'good' :
-      CONFIDENCE >= 60 ? 'moderate' : 'preliminary';
-
-    // ── 📊 Data confidence line ────────────────────────────────
-    const dataNote = VERIFIED_COUNT === 0
-      ? "no verified deals yet for this exact car — formula-driven."
-      : `blends formula with <strong>${VERIFIED_COUNT}</strong> verified real-world deals.`;
-    const intro = `<p><span class="v-icon">📊</span><span class="v-text"><strong>${CAR_NAME}</strong> · <span class="ok">${CONFIDENCE}%</span> confidence (${confidenceWord}). ${dataNote}</span></p>`;
+    // v3.3: Verdict intro reworked for the no-verified-deals case.
+    // - Drop the "(preliminary)" suffix — confidence number alone is enough.
+    // - Replace harsh "no verified deals yet ... formula-driven" with softer
+    //   greyed sub-phrase that's clearer for users.
+    // When verified deals exist, keep the existing copy.
+    let intro;
+    if (VERIFIED_COUNT === 0) {
+      intro = `<p><span class="v-icon">📊</span><span class="v-text"><strong>${CAR_NAME}</strong> · <span class="ok">${CONFIDENCE}%</span> confidence. <span style="color:#6c757d;">Estimate based on pricing model — verified transaction data being collected.</span></span></p>`;
+    } else {
+      const confidenceWordHi =
+        CONFIDENCE >= 90 ? 'strong' :
+        CONFIDENCE >= 75 ? 'good' : 'moderate';
+      intro = `<p><span class="v-icon">📊</span><span class="v-text"><strong>${CAR_NAME}</strong> · <span class="ok">${CONFIDENCE}%</span> confidence (${confidenceWordHi}). Blends formula with <strong>${VERIFIED_COUNT}</strong> verified real-world deals.</span></p>`;
+    }
 
     // ── 💰 Pricing strategy + ⏱ time line ──────────────────────
     let priceLine;
@@ -1573,11 +1610,13 @@
       const tip = wrap.querySelector('.info-tooltip');
       if (!tip) return;
       wrap.addEventListener('mouseenter', function() {
+        // Reset to default centered position
         tip.classList.remove('flip-down');
         tip.style.left = '';
         tip.style.right = '';
         tip.style.transform = 'translateX(-50%)';
 
+        // Measure tooltip dimensions while temporarily visible (for layout)
         tip.style.visibility = 'hidden';
         tip.style.opacity = '0';
         const tmpDisplay = tip.style.display;
@@ -1589,25 +1628,37 @@
         tip.style.opacity = '';
 
         const iconRect = wrap.getBoundingClientRect();
+        const viewW = window.innerWidth;
 
+        // 1) Vertical flip if no space above
         if (iconRect.top < tipHeight + 20) {
           tip.classList.add('flip-down');
         }
 
-        const viewW = window.innerWidth;
-        const halfTip = tipWidth / 2;
+        // 2) Horizontal: viewport-aware positioning.
+        //    v3.3: Previous logic could still overflow on narrow (≤380px)
+        //    viewports because anchoring to .info-wrap edges doesn't help
+        //    when the tooltip is wider than the available viewport space
+        //    on either side.
+        //    New approach: compute the tooltip's actual viewport-left after
+        //    centered placement, then nudge it horizontally until it fits.
         const iconCenterX = iconRect.left + iconRect.width / 2;
-        const leftSpace  = iconCenterX;
-        const rightSpace = viewW - iconCenterX;
+        const margin = 8; // min gap to viewport edge
 
-        if (leftSpace < halfTip + 10) {
-          tip.style.left = '0';
-          tip.style.transform = 'none';
-        } else if (rightSpace < halfTip + 10) {
-          tip.style.left = 'auto';
-          tip.style.right = '0';
-          tip.style.transform = 'none';
+        // After translateX(-50%) the tooltip's left edge is at iconCenterX - tipWidth/2
+        let tipLeftViewport = iconCenterX - (tipWidth / 2);
+        let tipRightViewport = tipLeftViewport + tipWidth;
+
+        if (tipLeftViewport < margin) {
+          // Overflows left edge — push right by the overflow amount
+          const shift = margin - tipLeftViewport;
+          tip.style.transform = `translateX(calc(-50% + ${shift}px))`;
+        } else if (tipRightViewport > viewW - margin) {
+          // Overflows right edge — push left by the overflow amount
+          const shift = tipRightViewport - (viewW - margin);
+          tip.style.transform = `translateX(calc(-50% - ${shift}px))`;
         }
+        // else: default centered position is fine
       });
     });
   }
