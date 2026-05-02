@@ -5043,8 +5043,12 @@ def admin_feedback():
 
 # Source values must match the dropdown in admin_research.html
 RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family']
-RESEARCH_OWNERS = ['1st', '2nd', '3rd', '4th+']
-RESEARCH_CONDITIONS = ['Excellent', 'Good', 'Fair']
+# v3.5.1-r5.1: Use the canonical OWNERS / CONDITIONS lists from app.py module scope
+# (defined ~line 159-160) so the research form mirrors seller / submit_deal exactly.
+# Before, this was a bespoke 4-value list ('1st'/'2nd'/'3rd'/'4th+') which broke
+# parity with the rest of the app.
+RESEARCH_OWNERS = OWNERS                  # ['1st Owner', '2nd Owner', '3rd Owner or more']
+RESEARCH_CONDITIONS = CONDITIONS          # ['Excellent', 'Good', 'Fair']
 
 
 def _parse_research_int(raw, field_name, min_val, max_val, allow_none=True):
@@ -5292,6 +5296,7 @@ def admin_research():
         condition_choices=RESEARCH_CONDITIONS,
         car_data=CAR_DATA,
         cities_by_state=INDIAN_CITIES_BY_STATE,
+        rto_states=RTO_STATES,
         default_state=DEFAULT_STATE_CODE,
         default_city=DEFAULT_CITY,
         active_source=f_source,
@@ -5436,14 +5441,10 @@ def _compute_calibration_suggestions(rows):
 
         for r in entries:
             try:
-                # Map research-log fields → valuation engine inputs
-                # Owner format normalization: research uses '1st'..'4th+',
-                # engine uses '1st Owner'..'4th Owner'
-                owner_map = {
-                    '1st': '1st Owner', '2nd': '2nd Owner',
-                    '3rd': '3rd Owner', '4th+': '4th Owner',
-                }
-                eng_owner = owner_map.get(r.get('owners') or '', '1st Owner')
+                # Map research-log fields → valuation engine inputs.
+                # v3.5.1-r5.1: research now uses the canonical OWNERS list
+                # (matches seller/submit_deal), so no remapping needed.
+                eng_owner = r.get('owners') or '1st Owner'
                 eng_condition = r.get('condition') or 'Good'
                 eng_mileage = r.get('mileage_km') or 50000  # reasonable default
 
