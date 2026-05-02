@@ -4754,7 +4754,7 @@ def admin_multipliers():
     Admin view + edit for state_multipliers table.
 
     GET: shows table of all 36 states/UTs with: state_code, state_name, multiplier,
-         road_tax_pct, rto_fee_inr, data_quality, last_updated, notes.
+         road_tax_pct, rto_fee_inr, data_quality, updated_at, notes.
     POST: updates a single state's editable fields. Form fields:
           state_code (required), multiplier, road_tax_pct, rto_fee_inr,
           data_quality, notes.
@@ -4824,7 +4824,7 @@ def admin_multipliers():
             flash('No changes provided.', 'error')
             return redirect(url_for('admin_multipliers'))
 
-        update_fields['last_updated'] = datetime.utcnow().isoformat()
+        update_fields['updated_at'] = datetime.utcnow().isoformat()
         update_fields['updated_by'] = admin.get('email')
 
         try:
@@ -4857,9 +4857,12 @@ def admin_multipliers():
              .order('state_code', desc=False)
              .execute())
         rows = r.data or []
-        # Format last_updated for display (DD-MMM-YYYY) per UI rule.
+        # v3.5.1-r5.3: actual column is updated_at. Alias to last_updated so
+        # the template (which references row.last_updated) keeps working,
+        # and compute last_updated_display for the DD-MMM-YYYY UI rule.
         for row in rows:
-            row['last_updated_display'] = _format_txn_date(row.get('last_updated'))
+            row['last_updated'] = row.get('updated_at')
+            row['last_updated_display'] = _format_txn_date(row.get('updated_at'))
     except Exception as e:
         app.logger.error(f"admin_multipliers fetch failed: {e}")
         rows = []
@@ -5640,7 +5643,7 @@ def admin_research_apply_suggestion(state_code):
     try:
         update_fields = {
             'multiplier': suggested_mult,
-            'last_updated': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat(),
             'updated_by': admin.get('email'),
         }
         supabase.table('state_multipliers').update(update_fields).eq('state_code', state_code).execute()
