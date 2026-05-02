@@ -58,8 +58,8 @@
   }
   .btn-request-credits:hover { background: #e69500; color: #1a1d24; }
 
+  /* v3.5: Location row now has TWO fields: State + City */
   .location-row { margin-bottom: 1rem; }
-  .location-row .form-select { max-width: 100%; }
 
   /* Asking price field with ₹ prefix */
   .price-input-wrap { position: relative; }
@@ -71,6 +71,27 @@
 
   .optional-hint {
     color: #6c757d; font-weight: 400; font-size: 0.82rem;
+  }
+
+  /* v3.5: Asking price input — locked dark theme (consistency with seller mileage fix). */
+  #asking-display {
+    background: #1a1d24 !important;
+    color: #e6e6e6 !important;
+    -webkit-text-fill-color: #e6e6e6;
+  }
+  #asking-display::placeholder { color: #6c757d; }
+  #asking-display:focus {
+    background: #1a1d24 !important;
+    color: #e6e6e6 !important;
+    border-color: #4e54ff;
+    box-shadow: 0 0 0 0.2rem rgba(78,84,255,0.25);
+  }
+  #asking-display:-webkit-autofill,
+  #asking-display:-webkit-autofill:hover,
+  #asking-display:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px #1a1d24 inset !important;
+    -webkit-text-fill-color: #e6e6e6 !important;
+    caret-color: #e6e6e6;
   }
 </style>
 {% endblock %}
@@ -117,6 +138,9 @@
         <input type="hidden" name="keep_mileage"      value="{{ form.mileage or '' }}">
         <input type="hidden" name="keep_condition"    value="{{ form.condition or '' }}">
         <input type="hidden" name="keep_asking_price" value="{{ form.asking_price or '' }}">
+        {# v3.5: preserve geo through credit top-up #}
+        <input type="hidden" name="keep_user_state"   value="{{ form.user_state or default_state }}">
+        <input type="hidden" name="keep_user_city"    value="{{ form.user_city or default_city }}">
         <button type="submit" class="btn-request-credits">
           Request 500 Credits (Free)
         </button>
@@ -126,12 +150,22 @@
 
     <form method="POST" action="{{ url_for('buyer') }}">
 
-      <!-- Row 1: LOCATION (full width, locked) -->
+      {# ============================================================
+         v3.5: LOCATION row — STATE + CITY dropdowns.
+         Default: Karnataka / Bangalore. State change repopulates City.
+         States sorted alphabetically by full name; "Other" pinned last for City.
+         ============================================================ #}
       <div class="row g-3 location-row">
-        <div class="col-12">
-          <label class="form-label">Location</label>
-          <select class="form-select" disabled>
-            <option>Bangalore</option>
+        <div class="col-md-6">
+          <label class="form-label">State <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="user_state" id="user_state" required>
+            {# Options injected by JS in alphabetical order by full state name. #}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">City <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="user_city" id="user_city" required>
+            {# Options injected by JS based on selected state. "Other" pinned last. #}
           </select>
         </div>
       </div>
@@ -215,7 +249,8 @@
           <div class="price-input-wrap">
             <span class="price-prefix">₹</span>
             <input type="text" class="form-control" id="asking-display" inputmode="numeric"
-                   value="{{ form.asking_price or '' }}" placeholder="e.g. 3,50,000">
+                   value="{{ form.asking_price or '' }}" placeholder="e.g. 3,50,000"
+                   autocomplete="off">
             <input type="hidden" name="asking_price" id="asking-raw" value="{{ form.asking_price or '' }}">
           </div>
         </div>
@@ -237,6 +272,98 @@
   const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
   const CURRENT_YEAR = {{ years[0] }};  // newest year in dropdown = current
 
+  /* ============================================================
+     v3.5: STATE + CITY dropdowns (buyer flavor — same logic as seller)
+     ============================================================ */
+  const RTO_STATES = {{ rto_states | tojson }};
+  const CITIES_BY_STATE = {{ cities_by_state_json | safe }};
+  const DEFAULT_STATE = {{ default_state | tojson }};
+  const DEFAULT_CITY  = {{ default_city  | tojson }};
+
+  const STATE_NAMES = {
+    'AN': 'Andaman & Nicobar Islands',
+    'AP': 'Andhra Pradesh',
+    'AR': 'Arunachal Pradesh',
+    'AS': 'Assam',
+    'BR': 'Bihar',
+    'CG': 'Chhattisgarh',
+    'CH': 'Chandigarh',
+    'DD': 'Daman & Diu',
+    'DL': 'Delhi',
+    'DN': 'Dadra & Nagar Haveli',
+    'GA': 'Goa',
+    'GJ': 'Gujarat',
+    'HP': 'Himachal Pradesh',
+    'HR': 'Haryana',
+    'JH': 'Jharkhand',
+    'JK': 'Jammu & Kashmir',
+    'KA': 'Karnataka',
+    'KL': 'Kerala',
+    'LA': 'Ladakh',
+    'LD': 'Lakshadweep',
+    'MH': 'Maharashtra',
+    'ML': 'Meghalaya',
+    'MN': 'Manipur',
+    'MP': 'Madhya Pradesh',
+    'MZ': 'Mizoram',
+    'NL': 'Nagaland',
+    'OD': 'Odisha',
+    'PB': 'Punjab',
+    'PY': 'Puducherry',
+    'RJ': 'Rajasthan',
+    'SK': 'Sikkim',
+    'TN': 'Tamil Nadu',
+    'TR': 'Tripura',
+    'TS': 'Telangana',
+    'UK': 'Uttarakhand',
+    'UP': 'Uttar Pradesh',
+    'WB': 'West Bengal'
+  };
+
+  const stateEl = document.getElementById('user_state');
+  const cityEl  = document.getElementById('user_city');
+
+  const PREFILL_STATE = {{ (form.user_state or default_state) | tojson }};
+  const PREFILL_CITY  = {{ (form.user_city  or default_city)  | tojson }};
+
+  function buildStateOptions() {
+    const sortedCodes = RTO_STATES.slice().sort(function(a, b) {
+      return (STATE_NAMES[a] || a).localeCompare(STATE_NAMES[b] || b);
+    });
+    stateEl.innerHTML = '';
+    sortedCodes.forEach(function(code) {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = STATE_NAMES[code] || code;
+      if (code === PREFILL_STATE) opt.selected = true;
+      stateEl.appendChild(opt);
+    });
+  }
+
+  function buildCityOptions(stateCode, preselectCity) {
+    cityEl.innerHTML = '';
+    const cities = CITIES_BY_STATE[stateCode] || ['Other'];
+    const others = cities.filter(function(c) { return c !== 'Other'; }).sort();
+    const ordered = others.concat(cities.indexOf('Other') >= 0 ? ['Other'] : []);
+    ordered.forEach(function(c) {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      if (preselectCity && c === preselectCity) opt.selected = true;
+      cityEl.appendChild(opt);
+    });
+  }
+
+  stateEl.addEventListener('change', function() {
+    buildCityOptions(this.value, null);
+  });
+
+  buildStateOptions();
+  buildCityOptions(stateEl.value || DEFAULT_STATE, PREFILL_CITY);
+
+  /* ============================================================
+     Make → Fuel → Model → Variant cascade (unchanged from v3.4)
+     ============================================================ */
   const makeEl    = document.getElementById('make');
   const fuelEl    = document.getElementById('fuel');
   const modelEl   = document.getElementById('model');
@@ -334,9 +461,9 @@
     }
   })();
 
-  // ======================================================
-  // Indian comma formatter (shared)
-  // ======================================================
+  /* ============================================================
+     Indian comma formatter (shared)
+     ============================================================ */
   function inrGroup(n) {
     const s = String(Math.abs(n));
     if (s.length <= 3) return s;
@@ -351,11 +478,11 @@
     return groups.join(',') + ',' + last3;
   }
 
-  // ======================================================
-  // Mileage RANGE dropdown
-  // Each range: { min, max, mid }
-  // Label shown = "X - Y kms"; submitted value = midpoint (used by valuation)
-  // ======================================================
+  /* ============================================================
+     Mileage RANGE dropdown
+     Each range: { min, max, mid }
+     Label shown = "X - Y kms"; submitted value = midpoint (used by valuation)
+     ============================================================ */
   const MILEAGE_RANGES = [
     { min: 0,      max: 10000,  mid: 5000   },
     { min: 10000,  max: 20000,  mid: 15000  },
@@ -396,11 +523,9 @@
     });
   }
 
-  // Given a raw km number (from prefill or estimate), find the range it belongs to and return its mid
   function kmToRangeMid(km) {
     for (let i = 0; i < MILEAGE_RANGES.length; i++) {
       const r = MILEAGE_RANGES[i];
-      // Last bucket handles 500k+
       if (i === MILEAGE_RANGES.length - 1) {
         if (km >= r.min) return r.mid;
       } else {
@@ -410,14 +535,12 @@
     return MILEAGE_RANGES[0].mid;
   }
 
-  // Track whether user has manually picked mileage
   let mileageUserTouched = false;
 
   function defaultMileageForYear(year) {
     const y = parseInt(year, 10);
     if (!y || isNaN(y)) return null;
     const age = Math.max(0, CURRENT_YEAR - y);
-    // At least 1 year's worth of mileage so brand-new cars don't land in "0-10k"
     const estimated = Math.max(5000, age * 10000);
     return kmToRangeMid(estimated);
   }
@@ -430,7 +553,6 @@
     }
   }
 
-  // Init mileage dropdown
   (function initMileage() {
     const prefillMileage = PREFILL.mileage;
     if (prefillMileage) {
@@ -458,9 +580,9 @@
     applyDefaultMileage();
   });
 
-  // ======================================================
-  // Asking Price
-  // ======================================================
+  /* ============================================================
+     Asking Price
+     ============================================================ */
   const askingDisplay = document.getElementById('asking-display');
   const askingRaw     = document.getElementById('asking-raw');
 
