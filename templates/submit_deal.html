@@ -42,8 +42,9 @@
     text-transform: uppercase;
   }
 
+  /* v3.5: Location row replaced — submit_deal uses City dropdown only,
+     because State (reg_state) is already part of the registration number. */
   .location-row { margin-bottom: 1rem; }
-  .location-row .form-select { max-width: 100%; }
 
   /* Registration number group */
   .reg-group {
@@ -195,6 +196,50 @@
     font-weight: 600; margin-top: 10px;
   }
   .reward-note .emoji { font-size: 1rem; }
+
+  /* ============================================================
+     v3.5: Mileage display field — locked dark theme.
+     Fixes the white-bg autofill bug per locked UI rule.
+     ============================================================ */
+  #mileage-display {
+    background: #1a1d24 !important;
+    color: #e6e6e6 !important;
+    -webkit-text-fill-color: #e6e6e6;
+  }
+  #mileage-display::placeholder { color: #6c757d; }
+  #mileage-display:focus {
+    background: #1a1d24 !important;
+    color: #e6e6e6 !important;
+    border-color: #4eb0ff;
+    box-shadow: 0 0 0 0.2rem rgba(78,176,255,0.25);
+  }
+  #mileage-display:-webkit-autofill,
+  #mileage-display:-webkit-autofill:hover,
+  #mileage-display:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px #1a1d24 inset !important;
+    -webkit-text-fill-color: #e6e6e6 !important;
+    caret-color: #e6e6e6;
+  }
+  /* Same fix for asking/sale price inputs */
+  .price-input {
+    background: #1a1d24 !important;
+    color: #e6e6e6 !important;
+    -webkit-text-fill-color: #e6e6e6;
+  }
+  .price-input::placeholder { color: #6c757d; }
+  .price-input:focus {
+    background: #1a1d24 !important;
+    color: #e6e6e6 !important;
+    border-color: #4eb0ff;
+    box-shadow: 0 0 0 0.2rem rgba(78,176,255,0.25);
+  }
+  .price-input:-webkit-autofill,
+  .price-input:-webkit-autofill:hover,
+  .price-input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px #1a1d24 inset !important;
+    -webkit-text-fill-color: #e6e6e6 !important;
+    caret-color: #e6e6e6;
+  }
 </style>
 {% endblock %}
 
@@ -223,12 +268,18 @@
       <!-- ============ CAR DETAILS ============ -->
       <div class="section-label">Car Details</div>
 
+      {# v3.5: Location is now CITY only — the State for this transaction is
+         derived from the Registration Number (reg_state) below.
+         City auto-repopulates when reg_state changes. #}
       <div class="row g-3 location-row">
         <div class="col-12">
-          <label class="form-label">Location</label>
-          <select class="form-select" disabled>
-            <option>Bangalore</option>
+          <label class="form-label">City <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="city" id="city" required>
+            {# Options injected by JS based on selected reg_state. #}
           </select>
+          <small style="color:#6c757d; font-size:0.78rem;">
+            City is auto-set from the registration state. Change it if the transaction happened elsewhere.
+          </small>
         </div>
       </div>
 
@@ -283,8 +334,10 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
+          {# v3.5: forced dark bg via CSS to fix the white-bg autofill bug. #}
           <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
-                 value="{{ form.mileage or '' }}" placeholder="e.g. 45,000">
+                 value="{{ form.mileage or '' }}" placeholder="e.g. 45,000"
+                 autocomplete="off">
           <input type="hidden" name="mileage" id="mileage-raw" value="{{ form.mileage or '' }}">
         </div>
         <div class="col-md-3">
@@ -318,10 +371,10 @@
             </select>
             <input type="text" class="form-control reg-series" name="reg_series" id="reg_series"
                    maxlength="3" placeholder="MK" value="{{ form.reg_series or '' }}"
-                   required style="text-transform:uppercase;">
+                   required style="text-transform:uppercase;" autocomplete="off">
             <input type="text" class="form-control reg-number" name="reg_number" id="reg_number"
                    maxlength="4" inputmode="numeric" placeholder="8201"
-                   value="{{ form.reg_number or '' }}" required>
+                   value="{{ form.reg_number or '' }}" required autocomplete="off">
           </div>
           <div class="reg-preview">Preview: <strong id="reg-preview-text">KA 03 MK 8201</strong></div>
         </div>
@@ -361,7 +414,8 @@
           <div class="price-wrap">
             <span class="rupee-prefix">₹</span>
             <input type="text" class="form-control price-input" id="asking-display" inputmode="numeric"
-                   value="{{ form.asking_price or '' }}" placeholder="e.g. 6,50,000">
+                   value="{{ form.asking_price or '' }}" placeholder="e.g. 6,50,000"
+                   autocomplete="off">
             <input type="hidden" name="asking_price" id="asking-raw" value="{{ form.asking_price or '' }}">
           </div>
           <div class="price-hint" id="asking-hint"></div>
@@ -371,7 +425,8 @@
           <div class="price-wrap">
             <span class="rupee-prefix">₹</span>
             <input type="text" class="form-control price-input" id="sale-display" inputmode="numeric"
-                   value="{{ form.sale_price or '' }}" placeholder="e.g. 6,25,000" required>
+                   value="{{ form.sale_price or '' }}" placeholder="e.g. 6,25,000" required
+                   autocomplete="off">
             <input type="hidden" name="sale_price" id="sale-raw" value="{{ form.sale_price or '' }}">
           </div>
           <div class="price-hint" id="sale-hint"></div>
@@ -443,6 +498,44 @@
   const CAR_DATA = {{ car_data_json | safe }};
   const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
 
+  /* ============================================================
+     v3.5: City dropdown linked to reg_state.
+     When reg_state changes, repopulate city options.
+     ============================================================ */
+  const CITIES_BY_STATE = {{ cities_by_state_json | safe }};
+  const DEFAULT_CITY    = {{ default_city | tojson }};
+  const PREFILL_CITY    = {{ (form.city or default_city) | tojson }};
+
+  const cityEl     = document.getElementById('city');
+  const regStateEl = document.getElementById('reg_state');
+
+  function buildCityOptions(stateCode, preselectCity) {
+    cityEl.innerHTML = '';
+    const cities = CITIES_BY_STATE[stateCode] || ['Other'];
+    // Apply locked rule: alphabetical, with "Other" pinned last.
+    const others = cities.filter(function(c) { return c !== 'Other'; }).sort();
+    const ordered = others.concat(cities.indexOf('Other') >= 0 ? ['Other'] : []);
+    ordered.forEach(function(c) {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      if (preselectCity && c === preselectCity) opt.selected = true;
+      cityEl.appendChild(opt);
+    });
+  }
+
+  // When reg_state changes, rebuild city dropdown defaulting to first city of new state
+  regStateEl.addEventListener('change', function() {
+    buildCityOptions(this.value, null);
+  });
+
+  // Initial build: use reg_state if pre-selected, else fall back to KA
+  const initialState = regStateEl.value || 'KA';
+  buildCityOptions(initialState, PREFILL_CITY);
+
+  /* ============================================================
+     Make → Fuel → Model → Variant cascade (unchanged from v3.4)
+     ============================================================ */
   const makeEl    = document.getElementById('make');
   const fuelEl    = document.getElementById('fuel');
   const modelEl   = document.getElementById('model');
@@ -533,13 +626,10 @@
     }
   })();
 
-  // ============================================================
-  // FLATPICKR — date picker for Transaction Date
-  // ============================================================
-  // Backend expects YYYY-MM-DD (handled by app.py's strptime parser).
-  // Display shows DD-MMM-YYYY (e.g. 23-Apr-2026) per locked rule.
-  // altInput pattern: hidden real input posts YYYY-MM-DD, visible alt input
-  // shows the pretty format. User just clicks once and picks a date.
+  /* ============================================================
+     FLATPICKR — date picker for Transaction Date
+     Backend expects YYYY-MM-DD. Display: DD-MMM-YYYY.
+     ============================================================ */
   flatpickr("#transaction_date", {
     dateFormat: "Y-m-d",       // Internal format for backend
     altInput: true,            // Auto-create a styled display field
@@ -551,7 +641,9 @@
     defaultDate: {{ form.transaction_date|tojson if form.transaction_date else 'null' }}
   });
 
-  // Indian comma formatting
+  /* ============================================================
+     Indian comma formatter (shared)
+     ============================================================ */
   function inrGroup(n) {
     const s = String(Math.abs(n));
     if (s.length <= 3) return s;
