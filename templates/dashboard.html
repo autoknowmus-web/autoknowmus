@@ -202,6 +202,16 @@
     color: #28a745;
     font-weight: 700;
   }
+  /* v3.5.1 fix #6: Reassurance copy explaining the impact of feedback.
+     Sits between the title and the action buttons. */
+  .feedback-module .fb-impact-line {
+    color: #adb5bd;
+    font-size: 0.74rem;
+    text-align: center;
+    margin: 0 0 10px;
+    line-height: 1.4;
+    font-style: italic;
+  }
   .feedback-module .fb-row {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -258,13 +268,30 @@
   .feedback-module.is-thanked .fb-thanks { display: block; }
 
   /* Detail panel (price + source) — appears for close/wayoff */
+  /* v3.5.1: Detail panel is now ALWAYS rendered.
+     - Pre-click (no .is-detail-open): inputs disabled, panel dimmed.
+     - Click Helpful/Way off (.is-detail-open): inputs enabled, panel fully bright.
+     This avoids the visual "blank space jump" that happened when the panel
+     toggled in/out of the layout. */
   .feedback-module .fb-detail-panel {
-    display: none;
+    display: block;
     margin-top: 10px;
     padding-top: 10px;
     border-top: 1px solid #2a2d34;
+    transition: opacity 0.2s;
   }
-  .feedback-module.is-detail-open .fb-detail-panel { display: block; }
+  /* Pre-click: dim everything inside the panel and block interaction. */
+  .feedback-module:not(.is-detail-open):not(.is-thanked) .fb-detail-panel {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .feedback-module:not(.is-detail-open):not(.is-thanked) .fb-detail-panel input,
+  .feedback-module:not(.is-detail-open):not(.is-thanked) .fb-detail-panel select,
+  .feedback-module:not(.is-detail-open):not(.is-thanked) .fb-detail-panel button {
+    cursor: not-allowed;
+  }
+  /* Hide cancel button before any click (cancel only makes sense once user has clicked Helpful/Way off). */
+  .feedback-module:not(.is-detail-open) .fb-cancel { visibility: hidden; }
   .feedback-module .fb-detail-headline {
     font-size: 0.82rem;
     color: #fff;
@@ -394,6 +421,12 @@
     text-decoration: none;
   }
   .feedback-module .fb-footer-hint a:hover { text-decoration: underline; }
+  /* v3.5.1: "100 Credits" inside footer hint is bold-green, matching "50 Credits"
+     in the title sub-text for consistent treatment of credit amounts. */
+  .feedback-module .fb-footer-hint strong {
+    color: #28a745;
+    font-weight: 700;
+  }
   .feedback-module.is-guest .fb-footer-hint,
   .feedback-module.is-thanked .fb-footer-hint { display: none; }
 
@@ -479,19 +512,24 @@
     padding: 5px 4px;
   }
   .conf-ladder-band {
+    /* v3.5.1 fix #3: Left-aligned plain text (no pill background) to match
+       the Market Demand tooltip's label style. The colored text alone
+       conveys the band — no need for a filled pill. */
     font-weight: 700;
-    text-align: center;
-    padding: 2px 4px;
-    border-radius: 8px;
-    font-size: 0.68rem;
-    letter-spacing: 0.3px;
+    text-align: left;
+    padding: 0;
+    background: none;
+    border-radius: 0;
+    font-size: 0.7rem;
+    letter-spacing: 0;
   }
-  .conf-ladder-band.b-high    { color: #5bd47b; background: rgba(40,167,69,0.16); }
-  .conf-ladder-band.b-good    { color: #87dc9c; background: rgba(40,167,69,0.10); }
-  .conf-ladder-band.b-mod     { color: #ffc870; background: rgba(255,165,0,0.14); }
-  .conf-ladder-band.b-limited { color: #adb5bd; background: rgba(108,117,125,0.18); }
+  .conf-ladder-band.b-high    { color: #5bd47b; }
+  .conf-ladder-band.b-good    { color: #87dc9c; }
+  .conf-ladder-band.b-mod     { color: #ffc870; }
+  .conf-ladder-band.b-limited { color: #adb5bd; }
   .conf-ladder-row.is-active .conf-ladder-band {
-    box-shadow: 0 0 0 1px rgba(78,176,255,0.4);
+    /* No box-shadow ring needed when band is plain text */
+    box-shadow: none;
   }
   .conf-ladder-text {
     color: #c9cdd5;
@@ -1421,6 +1459,8 @@
           Was this estimate helpful?
           <span class="fb-sub">— Earn <strong>50 Credits</strong></span>
         </div>
+        {# v3.5.1 fix #6: Reassurance copy explaining why we ask for feedback. #}
+        <div class="fb-impact-line">Your feedback helps us improve price accuracy for everyone.</div>
 
         <div class="fb-row">
           <button type="button" class="fb-btn" data-reaction="helpful">
@@ -1434,11 +1474,12 @@
         </div>
 
         {# Detail panel — required for BOTH reactions in v3.5.1.
-           User selects helpful/wayoff, panel opens, they enter actual_price + source. #}
+           v3.5.1 fix #2: Always rendered. Greyed-out before click; brightens on click.
+           Pre-click headline is neutral; JS swaps in Helpful/Way off copy on click. #}
         <div class="fb-detail-panel">
           <div class="fb-detail-headline">
-            <span class="fb-detail-icon" id="fb-detail-icon">👍</span>
-            <span id="fb-detail-text">Help us calibrate — what's the actual price?</span>
+            <span class="fb-detail-icon" id="fb-detail-icon">💬</span>
+            <span id="fb-detail-text">Pick Helpful or Way off above, then share the actual price you saw or got.</span>
           </div>
           <div class="fb-detail-row">
             <label for="fb-actual-price">Actual price</label>
@@ -1486,7 +1527,7 @@
 
         {# v3.5.1: Footer hint promotes the bigger reward — submitting a verified deal. #}
         <div class="fb-footer-hint">
-          💡 <a href="{{ url_for('submit_deal') }}">Submit a verified deal</a> to earn <strong>100 credits</strong> instead.
+          💡 <a href="{{ url_for('submit_deal') }}">Submit a verified deal</a> to earn <strong>100 Credits</strong> instead.
         </div>
       </div>
 
@@ -1671,7 +1712,10 @@
               </div>
             </div>
             <div class="conf-ladder-action">
-              {% if confidence_msg %}{{ confidence_msg.action }}{% else %}Submit a verified deal in your area to improve calibration.{% endif %}
+              {# v3.5.1 fix #5: Generic explanation that confidence grows with real
+                 transaction data. Replaces the previous credit-CTA which felt
+                 promotional inside an information tooltip. #}
+              Data confidence grows with real transaction data submitted by Sellers &amp; Buyers on AutoKnowMus.
             </div>
           </span>
         </span>
@@ -2157,6 +2201,9 @@
       sourceOtherInput.value = '';
       sourceOtherRow.style.display = 'none';
       clearError();
+      // v3.5.1 fix #2: Reset headline to neutral pre-click placeholder.
+      detailIcon.textContent = '💬';
+      detailText.textContent = "Pick Helpful or Way off above, then share the actual price you saw or got.";
     }
     function showThanks(credits) {
       thanksCreditsEl.textContent = '+' + credits;
