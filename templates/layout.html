@@ -6,6 +6,47 @@
   <title>{% block title %}AutoKnowMus - Used Car Price Intelligence{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+  {# ============================================================
+     v3.5.1-r3: GOOGLE ANALYTICS 4 (GA4) tracking
+     Property: AutoKnowMus Production · Measurement ID: G-7JPP8M32JV
+
+     Two safety checks before sending any data to Google:
+       1. ADMIN OPT-OUT — if logged in as the admin email, do NOT track.
+          Prevents your own browsing from polluting visitor stats.
+       2. DOMAIN GATE — only fires on autoknowmus.com (and www.).
+          Localhost, *.onrender.com preview URLs, and any other host
+          do NOT track, so dev/staging traffic stays out of production
+          analytics.
+     ============================================================ #}
+  {% set ga_admin_email = 'autoknowmus@gmail.com' %}
+  {% set is_admin_user = session.user and (session.user.email | lower) == ga_admin_email %}
+  {% if not is_admin_user %}
+  <script>
+    (function() {
+      var host = (window.location.hostname || '').toLowerCase();
+      // Only fire on the production domain — autoknowmus.com or www.autoknowmus.com
+      var isProduction = (host === 'autoknowmus.com' || host === 'www.autoknowmus.com');
+      if (!isProduction) return;
+
+      // Inject GA4 gtag.js
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=G-7JPP8M32JV';
+      document.head.appendChild(s);
+
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      window.gtag = gtag;
+      gtag('js', new Date());
+      gtag('config', 'G-7JPP8M32JV', {
+        // Anonymize IP (privacy hygiene; GA4 does this by default but explicit is good)
+        anonymize_ip: true
+      });
+    })();
+  </script>
+  {% endif %}
+
   <style>
     body { background: #0e1117; color: #e6e6e6; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
     .navbar-custom { background: #000; border-bottom: 2px solid #28a745; padding: 12px 30px; }
