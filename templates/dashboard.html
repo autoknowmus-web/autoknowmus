@@ -70,6 +70,16 @@
   }
   @media (max-width: 900px) { .top-row { grid-template-columns: 1fr; } }
 
+  /* v3.5.1: Right column wraps chart + slider in a vertical stack so they
+     fill the available space alongside the hero card. On mobile, .top-row
+     collapses to single column and right-col-stack still stacks naturally. */
+  .right-col-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0; /* allow chart canvas to shrink */
+  }
+
   .card {
     background: #1a1d24;
     border: 1px solid #2a2d34;
@@ -186,6 +196,12 @@
     font-weight: 400;
     font-size: 0.74rem;
   }
+  /* v3.5.1: Highlight "50 Credits" in green inside the header sub-text,
+     mirroring how "100 Credits" is styled in the footer hint below. */
+  .feedback-module .fb-title .fb-sub strong {
+    color: #28a745;
+    font-weight: 700;
+  }
   .feedback-module .fb-row {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -285,6 +301,27 @@
   .feedback-module .fb-detail-row select:focus {
     outline: none;
     border-color: #28a745;
+  }
+  /* v3.5.1: ₹ prefix wrapper for the actual-price input.
+     Mirrors the .price-wrap pattern used in submit_deal.html / buyer.html. */
+  .feedback-module .fb-price-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 130px;
+  }
+  .feedback-module .fb-price-wrap .fb-rupee {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #ffa500;
+    font-weight: 600;
+    pointer-events: none;
+    font-size: 0.92rem;
+  }
+  .feedback-module .fb-price-wrap input[type="text"] {
+    width: 100%;
+    padding-left: 24px;
   }
   .feedback-module .fb-actions {
     display: flex;
@@ -404,6 +441,73 @@
     font-style: italic;
     border-top: 1px solid rgba(255,255,255,0.1);
     padding-top: 6px;
+  }
+
+  /* ============================================================
+     v3.5.1 (revised): 4-tier confidence ladder inside Data Confidence
+     tooltip. Static educational scale; the row matching the actual
+     confidence value gets the .is-active highlight. Replaces the
+     previous "verified-deal counts" tooltip that mentioned 0 deals
+     and eroded user trust.
+     ============================================================ */
+  .conf-ladder-header {
+    display: block;
+    color: #adb5bd;
+    font-weight: 700;
+    font-size: 0.76rem;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+  }
+  .conf-ladder { display: flex; flex-direction: column; gap: 0; }
+  .conf-ladder-row {
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    gap: 8px;
+    padding: 5px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    align-items: start;
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+  .conf-ladder-row:last-of-type { border-bottom: none; }
+  .conf-ladder-row.is-active {
+    background: rgba(78,176,255,0.10);
+    border-radius: 4px;
+    border-bottom-color: transparent;
+    margin: 0 -2px;
+    padding: 5px 4px;
+  }
+  .conf-ladder-band {
+    font-weight: 700;
+    text-align: center;
+    padding: 2px 4px;
+    border-radius: 8px;
+    font-size: 0.68rem;
+    letter-spacing: 0.3px;
+  }
+  .conf-ladder-band.b-high    { color: #5bd47b; background: rgba(40,167,69,0.16); }
+  .conf-ladder-band.b-good    { color: #87dc9c; background: rgba(40,167,69,0.10); }
+  .conf-ladder-band.b-mod     { color: #ffc870; background: rgba(255,165,0,0.14); }
+  .conf-ladder-band.b-limited { color: #adb5bd; background: rgba(108,117,125,0.18); }
+  .conf-ladder-row.is-active .conf-ladder-band {
+    box-shadow: 0 0 0 1px rgba(78,176,255,0.4);
+  }
+  .conf-ladder-text {
+    color: #c9cdd5;
+    line-height: 1.4;
+  }
+  .conf-ladder-row.is-active .conf-ladder-text {
+    color: #e6e6e6;
+  }
+  .conf-ladder-action {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    font-style: italic;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 6px;
+    margin-top: 6px;
   }
 
   .slider-section { border-top: 1px solid #2a2d34; padding-top: 12px; }
@@ -1232,10 +1336,18 @@
      reference baseline for the price data source. State-level adjustments
      are applied AT VALUATION TIME via state_multiplier. #}
   {% if anchor_data %}
+    {# v3.5.1: Anchor strip wording adapts to user's location.
+       For Bangalore searches we keep "(Bangalore)" since it matches the user's city.
+       For other cities we drop the city-name from the main line and add a side-note
+       explaining that ex-showroom prices are pegged to Bangalore as the reference
+       baseline (state-level adjustments are applied at valuation time via state_multiplier). #}
+    {% set show_bangalore_label = (user_city or '')|lower == 'bangalore' %}
     <div class="anchor-strip">
       <div class="anchor-row">
         <span class="anchor-segment">
-          <span class="anchor-label">Ex-showroom (Bangalore):</span>
+          <span class="anchor-label">
+            Ex-showroom{% if show_bangalore_label %} (Bangalore){% endif %}:
+          </span>
           <span class="anchor-value">₹ {{ l2dp(anchor_data.ex_showroom) }}</span>
           <span class="anchor-label">({{ anchor_data.years_old }} yr{{ '' if anchor_data.years_old == 1 else 's' }} old)</span>
         </span>
@@ -1246,7 +1358,13 @@
         </span>
         <span class="anchor-pct">~{{ anchor_data.pct_off_new }}% off new</span>
       </div>
-      <div class="anchor-subtext">Latest ex-showroom price for the new version of this car</div>
+      <div class="anchor-subtext">
+        {% if show_bangalore_label %}
+          Latest ex-showroom price for the new version of this car
+        {% else %}
+          Latest ex-showroom price for the new version of this car (Bangalore reference; local pricing reflects {{ user_city }})
+        {% endif %}
+      </div>
     </div>
   {% endif %}
 
@@ -1301,7 +1419,7 @@
            data-is-guest="{{ '1' if not user else '0' }}">
         <div class="fb-title">
           Was this estimate helpful?
-          <span class="fb-sub">— Earn 50 credits (one-time per estimate)</span>
+          <span class="fb-sub">— Earn <strong>50 Credits</strong></span>
         </div>
 
         <div class="fb-row">
@@ -1324,7 +1442,12 @@
           </div>
           <div class="fb-detail-row">
             <label for="fb-actual-price">Actual price</label>
-            <input type="text" id="fb-actual-price" placeholder="e.g. 825000" inputmode="numeric">
+            {# v3.5.1: ₹ prefix + Indian comma formatting (8,25,000 not 825000).
+               Visible field is formatted; hidden field carries the raw integer. #}
+            <div class="fb-price-wrap">
+              <span class="fb-rupee">₹</span>
+              <input type="text" id="fb-actual-price" placeholder="e.g. 8,25,000" inputmode="numeric">
+            </div>
           </div>
           <div class="fb-detail-row">
             <label for="fb-source">Source</label>
@@ -1371,67 +1494,78 @@
          the depreciation chart (where there's empty space). See .slider-card below. #}
     </div>
 
-    <div class="card chart-card">
-      <div class="card-title">
-        Depreciation Forecast
-        <span class="info-wrap">
-          <span class="info-icon">i</span>
-          <span class="info-tooltip">
-            This shows the cost of delay in selling your car — as time passes, the value will further drop. Day 30 / 60 / 90 prices are pinned on the chart, and you can hover anywhere to see any specific day's projected value.
+    {# v3.5.1 (revised): Right column wraps chart + slider in a vertical stack.
+       On desktop, this fills the empty space below the chart. On mobile (single
+       column) it stacks naturally below the hero card and feedback module. #}
+    <div class="right-col-stack">
+      <div class="card chart-card">
+        <div class="card-title">
+          Depreciation Forecast
+          <span class="info-wrap">
+            <span class="info-icon">i</span>
+            <span class="info-tooltip">
+              This shows the cost of delay in selling your car — as time passes, the value will further drop. Day 30 / 60 / 90 prices are pinned on the chart, and you can hover anywhere to see any specific day's projected value.
+            </span>
           </span>
-        </span>
-        <span class="sub">Next 90 Days · Values at D30 / D60 / D90</span>
-      </div>
+          <span class="sub">Next 90 Days · Values at D30 / D60 / D90</span>
+        </div>
 
-      <div class="chart-caution-chip" id="caution-chip">
-        <span class="chip-icon">⚠️</span>
-        <span>Premium pricing — preparation matters</span>
-        <div class="chart-caution-tooltip">
-          <strong style="color:#ffa500;">Priced at the top of the range.</strong><br><br>
-          Buyers paying top price expect showroom-like condition. Ensure you have:<br>
-          • Full service history<br>
-          • No visible scratches, dents, or interior wear<br>
-          • Spotless detailing before viewings<br><br>
-          Without these, expect lowball offers or a slow sale.
+        <div class="chart-caution-chip" id="caution-chip">
+          <span class="chip-icon">⚠️</span>
+          <span>Premium pricing — preparation matters</span>
+          <div class="chart-caution-tooltip">
+            <strong style="color:#ffa500;">Priced at the top of the range.</strong><br><br>
+            Buyers paying top price expect showroom-like condition. Ensure you have:<br>
+            • Full service history<br>
+            • No visible scratches, dents, or interior wear<br>
+            • Spotless detailing before viewings<br><br>
+            Without these, expect lowball offers or a slow sale.
+          </div>
+        </div>
+
+        <div class="graph-wrap">
+          <canvas id="dep-chart"></canvas>
+        </div>
+
+        {# v3.1: Chart caption explaining loss in first 30 days #}
+        <div class="chart-caption">
+          Your car loses about <strong>₹ {{ l2dp(chart_loss_pct.total_rupees) }}</strong> in value over the next 30 days. Every week you wait costs roughly <strong>₹ {{ l2dp(chart_loss_pct.weekly_rupees) }}</strong>.
         </div>
       </div>
 
-      <div class="graph-wrap">
-        <canvas id="dep-chart"></canvas>
-      </div>
-
-      {# v3.1: Chart caption explaining loss in first 30 days #}
-      <div class="chart-caption">
-        Your car loses about <strong>₹ {{ l2dp(chart_loss_pct.total_rupees) }}</strong> in value over the next 30 days. Every week you wait costs roughly <strong>₹ {{ l2dp(chart_loss_pct.weekly_rupees) }}</strong>.
-      </div>
-    </div>
-  </div>
-
-  {# v3.5.1: PRICE STRATEGY SLIDER — moved out of hero-combined to its own
-     full-width card below the depreciation chart. Fills the empty space.
-     User can still drag to see how price affects demand and days-to-sell. #}
-  <div class="card slider-card" style="margin-bottom: 12px;">
-    <div class="card-title">
-      Try different listing prices
-      <span class="sub">drag to see how price affects demand &amp; selling time</span>
-    </div>
-    <div class="slider-section">
-      <div class="slider-labels">
-        <span class="left">← Quick Sale</span>
-        <span class="right">Highest Price →</span>
-      </div>
-      <div class="slider-track-wrap">
-        <div class="slider-bubble" id="slider-bubble">₹ {{ l2dp(estimated) }}</div>
-        <input type="range" id="price-slider"
-               min="{{ price_low }}" max="{{ price_high }}"
-               value="{{ estimated }}" step="1000">
-      </div>
-      <div class="slider-info">
-        <div>Your price: <strong id="slider-price-text">₹ {{ l2dp(estimated) }}</strong></div>
-        <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
+      {# v3.5.1: PRICE STRATEGY SLIDER — sits directly under the depreciation
+         chart in the right column. Fills what used to be empty space below the
+         chart on desktop. User can still drag to see how price affects demand. #}
+      <div class="card slider-card">
+        <div class="card-title">
+          Try different listing prices
+          <span class="sub">drag to see how price affects demand &amp; selling time</span>
+        </div>
+        <div class="slider-section">
+          <div class="slider-labels">
+            <span class="left">← Quick Sale</span>
+            <span class="right">Highest Price →</span>
+          </div>
+          {# v3.5.1: Slider initializes at the geometric midpoint of (price_low, price_high)
+             so the thumb sits visually in the middle of the track on page load. The bubble
+             and price-text update accordingly. User can drag toward Quick Sale or Premium ask. #}
+          {% set slider_init = ((price_low + price_high) // 2) %}
+          <div class="slider-track-wrap">
+            <div class="slider-bubble" id="slider-bubble">₹ {{ l2dp(slider_init) }}</div>
+            <input type="range" id="price-slider"
+                   min="{{ price_low }}" max="{{ price_high }}"
+                   value="{{ slider_init }}" step="1000">
+          </div>
+          <div class="slider-info">
+            <div>Your price: <strong id="slider-price-text">₹ {{ l2dp(slider_init) }}</strong></div>
+            <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+
+  {# v3.5.1: slider was here in earlier draft — moved into right-col-stack above. #}
 
   {# v3.1: "Why this price?" panel — IP-protected adjustment breakdown.
      Hybrid baseline disclosure: shows starting number ONLY when market_v1 fired. #}
@@ -1506,31 +1640,48 @@
         Data Confidence
         <span class="info-wrap" id="conf-info-wrap">
           <span class="info-icon">i</span>
+          {# v3.5.1 (revised): Static 4-tier confidence ladder.
+             Replaces the previous tooltip that named raw verified-deal counts
+             (e.g. "0 in your city, 1 in state") which eroded user trust.
+             The active row is highlighted based on the actual confidence value.
+             Tier copy locked per user's exact wording. #}
+          {% set conf_band =
+            'high'    if confidence >= 95 else
+            'good'    if confidence >= 80 else
+            'mod'     if confidence >= 60 else
+            'limited' %}
           <span class="info-tooltip wide" id="conf-tooltip">
-            {% set conf_tier = (confidence_msg.tier_label if confidence_msg else 'formula') or 'formula' %}
-            <span class="conf-tier-pill tier-{{ conf_tier }}">
-              {%- if conf_tier == 'city' -%}🏙️ Local data
-              {%- elif conf_tier == 'state' -%}📍 State data
-              {%- elif conf_tier == 'national' -%}🇮🇳 National data
-              {%- else -%}📊 Formula-driven
-              {%- endif -%}
-            </span>
-            <div class="conf-geo-headline">
-              {% if confidence_msg %}{{ confidence_msg.message }}{% else %}Confidence: {{ confidence }}%{% endif %}
+            <span class="conf-ladder-header">How confidence is calibrated</span>
+            <div class="conf-ladder">
+              <div class="conf-ladder-row {% if conf_band == 'high' %}is-active{% endif %}">
+                <span class="conf-ladder-band b-high">95–100%</span>
+                <span class="conf-ladder-text">Highly calibrated due to verified local transactions</span>
+              </div>
+              <div class="conf-ladder-row {% if conf_band == 'good' %}is-active{% endif %}">
+                <span class="conf-ladder-band b-good">80–94%</span>
+                <span class="conf-ladder-text">Well calibrated due to strong market data availability</span>
+              </div>
+              <div class="conf-ladder-row {% if conf_band == 'mod' %}is-active{% endif %}">
+                <span class="conf-ladder-band b-mod">60–79%</span>
+                <span class="conf-ladder-text">Moderately calibrated with available market data</span>
+              </div>
+              <div class="conf-ladder-row {% if conf_band == 'limited' %}is-active{% endif %}">
+                <span class="conf-ladder-band b-limited">Below 60%</span>
+                <span class="conf-ladder-text">Pricing model based estimate · Limited market data</span>
+              </div>
             </div>
-            <div class="conf-geo-action">
-              {% if confidence_msg %}{{ confidence_msg.action }}{% else %}Estimate based on the available data — submit a verified deal to improve accuracy.{% endif %}
+            <div class="conf-ladder-action">
+              {% if confidence_msg %}{{ confidence_msg.action }}{% else %}Submit a verified deal in your area to improve calibration.{% endif %}
             </div>
           </span>
         </span>
       </div>
       <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
       <div class="kpi-sub">
-        {%- set conf_tier = (confidence_msg.tier_label if confidence_msg else 'formula') or 'formula' -%}
-        {%- if conf_tier == 'city' -%}From {{ user_city }} deals
-        {%- elif conf_tier == 'state' -%}From your state's deals
-        {%- elif conf_tier == 'national' -%}National + pricing model
-        {%- else -%}Pricing model only
+        {%- if conf_band == 'high' -%}Highly calibrated
+        {%- elif conf_band == 'good' -%}Well calibrated
+        {%- elif conf_band == 'mod' -%}Moderately calibrated
+        {%- else -%}Pricing model based
         {%- endif -%}
       </div>
     </div>
@@ -1861,7 +2012,7 @@
 
     // ── 🎯 Recommendation line ──────────────────────────────────
     const mid = Math.round((PRICE_LOW + PRICE_HIGH) / 2);
-    const actionable = `<p><span class="v-icon">🎯</span><span class="v-text"><strong>Pricing guide:</strong> 💵 Cash-fast → ₹ ${lakh2dp(PRICE_LOW)} · ⚖️ Balanced → ₹ ${lakh2dp(mid)} · 💎 Top dollar → ₹ ${lakh2dp(PRICE_HIGH)}.</span></p>`;
+    const actionable = `<p><span class="v-icon">🎯</span><span class="v-text"><strong>Pricing guide:</strong> 💵 Cash-fast → ₹ ${lakh2dp(PRICE_LOW)} · ⚖️ Balanced → ₹ ${lakh2dp(mid)} · 💎 Premium ask → ₹ ${lakh2dp(PRICE_HIGH)}.</span></p>`;
 
     return intro + pricing + depreciation + actionable;
   }
@@ -1918,9 +2069,10 @@
   window.addEventListener('resize', positionBubble);
 
   requestAnimationFrame(() => {
-    positionBubble();
-    updateCaution(ESTIMATED);
-    verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
+    // v3.5.1: slider now starts at geometric midpoint (not ESTIMATED).
+    // Use onSliderInput() to compute everything from the slider's actual initial
+    // value, so verdict/days/demand all match what the user sees.
+    onSliderInput();
   });
 
   // ============================================================
@@ -1950,6 +2102,31 @@
     const sourceOtherInput = document.getElementById('fb-source-other');
 
     let currentReaction = null;
+
+    // v3.5.1: Indian number format helper for the actual-price input.
+    // 825000 → "8,25,000" (last group of 3, then groups of 2).
+    function inrFormatPrice(n) {
+      const s = String(Math.abs(n));
+      if (s.length <= 3) return s;
+      const last3 = s.slice(-3);
+      let rest = s.slice(0, -3);
+      const groups = [];
+      while (rest.length > 2) {
+        groups.unshift(rest.slice(-2));
+        rest = rest.slice(0, -2);
+      }
+      if (rest) groups.unshift(rest);
+      return groups.join(',') + ',' + last3;
+    }
+    function formatPriceInput() {
+      const digits = (priceInput.value || '').replace(/\D+/g, '');
+      if (!digits) { priceInput.value = ''; return; }
+      let n = parseInt(digits, 10);
+      if (n > 100000000) n = 100000000;  // 10 crore cap, matches backend
+      priceInput.value = inrFormatPrice(n);
+    }
+    priceInput.addEventListener('input', formatPriceInput);
+    priceInput.addEventListener('blur',  formatPriceInput);
 
     function showError(msg) {
       errorEl.textContent = msg;
