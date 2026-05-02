@@ -5028,6 +5028,273 @@ def admin_feedback():
 
 
 # ============================================================
+# ADMIN · RESEARCH LOG (v3.5.1-r4)
+# ============================================================
+# Manual-entry research data — mystery shopping observations + friends/family
+# deal references. Used for INITIAL FORMULA CALIBRATION ONLY. Does NOT feed
+# the live valuation engine (that's the verified `deals` table's job).
+#
+# Routes:
+#   GET  /admin/research                 → list + add-form page
+#   POST /admin/research                 → create new entry
+#   POST /admin/research/<id>/edit       → update existing entry
+#   POST /admin/research/<id>/delete     → permanently delete
+# ============================================================
+
+# Source values must match the dropdown in admin_research.html
+RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family']
+RESEARCH_OWNERS = ['1st', '2nd', '3rd', '4th+']
+RESEARCH_CONDITIONS = ['Excellent', 'Good', 'Fair']
+
+
+def _parse_research_int(raw, field_name, min_val, max_val, allow_none=True):
+    """Parse a numeric field from the research form. Returns int or None.
+       Strips Indian-format commas, the ₹ prefix, and whitespace."""
+    if raw is None:
+        return None
+    s = str(raw).replace(',', '').replace('₹', '').strip()
+    if not s:
+        return None
+    try:
+        n = int(float(s))
+    except (ValueError, TypeError):
+        raise ValueError(f"{field_name} must be a number.")
+    if n < min_val or n > max_val:
+        raise ValueError(f"{field_name} must be between {min_val:,} and {max_val:,}.")
+    return n
+
+
+def _validate_research_form(form, is_edit=False):
+    """Pull and validate fields from a research-log POST form.
+       Returns (payload_dict, error_message_or_None)."""
+    # Required: car identity
+    make    = (form.get('make') or '').strip()
+    model   = (form.get('model') or '').strip()
+    variant = (form.get('variant') or '').strip()
+    fuel    = (form.get('fuel') or '').strip()
+    year_raw = (form.get('year') or '').strip()
+
+    for label, val in [('Make', make), ('Model', model), ('Variant', variant), ('Fuel', fuel)]:
+        if not val:
+            return None, f"{label} is required."
+    try:
+        year = int(year_raw)
+        if year < 2000 or year > 2030:
+            return None, "Year must be between 2000 and 2030."
+    except (ValueError, TypeError):
+        return None, "Year is required."
+
+    # Required: source + entry_date
+    data_source = (form.get('data_source') or '').strip()
+    if data_source not in RESEARCH_SOURCES:
+        return None, f"Source must be one of: {', '.join(RESEARCH_SOURCES)}."
+
+    entry_date_raw = (form.get('entry_date') or '').strip()
+    if not entry_date_raw:
+        entry_date_raw = datetime.utcnow().strftime('%Y-%m-%d')
+    # Accept either ISO yyyy-mm-dd (HTML date input) or DD-MMM-YYYY
+    entry_date_iso = None
+    for fmt in ('%Y-%m-%d', '%d-%b-%Y'):
+        try:
+            entry_date_iso = datetime.strptime(entry_date_raw, fmt).strftime('%Y-%m-%d')
+            break
+        except ValueError:
+            continue
+    if not entry_date_iso:
+        return None, "Entry date format is invalid. Use DD-MMM-YYYY (e.g. 02-May-2026)."
+
+    # Optional: car-state fields
+    try:
+        mileage_km = _parse_research_int(form.get('mileage_km'), 'Mileage', 0, 1000000)
+    except ValueError as e:
+        return None, str(e)
+
+    owners = (form.get('owners') or '').strip() or None
+    if owners and owners not in RESEARCH_OWNERS:
+        return None, f"Owners must be one of: {', '.join(RESEARCH_OWNERS)}."
+
+    condition = (form.get('condition') or '').strip() or None
+    if condition and condition not in RESEARCH_CONDITIONS:
+        return None, f"Condition must be one of: {', '.join(RESEARCH_CONDITIONS)}."
+
+    # Optional: location
+    state_code = (form.get('state_code') or '').strip().upper() or None
+    city = (form.get('city') or '').strip() or None
+
+    # Optional: pricing
+    try:
+        asking_price = _parse_research_int(form.get('asking_price_inr'), 'Asking price', 1, 100000000)
+        negotiated_price = _parse_research_int(form.get('negotiated_price_inr'), 'Negotiated price', 1, 100000000)
+    except ValueError as e:
+        return None, str(e)
+
+    # Optional: dealer / listing context
+    dealer_name = (form.get('dealer_name') or '').strip() or None
+    dealer_phone = (form.get('dealer_phone') or '').strip() or None
+    listing_url = (form.get('listing_url') or '').strip() or None
+    notes = (form.get('notes') or '').strip() or None
+    if notes and len(notes) > 2000:
+        return None, "Notes are limited to 2000 characters."
+
+    payload = {
+        'make': make,
+        'model': model,
+        'variant': variant,
+        'year': year,
+        'fuel': fuel,
+        'data_source': data_source,
+        'entry_date': entry_date_iso,
+        'mileage_km': mileage_km,
+        'owners': owners,
+        'condition': condition,
+        'state_code': state_code,
+        'city': city,
+        'asking_price_inr': asking_price,
+        'negotiated_price_inr': negotiated_price,
+        'dealer_name': dealer_name,
+        'dealer_phone': dealer_phone,
+        'listing_url': listing_url,
+        'notes': notes,
+    }
+    return payload, None
+
+
+@app.route('/admin/research', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_research():
+    """List + add research log entries. Filters via querystring."""
+    admin = current_user()
+
+    # ── POST: create a new entry ──────────────────────────────
+    if request.method == 'POST':
+        payload, err = _validate_research_form(request.form)
+        if err:
+            flash(err, 'error')
+            return redirect(url_for('admin_research'))
+        payload['created_by'] = admin.get('email') or 'unknown'
+        try:
+            supabase.table('research_log').insert(payload).execute()
+            flash(
+                f"Research entry added: {payload['year']} {payload['make']} "
+                f"{payload['model']} ({payload['data_source']}).",
+                'success'
+            )
+        except Exception as e:
+            app.logger.error(f"admin_research insert failed: {e}")
+            flash(f"Could not save: {e}", 'error')
+        return redirect(url_for('admin_research'))
+
+    # ── GET: load entries with optional filters ───────────────
+    f_source = (request.args.get('source') or '').strip()
+    f_state = (request.args.get('state') or '').strip().upper()
+    f_make = (request.args.get('make') or '').strip()
+
+    try:
+        q = supabase.table('research_log').select('*')
+        if f_source and f_source in RESEARCH_SOURCES:
+            q = q.eq('data_source', f_source)
+        if f_state:
+            q = q.eq('state_code', f_state)
+        if f_make:
+            q = q.eq('make', f_make)
+        q = q.order('entry_date', desc=True).order('created_at', desc=True).limit(500)
+        r = q.execute()
+        rows = r.data or []
+    except Exception as e:
+        app.logger.error(f"admin_research fetch failed: {e}")
+        rows = []
+        flash(f"Could not load research log: {e}", 'error')
+
+    # Decorate each row with a display date and gap_pct sign
+    for row in rows:
+        ed = row.get('entry_date')
+        if ed:
+            try:
+                row['entry_date_display'] = datetime.strptime(ed, '%Y-%m-%d').strftime('%d-%b-%Y')
+            except (ValueError, TypeError):
+                row['entry_date_display'] = ed
+        else:
+            row['entry_date_display'] = '—'
+
+    # Aggregate stats
+    total = len(rows)
+    by_mystery = sum(1 for r_ in rows if r_.get('data_source') == 'Mystery Shopping')
+    by_ff = sum(1 for r_ in rows if r_.get('data_source') == 'Friends & Family')
+    # Average gap_pct (mystery-shop entries with both prices)
+    gaps = [float(r_['gap_pct']) for r_ in rows
+            if r_.get('gap_pct') is not None and r_.get('data_source') == 'Mystery Shopping']
+    avg_gap = round(sum(gaps) / len(gaps), 1) if gaps else None
+
+    stats = {
+        'total': total,
+        'mystery_count': by_mystery,
+        'ff_count': by_ff,
+        'avg_mystery_gap_pct': avg_gap,
+        'gap_sample_size': len(gaps),
+    }
+
+    # Distinct values for filter dropdowns
+    distinct_states = sorted({r_.get('state_code') for r_ in rows if r_.get('state_code')})
+    distinct_makes = sorted({r_.get('make') for r_ in rows if r_.get('make')})
+
+    return render_template(
+        'admin_research.html',
+        user=admin,
+        first_name=firstname_filter(admin.get('name')),
+        rows=rows,
+        stats=stats,
+        sources=RESEARCH_SOURCES,
+        owners_choices=RESEARCH_OWNERS,
+        condition_choices=RESEARCH_CONDITIONS,
+        car_data=CAR_DATA,
+        cities_by_state=INDIAN_CITIES_BY_STATE,
+        default_state=DEFAULT_STATE_CODE,
+        default_city=DEFAULT_CITY,
+        active_source=f_source,
+        active_state=f_state,
+        active_make=f_make,
+        distinct_states=distinct_states,
+        distinct_makes=distinct_makes,
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+        today_iso=datetime.utcnow().strftime('%Y-%m-%d'),
+    )
+
+
+@app.route('/admin/research/<entry_id>/edit', methods=['POST'])
+@login_required
+@admin_required
+def admin_research_edit(entry_id):
+    """Update an existing research-log entry."""
+    payload, err = _validate_research_form(request.form, is_edit=True)
+    if err:
+        flash(err, 'error')
+        return redirect(url_for('admin_research'))
+    try:
+        supabase.table('research_log').update(payload).eq('id', entry_id).execute()
+        flash("Research entry updated.", 'success')
+    except Exception as e:
+        app.logger.error(f"admin_research_edit failed: {e}")
+        flash(f"Could not update: {e}", 'error')
+    return redirect(url_for('admin_research'))
+
+
+@app.route('/admin/research/<entry_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_research_delete(entry_id):
+    """Permanently delete a research-log entry. (Soft-delete is overkill
+    for an admin-only research table — the admin can re-enter on typo.)"""
+    try:
+        supabase.table('research_log').delete().eq('id', entry_id).execute()
+        flash("Research entry deleted.", 'success')
+    except Exception as e:
+        app.logger.error(f"admin_research_delete failed: {e}")
+        flash(f"Could not delete: {e}", 'error')
+    return redirect(url_for('admin_research'))
+
+
+# ============================================================
 # MISC ROUTES (preserved from current)
 # ============================================================
 
