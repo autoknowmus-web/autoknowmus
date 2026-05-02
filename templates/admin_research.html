@@ -486,19 +486,243 @@
     background: rgba(40,167,69,0.08);
   }
 
+  /* ============================================================
+     v3.5.1-r5: CALIBRATION SUGGESTIONS PANEL
+     ============================================================ */
+  .calib-card {
+    background: linear-gradient(135deg, #1c1f28 0%, #1a1d24 100%);
+    border: 1px solid #2a2f3a;
+    border-left: 4px solid #4eb0ff;
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+  }
+  .calib-card h2 {
+    font-size: 13px; font-weight: 700; color: #4eb0ff;
+    margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .calib-card h2 .sub {
+    color: #6c757d; font-size: 10.5px; font-weight: 500;
+    text-transform: none; letter-spacing: 0; margin-left: auto;
+  }
+  .calib-empty {
+    color: #6c757d;
+    font-size: 12.5px;
+    font-style: italic;
+    padding: 18px 0;
+    text-align: center;
+    line-height: 1.5;
+  }
+  .calib-empty strong { color: #adb5bd; }
+
+  .calib-row {
+    display: grid;
+    grid-template-columns: 80px 1fr auto auto auto;
+    gap: 14px;
+    align-items: center;
+    padding: 11px 12px;
+    margin-bottom: 8px;
+    background: #14171d;
+    border: 1px solid #242832;
+    border-radius: 6px;
+    transition: border-color 0.15s;
+  }
+  .calib-row:hover { border-color: #3a3f4a; }
+  .calib-row.is-in-sync   { border-left: 3px solid #28a745; }
+  .calib-row.is-low-conf  { border-left: 3px solid #6c757d; }
+  .calib-row.is-medium    { border-left: 3px solid #ffa500; }
+  .calib-row.is-high      { border-left: 3px solid #ff8585; }
+
+  .calib-row .state-cell {
+    font-size: 18px;
+    font-weight: 800;
+    color: #e4e6eb;
+    text-align: center;
+    line-height: 1.1;
+  }
+  .calib-row .state-cell .state-sub {
+    display: block;
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-top: 2px;
+  }
+  .calib-row .info-cell {
+    font-size: 11.5px;
+    color: #b4b8c3;
+    line-height: 1.5;
+  }
+  .calib-row .info-cell strong { color: #e4e6eb; }
+  .calib-row .info-cell .info-row { display: block; margin-top: 1px; }
+  .calib-row .info-cell .info-row .lbl {
+    color: #6c757d; font-weight: 500; margin-right: 4px;
+  }
+
+  .calib-row .mults-cell {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+    min-width: 130px;
+  }
+  .calib-row .mults-cell .mult-current {
+    color: #adb5bd;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .calib-row .mults-cell .mult-arrow {
+    color: #6c757d;
+    margin: 0 5px;
+  }
+  .calib-row .mults-cell .mult-suggested {
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .calib-row.is-in-sync   .mults-cell .mult-suggested { color: #5fd37a; }
+  .calib-row.is-low-conf  .mults-cell .mult-suggested { color: #adb5bd; }
+  .calib-row.is-medium    .mults-cell .mult-suggested { color: #ffa500; }
+  .calib-row.is-high      .mults-cell .mult-suggested { color: #ff8585; }
+
+  .calib-row .gap-cell {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 65px;
+  }
+  .calib-row.is-in-sync   .gap-cell { color: #5fd37a; }
+  .calib-row.is-low-conf  .gap-cell { color: #adb5bd; }
+  .calib-row.is-medium    .gap-cell { color: #ffa500; }
+  .calib-row.is-high      .gap-cell { color: #ff8585; }
+
+  .calib-row .actions-cell {
+    text-align: right;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .calib-row .btn-apply {
+    background: #4eb0ff;
+    color: #14171d;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 11px;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .calib-row .btn-apply:hover { background: #6cc0ff; }
+  .calib-row.is-in-sync .btn-apply {
+    background: #2a2f3a;
+    color: #6c757d;
+    cursor: not-allowed;
+  }
+  .calib-row .btn-show-entries {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2f3a;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .calib-row .btn-show-entries:hover {
+    border-color: #4eb0ff;
+    color: #4eb0ff;
+  }
+
+  .calib-row .conf-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .conf-pill.conf-in_sync { background: rgba(40,167,69,0.15);  color: #5fd37a; border: 1px solid rgba(40,167,69,0.4); }
+  .conf-pill.conf-low     { background: rgba(108,117,125,0.18); color: #8b92a5; border: 1px solid rgba(108,117,125,0.4); }
+  .conf-pill.conf-medium  { background: rgba(255,165,0,0.16); color: #ffa500; border: 1px solid rgba(255,165,0,0.4); }
+  .conf-pill.conf-high    { background: rgba(255,107,107,0.16); color: #ff8585; border: 1px solid rgba(255,107,107,0.4); }
+
+  /* Detail popover for "Show entries" — uses existing .modal-backdrop styles */
+
+  /* ============================================================
+     v3.5.1-r5: TOGGLE column on entries table + dimmed excluded rows
+     ============================================================ */
+  .entries-table .calib-toggle-cell {
+    width: 60px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .calib-toggle-btn {
+    background: transparent;
+    border: 1.5px solid #28a745;
+    color: #5fd37a;
+    border-radius: 12px;
+    padding: 2px 9px;
+    font-size: 10.5px;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    transition: all 0.15s;
+  }
+  .calib-toggle-btn:hover {
+    background: rgba(40,167,69,0.12);
+  }
+  .calib-toggle-btn.is-excluded {
+    border-color: #6c757d;
+    color: #8b92a5;
+  }
+  .calib-toggle-btn.is-excluded:hover {
+    background: rgba(108,117,125,0.12);
+  }
+
+  .entries-table tr.row-excluded {
+    opacity: 0.55;
+  }
+  .entries-table tr.row-excluded:hover {
+    opacity: 0.8;
+  }
+
+  .exclusion-reason-text {
+    display: block;
+    font-size: 10.5px;
+    color: #8b92a5;
+    font-style: italic;
+    margin-top: 3px;
+    line-height: 1.3;
+  }
+
   @media (max-width: 1100px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
     .form-grid { grid-template-columns: repeat(2, 1fr); }
     .form-grid .col-2, .form-grid .col-4 { grid-column: span 2; }
+    .calib-row {
+      grid-template-columns: 60px 1fr auto;
+      gap: 10px;
+    }
+    .calib-row .mults-cell { grid-column: 2 / -1; text-align: left; min-width: 0; padding-top: 4px; }
+    .calib-row .gap-cell   { grid-column: 1 / 2; min-width: 0; font-size: 14px; }
+    .calib-row .actions-cell { grid-column: 1 / -1; justify-content: flex-start; padding-top: 4px; }
+    .calib-row .state-cell { font-size: 14px; }
   }
   @media (max-width: 700px) {
     .form-grid { grid-template-columns: 1fr; }
     .form-grid .col-2, .form-grid .col-4 { grid-column: span 1; }
     .data-source-row { grid-template-columns: 1fr; }
-    .entries-table th:nth-child(3),
-    .entries-table td:nth-child(3),
-    .entries-table th:nth-child(7),
-    .entries-table td:nth-child(7) { display: none; }
+    .entries-table th:nth-child(4),
+    .entries-table td:nth-child(4),
+    .entries-table th:nth-child(8),
+    .entries-table td:nth-child(8) { display: none; }
   }
 </style>
 
@@ -575,6 +799,100 @@
         {% endif %}
       </div>
     </div>
+    <div class="stat-card">
+      <div class="stat-card-label">✅ In Calibration</div>
+      <div class="stat-card-value" style="color:#5fd37a;">{{ stats.included_count }}</div>
+      <div class="stat-card-sub">
+        {% if stats.excluded_count %}
+          {{ stats.excluded_count }} excluded
+        {% else %}
+          all entries included
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- v3.5.1-r5: CALIBRATION SUGGESTIONS PANEL -->
+  <div class="calib-card">
+    <h2>
+      📐 Calibration Suggestions
+      <span class="sub">research-driven multiplier nudges</span>
+    </h2>
+
+    {% if suggestions %}
+      <div style="font-size: 11.5px; color: #8b92a5; margin-bottom: 12px; line-height: 1.5;">
+        Suggestions are computed only for states with <strong>≥{{ calib_min_entries }} included research entries</strong>
+        from the last 90 days. Each suggestion is the median of <code style="background:#0d0f14;padding:1px 5px;border-radius:3px;">research_price &divide; engine_prediction</code>
+        applied to the current state multiplier. Click <strong>Apply</strong> to update the state multiplier; the audit log captures the reasoning.
+      </div>
+
+      {% for s in suggestions %}
+        {% set conf_class =
+          'is-in-sync'  if s.confidence == 'in_sync'  else
+          'is-low-conf' if s.confidence == 'low'      else
+          'is-medium'   if s.confidence == 'medium'   else
+          'is-high' %}
+        <div class="calib-row {{ conf_class }}">
+          <div class="state-cell">
+            {{ s.state_code }}
+            <span class="state-sub">state</span>
+          </div>
+
+          <div class="info-cell">
+            <strong>{{ s.sample_size }}</strong> entries used
+            <span class="conf-pill conf-{{ s.confidence }}">{{ s.confidence|replace('_', '-') }}</span>
+            <span class="info-row">
+              <span class="lbl">Mix:</span>
+              {{ s.mystery_count }} mystery · {{ s.ff_count }} F&amp;F
+              {% if s.skipped_count %}<span style="color:#ff8585;"> · {{ s.skipped_count }} skipped</span>{% endif %}
+            </span>
+            <span class="info-row">
+              <span class="lbl">Range:</span> {{ s.date_range_display }}
+              · <span class="lbl">Median ratio:</span> {{ s.median_ratio }}
+            </span>
+          </div>
+
+          <div class="mults-cell">
+            <span class="mult-current">{{ '%.3f'|format(s.current_multiplier) }}</span>
+            <span class="mult-arrow">→</span>
+            <span class="mult-suggested">{{ '%.3f'|format(s.suggested_multiplier) }}</span>
+          </div>
+
+          <div class="gap-cell">
+            {% if s.gap_pct > 0 %}+{% endif %}{{ s.gap_pct }}%
+          </div>
+
+          <div class="actions-cell">
+            {% if s.confidence == 'in_sync' %}
+              <button type="button" class="btn-apply" disabled title="Already in sync — no change needed">In sync</button>
+            {% else %}
+              <form method="POST"
+                    action="{{ url_for('admin_research_apply_suggestion', state_code=s.state_code) }}"
+                    style="display:inline;"
+                    onsubmit="return confirm(
+                      'Apply suggestion for {{ s.state_code }}?\n\n' +
+                      '  Current:   {{ '%.3f'|format(s.current_multiplier) }}\n' +
+                      '  Suggested: {{ '%.3f'|format(s.suggested_multiplier) }}  ({{ '%+.1f'|format(s.gap_pct) }}%)\n' +
+                      '  Based on:  {{ s.sample_size }} entries\n\n' +
+                      'This will update /admin/multipliers and immediately affect live valuations for {{ s.state_code }}.\n\n' +
+                      'Audit log will record: source=research_calibration, sample_size={{ s.sample_size }}, median_ratio={{ s.median_ratio }}.'
+                    );">
+                <button type="submit" class="btn-apply">Apply</button>
+              </form>
+            {% endif %}
+            {# Toggle visibility of the contributing entries (anchored below) #}
+            <a href="#calib-{{ s.state_code }}" class="btn-show-entries" onclick="filterTo('{{ s.state_code }}', 'state'); return false;">Show entries</a>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="calib-empty">
+        <strong>No suggestions yet.</strong><br>
+        Suggestions appear once you have <strong>≥{{ calib_min_entries }} included entries</strong>
+        for any state (within last 90 days, with negotiated price filled).
+        Log mystery shop visits and friends/family deal prices to start building this up.
+      </div>
+    {% endif %}
   </div>
 
   <!-- ADD NEW ENTRY FORM -->
@@ -792,6 +1110,7 @@
       <table class="entries-table">
         <thead>
           <tr>
+            <th class="calib-toggle-cell">Calib</th>
             <th>Date</th>
             <th>Source</th>
             <th>Car</th>
@@ -808,7 +1127,19 @@
         <tbody>
           {% for r in rows %}
           {% set src_class = 'mystery' if r.data_source == 'Mystery Shopping' else 'ff' %}
-          <tr>
+          {% set is_excluded = not r.include_in_calibration %}
+          <tr {% if is_excluded %}class="row-excluded"{% endif %}>
+            <td class="calib-toggle-cell">
+              <form method="POST" action="{{ url_for('admin_research_toggle_calibration', entry_id=r.id) }}" style="display:inline;">
+                {% if is_excluded %}
+                  <button type="submit" class="calib-toggle-btn is-excluded"
+                          title="EXCLUDED — click to include in calibration">EXCL</button>
+                {% else %}
+                  <button type="submit" class="calib-toggle-btn"
+                          title="INCLUDED — click to exclude from calibration">INCL</button>
+                {% endif %}
+              </form>
+            </td>
             <td>{{ r.entry_date_display }}</td>
             <td>
               <span class="source-pill {{ src_class }}">
@@ -855,6 +1186,9 @@
               {% if r.notes %}
                 <span class="truncated" title="{{ r.notes }}">{{ r.notes }}</span>
               {% else %}—{% endif %}
+              {% if is_excluded and r.exclusion_reason %}
+                <span class="exclusion-reason-text" title="{{ r.exclusion_reason }}">⊘ {{ r.exclusion_reason }}</span>
+              {% endif %}
             </td>
             <td class="actions">
               <button type="button" class="btn-mini" onclick='openEditModal({{ r|tojson }})'>Edit</button>
@@ -993,6 +1327,35 @@
           <label>Notes</label>
           <textarea name="notes" id="e-notes" maxlength="2000"></textarea>
         </div>
+
+        {# v3.5.1-r5: Calibration toggle inside edit modal #}
+        <div class="form-group col-4" style="background: #14171d; border: 1px solid #2a2f3a; border-radius: 6px; padding: 12px 14px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom: 4px;">
+            <input type="checkbox" name="include_in_calibration" id="e-include_in_calibration" value="1"
+                   onchange="toggleEditExclusionReason()"
+                   style="margin: 0; accent-color: #28a745; width: 16px; height: 16px;">
+            <span style="text-transform: none; letter-spacing: 0; font-weight: 600; color: #e4e6eb; font-size: 13px;">
+              ✅ Include this entry in calibration
+            </span>
+          </label>
+          <div style="font-size: 11px; color: #6c757d; margin-left: 24px; line-height: 1.4;">
+            Uncheck to exclude this entry from the multiplier suggestion math. The entry stays in the log for reference but is ignored when calibrating.
+          </div>
+
+          {# Exclusion reason — only visible when checkbox is unchecked #}
+          <div id="e-exclusion-reason-wrap" style="display: none; margin-top: 10px;">
+            <label style="font-size: 11px; color: #ff8585; margin-bottom: 4px;">
+              Why exclude this entry?
+            </label>
+            <input type="text" name="exclusion_reason" id="e-exclusion_reason"
+                   maxlength="500"
+                   placeholder="e.g. distress sale, hidden accident damage, dealer scam, outlier I can't explain..."
+                   style="background: #0d0f14; border: 1px solid #2a2f3a; color: #e4e6eb; padding: 6px 9px; border-radius: 4px; font-size: 12px; width: 100%;">
+            <div style="font-size: 10.5px; color: #6c757d; margin-top: 3px; line-height: 1.3;">
+              Optional but helpful — future-you will appreciate the context.
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="form-actions">
@@ -1126,11 +1489,30 @@
     document.getElementById('e-listing_url').value = row.listing_url || '';
     document.getElementById('e-notes').value = row.notes || '';
 
+    // v3.5.1-r5: Calibration inclusion + reason
+    const includeCb = document.getElementById('e-include_in_calibration');
+    // Default: TRUE if undefined (legacy entries) or explicitly true
+    includeCb.checked = (row.include_in_calibration !== false);
+    document.getElementById('e-exclusion_reason').value = row.exclusion_reason || '';
+    toggleEditExclusionReason();
+
     modal.classList.add('is-open');
   }
 
   function closeEditModal() {
     document.getElementById('edit-modal').classList.remove('is-open');
+  }
+
+  // v3.5.1-r5: Show/hide exclusion-reason field based on calibration checkbox
+  function toggleEditExclusionReason() {
+    const includeCb = document.getElementById('e-include_in_calibration');
+    const wrap = document.getElementById('e-exclusion-reason-wrap');
+    if (!includeCb || !wrap) return;
+    if (includeCb.checked) {
+      wrap.style.display = 'none';
+    } else {
+      wrap.style.display = 'block';
+    }
   }
 
   function updateEditModels() {
