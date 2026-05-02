@@ -1,0 +1,1165 @@
+{% extends "layout.html" %}
+
+{% block title %}Research Log — Admin · AutoKnowMus{% endblock %}
+
+{% block content %}
+<style>
+  .admin-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 18px 20px 60px;
+    color: #e4e6eb;
+  }
+
+  .btn-back {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 14px;
+  }
+  .btn-back:hover { background: #5a6168; }
+
+  /* Admin nav strip — same style as other admin pages */
+  .admin-nav-strip {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .admin-nav-strip a {
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    color: #8b92a5;
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    transition: all 0.15s;
+  }
+  .admin-nav-strip a:hover {
+    color: #e4e6eb;
+    border-color: #3a3f4a;
+  }
+  .admin-nav-strip a.active {
+    color: #ffa500;
+    border-color: rgba(255,165,0,0.4);
+    background: rgba(255,165,0,0.08);
+  }
+
+  .admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #2a2f3a;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .admin-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+    color: #ffa500;
+  }
+  .admin-header .meta {
+    font-size: 12px;
+    color: #8b92a5;
+  }
+
+  /* Helper strip explaining the page */
+  .helper-strip {
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    border-left: 4px solid #4eb0ff;
+    border-radius: 6px;
+    padding: 11px 16px;
+    margin-bottom: 14px;
+    color: #b4b8c3;
+    font-size: 12.5px;
+    line-height: 1.55;
+  }
+  .helper-strip strong { color: #e4e6eb; }
+  .helper-strip code {
+    background: #0d0f14;
+    border: 1px solid #2a2f3a;
+    color: #e4e6eb;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11.5px;
+  }
+
+  /* Flash messages */
+  .flash-container { margin-bottom: 14px; }
+  .flash-msg {
+    position: relative;
+    padding: 12px 40px 12px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+  .flash-msg.success {
+    background: rgba(40,167,69,0.12);
+    border: 1px solid rgba(40,167,69,0.35);
+    color: #5fd37a;
+  }
+  .flash-msg.error {
+    background: rgba(220,53,69,0.12);
+    border: 1px solid rgba(220,53,69,0.35);
+    color: #ff6b7a;
+  }
+  .flash-close {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: none; color: inherit;
+    font-size: 18px; cursor: pointer; opacity: 0.7;
+    padding: 0 6px; line-height: 1;
+  }
+  .flash-close:hover { opacity: 1; }
+
+  /* Stats strip */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .stat-card-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
+    color: #8b92a5; margin-bottom: 6px; font-weight: 600;
+  }
+  .stat-card-value {
+    font-size: 22px; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums; color: #e4e6eb;
+  }
+  .stat-card-value.mystery   { color: #ffa500; }
+  .stat-card-value.ff        { color: #5fd37a; }
+  .stat-card-value.gap       { color: #ff8585; }
+  .stat-card-sub {
+    font-size: 11px; color: #6c757d; margin-top: 4px;
+  }
+
+  /* Section card */
+  .card {
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+  }
+  .card h2 {
+    font-size: 13px; font-weight: 700; color: #ffa500;
+    margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 0.6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .sub {
+    color: #6c757d; font-size: 10.5px; font-weight: 500;
+    text-transform: none; letter-spacing: 0; margin-left: auto;
+  }
+
+  /* Form layout */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .form-grid .col-2 { grid-column: span 2; }
+  .form-grid .col-4 { grid-column: span 4; }
+
+  .form-group { display: flex; flex-direction: column; }
+  .form-group label {
+    font-size: 11px; color: #8b92a5; margin-bottom: 4px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .form-group label .req { color: #ff8585; }
+  .form-group input[type="text"],
+  .form-group input[type="number"],
+  .form-group input[type="date"],
+  .form-group input[type="url"],
+  .form-group input[type="tel"],
+  .form-group select,
+  .form-group textarea {
+    background: #0d0f14;
+    border: 1px solid #2a2f3a;
+    color: #e4e6eb;
+    padding: 7px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: #ffa500;
+    box-shadow: 0 0 0 2px rgba(255,165,0,0.15);
+  }
+  .form-group textarea {
+    resize: vertical;
+    min-height: 70px;
+  }
+  .form-group .price-wrap {
+    position: relative;
+  }
+  .form-group .price-wrap input {
+    width: 100%;
+    padding-left: 22px;
+  }
+  .form-group .price-wrap .rupee {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #ffa500;
+    font-weight: 600;
+    pointer-events: none;
+    font-size: 13px;
+  }
+  .form-group .help {
+    font-size: 10.5px; color: #6c757d; margin-top: 3px; line-height: 1.3;
+  }
+
+  .form-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .btn-primary {
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-primary:hover { background: #218838; }
+  .btn-secondary {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2f3a;
+    border-radius: 4px;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-secondary:hover {
+    border-color: #4eb0ff;
+    color: #4eb0ff;
+  }
+
+  /* Filter bar */
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .filter-bar a {
+    padding: 5px 11px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-decoration: none;
+    color: #8b92a5;
+    background: #0d0f14;
+    border: 1px solid #2a2f3a;
+    transition: all 0.15s;
+  }
+  .filter-bar a:hover { color: #e4e6eb; border-color: #3a3f4a; }
+  .filter-bar a.active {
+    color: #ffa500;
+    border-color: rgba(255,165,0,0.4);
+    background: rgba(255,165,0,0.08);
+  }
+  .filter-bar .filter-label {
+    font-size: 11px; color: #6c757d; margin-right: 4px;
+    text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;
+  }
+  .filter-bar select {
+    background: #0d0f14;
+    border: 1px solid #2a2f3a;
+    color: #e4e6eb;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11.5px;
+  }
+
+  /* Entries table */
+  .entries-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .entries-table th {
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b92a5;
+    border-bottom: 1px solid #2a2f3a;
+    padding: 8px 6px;
+    font-weight: 600;
+    background: #14171d;
+    position: sticky;
+    top: 0;
+  }
+  .entries-table th.num,
+  .entries-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .entries-table td {
+    padding: 9px 6px;
+    border-bottom: 1px solid #242832;
+    color: #e4e6eb;
+    vertical-align: top;
+  }
+  .entries-table tr:last-child td { border-bottom: none; }
+  .entries-table .source-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .entries-table .source-pill.mystery {
+    background: rgba(255,165,0,0.18);
+    color: #ffa500;
+    border: 1px solid rgba(255,165,0,0.4);
+  }
+  .entries-table .source-pill.ff {
+    background: rgba(40,167,69,0.18);
+    color: #5fd37a;
+    border: 1px solid rgba(40,167,69,0.4);
+  }
+  .entries-table .gap-pos { color: #ff8585; font-weight: 600; }
+  .entries-table .gap-zero { color: #8b92a5; }
+
+  .entries-table .car-cell {
+    line-height: 1.35;
+  }
+  .entries-table .car-cell .car-meta {
+    display: block;
+    font-size: 11px;
+    color: #8b92a5;
+    margin-top: 2px;
+  }
+
+  .entries-table .notes-cell {
+    color: #b4b8c3;
+    font-size: 11.5px;
+    line-height: 1.4;
+    max-width: 240px;
+  }
+  .entries-table .notes-cell .truncated {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+  }
+
+  .entries-table .actions {
+    white-space: nowrap;
+    text-align: right;
+  }
+  .btn-mini {
+    background: transparent;
+    border: 1px solid #2a2f3a;
+    color: #8b92a5;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    margin-left: 3px;
+  }
+  .btn-mini:hover { border-color: #4eb0ff; color: #4eb0ff; }
+  .btn-mini.danger:hover { border-color: #dc3545; color: #ff6b7a; }
+
+  /* Edit modal */
+  .modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  .modal-backdrop.is-open { display: flex; }
+  .modal-content {
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    border-radius: 10px;
+    padding: 20px 22px 24px;
+    max-width: 920px;
+    width: 100%;
+    max-height: 95vh;
+    overflow-y: auto;
+    color: #e4e6eb;
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #2a2f3a;
+  }
+  .modal-header h3 {
+    margin: 0;
+    color: #ffa500;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .modal-close {
+    background: transparent; border: none; color: #8b92a5;
+    font-size: 22px; cursor: pointer; padding: 0 6px;
+  }
+  .modal-close:hover { color: #fff; }
+
+  .empty-state {
+    color: #6c757d;
+    font-size: 12.5px;
+    font-style: italic;
+    padding: 24px 0;
+    text-align: center;
+  }
+
+  .data-source-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .data-source-row label {
+    cursor: pointer;
+    background: #0d0f14;
+    border: 1px solid #2a2f3a;
+    border-radius: 5px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+  }
+  .data-source-row label:hover {
+    border-color: #4eb0ff;
+  }
+  .data-source-row input[type="radio"] {
+    margin: 0;
+    accent-color: #ffa500;
+  }
+  .data-source-row label.is-mystery-checked {
+    border-color: #ffa500;
+    background: rgba(255,165,0,0.08);
+  }
+  .data-source-row label.is-ff-checked {
+    border-color: #28a745;
+    background: rgba(40,167,69,0.08);
+  }
+
+  @media (max-width: 1100px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .form-grid { grid-template-columns: repeat(2, 1fr); }
+    .form-grid .col-2, .form-grid .col-4 { grid-column: span 2; }
+  }
+  @media (max-width: 700px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .form-grid .col-2, .form-grid .col-4 { grid-column: span 1; }
+    .data-source-row { grid-template-columns: 1fr; }
+    .entries-table th:nth-child(3),
+    .entries-table td:nth-child(3),
+    .entries-table th:nth-child(7),
+    .entries-table td:nth-child(7) { display: none; }
+  }
+</style>
+
+<div class="admin-wrap">
+
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+
+  <!-- Admin nav strip — switch between admin pages -->
+  <div class="admin-nav-strip">
+    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
+    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
+    <a href="{{ url_for('admin_multipliers') }}">📐 State Multipliers</a>
+    <a href="{{ url_for('admin_feedback') }}">💬 Feedback Calibration</a>
+    <a href="{{ url_for('admin_research') }}" class="active">🔬 Research</a>
+    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
+  </div>
+
+  <div class="admin-header">
+    <h1>🔬 AutoKnowMus — Research Log</h1>
+    <div class="meta">Updated: {{ now_display }}</div>
+  </div>
+
+  <!-- FLASH MESSAGES -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, msg in messages %}
+          <div class="flash-msg {{ category }}">
+            {{ msg }}
+            <button type="button" class="flash-close" onclick="this.parentElement.style.display='none'" aria-label="Dismiss">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- Helper strip -->
+  <div class="helper-strip">
+    <strong>What is this?</strong>
+    Research data — your <strong>mystery shopping observations</strong> and <strong>real deal references from friends &amp; family</strong> — used for <strong>initial formula calibration</strong>.
+    This log is <strong>separate from the live <code>deals</code> table</strong>: research entries do <strong>NOT</strong> feed the valuation engine. They're for your eyes only, to help you tune state multipliers and pricing parameters.
+    User-submitted verified deals continue to drive organic calibration over time.
+  </div>
+
+  <!-- Stats strip -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-card-label">Total Entries</div>
+      <div class="stat-card-value">{{ stats.total }}</div>
+      <div class="stat-card-sub">all time</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-label">🕵️ Mystery Shopping</div>
+      <div class="stat-card-value mystery">{{ stats.mystery_count }}</div>
+      <div class="stat-card-sub">dealer / OLX visits</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-label">👥 Friends &amp; Family</div>
+      <div class="stat-card-value ff">{{ stats.ff_count }}</div>
+      <div class="stat-card-sub">real deal references</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-label">📈 Avg Asking Markup</div>
+      <div class="stat-card-value gap">
+        {% if stats.avg_mystery_gap_pct is not none %}
+          +{{ stats.avg_mystery_gap_pct }}%
+        {% else %}—{% endif %}
+      </div>
+      <div class="stat-card-sub">
+        {% if stats.gap_sample_size %}
+          mystery shop · n={{ stats.gap_sample_size }}
+        {% else %}
+          mystery shop · need data
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD NEW ENTRY FORM -->
+  <div class="card">
+    <h2>
+      ➕ Add New Research Entry
+      <span class="sub">required fields marked with <span style="color:#ff8585;">*</span></span>
+    </h2>
+
+    <form id="research-form" method="POST" action="{{ url_for('admin_research') }}">
+
+      <!-- Source toggle (radio buttons styled as cards) -->
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label>Data source <span class="req">*</span></label>
+        <div class="data-source-row">
+          <label id="lbl-mystery">
+            <input type="radio" name="data_source" value="Mystery Shopping" required onchange="updateSourceUI()">
+            <span>🕵️ <strong>Mystery Shopping</strong> — dealer visit / OLX listing</span>
+          </label>
+          <label id="lbl-ff">
+            <input type="radio" name="data_source" value="Friends &amp; Family" onchange="updateSourceUI()">
+            <span>👥 <strong>Friends &amp; Family</strong> — real deal reference</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Car identity (REQUIRED) + Date -->
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Make <span class="req">*</span></label>
+          <select id="f-make" name="make" required onchange="updateModels()">
+            <option value="">— Select —</option>
+            {% for mk in car_data.keys()|sort %}
+              <option value="{{ mk }}">{{ mk }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Model <span class="req">*</span></label>
+          <select id="f-model" name="model" required onchange="updateVariants()">
+            <option value="">— Select Make first —</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Variant <span class="req">*</span></label>
+          <select id="f-variant" name="variant" required>
+            <option value="">— Select Model first —</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Fuel <span class="req">*</span></label>
+          <select name="fuel" required>
+            <option value="">— Select —</option>
+            <option value="Petrol">Petrol</option>
+            <option value="Diesel">Diesel</option>
+            <option value="CNG">CNG</option>
+            <option value="HEV">HEV</option>
+            <option value="PHEV">PHEV</option>
+            <option value="BEV">BEV</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Year <span class="req">*</span></label>
+          <select name="year" required>
+            <option value="">— Select —</option>
+            {% for y in range(2026, 2010, -1) %}
+              <option value="{{ y }}">{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Entry date <span class="req">*</span></label>
+          <input type="date" name="entry_date" value="{{ today_iso }}" required>
+        </div>
+
+        <div class="form-group">
+          <label>Mileage (km)</label>
+          <input type="number" name="mileage_km" min="0" max="1000000" placeholder="e.g. 45000">
+        </div>
+
+        <div class="form-group">
+          <label>Owners</label>
+          <select name="owners">
+            <option value="">—</option>
+            {% for o in owners_choices %}
+              <option value="{{ o }}">{{ o }} owner</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Condition</label>
+          <select name="condition">
+            <option value="">—</option>
+            {% for c in condition_choices %}
+              <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>State</label>
+          <select id="f-state" name="state_code" onchange="updateCities()">
+            <option value="">—</option>
+            {% for sc, cities in cities_by_state.items()|sort %}
+              <option value="{{ sc }}" {% if sc == default_state %}selected{% endif %}>{{ sc }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>City</label>
+          <select id="f-city" name="city">
+            <option value="">—</option>
+            {# Pre-populated client-side via updateCities() — server sends empty placeholder #}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Asking price</label>
+          <div class="price-wrap">
+            <span class="rupee">₹</span>
+            <input type="text" name="asking_price_inr" inputmode="numeric" placeholder="e.g. 950000">
+          </div>
+          <div class="help">As listed by dealer / seller</div>
+        </div>
+
+        <div class="form-group">
+          <label>Negotiated price</label>
+          <div class="price-wrap">
+            <span class="rupee">₹</span>
+            <input type="text" name="negotiated_price_inr" inputmode="numeric" placeholder="e.g. 870000">
+          </div>
+          <div class="help">After negotiation / final deal</div>
+        </div>
+
+        <div class="form-group col-2">
+          <label>Dealer / Seller name</label>
+          <input type="text" name="dealer_name" maxlength="200" placeholder="e.g. Spinny HSR Layout, Cars24, Mr. Suresh">
+        </div>
+
+        <div class="form-group col-2">
+          <label>Dealer / Seller phone</label>
+          <input type="tel" name="dealer_phone" maxlength="40" placeholder="e.g. +91-9876543210">
+        </div>
+
+        <div class="form-group col-4">
+          <label>Listing URL (if online)</label>
+          <input type="url" name="listing_url" maxlength="500" placeholder="https://www.olx.in/item/...">
+        </div>
+
+        <div class="form-group col-4">
+          <label>Notes</label>
+          <textarea name="notes" maxlength="2000" placeholder="Observations: condition vs claim, dealer behavior, why they negotiated, anything useful..."></textarea>
+          <div class="help">Up to 2000 characters. Use this for everything that doesn't fit a structured field above.</div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">💾 Save Research Entry</button>
+        <button type="reset" class="btn-secondary" onclick="setTimeout(updateSourceUI, 50)">Reset form</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="card">
+    <h2>📋 Past Entries
+      <span class="sub">{{ stats.total }} total · showing latest 500</span>
+    </h2>
+
+    <div class="filter-bar">
+      <span class="filter-label">Source:</span>
+      <a href="{{ url_for('admin_research') }}"
+         class="{% if not active_source %}active{% endif %}">All</a>
+      {% for s in sources %}
+        <a href="{{ url_for('admin_research', source=s) }}"
+           class="{% if active_source == s %}active{% endif %}">{{ s }}</a>
+      {% endfor %}
+
+      {% if distinct_states %}
+        <span class="filter-label" style="margin-left: 14px;">State:</span>
+        <select onchange="filterTo(this.value, 'state')">
+          <option value="">All</option>
+          {% for sc in distinct_states %}
+            <option value="{{ sc }}" {% if active_state == sc %}selected{% endif %}>{{ sc }}</option>
+          {% endfor %}
+        </select>
+      {% endif %}
+
+      {% if distinct_makes %}
+        <span class="filter-label" style="margin-left: 8px;">Make:</span>
+        <select onchange="filterTo(this.value, 'make')">
+          <option value="">All</option>
+          {% for mk in distinct_makes %}
+            <option value="{{ mk }}" {% if active_make == mk %}selected{% endif %}>{{ mk }}</option>
+          {% endfor %}
+        </select>
+      {% endif %}
+
+      {% if active_source or active_state or active_make %}
+        <a href="{{ url_for('admin_research') }}"
+           class="btn-secondary"
+           style="margin-left: 14px;">Clear filters</a>
+      {% endif %}
+    </div>
+
+    {% if rows %}
+    <div style="overflow-x: auto;">
+      <table class="entries-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Source</th>
+            <th>Car</th>
+            <th>Owner / Cond.</th>
+            <th>Location</th>
+            <th class="num">Asking</th>
+            <th class="num">Negotiated</th>
+            <th class="num">Gap %</th>
+            <th>Dealer</th>
+            <th>Notes</th>
+            <th class="actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          {% set src_class = 'mystery' if r.data_source == 'Mystery Shopping' else 'ff' %}
+          <tr>
+            <td>{{ r.entry_date_display }}</td>
+            <td>
+              <span class="source-pill {{ src_class }}">
+                {% if r.data_source == 'Mystery Shopping' %}🕵️{% else %}👥{% endif %}
+              </span>
+            </td>
+            <td class="car-cell">
+              <strong>{{ r.year }} {{ r.make }} {{ r.model }}</strong>
+              <span class="car-meta">{{ r.variant }} · {{ r.fuel }}{% if r.mileage_km %} · {{ '{:,}'.format(r.mileage_km) }} km{% endif %}</span>
+            </td>
+            <td>
+              {% if r.owners %}{{ r.owners }} owner{% else %}—{% endif %}
+              {% if r.condition %}<br><span style="color:#8b92a5; font-size:11px;">{{ r.condition }}</span>{% endif %}
+            </td>
+            <td>
+              {% if r.city or r.state_code %}
+                {{ r.city or '—' }}{% if r.state_code %}, {{ r.state_code }}{% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td class="num">
+              {% if r.asking_price_inr %}₹ {{ '{:,}'.format(r.asking_price_inr) }}{% else %}—{% endif %}
+            </td>
+            <td class="num">
+              {% if r.negotiated_price_inr %}₹ {{ '{:,}'.format(r.negotiated_price_inr) }}{% else %}—{% endif %}
+            </td>
+            <td class="num">
+              {% if r.gap_pct is not none %}
+                {% set gap_val = r.gap_pct|float %}
+                <span class="{% if gap_val > 0 %}gap-pos{% else %}gap-zero{% endif %}">
+                  {% if gap_val > 0 %}+{% endif %}{{ '%.1f'|format(gap_val) }}%
+                </span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if r.dealer_name %}
+                <strong style="font-size:11.5px;">{{ r.dealer_name }}</strong>
+                {% if r.dealer_phone %}<br><span style="color:#8b92a5; font-size:10.5px;">{{ r.dealer_phone }}</span>{% endif %}
+              {% else %}—{% endif %}
+              {% if r.listing_url %}
+                <br><a href="{{ r.listing_url }}" target="_blank" rel="noopener" style="font-size:10.5px; color:#4eb0ff;">↗ listing</a>
+              {% endif %}
+            </td>
+            <td class="notes-cell">
+              {% if r.notes %}
+                <span class="truncated" title="{{ r.notes }}">{{ r.notes }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="actions">
+              <button type="button" class="btn-mini" onclick='openEditModal({{ r|tojson }})'>Edit</button>
+              <form method="POST" action="{{ url_for('admin_research_delete', entry_id=r.id) }}" style="display:inline;"
+                    onsubmit="return confirm('Delete this research entry permanently? Cannot be undone.');">
+                <button type="submit" class="btn-mini danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <div class="empty-state">
+        No research entries yet. Add your first one using the form above —
+        could be a mystery shop observation or a deal price shared by a friend.
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- EDIT MODAL — populated client-side from row JSON -->
+<div class="modal-backdrop" id="edit-modal" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>✏️ Edit Research Entry</h3>
+      <button type="button" class="modal-close" onclick="closeEditModal()">×</button>
+    </div>
+    <form id="edit-form" method="POST">
+      {# action set client-side via JS, includes entry_id #}
+      <div class="form-grid">
+        <div class="form-group col-2">
+          <label>Data source <span class="req">*</span></label>
+          <select name="data_source" id="e-data_source" required>
+            {% for s in sources %}
+              <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group col-2">
+          <label>Entry date <span class="req">*</span></label>
+          <input type="date" name="entry_date" id="e-entry_date" required>
+        </div>
+
+        <div class="form-group">
+          <label>Make <span class="req">*</span></label>
+          <select name="make" id="e-make" required onchange="updateEditModels()"></select>
+        </div>
+        <div class="form-group">
+          <label>Model <span class="req">*</span></label>
+          <select name="model" id="e-model" required onchange="updateEditVariants()"></select>
+        </div>
+        <div class="form-group">
+          <label>Variant <span class="req">*</span></label>
+          <select name="variant" id="e-variant" required></select>
+        </div>
+        <div class="form-group">
+          <label>Fuel <span class="req">*</span></label>
+          <select name="fuel" id="e-fuel" required>
+            <option value="Petrol">Petrol</option>
+            <option value="Diesel">Diesel</option>
+            <option value="CNG">CNG</option>
+            <option value="HEV">HEV</option>
+            <option value="PHEV">PHEV</option>
+            <option value="BEV">BEV</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Year <span class="req">*</span></label>
+          <select name="year" id="e-year" required>
+            {% for y in range(2026, 2010, -1) %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Mileage (km)</label>
+          <input type="number" name="mileage_km" id="e-mileage_km" min="0" max="1000000">
+        </div>
+        <div class="form-group">
+          <label>Owners</label>
+          <select name="owners" id="e-owners">
+            <option value="">—</option>
+            {% for o in owners_choices %}<option value="{{ o }}">{{ o }} owner</option>{% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Condition</label>
+          <select name="condition" id="e-condition">
+            <option value="">—</option>
+            {% for c in condition_choices %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>State</label>
+          <select name="state_code" id="e-state_code">
+            <option value="">—</option>
+            {% for sc in cities_by_state.keys()|sort %}<option value="{{ sc }}">{{ sc }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>City</label>
+          <input type="text" name="city" id="e-city" maxlength="100">
+        </div>
+        <div class="form-group">
+          <label>Asking price</label>
+          <div class="price-wrap">
+            <span class="rupee">₹</span>
+            <input type="text" name="asking_price_inr" id="e-asking_price_inr" inputmode="numeric">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Negotiated price</label>
+          <div class="price-wrap">
+            <span class="rupee">₹</span>
+            <input type="text" name="negotiated_price_inr" id="e-negotiated_price_inr" inputmode="numeric">
+          </div>
+        </div>
+        <div class="form-group col-3">
+          <label>Dealer / Seller name</label>
+          <input type="text" name="dealer_name" id="e-dealer_name" maxlength="200">
+        </div>
+        <div class="form-group col-2">
+          <label>Dealer / Seller phone</label>
+          <input type="tel" name="dealer_phone" id="e-dealer_phone" maxlength="40">
+        </div>
+        <div class="form-group col-2">
+          <label>Listing URL</label>
+          <input type="url" name="listing_url" id="e-listing_url" maxlength="500">
+        </div>
+
+        <div class="form-group col-4">
+          <label>Notes</label>
+          <textarea name="notes" id="e-notes" maxlength="2000"></textarea>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">💾 Save Changes</button>
+        <button type="button" class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // ────────────────────────────────────────────────────────────
+  // CAR_DATA + INDIAN_CITIES_BY_STATE for cascading dropdowns
+  // ────────────────────────────────────────────────────────────
+  const CAR_DATA = {{ car_data|tojson }};
+  const CITIES_BY_STATE = {{ cities_by_state|tojson }};
+  const DEFAULT_CITY = {{ default_city|tojson }};
+
+  // ────────────────────────────────────────────────────────────
+  // ADD FORM cascading dropdowns
+  // ────────────────────────────────────────────────────────────
+  function updateModels() {
+    const make = document.getElementById('f-make').value;
+    const modelSel = document.getElementById('f-model');
+    modelSel.innerHTML = '<option value="">— Select —</option>';
+    if (make && CAR_DATA[make]) {
+      Object.keys(CAR_DATA[make]).sort().forEach(function(m) {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m;
+        modelSel.appendChild(opt);
+      });
+    }
+    updateVariants();
+  }
+
+  function updateVariants() {
+    const make = document.getElementById('f-make').value;
+    const model = document.getElementById('f-model').value;
+    const varSel = document.getElementById('f-variant');
+    varSel.innerHTML = '<option value="">— Select —</option>';
+    if (make && model && CAR_DATA[make] && CAR_DATA[make][model]) {
+      const variants = CAR_DATA[make][model].variants || [];
+      variants.slice().sort().forEach(function(v) {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        varSel.appendChild(opt);
+      });
+    }
+  }
+
+  function updateCities() {
+    const sc = document.getElementById('f-state').value;
+    const citySel = document.getElementById('f-city');
+    citySel.innerHTML = '<option value="">—</option>';
+    const cities = CITIES_BY_STATE[sc] || [];
+    cities.slice().sort().forEach(function(c) {
+      const opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      if (c === DEFAULT_CITY && sc === 'KA') opt.selected = true;
+      citySel.appendChild(opt);
+    });
+  }
+  // Initialize cities on page load (default state may be pre-selected)
+  document.addEventListener('DOMContentLoaded', updateCities);
+
+  // ────────────────────────────────────────────────────────────
+  // Source-toggle visual highlight
+  // ────────────────────────────────────────────────────────────
+  function updateSourceUI() {
+    const lblM = document.getElementById('lbl-mystery');
+    const lblF = document.getElementById('lbl-ff');
+    lblM.classList.remove('is-mystery-checked');
+    lblF.classList.remove('is-ff-checked');
+    const checked = document.querySelector('input[name="data_source"]:checked');
+    if (!checked) return;
+    if (checked.value === 'Mystery Shopping') {
+      lblM.classList.add('is-mystery-checked');
+    } else {
+      lblF.classList.add('is-ff-checked');
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // Filter dropdowns (state / make) — navigate with current filter preserved
+  // ────────────────────────────────────────────────────────────
+  function filterTo(value, key) {
+    const url = new URL(window.location.href);
+    if (value) {
+      url.searchParams.set(key, value);
+    } else {
+      url.searchParams.delete(key);
+    }
+    window.location.href = url.toString();
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // EDIT MODAL — open / close / populate
+  // ────────────────────────────────────────────────────────────
+  function openEditModal(row) {
+    const modal = document.getElementById('edit-modal');
+    const form = document.getElementById('edit-form');
+    form.action = '/admin/research/' + row.id + '/edit';
+
+    // Set car identity (with cascading)
+    document.getElementById('e-make').innerHTML = '';
+    Object.keys(CAR_DATA).sort().forEach(function(mk) {
+      const o = document.createElement('option');
+      o.value = mk; o.textContent = mk;
+      document.getElementById('e-make').appendChild(o);
+    });
+    document.getElementById('e-make').value = row.make || '';
+    updateEditModels();
+    document.getElementById('e-model').value = row.model || '';
+    updateEditVariants();
+    document.getElementById('e-variant').value = row.variant || '';
+
+    // Simple fields
+    document.getElementById('e-data_source').value = row.data_source || '';
+    document.getElementById('e-entry_date').value = row.entry_date || '';
+    document.getElementById('e-fuel').value = row.fuel || '';
+    document.getElementById('e-year').value = row.year || '';
+    document.getElementById('e-mileage_km').value = row.mileage_km || '';
+    document.getElementById('e-owners').value = row.owners || '';
+    document.getElementById('e-condition').value = row.condition || '';
+    document.getElementById('e-state_code').value = row.state_code || '';
+    document.getElementById('e-city').value = row.city || '';
+    document.getElementById('e-asking_price_inr').value = row.asking_price_inr || '';
+    document.getElementById('e-negotiated_price_inr').value = row.negotiated_price_inr || '';
+    document.getElementById('e-dealer_name').value = row.dealer_name || '';
+    document.getElementById('e-dealer_phone').value = row.dealer_phone || '';
+    document.getElementById('e-listing_url').value = row.listing_url || '';
+    document.getElementById('e-notes').value = row.notes || '';
+
+    modal.classList.add('is-open');
+  }
+
+  function closeEditModal() {
+    document.getElementById('edit-modal').classList.remove('is-open');
+  }
+
+  function updateEditModels() {
+    const make = document.getElementById('e-make').value;
+    const sel = document.getElementById('e-model');
+    sel.innerHTML = '';
+    if (make && CAR_DATA[make]) {
+      Object.keys(CAR_DATA[make]).sort().forEach(function(m) {
+        const o = document.createElement('option');
+        o.value = m; o.textContent = m;
+        sel.appendChild(o);
+      });
+    }
+    updateEditVariants();
+  }
+
+  function updateEditVariants() {
+    const make = document.getElementById('e-make').value;
+    const model = document.getElementById('e-model').value;
+    const sel = document.getElementById('e-variant');
+    sel.innerHTML = '';
+    if (make && model && CAR_DATA[make] && CAR_DATA[make][model]) {
+      (CAR_DATA[make][model].variants || []).slice().sort().forEach(function(v) {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        sel.appendChild(o);
+      });
+    }
+  }
+</script>
+
+{% endblock %}
