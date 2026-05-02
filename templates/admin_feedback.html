@@ -29,18 +29,50 @@
   .admin-meta { color: #6c757d; font-size: 0.78rem; }
   .admin-meta strong { color: #adb5bd; }
 
-  .admin-tabs {
-    display: flex; gap: 4px; margin-bottom: 14px;
-    border-bottom: 1px solid #2a2d34;
+  /* === Back button — matches admin_data_health.html / admin_user_activity.html === */
+  .btn-back {
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 14px;
   }
-  .admin-tab {
-    color: #adb5bd; text-decoration: none;
-    padding: 8px 14px; font-size: 0.86rem; font-weight: 600;
-    border-bottom: 2px solid transparent;
-    transition: color 0.15s, border-color 0.15s;
+  .btn-back:hover { background: #5a6168; }
+
+  /* === Admin nav strip — switch between admin pages.
+         Same style as admin_data_health.html / admin_user_activity.html. === */
+  .admin-nav-strip {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
   }
-  .admin-tab:hover { color: #4eb0ff; }
-  .admin-tab.active { color: #4eb0ff; border-bottom-color: #4eb0ff; }
+  .admin-nav-strip a {
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    color: #8b92a5;
+    background: #1a1d24;
+    border: 1px solid #2a2f3a;
+    transition: all 0.15s;
+  }
+  .admin-nav-strip a:hover {
+    color: #e4e6eb;
+    border-color: #3a3f4a;
+  }
+  .admin-nav-strip a.active {
+    color: #ffa500;
+    border-color: rgba(255,165,0,0.4);
+    background: rgba(255,165,0,0.08);
+  }
 
   .flash-success-admin {
     background: #28a745; color: #fff; border-radius: 8px;
@@ -262,6 +294,17 @@
 
 <div class="admin-wrap">
 
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+
+  <!-- Admin nav strip — switch between admin pages -->
+  <div class="admin-nav-strip">
+    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
+    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
+    <a href="{{ url_for('admin_multipliers') }}">📐 State Multipliers</a>
+    <a href="{{ url_for('admin_feedback') }}" class="active">💬 Feedback Calibration</a>
+    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
+  </div>
+
   <div class="admin-header">
     <h2 class="admin-title">
       💬 Feedback Calibration <span class="badge-admin">Admin</span>
@@ -269,11 +312,6 @@
     <div class="admin-meta">
       Generated <strong>{{ now_display }}</strong>
     </div>
-  </div>
-
-  <div class="admin-tabs">
-    <a href="{{ url_for('admin_multipliers') }}" class="admin-tab">📐 State Multipliers</a>
-    <a href="{{ url_for('admin_feedback') }}"    class="admin-tab active">💬 Feedback Calibration</a>
   </div>
 
   {% with flash_success = get_flashed_messages(category_filter=['success']) %}
