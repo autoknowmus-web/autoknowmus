@@ -5458,11 +5458,18 @@ def _compute_calibration_suggestions(rows):
                     user_state=sc,
                     user_city=r.get('city'),
                 )
-                if not result or not result.get('estimated_price'):
+                # v3.5.1-r5.2 BUGFIX: _route_valuation() returns the price under
+                # the key 'estimated' (NOT 'estimated_price' — that's the key
+                # used internally by the engine's own intermediate dict, before
+                # _route_valuation rewraps it). Using the wrong key made every
+                # entry silently fail this guard, dropping the suggestion to
+                # zero contributing entries and showing "No suggestions yet"
+                # even with 3+ valid included entries.
+                if not result or not result.get('estimated'):
                     skipped_count += 1
                     continue
 
-                eng_pred = float(result['estimated_price'])
+                eng_pred = float(result['estimated'])
                 if eng_pred <= 0:
                     skipped_count += 1
                     continue
