@@ -465,6 +465,12 @@ def fetch_deals_by_geo(make, model, variant, fuel, year, user_state, user_city,
     Variant-preference: if >=3 variant-specific verified deals exist for the
     car, those are preferred. Otherwise model-level deals are used.
     All queries exclude is_test_data=true.
+
+    v3.5.1: Geographic matching uses user_state + user_city (transaction location)
+    per locked rule #7 — registration (rto_code) and transaction location are
+    independent. Falls back to rto_code prefix / legacy city column if the
+    new columns are NULL (handles old rows from before Migration 4 backfill,
+    just in case).
     """
     out = {
         'city_count': 0,
@@ -481,9 +487,12 @@ def fetch_deals_by_geo(make, model, variant, fuel, year, user_state, user_city,
         year_high = int(year) + window_years
         cutoff = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
 
+        # v3.5.1: Select user_state and user_city alongside rto_code/city for fallback
+        select_cols = 'sale_price, rto_code, city, user_state, user_city'
+
         # First try variant-specific
         r_var = (supabase.table('deals')
-                 .select('sale_price, rto_code, city')
+                 .select(select_cols)
                  .eq('make', make)
                  .eq('model', model)
                  .eq('variant', variant)
@@ -501,7 +510,7 @@ def fetch_deals_by_geo(make, model, variant, fuel, year, user_state, user_city,
         else:
             # Fall back to model-level
             r_model = (supabase.table('deals')
-                       .select('sale_price, rto_code, city')
+                       .select(select_cols)
                        .eq('make', make)
                        .eq('model', model)
                        .eq('fuel', fuel)
@@ -528,9 +537,16 @@ def fetch_deals_by_geo(make, model, variant, fuel, year, user_state, user_city,
         except (ValueError, TypeError):
             continue
 
-        rto = (row.get('rto_code') or '').upper()
-        deal_state = rto[:2] if len(rto) >= 2 else ''
-        deal_city = (row.get('city') or '').strip().lower()
+        # v3.5.1: Prefer user_state/user_city (transaction location).
+        # Fall back to rto_code prefix and legacy city column if NULL.
+        deal_state = (row.get('user_state') or '').upper()
+        if not deal_state:
+            rto = (row.get('rto_code') or '').upper()
+            deal_state = rto[:2] if len(rto) >= 2 else ''
+
+        deal_city = (row.get('user_city') or '').strip().lower()
+        if not deal_city:
+            deal_city = (row.get('city') or '').strip().lower()
 
         out['national_prices'].append(price_int)
         if user_state_upper and deal_state == user_state_upper:
@@ -3426,8 +3442,19 @@ def submit_deal():
 
     rto_code_combined = form_data['reg_state'] + form_data['reg_district']
 
-    # v3.5: City — default to DEFAULT_CITY if not provided. Normalize against state.
-    deal_city = normalize_city(form_data['city'], form_data['reg_state'])
+    # v3.5.1: Independent transaction location (per locked rule #7).
+    # user_state + user_city tell us WHERE the transaction happened — a KA-
+    # registered car can be sold in MH if the new buyer is in MH. The deals
+    # table records both: rto_code (registration) AND user_state/user_city
+    # (transaction location).
+    user_state_norm = normalize_state_code(form_data['user_state'])
+    user_city_norm  = normalize_city(form_data['user_city'], user_state_norm)
+    form_data['user_state'] = user_state_norm
+    form_data['user_city']  = user_city_norm
+
+    # Legacy 'city' column on deals — keep populated for backwards compat
+    # (older code paths may still query it). It always equals user_city now.
+    deal_city = user_city_norm
     form_data['city'] = deal_city
 
     try:
@@ -3483,8 +3510,11 @@ def submit_deal():
         'has_proof':         form_data['has_proof'],
         'verified':          verified_flag,
         'is_test_data':      is_admin,
-        # v3.5
+        # v3.5: legacy city column (kept populated for backwards compat)
         'city':              deal_city,
+        # v3.5.1: independent transaction location (per locked rule #7)
+        'user_state':        user_state_norm,
+        'user_city':         user_city_norm,
     }
 
     try:
