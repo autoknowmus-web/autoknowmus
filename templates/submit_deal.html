@@ -268,18 +268,23 @@
       <!-- ============ CAR DETAILS ============ -->
       <div class="section-label">Car Details</div>
 
-      {# v3.5: Location is now CITY only — the State for this transaction is
-         derived from the Registration Number (reg_state) below.
-         City auto-repopulates when reg_state changes. #}
+      {# v3.5.1: Transaction location — STATE + CITY dropdowns, INDEPENDENT of
+         reg_state. Per locked rule #7: a KA-registered car can be sold in MH
+         if the new buyer is in MH. So this row tells us where the transaction
+         happened, while the registration block below tells us where the car
+         is registered. Defaults to KA / Bangalore. #}
       <div class="row g-3 location-row">
-        <div class="col-12">
-          <label class="form-label">City <span style="color:#ff6b6b;">*</span></label>
-          <select class="form-select" name="city" id="city" required>
-            {# Options injected by JS based on selected reg_state. #}
+        <div class="col-md-6">
+          <label class="form-label">Transaction State <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="user_state" id="user_state" required>
+            {# Options injected by JS in alphabetical order by full state name. #}
           </select>
-          <small style="color:#6c757d; font-size:0.78rem;">
-            City is auto-set from the registration state. Change it if the transaction happened elsewhere.
-          </small>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Transaction City <span style="color:#ff6b6b;">*</span></label>
+          <select class="form-select" name="user_city" id="user_city" required>
+            {# Options injected by JS based on selected state. "Other" pinned last. #}
+          </select>
         </div>
       </div>
 
@@ -499,18 +504,83 @@
   const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
 
   /* ============================================================
-     v3.5: City dropdown linked to reg_state.
-     When reg_state changes, repopulate city options.
+     v3.5.1: Transaction State + City dropdowns — INDEPENDENT of reg_state.
+     Per locked rule #7: registration ≠ transaction location. A KA-registered
+     car can be sold in MH if the new buyer is in MH. The reg_state field
+     below has no effect on these dropdowns.
+     Same pattern as seller.html / buyer.html for consistency.
      ============================================================ */
+  const RTO_STATES = {{ rto_states | tojson }};
   const CITIES_BY_STATE = {{ cities_by_state_json | safe }};
-  const DEFAULT_CITY    = {{ default_city | tojson }};
-  const PREFILL_CITY    = {{ (form.city or default_city) | tojson }};
+  const DEFAULT_STATE   = {{ default_state | tojson }};
+  const DEFAULT_CITY    = {{ default_city  | tojson }};
 
-  const cityEl     = document.getElementById('city');
-  const regStateEl = document.getElementById('reg_state');
+  // 36-entry state name map (matches seller/buyer templates).
+  const STATE_NAMES = {
+    'AN': 'Andaman & Nicobar Islands',
+    'AP': 'Andhra Pradesh',
+    'AR': 'Arunachal Pradesh',
+    'AS': 'Assam',
+    'BR': 'Bihar',
+    'CG': 'Chhattisgarh',
+    'CH': 'Chandigarh',
+    'DD': 'Daman & Diu',
+    'DL': 'Delhi',
+    'DN': 'Dadra & Nagar Haveli',
+    'GA': 'Goa',
+    'GJ': 'Gujarat',
+    'HP': 'Himachal Pradesh',
+    'HR': 'Haryana',
+    'JH': 'Jharkhand',
+    'JK': 'Jammu & Kashmir',
+    'KA': 'Karnataka',
+    'KL': 'Kerala',
+    'LA': 'Ladakh',
+    'LD': 'Lakshadweep',
+    'MH': 'Maharashtra',
+    'ML': 'Meghalaya',
+    'MN': 'Manipur',
+    'MP': 'Madhya Pradesh',
+    'MZ': 'Mizoram',
+    'NL': 'Nagaland',
+    'OD': 'Odisha',
+    'PB': 'Punjab',
+    'PY': 'Puducherry',
+    'RJ': 'Rajasthan',
+    'SK': 'Sikkim',
+    'TN': 'Tamil Nadu',
+    'TR': 'Tripura',
+    'TS': 'Telangana',
+    'UK': 'Uttarakhand',
+    'UP': 'Uttar Pradesh',
+    'WB': 'West Bengal'
+  };
+
+  const userStateEl = document.getElementById('user_state');
+  const userCityEl  = document.getElementById('user_city');
+
+  // Prefill: prefer form values (form.user_state / form.user_city), then defaults.
+  // The submit_deal route already injects user_state defaulting to DEFAULT_STATE_CODE.
+  const PREFILL_USER_STATE = {{ (form.user_state or default_state) | tojson }};
+  const PREFILL_USER_CITY  = {{ (form.user_city  or default_city)  | tojson }};
+
+  function buildStateOptions() {
+    // Sort alphabetically by full name (per UI rule).
+    const sortedCodes = RTO_STATES.slice().sort(function(a, b) {
+      return (STATE_NAMES[a] || a).localeCompare(STATE_NAMES[b] || b);
+    });
+    userStateEl.innerHTML = '';
+    sortedCodes.forEach(function(code) {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = STATE_NAMES[code] || code;
+      if (code === PREFILL_USER_STATE) opt.selected = true;
+      userStateEl.appendChild(opt);
+    });
+  }
 
   function buildCityOptions(stateCode, preselectCity) {
-    cityEl.innerHTML = '';
+    userCityEl.innerHTML = '';
     const cities = CITIES_BY_STATE[stateCode] || ['Other'];
     // Apply locked rule: alphabetical, with "Other" pinned last.
     const others = cities.filter(function(c) { return c !== 'Other'; }).sort();
@@ -520,18 +590,18 @@
       opt.value = c;
       opt.textContent = c;
       if (preselectCity && c === preselectCity) opt.selected = true;
-      cityEl.appendChild(opt);
+      userCityEl.appendChild(opt);
     });
   }
 
-  // When reg_state changes, rebuild city dropdown defaulting to first city of new state
-  regStateEl.addEventListener('change', function() {
+  // When state changes, rebuild city dropdown defaulting to first city of new state.
+  userStateEl.addEventListener('change', function() {
     buildCityOptions(this.value, null);
   });
 
-  // Initial build: use reg_state if pre-selected, else fall back to KA
-  const initialState = regStateEl.value || 'KA';
-  buildCityOptions(initialState, PREFILL_CITY);
+  // Initial build
+  buildStateOptions();
+  buildCityOptions(userStateEl.value || DEFAULT_STATE, PREFILL_USER_CITY);
 
   /* ============================================================
      Make → Fuel → Model → Variant cascade (unchanged from v3.4)
