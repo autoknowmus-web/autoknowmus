@@ -160,6 +160,225 @@
     visibility: visible; opacity: 1;
   }
 
+  /* ============================================================
+     v3.5: FEEDBACK MODULE (seller dashboard only)
+     Three-button reaction (helpful / close / wayoff) + detail panel.
+     Logged-in users: live, click-through to /api/feedback.
+     Guests: greyed out with "Sign up to leave feedback" upsell.
+     ============================================================ */
+  .feedback-module {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 14px;
+    position: relative;
+  }
+  .feedback-module .fb-title {
+    color: #adb5bd;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .feedback-module .fb-title .fb-sub {
+    color: #6c757d;
+    font-weight: 400;
+    font-size: 0.74rem;
+  }
+  .feedback-module .fb-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .feedback-module .fb-btn {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 8px;
+    padding: 9px 6px;
+    cursor: pointer;
+    text-align: center;
+    color: #e6e6e6;
+    font-size: 0.78rem;
+    font-weight: 600;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .feedback-module .fb-btn:hover {
+    border-color: #28a745;
+    background: rgba(40,167,69,0.08);
+    transform: translateY(-1px);
+  }
+  .feedback-module .fb-btn .fb-emoji { font-size: 1.4rem; line-height: 1; }
+  .feedback-module .fb-btn .fb-label { font-size: 0.72rem; color: #adb5bd; }
+  .feedback-module .fb-btn[data-reaction="close"]:hover {
+    border-color: #ffa500; background: rgba(255,165,0,0.08);
+  }
+  .feedback-module .fb-btn[data-reaction="wayoff"]:hover {
+    border-color: #ff6b6b; background: rgba(255,107,107,0.08);
+  }
+  .feedback-module .fb-btn:disabled,
+  .feedback-module .fb-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .feedback-module .fb-thanks {
+    display: none;
+    color: #5bd47b;
+    text-align: center;
+    padding: 14px 0 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .feedback-module .fb-thanks .fb-thanks-sub {
+    color: #adb5bd;
+    font-weight: 400;
+    font-size: 0.74rem;
+    margin-top: 3px;
+    display: block;
+  }
+  .feedback-module.is-thanked .fb-row,
+  .feedback-module.is-thanked .fb-detail-panel { display: none; }
+  .feedback-module.is-thanked .fb-thanks { display: block; }
+
+  /* Detail panel (price + source) — appears for close/wayoff */
+  .feedback-module .fb-detail-panel {
+    display: none;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #2a2d34;
+  }
+  .feedback-module.is-detail-open .fb-detail-panel { display: block; }
+  .feedback-module .fb-detail-headline {
+    font-size: 0.82rem;
+    color: #fff;
+    font-weight: 600;
+    margin-bottom: 7px;
+    text-align: center;
+  }
+  .feedback-module .fb-detail-headline .fb-detail-icon { margin-right: 4px; }
+  .feedback-module .fb-detail-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+  }
+  .feedback-module .fb-detail-row label {
+    color: #adb5bd;
+    font-size: 0.74rem;
+    flex-shrink: 0;
+    min-width: 80px;
+  }
+  .feedback-module .fb-detail-row input[type="text"],
+  .feedback-module .fb-detail-row select {
+    flex: 1;
+    min-width: 130px;
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 0.82rem;
+  }
+  .feedback-module .fb-detail-row input[type="text"]:focus,
+  .feedback-module .fb-detail-row select:focus {
+    outline: none;
+    border-color: #28a745;
+  }
+  .feedback-module .fb-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 6px;
+  }
+  .feedback-module .fb-cancel {
+    background: transparent;
+    border: 1px solid #2a2d34;
+    color: #adb5bd;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .feedback-module .fb-submit {
+    background: #28a745;
+    border: none;
+    color: #fff;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .feedback-module .fb-submit:hover { background: #2bb84d; }
+  .feedback-module .fb-error {
+    color: #ff8585;
+    font-size: 0.74rem;
+    margin-top: 5px;
+    text-align: center;
+    display: none;
+  }
+  .feedback-module .fb-error.show { display: block; }
+
+  /* Guest greyed-out overlay — entire module dimmed + click intercepted */
+  .feedback-module.is-guest .fb-row { pointer-events: none; opacity: 0.55; }
+  .feedback-module.is-guest .fb-btn { cursor: not-allowed; }
+  .feedback-module .fb-guest-cta {
+    display: none;
+    text-align: center;
+    margin-top: 9px;
+    padding-top: 9px;
+    border-top: 1px solid #2a2d34;
+    font-size: 0.78rem;
+    color: #adb5bd;
+  }
+  .feedback-module .fb-guest-cta a {
+    color: #28a745;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .feedback-module .fb-guest-cta a:hover { text-decoration: underline; }
+  .feedback-module.is-guest .fb-guest-cta { display: block; }
+
+  /* ============================================================
+     v3.5: GEO-AWARE CONFIDENCE TOOLTIP STYLES
+     Replaces the static "Backed by 20+ verified deals" rows with
+     a tier pill + dynamic message + action prompt.
+     ============================================================ */
+  .conf-tier-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 8px;
+  }
+  .conf-tier-pill.tier-city     { background: rgba(40,167,69,0.18);   color: #5bd47b; border: 1px solid rgba(40,167,69,0.5); }
+  .conf-tier-pill.tier-state    { background: rgba(78,176,255,0.18);  color: #8ec5ff; border: 1px solid rgba(78,176,255,0.5); }
+  .conf-tier-pill.tier-national { background: rgba(255,165,0,0.18);   color: #ffc870; border: 1px solid rgba(255,165,0,0.5); }
+  .conf-tier-pill.tier-formula  { background: rgba(108,117,125,0.18); color: #adb5bd; border: 1px solid rgba(108,117,125,0.5); }
+  .conf-geo-headline {
+    color: #e6e6e6;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin-bottom: 7px;
+  }
+  .conf-geo-action {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    font-style: italic;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 6px;
+  }
+
   .slider-section { border-top: 1px solid #2a2d34; padding-top: 12px; }
   .slider-labels { display: flex; justify-content: space-between; color: #b0b0b0; font-size: 0.76rem; margin-bottom: 4px; }
   .slider-labels .left  { color: #ffa500; font-weight: 600; }
@@ -534,26 +753,6 @@
     margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
   }
 
-  .conf-tip-row {
-    display: grid;
-    grid-template-columns: 62px 1fr;
-    gap: 8px;
-    padding: 4px 2px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    align-items: start;
-    font-size: 0.72rem;
-    line-height: 1.4;
-  }
-  .conf-tip-row:last-child { border-bottom: none; }
-  .conf-tip-row .tip-bracket { font-weight: 700; color: #b0b0b0; font-variant-numeric: tabular-nums; }
-  .conf-tip-row.active { background: rgba(78,176,255,0.12); border-radius: 4px; border-bottom-color: transparent; margin: 0 -2px; padding: 4px; }
-  .conf-tip-row.active .tip-bracket { color: #4eb0ff; }
-  .conf-tip-row .tip-benefit { display: block; color: #adb5bd; font-size: 0.66rem; margin-top: 1px; font-style: italic; }
-  .conf-tip-header {
-    display: block; color: #4eb0ff; font-weight: 700; font-size: 0.76rem;
-    margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
-  }
-
   .demand-tip-row {
     display: grid;
     grid-template-columns: 78px 1fr;
@@ -898,7 +1097,6 @@
   .verdict-title .brand-name {
     display: inline-flex;
     align-items: baseline;
-    /* explicitly NO gap — the three colored spans must read as one word */
   }
   .verdict-title .brand-auto { color: #ffffff; }
   .verdict-title .brand-know { color: #5bd47b; }
@@ -973,11 +1171,14 @@
 
   <!-- HEADER -->
   <div class="dash-header">
+    {# v3.5: Back link now includes user_state and user_city so seller form
+       prefills the geo dropdowns the user picked. #}
     <a href="{{ url_for('seller',
                         make=back_prefill.make, fuel=back_prefill.fuel,
                         model=back_prefill.model, variant=back_prefill.variant,
                         year=back_prefill.year, owner=back_prefill.owner,
-                        mileage=back_prefill.mileage, condition=back_prefill.condition) }}"
+                        mileage=back_prefill.mileage, condition=back_prefill.condition,
+                        user_state=back_prefill.user_state, user_city=back_prefill.user_city) }}"
        class="btn-back">← Back</a>
     <div class="car-summary">
       <div class="car-name">{{ val.year }} {{ val.make }} {{ val.model }} {{ val.variant }}</div>
@@ -986,13 +1187,17 @@
         <span class="lbl">Mileage:</span> {{ val.mileage | inr }} km ·
         <span class="lbl">Condition:</span> {{ val.condition }} ·
         <span class="lbl">Owner:</span> {{ val.owner }}
+        {% if user_city %} · <span class="lbl">Location:</span> {{ user_city }}, {{ user_state }}{% endif %}
       </div>
     </div>
   </div>
 
   {# v3.1: New car anchor strip — public arithmetic, shown on both engine paths.
      v3.3: Replaced "When new" label with "Ex-showroom (Bangalore)"; added
-     greyed sub-text clarifying this is the latest price for the new version. #}
+     greyed sub-text clarifying this is the latest price for the new version.
+     Note: Ex-showroom prices remain pegged to Bangalore — that's the
+     reference baseline for the price data source. State-level adjustments
+     are applied AT VALUATION TIME via state_multiplier. #}
   {% if anchor_data %}
     <div class="anchor-strip">
       <div class="anchor-row">
@@ -1050,6 +1255,75 @@
             {{ phase_data.display.badge }}
           </span>
           <span class="phase-tooltip">{{ phase_data.display.tooltip }}</span>
+        </div>
+      </div>
+
+      {# v3.5: FEEDBACK MODULE — right under the price hero.
+         Logged-in users: live, posts to /api/feedback, awards credits.
+         Guests: greyed-out with signup CTA.
+         Per locked design: 50 credits for "helpful", 200 for "close"/"wayoff" (with price + source). #}
+      <div class="feedback-module {% if not user %}is-guest{% endif %}" id="fb-module"
+           data-valuation-id="{{ val.id if val.id != 'guest' else '' }}"
+           data-is-guest="{{ '1' if not user else '0' }}">
+        <div class="fb-title">
+          Was this estimate helpful?
+          <span class="fb-sub">— takes 5 seconds, earn credits</span>
+        </div>
+
+        <div class="fb-row">
+          <button type="button" class="fb-btn" data-reaction="helpful">
+            <span class="fb-emoji">👍</span>
+            <span>Helpful</span>
+            <span class="fb-label">+50 credits</span>
+          </button>
+          <button type="button" class="fb-btn" data-reaction="close">
+            <span class="fb-emoji">🤔</span>
+            <span>Close, but…</span>
+            <span class="fb-label">+200 credits</span>
+          </button>
+          <button type="button" class="fb-btn" data-reaction="wayoff">
+            <span class="fb-emoji">👎</span>
+            <span>Way off</span>
+            <span class="fb-label">+200 credits</span>
+          </button>
+        </div>
+
+        {# Detail panel — shown only when "close" or "wayoff" is clicked #}
+        <div class="fb-detail-panel">
+          <div class="fb-detail-headline">
+            <span class="fb-detail-icon" id="fb-detail-icon">🤔</span>
+            <span id="fb-detail-text">Help us calibrate — what's the actual price?</span>
+          </div>
+          <div class="fb-detail-row">
+            <label for="fb-actual-price">Actual price</label>
+            <input type="text" id="fb-actual-price" placeholder="e.g. 825000" inputmode="numeric">
+          </div>
+          <div class="fb-detail-row">
+            <label for="fb-source">Source</label>
+            <select id="fb-source">
+              <option value="">— Select source —</option>
+              <option value="OLX">OLX</option>
+              <option value="Dealer">Dealer</option>
+              <option value="CarTrade">CarTrade</option>
+              <option value="CarDekho">CarDekho</option>
+              <option value="Friend/Family">Friend / Family</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="fb-error" id="fb-error"></div>
+          <div class="fb-actions">
+            <button type="button" class="fb-cancel" id="fb-cancel">Cancel</button>
+            <button type="button" class="fb-submit" id="fb-submit">Submit (+200 credits)</button>
+          </div>
+        </div>
+
+        <div class="fb-thanks" id="fb-thanks">
+          ✅ Thanks! <span id="fb-thanks-credits"></span> credits awarded.
+          <span class="fb-thanks-sub">Your feedback helps us calibrate prices for everyone.</span>
+        </div>
+
+        <div class="fb-guest-cta">
+          <a href="{{ url_for('signup') }}">Sign up</a> to leave feedback and earn credits.
         </div>
       </div>
 
@@ -1172,43 +1446,41 @@
       <div class="kpi-sub" id="demand-sub">Based on brand, age & price</div>
     </div>
 
+    {# v3.5: Confidence kpi — geo-aware tooltip that surfaces the tier
+       (city/state/national/formula), the data behind it, and an action prompt.
+       Replaces the previous static "Backed by 20+ verified deals" rows. #}
     <div class="kpi-card">
       <div class="kpi-label">
         Data Confidence
         <span class="info-wrap" id="conf-info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip wide" id="conf-tooltip">
-            <span class="conf-tip-header">Confidence levels — what each means</span>
-            {% set c = confidence | int %}
-            <div class="conf-tip-row {% if c >= 90 %}active{% endif %}">
-              <span class="tip-bracket">90–95%</span>
-              <span>Backed by 20+ verified deals for this exact car.
-                <span class="tip-benefit">List confidently — minimal haggling room.</span>
-              </span>
+            {% set conf_tier = (confidence_msg.tier_label if confidence_msg else 'formula') or 'formula' %}
+            <span class="conf-tier-pill tier-{{ conf_tier }}">
+              {%- if conf_tier == 'city' -%}🏙️ Local data
+              {%- elif conf_tier == 'state' -%}📍 State data
+              {%- elif conf_tier == 'national' -%}🇮🇳 National data
+              {%- else -%}📊 Formula-driven
+              {%- endif -%}
+            </span>
+            <div class="conf-geo-headline">
+              {% if confidence_msg %}{{ confidence_msg.message }}{% else %}Confidence: {{ confidence }}%{% endif %}
             </div>
-            <div class="conf-tip-row {% if c >= 75 and c < 90 %}active{% endif %}">
-              <span class="tip-bracket">75–89%</span>
-              <span>Backed by 10–19 verified deals.
-                <span class="tip-benefit">Price is dependable — small buffer is safe.</span>
-              </span>
-            </div>
-            <div class="conf-tip-row {% if c >= 60 and c < 75 %}active{% endif %}">
-              <span class="tip-bracket">60–74%</span>
-              <span>Backed by 5–9 verified deals.
-                <span class="tip-benefit">Use as a guideline — expect 5–8% swing.</span>
-              </span>
-            </div>
-            <div class="conf-tip-row {% if c < 60 %}active{% endif %}">
-              <span class="tip-bracket">50–59%</span>
-              <span>Fewer than 5 verified deals — formula-driven estimate.
-                <span class="tip-benefit">Treat as a starting point — verify with other sources.</span>
-              </span>
+            <div class="conf-geo-action">
+              {% if confidence_msg %}{{ confidence_msg.action }}{% else %}Estimate based on the available data — submit a verified deal to improve accuracy.{% endif %}
             </div>
           </span>
         </span>
       </div>
       <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
-      <div class="kpi-sub">Based on verified deals</div>
+      <div class="kpi-sub">
+        {%- set conf_tier = (confidence_msg.tier_label if confidence_msg else 'formula') or 'formula' -%}
+        {%- if conf_tier == 'city' -%}From {{ user_city }} deals
+        {%- elif conf_tier == 'state' -%}From your state's deals
+        {%- elif conf_tier == 'national' -%}National + pricing model
+        {%- else -%}Pricing model only
+        {%- endif -%}
+      </div>
     </div>
 
     <div class="kpi-card">
@@ -1494,12 +1766,7 @@
   function generateVerdict(price, demand, days) {
     // v3.2: Tighter verdict — icon per paragraph, fewer words, same insight density.
     // 4 paragraphs, each led by a relevant emoji icon.
-
     // v3.3: Verdict intro reworked for the no-verified-deals case.
-    // - Drop the "(preliminary)" suffix — confidence number alone is enough.
-    // - Replace harsh "no verified deals yet ... formula-driven" with softer
-    //   greyed sub-phrase that's clearer for users.
-    // When verified deals exist, keep the existing copy.
     let intro;
     if (VERIFIED_COUNT === 0) {
       intro = `<p><span class="v-icon">📊</span><span class="v-text"><strong>${CAR_NAME}</strong> · <span class="ok">${CONFIDENCE}%</span> confidence. <span style="color:#6c757d;">Estimate based on pricing model — verified transaction data being collected.</span></span></p>`;
@@ -1604,6 +1871,120 @@
     verdictEl.innerHTML = generateVerdict(ESTIMATED, BASE_DEMAND, BASE_DAYS);
   });
 
+  // ============================================================
+  // v3.5: FEEDBACK MODULE HANDLER
+  // ============================================================
+  (function setupFeedback() {
+    const fbModule = document.getElementById('fb-module');
+    if (!fbModule) return;
+
+    const isGuest = fbModule.dataset.isGuest === '1';
+    const valuationId = fbModule.dataset.valuationId;
+    const buttons = fbModule.querySelectorAll('.fb-btn');
+    const detailPanel = fbModule.querySelector('.fb-detail-panel');
+    const detailIcon = document.getElementById('fb-detail-icon');
+    const detailText = document.getElementById('fb-detail-text');
+    const submitBtn = document.getElementById('fb-submit');
+    const cancelBtn = document.getElementById('fb-cancel');
+    const errorEl = document.getElementById('fb-error');
+    const thanksEl = document.getElementById('fb-thanks');
+    const thanksCreditsEl = document.getElementById('fb-thanks-credits');
+    const priceInput = document.getElementById('fb-actual-price');
+    const sourceInput = document.getElementById('fb-source');
+
+    let currentReaction = null;
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.add('show');
+    }
+    function clearError() {
+      errorEl.textContent = '';
+      errorEl.classList.remove('show');
+    }
+    function closeDetail() {
+      fbModule.classList.remove('is-detail-open');
+      currentReaction = null;
+      priceInput.value = '';
+      sourceInput.value = '';
+      clearError();
+    }
+    function showThanks(credits) {
+      thanksCreditsEl.textContent = '+' + credits;
+      fbModule.classList.add('is-thanked');
+    }
+
+    async function postFeedback(reaction, actualPrice, source) {
+      if (!valuationId) {
+        showError('Cannot submit feedback for guest valuations. Sign up first.');
+        return;
+      }
+      const body = new FormData();
+      body.append('valuation_id', valuationId);
+      body.append('reaction', reaction);
+      if (actualPrice !== null && actualPrice !== undefined) body.append('actual_price', actualPrice);
+      if (source) body.append('source', source);
+      try {
+        const resp = await fetch('/api/feedback', { method: 'POST', body: body });
+        const data = await resp.json();
+        if (data.ok) {
+          showThanks(data.credits_awarded);
+        } else if (data.error === 'already_submitted') {
+          showError('You already submitted feedback for this valuation.');
+        } else {
+          showError('Could not submit: ' + (data.error || 'unknown error'));
+        }
+      } catch (e) {
+        showError('Network error — please try again.');
+      }
+    }
+
+    buttons.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        if (isGuest) return;  // greyed-out — pointer-events: none on parent
+
+        const reaction = btn.dataset.reaction;
+        if (reaction === 'helpful') {
+          // No detail panel, fire immediately
+          postFeedback('helpful');
+        } else {
+          // Open detail panel for close/wayoff
+          currentReaction = reaction;
+          if (reaction === 'close') {
+            detailIcon.textContent = '🤔';
+            detailText.textContent = "Help us calibrate — what's the actual price?";
+          } else {
+            detailIcon.textContent = '👎';
+            detailText.textContent = "Tell us what's the right price so we can calibrate";
+          }
+          fbModule.classList.add('is-detail-open');
+          clearError();
+        }
+      });
+    });
+
+    cancelBtn.addEventListener('click', closeDetail);
+
+    submitBtn.addEventListener('click', function() {
+      const priceRaw = (priceInput.value || '').replace(/[,₹\s]/g, '').trim();
+      const source = (sourceInput.value || '').trim();
+      if (!priceRaw) {
+        showError('Please enter the actual price.');
+        return;
+      }
+      const priceInt = parseInt(priceRaw, 10);
+      if (isNaN(priceInt) || priceInt <= 0) {
+        showError('Price must be a positive number.');
+        return;
+      }
+      if (!source) {
+        showError('Please select a source.');
+        return;
+      }
+      postFeedback(currentReaction, priceInt, source);
+    });
+  })();
+
   function setupTooltipFlip() {
     const wraps = document.querySelectorAll('.info-wrap');
     wraps.forEach(function(wrap) {
@@ -1636,29 +2017,19 @@
         }
 
         // 2) Horizontal: viewport-aware positioning.
-        //    v3.3: Previous logic could still overflow on narrow (≤380px)
-        //    viewports because anchoring to .info-wrap edges doesn't help
-        //    when the tooltip is wider than the available viewport space
-        //    on either side.
-        //    New approach: compute the tooltip's actual viewport-left after
-        //    centered placement, then nudge it horizontally until it fits.
         const iconCenterX = iconRect.left + iconRect.width / 2;
         const margin = 8; // min gap to viewport edge
 
-        // After translateX(-50%) the tooltip's left edge is at iconCenterX - tipWidth/2
         let tipLeftViewport = iconCenterX - (tipWidth / 2);
         let tipRightViewport = tipLeftViewport + tipWidth;
 
         if (tipLeftViewport < margin) {
-          // Overflows left edge — push right by the overflow amount
           const shift = margin - tipLeftViewport;
           tip.style.transform = `translateX(calc(-50% + ${shift}px))`;
         } else if (tipRightViewport > viewW - margin) {
-          // Overflows right edge — push left by the overflow amount
           const shift = tipRightViewport - (viewW - margin);
           tip.style.transform = `translateX(calc(-50% - ${shift}px))`;
         }
-        // else: default centered position is fine
       });
     });
   }
