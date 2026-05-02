@@ -1,0 +1,477 @@
+{% extends "layout.html" %}
+{% block title %}Admin · Feedback Calibration — AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ============================================================
+     v3.5.1-r2: admin_feedback.html
+     - Top: stats strip (total, helpful, way off, helpful%)
+     - Middle: aggregate table (Brand × State × Model) sorted by
+       flagged > wayoff% > volume. Rows with N>=5 AND wayoff%>=40%
+       are flagged red (calibration likely needs attention).
+     - Bottom: recent 50 raw feedback rows for granular review.
+     ============================================================ */
+  .admin-wrap { padding: 20px 28px 28px; }
+
+  .admin-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
+  }
+  .admin-title {
+    color: #4eb0ff; font-size: 1.4rem; font-weight: 700; margin: 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .admin-title .badge-admin {
+    background: #ff8c00; color: #1a1d24;
+    font-size: 0.65rem; font-weight: 800; padding: 3px 10px;
+    border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .admin-meta { color: #6c757d; font-size: 0.78rem; }
+  .admin-meta strong { color: #adb5bd; }
+
+  .admin-tabs {
+    display: flex; gap: 4px; margin-bottom: 14px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .admin-tab {
+    color: #adb5bd; text-decoration: none;
+    padding: 8px 14px; font-size: 0.86rem; font-weight: 600;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .admin-tab:hover { color: #4eb0ff; }
+  .admin-tab.active { color: #4eb0ff; border-bottom-color: #4eb0ff; }
+
+  .flash-success-admin {
+    background: #28a745; color: #fff; border-radius: 8px;
+    padding: 0.6rem 2.4rem 0.6rem 0.95rem; margin-bottom: 12px;
+    position: relative; font-size: 0.88rem; font-weight: 500;
+  }
+  .flash-error-admin {
+    background: #dc3545; color: #fff; border-radius: 8px;
+    padding: 0.6rem 2.4rem 0.6rem 0.95rem; margin-bottom: 12px;
+    position: relative; font-size: 0.88rem; font-weight: 500;
+  }
+  .flash-close-x {
+    position: absolute; top: 50%; right: 0.7rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.2rem; line-height: 1; cursor: pointer;
+  }
+
+  /* Stats strip */
+  .stats-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 10px; margin-bottom: 14px;
+  }
+  .stat-card {
+    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 9px;
+    padding: 12px 14px; text-align: center;
+  }
+  .stat-card.is-helpful  { border-left: 3px solid #28a745; }
+  .stat-card.is-wayoff   { border-left: 3px solid #dc3545; }
+  .stat-card.is-total    { border-left: 3px solid #4eb0ff; }
+  .stat-card.is-pct      { border-left: 3px solid #ffa500; }
+  .stat-value {
+    color: #e6e6e6; font-size: 1.6rem; font-weight: 700;
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .stat-label {
+    color: #6c757d; font-size: 0.74rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    margin-top: 5px;
+  }
+  @media (max-width: 720px) {
+    .stats-strip { grid-template-columns: repeat(2, 1fr); }
+    .stat-value { font-size: 1.3rem; }
+  }
+
+  .helper-strip {
+    background: #14171d; border: 1px solid #2a2d34; border-left: 3px solid #4eb0ff;
+    border-radius: 7px; padding: 10px 14px; margin-bottom: 14px;
+    color: #adb5bd; font-size: 0.82rem; line-height: 1.45;
+  }
+  .helper-strip strong { color: #e6e6e6; }
+  .helper-strip code {
+    background: #0e1117; color: #4eb0ff; padding: 1px 5px;
+    border-radius: 3px; font-size: 0.78rem;
+  }
+
+  /* Section title */
+  .section-title {
+    color: #e6e6e6; font-size: 1rem; font-weight: 700;
+    margin: 18px 0 8px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-title .section-count {
+    color: #6c757d; font-size: 0.78rem; font-weight: 400;
+  }
+
+  /* Aggregate table */
+  .agg-card {
+    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 10px;
+    overflow: hidden; margin-bottom: 14px;
+  }
+  .agg-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.82rem; color: #e6e6e6;
+  }
+  .agg-table thead th {
+    background: #14171d; color: #adb5bd;
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    padding: 10px 8px; text-align: left;
+    border-bottom: 1px solid #2a2d34;
+    position: sticky; top: 0; z-index: 2;
+    white-space: nowrap;
+  }
+  .agg-table thead th.num { text-align: right; }
+  .agg-table tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background 0.1s;
+  }
+  .agg-table tbody tr:hover { background: rgba(78,176,255,0.04); }
+  .agg-table tbody tr:last-child { border-bottom: none; }
+  .agg-table tbody tr.is-flagged {
+    background: rgba(220,53,69,0.06);
+    border-left: 3px solid #dc3545;
+  }
+  .agg-table tbody tr.is-flagged:hover { background: rgba(220,53,69,0.12); }
+  .agg-table td {
+    padding: 7px 8px; vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+  }
+  .agg-table td.num { text-align: right; }
+  .agg-table td.brand-cell { color: #4eb0ff; font-weight: 700; }
+  .agg-table td.state-cell {
+    color: #adb5bd; font-weight: 600;
+    font-size: 0.78rem; letter-spacing: 0.4px;
+  }
+  .agg-table td.model-cell { color: #e6e6e6; }
+  .agg-table .pct-helpful { color: #5bd47b; font-weight: 600; }
+  .agg-table .pct-wayoff  { color: #ff8585; font-weight: 700; }
+  .agg-table .pct-neutral { color: #adb5bd; }
+  .agg-table .gap-cell { color: #ffc870; font-weight: 600; }
+  .agg-table .gap-cell.gap-low  { color: #5bd47b; }
+  .agg-table .gap-cell.gap-high { color: #ff8585; }
+
+  .flag-pill {
+    display: inline-block; background: rgba(220,53,69,0.18);
+    color: #ff8585; border: 1px solid rgba(220,53,69,0.5);
+    padding: 1px 7px; border-radius: 8px;
+    font-size: 0.66rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+
+  /* Recent feedback list */
+  .recent-card {
+    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 10px;
+    overflow: hidden;
+  }
+  .recent-table {
+    width: 100%; border-collapse: collapse; font-size: 0.78rem;
+  }
+  .recent-table thead th {
+    background: #14171d; color: #adb5bd;
+    font-size: 0.66rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    padding: 9px 7px; text-align: left;
+    border-bottom: 1px solid #2a2d34;
+    position: sticky; top: 0; z-index: 2;
+    white-space: nowrap;
+  }
+  .recent-table thead th.num { text-align: right; }
+  .recent-table tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .recent-table tbody tr:last-child { border-bottom: none; }
+  .recent-table td {
+    padding: 6px 7px; vertical-align: top;
+    font-variant-numeric: tabular-nums; color: #adb5bd;
+  }
+  .recent-table td.num { text-align: right; color: #e6e6e6; }
+  .recent-table td.date-col { color: #6c757d; white-space: nowrap; font-size: 0.74rem; }
+  .recent-table td.email-col {
+    color: #adb5bd; font-size: 0.74rem; max-width: 180px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .recent-table td.car-col {
+    color: #e6e6e6; max-width: 220px;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .recent-table td.car-col .car-meta {
+    display: block; color: #6c757d; font-size: 0.7rem; margin-top: 1px;
+  }
+  .recent-table td.gap-col { font-weight: 700; }
+  .recent-table td.gap-col.gap-pos { color: #ff8585; } /* over-estimated */
+  .recent-table td.gap-col.gap-neg { color: #5bd47b; } /* under-estimated */
+
+  .reaction-pill {
+    display: inline-block; padding: 2px 8px; border-radius: 9px;
+    font-size: 0.68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .reaction-pill.r-helpful { background: rgba(40,167,69,0.18); color: #5bd47b; border: 1px solid rgba(40,167,69,0.45); }
+  .reaction-pill.r-wayoff  { background: rgba(220,53,69,0.18); color: #ff8585; border: 1px solid rgba(220,53,69,0.45); }
+  .reaction-pill.r-other   { background: rgba(108,117,125,0.16); color: #adb5bd; border: 1px solid rgba(108,117,125,0.45); }
+
+  .source-pill {
+    display: inline-block; padding: 1px 6px; border-radius: 6px;
+    font-size: 0.66rem; font-weight: 600;
+    background: rgba(78,176,255,0.12); color: #4eb0ff;
+    border: 1px solid rgba(78,176,255,0.3);
+  }
+
+  .empty-state {
+    color: #6c757d; font-style: italic; font-size: 0.86rem;
+    text-align: center; padding: 24px;
+  }
+
+  /* Mobile: collapse aggregate + recent table to vertical cards */
+  @media (max-width: 900px) {
+    .agg-table thead, .recent-table thead { display: none; }
+    .agg-table, .agg-table tbody, .agg-table tr, .agg-table td,
+    .recent-table, .recent-table tbody, .recent-table tr, .recent-table td {
+      display: block; width: 100%;
+    }
+    .agg-table tr, .recent-table tr {
+      border: 1px solid #2a2d34; border-radius: 7px;
+      margin-bottom: 8px; padding: 8px;
+    }
+    .agg-table td, .recent-table td {
+      padding: 3px 0; text-align: left !important;
+    }
+    .agg-table td::before, .recent-table td::before {
+      content: attr(data-label) ': ';
+      color: #6c757d; font-weight: 600;
+      font-size: 0.7rem; text-transform: uppercase;
+      letter-spacing: 0.4px; display: inline-block;
+      min-width: 100px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% macro fmt_inr(n) -%}
+  {%- if n is none or n == '' -%}—
+  {%- else -%}₹{{ '{:,}'.format(n|int) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% set helpful_overall_pct = ((helpful_count / total_count) * 100) | round(1) if total_count else 0 %}
+
+<div class="admin-wrap">
+
+  <div class="admin-header">
+    <h2 class="admin-title">
+      💬 Feedback Calibration <span class="badge-admin">Admin</span>
+    </h2>
+    <div class="admin-meta">
+      Generated <strong>{{ now_display }}</strong>
+    </div>
+  </div>
+
+  <div class="admin-tabs">
+    <a href="{{ url_for('admin_multipliers') }}" class="admin-tab">📐 State Multipliers</a>
+    <a href="{{ url_for('admin_feedback') }}"    class="admin-tab active">💬 Feedback Calibration</a>
+  </div>
+
+  {% with flash_success = get_flashed_messages(category_filter=['success']) %}
+    {% if flash_success %}
+      {% for m in flash_success %}
+        <div class="flash-success-admin" id="fs-{{ loop.index }}">
+          ✅ {{ m }}
+          <button type="button" class="flash-close-x"
+                  onclick="document.getElementById('fs-{{ loop.index }}').remove()">&times;</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% with flash_error = get_flashed_messages(category_filter=['error']) %}
+    {% if flash_error %}
+      {% for m in flash_error %}
+        <div class="flash-error-admin" id="fe-{{ loop.index }}">
+          ⚠️ {{ m }}
+          <button type="button" class="flash-close-x"
+                  onclick="document.getElementById('fe-{{ loop.index }}').remove()">&times;</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {# Top-line stats strip #}
+  <div class="stats-strip">
+    <div class="stat-card is-total">
+      <div class="stat-value">{{ total_count }}</div>
+      <div class="stat-label">Total Feedback</div>
+    </div>
+    <div class="stat-card is-helpful">
+      <div class="stat-value">{{ helpful_count }}</div>
+      <div class="stat-label">👍 Helpful</div>
+    </div>
+    <div class="stat-card is-wayoff">
+      <div class="stat-value">{{ wayoff_count }}</div>
+      <div class="stat-label">⚠️ Way Off</div>
+    </div>
+    <div class="stat-card is-pct">
+      <div class="stat-value">{{ helpful_overall_pct }}%</div>
+      <div class="stat-label">Helpful Rate</div>
+    </div>
+  </div>
+
+  <div class="helper-strip">
+    <strong>How to read this page:</strong>
+    The aggregate table groups feedback by <strong>Brand × State × Model</strong>.
+    Rows in red are <strong>flagged</strong> — they have ≥5 feedback entries AND ≥40% Way Off,
+    suggesting calibration likely needs attention.
+    Sort order: flagged first, then by Way Off %, then by volume.
+    <code>Median Gap %</code> is the median <code>(predicted − actual) / actual × 100</code> — positive means we're over-estimating.
+  </div>
+
+  {# Aggregate table #}
+  <div class="section-title">
+    📊 Calibration Hot Spots
+    <span class="section-count">{{ table_rows | length }} unique combination{{ 's' if table_rows|length != 1 else '' }}</span>
+  </div>
+
+  <div class="agg-card">
+    <table class="agg-table">
+      <thead>
+        <tr>
+          <th>Brand</th>
+          <th>State</th>
+          <th>Model</th>
+          <th class="num">N</th>
+          <th class="num">Helpful %</th>
+          <th class="num">Way Off %</th>
+          <th class="num">Median Pred.</th>
+          <th class="num">Median Actual</th>
+          <th class="num">Gap %</th>
+          <th>Flag</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if table_rows %}
+          {% for r in table_rows %}
+            <tr class="{% if r.flagged %}is-flagged{% endif %}">
+              <td class="brand-cell" data-label="Brand">{{ r.make }}</td>
+              <td class="state-cell" data-label="State">{{ r.state }}</td>
+              <td class="model-cell" data-label="Model">{{ r.model }}</td>
+              <td class="num"             data-label="N">{{ r.total }}</td>
+              <td class="num pct-helpful" data-label="Helpful %">{{ r.helpful_pct }}%</td>
+              <td class="num pct-wayoff"  data-label="Way Off %">{{ r.wayoff_pct }}%</td>
+              <td class="num"             data-label="Median Pred.">{{ fmt_inr(r.median_estimate) }}</td>
+              <td class="num"             data-label="Median Actual">{{ fmt_inr(r.median_actual) }}</td>
+              <td class="num gap-cell {% if r.median_gap_pct is not none and r.median_gap_pct|abs <= 5 %}gap-low{% elif r.median_gap_pct is not none and r.median_gap_pct|abs >= 15 %}gap-high{% endif %}"
+                  data-label="Gap %">
+                {% if r.median_gap_pct is not none %}
+                  {{ '%+.1f'|format(r.median_gap_pct) }}%
+                {% else %}—{% endif %}
+              </td>
+              <td data-label="Flag">
+                {% if r.flagged %}
+                  <span class="flag-pill">🚩 Flagged</span>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="10" class="empty-state">
+              No feedback aggregated yet. Once users start submitting Helpful / Way off ratings, this table will populate.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  {# Recent raw feedback list #}
+  <div class="section-title">
+    📝 Recent Feedback
+    <span class="section-count">last {{ recent | length }}</span>
+  </div>
+
+  <div class="recent-card">
+    <table class="recent-table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>User</th>
+          <th>Reaction</th>
+          <th>Car</th>
+          <th>State</th>
+          <th class="num">Predicted</th>
+          <th class="num">Actual</th>
+          <th class="num">Gap %</th>
+          <th>Source</th>
+          <th>Conf.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if recent %}
+          {% for f in recent %}
+            {% set rxn = (f.reaction or '')|lower %}
+            {% set rxn_class = 'r-helpful' if rxn == 'helpful' else ('r-wayoff' if rxn == 'wayoff' else 'r-other') %}
+            {% set gap_class = '' %}
+            {% if f.gap_pct is not none %}
+              {% if f.gap_pct|float > 0 %}{% set gap_class = 'gap-pos' %}
+              {% elif f.gap_pct|float < 0 %}{% set gap_class = 'gap-neg' %}
+              {% endif %}
+            {% endif %}
+            <tr>
+              <td class="date-col" data-label="When">{{ f.created_display or (f.created_at[:10] if f.created_at else '—') }}</td>
+              <td class="email-col" data-label="User" title="{{ f.user_email or '' }}">{{ f.user_email or '—' }}</td>
+              <td data-label="Reaction">
+                <span class="reaction-pill {{ rxn_class }}">{{ f.reaction_label or '—' }}</span>
+              </td>
+              <td class="car-col" data-label="Car">
+                {{ f.make or '?' }} {{ f.model or '?' }}
+                <span class="car-meta">
+                  {{ f.variant or '' }}
+                  {% if f.year %}· {{ f.year }}{% endif %}
+                  {% if f.fuel_type %}· {{ f.fuel_type }}{% endif %}
+                </span>
+              </td>
+              <td data-label="State">
+                {{ f.state_code or '—' }}
+                {% if f.city %}<span style="color:#6c757d; font-size:0.7rem;"> / {{ f.city }}</span>{% endif %}
+              </td>
+              <td class="num" data-label="Predicted">{{ fmt_inr(f.predicted_price_inr) }}</td>
+              <td class="num" data-label="Actual">{{ fmt_inr(f.actual_price_inr) }}</td>
+              <td class="num gap-col {{ gap_class }}" data-label="Gap %">
+                {% if f.gap_pct is not none %}{{ '%+.1f'|format(f.gap_pct|float) }}%{% else %}—{% endif %}
+              </td>
+              <td data-label="Source">
+                {% if f.price_source %}
+                  <span class="source-pill">{{ f.price_source }}</span>
+                  {% if f.price_source == 'Other' and f.source_other %}
+                    <span style="color:#6c757d; font-size:0.7rem; display:block; margin-top:2px;">{{ f.source_other }}</span>
+                  {% endif %}
+                {% else %}—{% endif %}
+              </td>
+              <td data-label="Conf.">
+                {% if f.confidence_score is not none %}
+                  {{ f.confidence_score }}%
+                  {% if f.confidence_tier %}
+                    <span style="color:#6c757d; font-size:0.7rem; display:block;">{{ f.confidence_tier }}</span>
+                  {% endif %}
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="10" class="empty-state">
+              No feedback rows yet. Every Helpful / Way off click on the seller dashboard will land here.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}
