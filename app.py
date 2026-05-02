@@ -5136,6 +5136,21 @@ def _validate_research_form(form, is_edit=False):
     if notes and len(notes) > 2000:
         return None, "Notes are limited to 2000 characters."
 
+    # v3.5.1-r5: include_in_calibration defaults to TRUE for new entries.
+    # On edit, the form sends explicit '0' or '1' so we honor it.
+    incl_raw = form.get('include_in_calibration')
+    if incl_raw is None:
+        include_in_calibration = True  # Default TRUE per user spec
+    else:
+        include_in_calibration = (str(incl_raw).strip() in ('1', 'on', 'true', 'True', 'yes'))
+
+    exclusion_reason = (form.get('exclusion_reason') or '').strip() or None
+    if exclusion_reason and len(exclusion_reason) > 500:
+        return None, "Exclusion reason is limited to 500 characters."
+    # Only persist exclusion_reason when actually excluded
+    if include_in_calibration:
+        exclusion_reason = None
+
     payload = {
         'make': make,
         'model': model,
@@ -5155,6 +5170,8 @@ def _validate_research_form(form, is_edit=False):
         'dealer_phone': dealer_phone,
         'listing_url': listing_url,
         'notes': notes,
+        'include_in_calibration': include_in_calibration,
+        'exclusion_reason': exclusion_reason,
     }
     return payload, None
 
@@ -5221,6 +5238,9 @@ def admin_research():
     total = len(rows)
     by_mystery = sum(1 for r_ in rows if r_.get('data_source') == 'Mystery Shopping')
     by_ff = sum(1 for r_ in rows if r_.get('data_source') == 'Friends & Family')
+    # v3.5.1-r5: Inclusion split for the calibration corpus
+    n_included = sum(1 for r_ in rows if r_.get('include_in_calibration'))
+    n_excluded = total - n_included
     # Average gap_pct (mystery-shop entries with both prices)
     gaps = [float(r_['gap_pct']) for r_ in rows
             if r_.get('gap_pct') is not None and r_.get('data_source') == 'Mystery Shopping']
@@ -5232,11 +5252,33 @@ def admin_research():
         'ff_count': by_ff,
         'avg_mystery_gap_pct': avg_gap,
         'gap_sample_size': len(gaps),
+        'included_count': n_included,
+        'excluded_count': n_excluded,
     }
 
     # Distinct values for filter dropdowns
     distinct_states = sorted({r_.get('state_code') for r_ in rows if r_.get('state_code')})
     distinct_makes = sorted({r_.get('make') for r_ in rows if r_.get('make')})
+
+    # v3.5.1-r5: Compute calibration suggestions from the FULL row set
+    # (don't apply UI filters to calibration math — that would be misleading).
+    # We need to query unfiltered when computing suggestions.
+    try:
+        if f_source or f_state or f_make:
+            # Filtered view — re-fetch full set just for suggestion math
+            r_all = (supabase.table('research_log')
+                     .select('*')
+                     .eq('include_in_calibration', True)
+                     .order('entry_date', desc=True)
+                     .limit(2000)
+                     .execute())
+            calib_corpus = r_all.data or []
+        else:
+            calib_corpus = rows
+        suggestions = _compute_calibration_suggestions(calib_corpus)
+    except Exception as e:
+        app.logger.error(f"calibration suggestions failed: {e}")
+        suggestions = []
 
     return render_template(
         'admin_research.html',
@@ -5244,6 +5286,7 @@ def admin_research():
         first_name=firstname_filter(admin.get('name')),
         rows=rows,
         stats=stats,
+        suggestions=suggestions,
         sources=RESEARCH_SOURCES,
         owners_choices=RESEARCH_OWNERS,
         condition_choices=RESEARCH_CONDITIONS,
@@ -5256,6 +5299,7 @@ def admin_research():
         active_make=f_make,
         distinct_states=distinct_states,
         distinct_makes=distinct_makes,
+        calib_min_entries=CALIB_MIN_ENTRIES,
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
         today_iso=datetime.utcnow().strftime('%Y-%m-%d'),
     )
@@ -5291,6 +5335,342 @@ def admin_research_delete(entry_id):
     except Exception as e:
         app.logger.error(f"admin_research_delete failed: {e}")
         flash(f"Could not delete: {e}", 'error')
+    return redirect(url_for('admin_research'))
+
+
+# ============================================================
+# v3.5.1-r5: CALIBRATION SUGGESTIONS — semi-automated multiplier updates
+# ============================================================
+# Three new pieces:
+#   1. _compute_calibration_suggestions(rows)
+#        Given the loaded research_log rows, returns a list of suggestion
+#        objects (one per state) where ≥3 included entries exist.
+#   2. POST /admin/research/<id>/toggle-calibration
+#        Flip include_in_calibration boolean. Optional exclusion_reason.
+#   3. POST /admin/research/apply-suggestion/<state_code>
+#        Apply the suggested multiplier to state_multipliers, log to audit.
+# ============================================================
+
+# Tunable thresholds — change here to adjust suggestion sensitivity
+CALIB_MIN_ENTRIES = 3                    # Need ≥3 entries before suggesting
+CALIB_OUTLIER_TRIM_PCT = 10              # Drop top/bottom 10% of ratios
+CALIB_MAX_AGE_DAYS = 90                  # Skip entries older than 90 days
+CALIB_MIN_GAP_PCT_TO_SUGGEST = 1.0       # Don't suggest changes <1%
+CALIB_MAX_REASONABLE_RATIO = 1.30        # Sanity: skip extreme outlier rows
+CALIB_MIN_REASONABLE_RATIO = 0.70
+
+
+def _percentile_trim(values, trim_pct):
+    """Drop the top and bottom trim_pct% of a sorted numeric list.
+    Returns the trimmed list. If trimming would leave <3 items,
+    returns the original (don't over-trim small samples)."""
+    if not values:
+        return values
+    n = len(values)
+    if n <= 4:
+        return sorted(values)
+    sorted_vals = sorted(values)
+    drop_n = max(1, int(n * trim_pct / 100))
+    trimmed = sorted_vals[drop_n:n - drop_n]
+    return trimmed if len(trimmed) >= 3 else sorted_vals
+
+
+def _median(values):
+    """Median of a numeric list. Returns None for empty."""
+    if not values:
+        return None
+    s = sorted(values)
+    n = len(s)
+    return s[n // 2] if n % 2 == 1 else (s[n // 2 - 1] + s[n // 2]) / 2
+
+
+def _compute_calibration_suggestions(rows):
+    """
+    For each state with ≥CALIB_MIN_ENTRIES included research entries,
+    compute a suggested state multiplier using the simple-ratio method:
+
+        ratio_i = research_negotiated_price_i / engine_estimated_price_i
+        median_ratio = median(ratios after outlier trim)
+        suggested_mult = current_multiplier × median_ratio
+
+    Returns a list of dicts (one per state), sorted with biggest gaps first.
+    """
+    # Group included rows by state_code
+    by_state = defaultdict(list)
+    today = datetime.utcnow().date()
+
+    for r in rows:
+        # Inclusion gate
+        if not r.get('include_in_calibration'):
+            continue
+        if not r.get('state_code'):
+            continue  # Can't calibrate state without a state code
+        if not r.get('negotiated_price_inr'):
+            continue  # Need actual price (F&F entries should have this in negotiated)
+
+        # Age gate
+        ed = r.get('entry_date')
+        if ed:
+            try:
+                entry_d = datetime.strptime(ed, '%Y-%m-%d').date()
+                age_days = (today - entry_d).days
+                if age_days > CALIB_MAX_AGE_DAYS:
+                    continue
+            except (ValueError, TypeError):
+                pass  # If date is malformed, include it anyway
+
+        by_state[r['state_code']].append(r)
+
+    suggestions = []
+    current_mults = load_state_multipliers()  # {state_code: float}
+
+    for sc, entries in by_state.items():
+        if len(entries) < CALIB_MIN_ENTRIES:
+            continue
+        current_mult = current_mults.get(sc, 1.000)
+
+        # Compute engine prediction for each entry, then the ratio
+        ratios = []
+        contributing_ids = []
+        skipped_count = 0
+
+        for r in entries:
+            try:
+                # Map research-log fields → valuation engine inputs
+                # Owner format normalization: research uses '1st'..'4th+',
+                # engine uses '1st Owner'..'4th Owner'
+                owner_map = {
+                    '1st': '1st Owner', '2nd': '2nd Owner',
+                    '3rd': '3rd Owner', '4th+': '4th Owner',
+                }
+                eng_owner = owner_map.get(r.get('owners') or '', '1st Owner')
+                eng_condition = r.get('condition') or 'Good'
+                eng_mileage = r.get('mileage_km') or 50000  # reasonable default
+
+                result, _audit = _route_valuation(
+                    make=r['make'], model=r['model'], variant=r['variant'],
+                    fuel=r['fuel'], year=r['year'],
+                    mileage=eng_mileage,
+                    condition=eng_condition,
+                    owner=eng_owner,
+                    allow_market_engine=True,
+                    user_state=sc,
+                    user_city=r.get('city'),
+                )
+                if not result or not result.get('estimated_price'):
+                    skipped_count += 1
+                    continue
+
+                eng_pred = float(result['estimated_price'])
+                if eng_pred <= 0:
+                    skipped_count += 1
+                    continue
+
+                ratio = float(r['negotiated_price_inr']) / eng_pred
+                # Sanity: drop completely unreasonable ratios (engine bug or data error)
+                if ratio < CALIB_MIN_REASONABLE_RATIO or ratio > CALIB_MAX_REASONABLE_RATIO:
+                    skipped_count += 1
+                    continue
+
+                ratios.append(ratio)
+                contributing_ids.append(r['id'])
+            except Exception as e:
+                app.logger.warning(f"calib ratio compute failed for entry {r.get('id')}: {e}")
+                skipped_count += 1
+
+        n_used = len(ratios)
+        if n_used < CALIB_MIN_ENTRIES:
+            continue
+
+        # Outlier trim (top/bottom 10% by ratio value)
+        trimmed_ratios = _percentile_trim(ratios, CALIB_OUTLIER_TRIM_PCT)
+        median_ratio = _median(trimmed_ratios)
+        if median_ratio is None:
+            continue
+
+        suggested_mult = round(current_mult * median_ratio, 3)
+
+        # Compute gap pct (how different is suggestion from current)
+        gap_pct = round(((suggested_mult - current_mult) / current_mult) * 100, 1) if current_mult else 0
+
+        # Don't surface trivial nudges
+        if abs(gap_pct) < CALIB_MIN_GAP_PCT_TO_SUGGEST:
+            confidence = 'in_sync'
+        elif n_used >= 6:
+            confidence = 'high'
+        elif n_used >= 4:
+            confidence = 'medium'
+        else:
+            confidence = 'low'
+
+        # Source breakdown for context
+        n_mystery = sum(1 for r in entries if r.get('data_source') == 'Mystery Shopping')
+        n_ff = sum(1 for r in entries if r.get('data_source') == 'Friends & Family')
+
+        # Date range of contributing entries
+        dates = [r.get('entry_date') for r in entries if r.get('entry_date')]
+        date_min = min(dates) if dates else None
+        date_max = max(dates) if dates else None
+
+        # Format the date range for display
+        def fmt_d(s):
+            try:
+                return datetime.strptime(s, '%Y-%m-%d').strftime('%d-%b-%Y')
+            except (ValueError, TypeError):
+                return s or '?'
+
+        suggestions.append({
+            'state_code': sc,
+            'current_multiplier': round(current_mult, 3),
+            'suggested_multiplier': suggested_mult,
+            'gap_pct': gap_pct,
+            'direction': 'up' if gap_pct > 0 else ('down' if gap_pct < 0 else 'same'),
+            'sample_size': n_used,
+            'sample_total': len(entries),
+            'skipped_count': skipped_count,
+            'mystery_count': n_mystery,
+            'ff_count': n_ff,
+            'median_ratio': round(median_ratio, 4),
+            'confidence': confidence,  # 'in_sync', 'low', 'medium', 'high'
+            'date_range_display': (
+                f"{fmt_d(date_min)} → {fmt_d(date_max)}" if date_min and date_max else '—'
+            ),
+            'contributing_ids': contributing_ids,
+        })
+
+    # Sort: biggest absolute gaps first (most actionable)
+    suggestions.sort(key=lambda s: (-abs(s['gap_pct']), -s['sample_size']))
+    return suggestions
+
+
+@app.route('/admin/research/<entry_id>/toggle-calibration', methods=['POST'])
+@login_required
+@admin_required
+def admin_research_toggle_calibration(entry_id):
+    """Flip the include_in_calibration flag on a research entry.
+    Optionally accepts an exclusion_reason form field for context."""
+    try:
+        # Read current value
+        r = supabase.table('research_log').select('include_in_calibration').eq('id', entry_id).execute()
+        if not r.data:
+            flash("Entry not found.", 'error')
+            return redirect(url_for('admin_research'))
+        cur = r.data[0].get('include_in_calibration', True)
+        new_val = not cur
+
+        update_payload = {'include_in_calibration': new_val}
+        if not new_val:
+            # Excluding — capture reason if provided
+            reason = (request.form.get('exclusion_reason') or '').strip()
+            if reason:
+                update_payload['exclusion_reason'] = reason[:500]
+        else:
+            # Re-including — clear any prior exclusion reason
+            update_payload['exclusion_reason'] = None
+
+        supabase.table('research_log').update(update_payload).eq('id', entry_id).execute()
+        flash(
+            f"Entry {'included in' if new_val else 'excluded from'} calibration.",
+            'success'
+        )
+    except Exception as e:
+        app.logger.error(f"admin_research_toggle_calibration failed: {e}")
+        flash(f"Could not toggle: {e}", 'error')
+    return redirect(url_for('admin_research'))
+
+
+@app.route('/admin/research/apply-suggestion/<state_code>', methods=['POST'])
+@login_required
+@admin_required
+def admin_research_apply_suggestion(state_code):
+    """Apply a suggested multiplier from the calibration panel.
+    Expects 'suggested_multiplier' in the form (recomputed server-side
+    for safety — never trust client value alone)."""
+    admin = current_user()
+    state_code = (state_code or '').strip().upper()
+    if not state_code:
+        flash("State code required.", 'error')
+        return redirect(url_for('admin_research'))
+
+    # Recompute the suggestion server-side so we apply the FRESH math,
+    # not whatever value the client posted (which could be stale or tampered).
+    try:
+        r = (supabase.table('research_log')
+             .select('*')
+             .eq('state_code', state_code)
+             .eq('include_in_calibration', True)
+             .execute())
+        rows = r.data or []
+    except Exception as e:
+        app.logger.error(f"apply-suggestion fetch failed: {e}")
+        flash(f"Could not load research: {e}", 'error')
+        return redirect(url_for('admin_research'))
+
+    suggestions = _compute_calibration_suggestions(rows)
+    matching = next((s for s in suggestions if s['state_code'] == state_code), None)
+    if not matching:
+        flash(
+            f"No suggestion available for {state_code} — likely fewer than "
+            f"{CALIB_MIN_ENTRIES} included entries, or all entries failed engine prediction.",
+            'error'
+        )
+        return redirect(url_for('admin_research'))
+
+    suggested_mult = matching['suggested_multiplier']
+    current_mult = matching['current_multiplier']
+
+    # Sanity bounds (matches the validation in admin_multipliers route)
+    if suggested_mult < 0.50 or suggested_mult > 1.50:
+        flash(
+            f"Suggested multiplier {suggested_mult} is outside safe range [0.50, 1.50]. "
+            f"Aborting auto-apply for safety. You can apply manually in /admin/multipliers if you really want to.",
+            'error'
+        )
+        return redirect(url_for('admin_research'))
+
+    # Apply to state_multipliers + write audit row
+    try:
+        update_fields = {
+            'multiplier': suggested_mult,
+            'last_updated': datetime.utcnow().isoformat(),
+            'updated_by': admin.get('email'),
+        }
+        supabase.table('state_multipliers').update(update_fields).eq('state_code', state_code).execute()
+
+        # Rich audit entry — captures the research basis
+        try:
+            audit_payload = {
+                'state_code': state_code,
+                'changed_by': admin.get('email'),
+                'changes': json.dumps({
+                    'multiplier': suggested_mult,
+                    'previous_multiplier': current_mult,
+                    'source': 'research_calibration',
+                    'sample_size': matching['sample_size'],
+                    'mystery_count': matching['mystery_count'],
+                    'ff_count': matching['ff_count'],
+                    'median_ratio': matching['median_ratio'],
+                    'date_range': matching['date_range_display'],
+                    'contributing_entry_ids': matching['contributing_ids'],
+                }),
+                'changed_at': datetime.utcnow().isoformat(),
+            }
+            supabase.table('state_multipliers_audit').insert(audit_payload).execute()
+        except Exception as e_audit:
+            app.logger.warning(f"audit insert failed: {e_audit}")
+
+        # Force-refresh in-memory cache so the new multiplier takes effect immediately
+        load_state_multipliers(force_refresh=True)
+
+        flash(
+            f"Applied: {state_code} multiplier {current_mult:.3f} → {suggested_mult:.3f} "
+            f"(based on {matching['sample_size']} research entries).",
+            'success'
+        )
+    except Exception as e:
+        app.logger.error(f"apply-suggestion update failed: {e}")
+        flash(f"Update failed: {e}", 'error')
+
     return redirect(url_for('admin_research'))
 
 
