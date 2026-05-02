@@ -163,6 +163,40 @@
     visibility: visible; opacity: 1;
   }
 
+  /* ============================================================
+     v3.5: GEO-AWARE CONFIDENCE TOOLTIP STYLES (buyer flavor)
+     Replaces the static "Backed by 20+ verified deals" rows with
+     a tier pill + dynamic message + action prompt.
+     ============================================================ */
+  .conf-tier-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 7px;
+  }
+  .conf-tier-pill.tier-city     { background: rgba(40,167,69,0.18);   color: #5bd47b; border: 1px solid rgba(40,167,69,0.5); }
+  .conf-tier-pill.tier-state    { background: rgba(78,176,255,0.18);  color: #8ec5ff; border: 1px solid rgba(78,176,255,0.5); }
+  .conf-tier-pill.tier-national { background: rgba(255,165,0,0.18);   color: #ffc870; border: 1px solid rgba(255,165,0,0.5); }
+  .conf-tier-pill.tier-formula  { background: rgba(108,117,125,0.18); color: #adb5bd; border: 1px solid rgba(108,117,125,0.5); }
+  .conf-geo-headline {
+    color: #e6e6e6;
+    font-size: 0.74rem;
+    line-height: 1.45;
+    margin-bottom: 6px;
+  }
+  .conf-geo-action {
+    color: #adb5bd;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    font-style: italic;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 5px;
+  }
+
   .deal-section { border-top: 1px solid #2a2d34; padding-top: 8px; }
   .deal-banner {
     border-radius: 9px;
@@ -327,10 +361,7 @@
     margin-bottom: 7px;
   }
 
-  /* v3.2: Adjustment row redesigned (buyer flavor — tighter padding).
-     - Icon sized up with colored bg circle for visibility
-     - Two-line stacked text (label line 1, description line 2)
-     - Right column = colored BADGE (Premium / Adds value / Typical / Reduces / Big hit) */
+  /* v3.2: Adjustment row redesigned (buyer flavor — tighter padding). */
   .adjustment-row {
     display: grid;
     grid-template-columns: 32px 1fr auto;
@@ -498,9 +529,7 @@
     border-color: #4eb0ff;
   }
 
-  /* v3.3: Cap tooltip width on small viewports so it can never exceed
-     the viewport even with positioning corrections. JS still nudges
-     position; CSS is the safety net for very wide tooltips. */
+  /* v3.3: Cap tooltip width on small viewports */
   @media (max-width: 480px) {
     .info-tooltip { width: auto; max-width: calc(100vw - 32px); }
     .info-tooltip.wide { width: auto; max-width: calc(100vw - 32px); }
@@ -525,40 +554,6 @@
   .phase-tip-header {
     display: block; color: #8a90ff; font-weight: 700; font-size: 0.74rem;
     margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.15);
-  }
-
-  .conf-mini-row {
-    display: grid;
-    grid-template-columns: 62px 1fr;
-    gap: 8px;
-    padding: 4px 6px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    align-items: start;
-    font-size: 0.7rem;
-    line-height: 1.35;
-  }
-  .conf-mini-row:last-child { border-bottom: none; }
-  .conf-mini-row .mini-bracket { font-weight: 700; color: #b0b0b0; white-space: nowrap; }
-  .conf-mini-row.active .mini-bracket { color: #4eb0ff; }
-  .conf-mini-row.active {
-    background: rgba(78,176,255,0.12);
-    border-radius: 4px;
-    border-bottom-color: transparent;
-  }
-  .conf-mini-row .mini-benefit {
-    display: block;
-    color: #adb5bd;
-    font-size: 0.66rem;
-    margin-top: 1px;
-  }
-  .conf-header {
-    color: #4eb0ff;
-    font-weight: 700;
-    font-size: 0.75rem;
-    margin-bottom: 5px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid rgba(255,255,255,0.15);
-    display: block;
   }
 
   .demand-tip-row {
@@ -596,7 +591,7 @@
   .market-stats .lakhs-hint { color: #6c757d; font-style: italic; font-size: 0.72rem; }
 
   /* ============================================================
-     v3.1: Listings table (buyer theme — same structure as seller, blue accent)
+     v3.1: Listings table (buyer theme — blue accent)
      ============================================================ */
   .listings-card {
     background: #1a1d24;
@@ -899,13 +894,9 @@
     margin-bottom: 8px;
     display: flex; align-items: center; gap: 6px;
   }
-  /* v3.2: Tri-color brand name in verdict header.
-     Brand spans wrapped in .brand-name so the parent flex gap doesn't
-     split "Auto", "Know", "Mus" into separate visual chunks. */
   .verdict-title .brand-name {
     display: inline-flex;
     align-items: baseline;
-    /* explicitly NO gap — the three colored spans must read as one word */
   }
   .verdict-title .brand-auto { color: #ffffff; }
   .verdict-title .brand-know { color: #5bd47b; }
@@ -958,9 +949,7 @@
   {%- endif %}
 {%- endmacro %}
 
-{# v3.2: Direction badge macro for "Why this price?" panel.
-   Replaces previous arrows (↑↑/↑/→/↓/↓↓) with self-explanatory text badges
-   so users don't need a legend to understand the direction. #}
+{# v3.2: Direction badge macro for "Why this price?" panel. #}
 {% macro dir_badge(direction) -%}
   {%- if direction == 'up_strong' -%}
     <span class="adj-badge b-up_strong">+ Premium</span>
@@ -980,12 +969,15 @@
 <div class="dashboard-wrap">
 
   <div class="dash-header">
+    {# v3.5: Back link includes user_state and user_city so buyer form
+       prefills the geo dropdowns the user picked. #}
     <a href="{{ url_for('buyer',
                         make=back_prefill.make, fuel=back_prefill.fuel,
                         model=back_prefill.model, variant=back_prefill.variant,
                         year=back_prefill.year, owner=back_prefill.owner,
                         mileage=back_prefill.mileage, condition=back_prefill.condition,
-                        asking_price=back_prefill.asking_price) }}"
+                        asking_price=back_prefill.asking_price,
+                        user_state=back_prefill.user_state, user_city=back_prefill.user_city) }}"
        class="btn-back">← Back</a>
     <div class="car-summary">
       <div class="car-name">{{ year }} {{ make }} {{ model }} {{ variant }}</div>
@@ -994,7 +986,8 @@
         <span class="lbl">Mileage:</span> {{ mileage | inr }} km ·
         <span class="lbl">Condition:</span> {{ condition }} ·
         <span class="lbl">Owner:</span> {{ owner }} ·
-        Bangalore
+        {# v3.5: replace hardcoded "Bangalore" with the user's actual location. #}
+        {{ user_city }}, {{ user_state }}
       </div>
     </div>
   </div>
@@ -1002,7 +995,8 @@
   {# v3.1: New car anchor strip — public arithmetic, shown on both engine paths.
      For buyer: "is-aged" class flagged on cars older than 7 years.
      v3.3: Replaced "When new" with "Ex-showroom (Bangalore)"; added greyed
-     sub-text clarifying source. #}
+     sub-text. Note: ex-showroom prices remain pegged to Bangalore (source data
+     baseline). State-level adjustments applied at valuation time. #}
   {% if anchor_data %}
     <div class="anchor-strip {% if anchor_data.years_old > 7 %}is-aged{% endif %}">
       <div class="anchor-row">
@@ -1252,47 +1246,40 @@
       </div>
     </div>
 
+    {# v3.5: Confidence kpi — geo-aware tooltip (buyer flavor).
+       Replaces the previous static "Backed by 20+ verified deals" rows. #}
     <div class="kpi-card">
       <div class="kpi-label">
         Data Confidence
         <span class="info-wrap" id="conf-info-wrap">
           <span class="info-icon">i</span>
           <span class="info-tooltip wide" id="conf-tooltip">
-            <span class="conf-header">Confidence levels — what each means</span>
-            {% set c = confidence | int %}
-            <span class="conf-mini-row {% if c >= 90 %}active{% endif %}">
-              <span class="mini-bracket">90–95%</span>
-              <span>
-                Backed by 20+ verified deals for this exact car.
-                <span class="mini-benefit">Pay within fair range; don't overpay.</span>
-              </span>
+            {% set conf_tier = (confidence_msg.tier_label if confidence_msg else 'formula') or 'formula' %}
+            <span class="conf-tier-pill tier-{{ conf_tier }}">
+              {%- if conf_tier == 'city' -%}🏙️ Local data
+              {%- elif conf_tier == 'state' -%}📍 State data
+              {%- elif conf_tier == 'national' -%}🇮🇳 National data
+              {%- else -%}📊 Formula-driven
+              {%- endif -%}
             </span>
-            <span class="conf-mini-row {% if c >= 75 and c < 90 %}active{% endif %}">
-              <span class="mini-bracket">75–89%</span>
-              <span>
-                Backed by 10–19 verified deals.
-                <span class="mini-benefit">Aim mid-range; small negotiation buffer.</span>
-              </span>
-            </span>
-            <span class="conf-mini-row {% if c >= 60 and c < 75 %}active{% endif %}">
-              <span class="mini-bracket">60–74%</span>
-              <span>
-                Backed by 5–9 verified deals.
-                <span class="mini-benefit">Negotiate harder — aim below midpoint.</span>
-              </span>
-            </span>
-            <span class="conf-mini-row {% if c < 60 %}active{% endif %}">
-              <span class="mini-bracket">50–59%</span>
-              <span>
-                Fewer than 5 verified deals — formula-driven estimate.
-                <span class="mini-benefit">Get an independent inspection before buying.</span>
-              </span>
-            </span>
+            <div class="conf-geo-headline">
+              {% if confidence_msg %}{{ confidence_msg.message }}{% else %}Confidence: {{ confidence }}%{% endif %}
+            </div>
+            <div class="conf-geo-action">
+              {% if confidence_msg %}{{ confidence_msg.action }}{% else %}Estimate based on the available data — submit a verified deal to improve accuracy.{% endif %}
+            </div>
           </span>
         </span>
       </div>
       <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
-      <div class="kpi-sub">Based on verified deals</div>
+      <div class="kpi-sub">
+        {%- set conf_tier = (confidence_msg.tier_label if confidence_msg else 'formula') or 'formula' -%}
+        {%- if conf_tier == 'city' -%}From {{ user_city }} deals
+        {%- elif conf_tier == 'state' -%}From your state's deals
+        {%- elif conf_tier == 'national' -%}National + pricing model
+        {%- else -%}Pricing model only
+        {%- endif -%}
+      </div>
     </div>
 
     <div class="kpi-card">
@@ -1407,6 +1394,9 @@
             <input type="hidden" name="keep_mileage"      value="{{ mileage }}">
             <input type="hidden" name="keep_condition"    value="{{ condition }}">
             <input type="hidden" name="keep_asking_price" value="{{ asking_price if asking_price is not none else '' }}">
+            {# v3.5: preserve geo for return path #}
+            <input type="hidden" name="keep_user_state"   value="{{ user_state }}">
+            <input type="hidden" name="keep_user_city"    value="{{ user_city }}">
             <button type="submit" class="strip-btn">Get 500 Free Credits</button>
           </form>
         </div>
@@ -1607,10 +1597,6 @@
   updateCaution();
 
   function generateBuyerVerdict() {
-    // v3.2: Tighter buyer verdict — icon per paragraph, fewer words.
-    // v3.3: Reworked the no-verified-deals branch — drops "(preliminary)"
-    // and replaces "no verified deals yet — formula-driven" with softer
-    // greyed sub-phrase. When verified deals exist, copy is unchanged.
     let intro;
     if (VERIFIED_COUNT === 0) {
       intro = `<p><span class="v-icon">📊</span><span class="v-text"><strong>${CAR_NAME}</strong> · <span class="info">${CONFIDENCE}%</span> confidence. <span style="color:#6c757d;">Estimate based on pricing model — verified transaction data being collected.</span></span></p>`;
@@ -1621,7 +1607,6 @@
       intro = `<p><span class="v-icon">📊</span><span class="v-text"><strong>${CAR_NAME}</strong> · <span class="info">${CONFIDENCE}%</span> confidence (${confidenceWordHi}). <strong>${VERIFIED_COUNT}</strong> verified deals factored in.</span></p>`;
     }
 
-    // ── Deal verdict ───────────────────────────────────────────
     let dealVerdict = '';
     if (ASKING_PRICE !== null) {
       if (ASKING_POSITION === 'below' && ASKING_PCT_DIFF <= -15) {
@@ -1638,7 +1623,6 @@
       dealVerdict = `<p><span class="v-icon">💡</span><span class="v-text"><span class="info">Tip:</span> add seller's asking price for a deal verdict.</span></p>`;
     }
 
-    // ── Market demand ─────────────────────────────────────────
     let demandGuidance = '';
     if (DEMAND === 'HIGH') {
       demandGuidance = `<p><span class="v-icon">🔥</span><span class="v-text">Demand <span class="hi">HIGH</span> — sellers hold leverage. Move fast on fair listings.</span></p>`;
@@ -1648,15 +1632,12 @@
       demandGuidance = `<p><span class="v-icon">🧊</span><span class="v-text">Demand <span class="ok">LOW</span> — buyer's market. Aim 10–15% below asking.</span></p>`;
     }
 
-    // ── Dealer vs Private ──────────────────────────────────────
     const diff = DEALER_PRICE - PRIVATE_PRICE;
     const dealerPremiumPct = Math.round((diff / PRIVATE_PRICE) * 100);
     const dealerVsPrivate = `<p><span class="v-icon">🏢</span><span class="v-text"><strong>Where to buy:</strong> 👤 Private saves ~<span class="ok">₹ ${lakh2dp(diff)} (${dealerPremiumPct}%)</span> · 🏢 Dealer adds warranty + paperwork (worth it for first-timers).</span></p>`;
 
-    // ── Cost of ownership ──────────────────────────────────────
     const priceAt5y = priceAtMonth(DEP_DATA.length - 1);
     const loss5y = ESTIMATED - priceAt5y;
-    const pct5y = Math.round((loss5y / ESTIMATED) * 100);
     const monthlyCost = Math.round(loss5y / 60);
     const deprecNote = `<p><span class="v-icon">📉</span><span class="v-text"><strong>5-yr cost:</strong> ~<span class="hi">₹ ${lakh2dp(loss5y)}</span> total · <span class="hi">₹ ${lakh2dp(monthlyCost)}/month</span> in depreciation. Compare against other cars before deciding.</span></p>`;
 
@@ -1671,13 +1652,11 @@
       const tip = wrap.querySelector('.info-tooltip');
       if (!tip) return;
       wrap.addEventListener('mouseenter', function() {
-        // Reset to default centered position
         tip.classList.remove('flip-down');
         tip.style.left = '';
         tip.style.right = '';
         tip.style.transform = 'translateX(-50%)';
 
-        // Measure tooltip dimensions while temporarily visible (for layout)
         tip.style.visibility = 'hidden';
         tip.style.opacity = '0';
         const tmpDisplay = tip.style.display;
@@ -1691,35 +1670,22 @@
         const iconRect = wrap.getBoundingClientRect();
         const viewW = window.innerWidth;
 
-        // 1) Vertical flip if no space above
         if (iconRect.top < tipHeight + 20) {
           tip.classList.add('flip-down');
         }
 
-        // 2) Horizontal: viewport-aware positioning.
-        //    v3.3: Previous logic could still overflow on narrow (≤380px)
-        //    viewports because anchoring to .info-wrap edges doesn't help
-        //    when the tooltip is wider than the available viewport space
-        //    on either side.
-        //    New approach: compute the tooltip's actual viewport-left after
-        //    centered placement, then nudge it horizontally until it fits.
         const iconCenterX = iconRect.left + iconRect.width / 2;
-        const margin = 8; // min gap to viewport edge
-
-        // After translateX(-50%) the tooltip's left edge is at iconCenterX - tipWidth/2
+        const margin = 8;
         let tipLeftViewport = iconCenterX - (tipWidth / 2);
         let tipRightViewport = tipLeftViewport + tipWidth;
 
         if (tipLeftViewport < margin) {
-          // Overflows left edge — push right by the overflow amount
           const shift = margin - tipLeftViewport;
           tip.style.transform = `translateX(calc(-50% + ${shift}px))`;
         } else if (tipRightViewport > viewW - margin) {
-          // Overflows right edge — push left by the overflow amount
           const shift = tipRightViewport - (viewW - margin);
           tip.style.transform = `translateX(calc(-50% - ${shift}px))`;
         }
-        // else: default centered position is fine
       });
     });
   }
