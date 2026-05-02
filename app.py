@@ -691,46 +691,40 @@ def calculate_geo_aware_confidence(phase, geo_tier):
 def get_confidence_message(geo_tier, city_count, state_count, national_count, user_city):
     """
     Generate user-facing tooltip message.
-    Returns dict: { 'tier_label', 'message', 'action' }
+    Returns dict: { 'tier_label', 'message', 'action', 'confidence_band' }
 
-    v3.5.1: Tooltip ALWAYS references verified-deal counts at city / state / national
-    levels regardless of which tier was actually used. This gives the user transparency
-    into the data behind the estimate at every tier, including formula-driven cases.
-    Per locked hybrid disclosure rule: shows geographic tier consequence, NOT the
-    matrix mechanics.
+    v3.5.1 (revised after user testing): Tooltip now shows a STATIC 4-tier
+    confidence ladder instead of dynamic counts. Showing "0 verified deals
+    in your city" was eroding user trust even though it was technically
+    accurate. The new tooltip educates users about what each confidence
+    range means without naming raw counts.
+
+    Tier copy (per user's exact wording, locked):
+      95-100% → Highly calibrated due to verified local transactions
+      80-94%  → Well calibrated due to strong market data availability
+      60-79%  → Moderately calibrated with available market data
+      <60%    → Pricing model based estimate, Limited market data
+
+    The geo_tier still drives the action prompt under the ladder, since that's
+    what nudges users to submit deals.
     """
-    # Build the always-visible counts line — same across all tiers
-    counts_line = (
-        f"Based on verified deals in last 90 days: "
-        f"{city_count} in {user_city}, {state_count} in your state, "
-        f"{national_count} nationally."
-    )
-
     if geo_tier == 'city':
-        return {
-            'tier_label': 'city',
-            'message': counts_line,
-            'action': f'Strong local data — pricing is well-calibrated for {user_city}.',
-        }
+        action = f'Strong local data — pricing is well-calibrated for {user_city}.'
     elif geo_tier == 'state':
-        return {
-            'tier_label': 'state',
-            'message': counts_line,
-            'action': f"Submit a deal from {user_city} to unlock city-specific pricing.",
-        }
+        action = f'Submit a verified deal in {user_city} to unlock city-specific pricing.'
     elif geo_tier == 'national':
-        return {
-            'tier_label': 'national',
-            'message': counts_line,
-            'action': f'Submit a deal in {user_city} to improve local accuracy.',
-        }
+        action = f'Submit a verified deal in {user_city} to improve local accuracy.'
     else:
-        # 'formula' tier — still show the counts, just be clear pricing model is in use
-        return {
-            'tier_label': 'formula',
-            'message': counts_line + ' Estimate driven by pricing model.',
-            'action': f'Submit a deal in {user_city} — earn 100 credits and improve accuracy.',
-        }
+        action = f'Submit a verified deal in {user_city} — earn 100 credits and improve accuracy.'
+
+    return {
+        'tier_label': geo_tier or 'formula',
+        # message + action are kept for backward-compat with any code reading them,
+        # but the new dashboard template uses the 4-tier ladder rendered in HTML
+        # rather than a single message string.
+        'message': '',
+        'action':  action,
+    }
 
 
 # ============================================================
@@ -3322,8 +3316,9 @@ def submit_deal():
             weekly_count=weekly_count if weekly_count is not None else count_recent_deals(user['id'], 7),
             max_per_week=MAX_DEALS_PER_WEEK,
             deal_reward=DEAL_REWARD_AMOUNT,
-            # v3.5: city dropdown data (state already on form via reg_state)
+            # v3.5.1: Transaction location dropdowns (independent of reg_state)
             cities_by_state_json=json.dumps(INDIAN_CITIES_BY_STATE),
+            default_state=DEFAULT_STATE_CODE,
             default_city=DEFAULT_CITY,
         )
 
@@ -4697,7 +4692,10 @@ def api_feedback():
         'gap_pct':              gap_pct,
         'confidence_score':     valuation.get('confidence'),
         'confidence_tier':      valuation.get('geo_tier') or 'formula',
-        'status':               'auto_awarded',
+        # v3.5.1 fix: feedback_status_check allows ('new','reviewed','actioned','dismissed').
+        # 'new' = just submitted, awaiting admin review. Credit award already happened
+        # via the credits ledger; status is for admin workflow only.
+        'status':               'new',
         # v3.5.1 NEW columns (added by Migration 3)
         'valuation_id':         valuation_id_int,
         'source_other':         source_other,
