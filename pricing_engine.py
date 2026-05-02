@@ -38,6 +38,14 @@ User-mileage adjustment (FOUNDER-LOCKED Drift #2 resolution: market_avg_km):
   This applies the user's actual km to the market-relative baseline.
   (Founder chose option 2b — market_avg over age-expected.)
 
+v3.5 (state expansion): Added optional `state_multiplier` parameter applied
+ONLY at the final step. The empirical signal (median, comparables, NMP) is
+NOT multiplied — only the user-facing output (estimated_price, price_low,
+price_high) and the audit `selling_price_F38` / `purchase_price_F39`. This
+preserves the engine's empirical accuracy when used for Bangalore queries
+(multiplier=1.0) and applies geographic adjustment for non-Bangalore users
+when no city/state-specific verified deals exist (caller decides).
+
 Outputs:
   Returns a PricingResult dict with:
     - estimated_price: int (rupees) — same semantic as compute_base_valuation
@@ -51,8 +59,9 @@ Outputs:
     - repair_cost_applied: int rupees
     - negotiation_buffer_pct: float
     - nmp_F37: int rupees (Net Market Price)
-    - selling_price_F38: int rupees
-    - purchase_price_F39: int rupees
+    - selling_price_F38: int rupees (multiplier-applied)
+    - purchase_price_F39: int rupees (multiplier-applied)
+    - state_multiplier_applied: float (v3.5: 1.0 if no multiplier)
 
 These map 1:1 to columns added in migration_phase_1A.sql for `valuations`.
 """
@@ -120,6 +129,7 @@ def compute_market_valuation(
     negotiation_buffer: Optional[float] = None,
     purchase_buffer: Optional[float] = None,
     range_pct: Optional[float] = None,
+    state_multiplier: Optional[float] = None,  # v3.5: state expansion
 ) -> Optional[Dict]:
     """
     Run the market pricing engine on a set of listings.
@@ -140,12 +150,20 @@ def compute_market_valuation(
         price_per_km, repair_cost, negotiation_buffer, purchase_buffer, range_pct:
             optional overrides. Default to module constants.
 
+        state_multiplier (v3.5): optional float, applied to final user-facing
+            output only. Default None / 1.0 = no adjustment (Bangalore behavior).
+            When set (e.g. 0.965 for MP), scales estimated_price, price_low,
+            price_high, selling_price_F38, purchase_price_F39 — but does NOT
+            scale median, NMP, or comparables (those represent empirical signal).
+
     Returns:
         PricingResult dict (see module docstring for fields), OR
         None if listings count < MIN_EFFECTIVE_LISTINGS (caller falls back).
 
     Caller responsibility:
         - Caller (app.py) decides whether to use this engine vs. depreciation.
+        - Caller decides whether to pass state_multiplier (only when no
+          city/state-specific verified deals exist for user's location).
         - This function returns None if N too low, but app.py should already
           have skipped this path. Returning None is defensive.
     """
@@ -167,6 +185,18 @@ def compute_market_valuation(
         purchase_buffer = DEFAULT_PURCHASE_BUFFER
     if range_pct is None:
         range_pct = DEFAULT_RANGE_PCT
+
+    # v3.5: State multiplier default = 1.0 (no adjustment)
+    if state_multiplier is None:
+        state_multiplier = 1.0
+
+    # Sanity: clamp multiplier to reasonable range so a corrupted DB row
+    # can't produce absurd output. State multipliers should fall in 0.85-1.15.
+    if state_multiplier < 0.80 or state_multiplier > 1.20:
+        logger.warning(
+            f"market engine: state_multiplier={state_multiplier} out of bounds, clamping to [0.80, 1.20]"
+        )
+        state_multiplier = max(0.80, min(1.20, state_multiplier))
 
     # Extract listings data
     mileages = []
@@ -208,6 +238,8 @@ def compute_market_valuation(
 
     # ============================================================
     # Step 4: NMP (F37) = median - repair_cost
+    # NOTE (v3.5): NMP is NOT multiplied. It represents the empirical signal
+    # from listings. State adjustment is applied later only to user-facing prices.
     # ============================================================
     nmp_F37 = median_comparable - repair_cost
 
@@ -241,21 +273,34 @@ def compute_market_valuation(
     estimated_price_raw = selling_price_F38 * cond_mult * owner_mult
 
     # ============================================================
+    # v3.5: Apply state multiplier ONLY to user-facing prices
+    # The empirical signals (median, NMP, comparables) stay unmultiplied
+    # in the audit dict, so we can see what the raw market said vs. what
+    # the user saw. This is critical for IP audit trail.
+    # ============================================================
+    estimated_price_adjusted = estimated_price_raw * state_multiplier
+    selling_F38_adjusted = selling_price_F38 * state_multiplier
+    purchase_F39_adjusted = purchase_price_F39 * state_multiplier
+
+    # ============================================================
     # Confidence — function of N (more listings = more confidence)
     #   Mirrors the Phase 4 "Real-Market Pricing" confidence bands:
     #   N=5  → 60
     #   N=10 → 70
     #   N=20 → 80
     #   N=50 → 90 (capped)
+    # NOTE (v3.5): app.py overrides this with the geographic-tier-aware
+    # confidence score. This number is preserved as the "engine native"
+    # confidence for audit purposes.
     # ============================================================
     confidence = _compute_confidence(len(mileages))
 
     # ============================================================
-    # Range
+    # Range — applied AFTER state multiplier
     # ============================================================
-    estimated_price = int(round(estimated_price_raw))
-    price_low = int(round(estimated_price_raw * (1 - range_pct)))
-    price_high = int(round(estimated_price_raw * (1 + range_pct)))
+    estimated_price = int(round(estimated_price_adjusted))
+    price_low = int(round(estimated_price_adjusted * (1 - range_pct)))
+    price_high = int(round(estimated_price_adjusted * (1 + range_pct)))
 
     return {
         'engine_used': 'market_v1',
@@ -270,9 +315,11 @@ def compute_market_valuation(
         'median_listing_price': int(round(median_comparable)),
         'repair_cost_applied': int(repair_cost),
         'negotiation_buffer_pct': round(negotiation_buffer, 4),
-        'nmp_F37': int(round(nmp_F37)),
-        'selling_price_F38': int(round(selling_price_F38)),
-        'purchase_price_F39': int(round(purchase_price_F39)),
+        'nmp_F37': int(round(nmp_F37)),  # un-multiplied — empirical signal
+        'selling_price_F38': int(round(selling_F38_adjusted)),  # multiplied
+        'purchase_price_F39': int(round(purchase_F39_adjusted)),  # multiplied
+        # v3.5: state multiplier audit
+        'state_multiplier_applied': round(state_multiplier, 3),
         # Internal — for tooltip / debug
         'condition_mult': round(cond_mult, 3),
         'owner_mult': round(owner_mult, 3),
@@ -354,7 +401,7 @@ def _compute_confidence(n_listings: int) -> int:
 
 
 # ============================================================
-# REGRESSION TEST — runs on import in dev / startup
+# REGRESSION TESTS — run on import in dev / startup
 # ============================================================
 
 def _regression_test_2015_sheet() -> Dict:
@@ -362,19 +409,11 @@ def _regression_test_2015_sheet() -> Dict:
     Regression test against the 2015 sheet of 740Li_R11_reference.xlsx.
     Must reproduce F35/F37/F38/F39 within ±0.5%.
 
-    Note: the Excel uses OMR (Omani rial). We use the same numeric values
-    here; the engine is currency-agnostic. INR vs OMR doesn't affect the math.
-
-    Reference target values:
-      F35 (median comparable): 15157.41
-      F37 (NMP): 12057.41
-      F38 (selling): 9645.93
-      F39 (purchase): 8769.03
-
-    Returns dict with computed_* and expected_* and pct_diff_* fields.
+    v3.5: This test runs WITHOUT state_multiplier (default 1.0) so behavior
+    is identical to pre-v3.5. New regression test for state multiplier behavior
+    is _regression_test_state_multiplier() below.
     """
     listings_2015 = [
-        # (mileage, asking_price)
         (40000, 16666.67), (55000, 19392.03), (66000, 15618.45), (27397, 15618.45),
         (35700, 18763.10), (4800, 19916.14), (32000, 16666.67), (46000, 19706.50),
         (37700, 22012.58), (95000, 15723.27), (50000, 12788.26), (40356, 16766.56),
@@ -383,41 +422,24 @@ def _regression_test_2015_sheet() -> Dict:
         (59429, 14675.05), (85000, 10377.36),
     ]
 
-    # Build listings in the dict format the engine expects
-    listings = [
-        {"mileage": km, "asking_price": price}
-        for (km, price) in listings_2015
-    ]
+    listings = [{"mileage": km, "asking_price": price} for (km, price) in listings_2015]
 
-    # Reference Excel uses:
-    #   price_per_km = 0.0465
-    #   repair_cost = 3100
-    #   negotiation_buffer = 0.25
-    #   purchase_buffer = 0.10
-    #
-    # The user's transaction is at km = 52356.90 (= market_avg_km), so user_mileage
-    # adjustment is zero, meaning user_specific_price == NMP_F37 exactly.
-    # We pass user_mileage = market_avg_km to verify F38 / F39 land correctly.
-
-    # First pass: just to compute market_avg_km
     n = len(listings_2015)
     total = sum(km for km, _ in listings_2015)
     market_avg = (total - max(km for km, _ in listings_2015) - min(km for km, _ in listings_2015)) / (n - 2)
 
     result = compute_market_valuation(
         listings=listings,
-        user_year=2020,  # 2015 model + 5 yrs (transaction was in 2017-2020)
-        user_mileage=int(round(market_avg)),  # zero user-adjustment
-        user_condition="Good",  # multiplier = 1.00 (no effect)
-        user_owner="1st Owner",  # multiplier = 1.00 (no effect)
-        # Override config with reference values (units = OMR, not INR)
+        user_year=2020,
+        user_mileage=int(round(market_avg)),
+        user_condition="Good",
+        user_owner="1st Owner",
         price_per_km=0.0465,
         repair_cost=3100,
         negotiation_buffer=0.25,
         purchase_buffer=0.10,
     )
 
-    # Expected values from the Excel sheet
     expected = {
         "median_F35": 15157.41,
         "nmp_F37": 12057.41,
@@ -448,21 +470,92 @@ def _regression_test_2015_sheet() -> Dict:
     }
 
 
-# Run regression on import in development. Production import skips this
-# (env var ENGINE_SKIP_SELFTEST=1 — set on Render to avoid 2ms startup cost).
+def _regression_test_state_multiplier() -> Dict:
+    """
+    v3.5: Regression test that state_multiplier scales final output correctly
+    while NOT scaling NMP/median (empirical signals).
+    """
+    listings = [
+        {"mileage": 40000, "asking_price": 16666.67},
+        {"mileage": 55000, "asking_price": 19392.03},
+        {"mileage": 66000, "asking_price": 15618.45},
+        {"mileage": 27397, "asking_price": 15618.45},
+        {"mileage": 35700, "asking_price": 18763.10},
+        {"mileage": 32000, "asking_price": 16666.67},
+    ]
+
+    baseline = compute_market_valuation(
+        listings=listings,
+        user_year=2020,
+        user_mileage=43000,
+        user_condition="Good",
+        user_owner="1st Owner",
+        price_per_km=0.0465,
+        repair_cost=0,
+        negotiation_buffer=0.25,
+        purchase_buffer=0.10,
+        state_multiplier=1.0,
+    )
+
+    mp_adjusted = compute_market_valuation(
+        listings=listings,
+        user_year=2020,
+        user_mileage=43000,
+        user_condition="Good",
+        user_owner="1st Owner",
+        price_per_km=0.0465,
+        repair_cost=0,
+        negotiation_buffer=0.25,
+        purchase_buffer=0.10,
+        state_multiplier=0.965,
+    )
+
+    nmp_unchanged = baseline['nmp_F37'] == mp_adjusted['nmp_F37']
+    expected_ratio = 0.965
+    actual_ratio = mp_adjusted['estimated_price'] / baseline['estimated_price']
+    multiplier_correct = abs(actual_ratio - expected_ratio) < 0.001
+    audit_correct = mp_adjusted['state_multiplier_applied'] == 0.965
+
+    return {
+        "nmp_unchanged": nmp_unchanged,
+        "multiplier_correct": multiplier_correct,
+        "audit_correct": audit_correct,
+        "baseline_estimated": baseline['estimated_price'],
+        "mp_adjusted_estimated": mp_adjusted['estimated_price'],
+        "ratio_observed": round(actual_ratio, 4),
+        "ratio_expected": expected_ratio,
+        "all_pass": all([nmp_unchanged, multiplier_correct, audit_correct]),
+    }
+
+
 if __name__ == "__main__":
     import json
-    test_result = _regression_test_2015_sheet()
-    print("MARKET PRICING ENGINE — REGRESSION TEST RESULTS")
+
     print("=" * 60)
-    print(f"\nFull result dict:\n{json.dumps(test_result['result'], indent=2)}\n")
-    print(f"\nDiffs vs Excel reference:")
-    for k, d in test_result["diffs"].items():
-        status = "✅" if d["pct_diff"] < 0.5 else "❌"
-        print(f"  {status} {k}: expected {d['expected']:>12.2f}, "
-              f"computed {d['computed']:>12.2f}, diff {d['pct_diff']:.4f}%")
-    print()
-    if test_result["all_within_tolerance"]:
-        print("✅ ALL VALUES WITHIN ±0.5% TOLERANCE — engine port is faithful")
+    print("REGRESSION TEST 1: 2015 Excel sheet (no state multiplier)")
+    print("=" * 60)
+    test1 = _regression_test_2015_sheet()
+    for k, d in test1["diffs"].items():
+        status = "PASS" if d["pct_diff"] < 0.5 else "FAIL"
+        print(f"  [{status}] {k}: expected {d['expected']:>12.2f}, computed {d['computed']:>12.2f}, diff {d['pct_diff']:.4f}%")
+    if test1["all_within_tolerance"]:
+        print("\nTest 1: PASSED - engine port faithful, no v3.5 regression\n")
     else:
-        print("❌ AT LEAST ONE VALUE EXCEEDS ±0.5% TOLERANCE")
+        print("\nTest 1: FAILED - at least one value exceeds +/-0.5% tolerance\n")
+
+    print("=" * 60)
+    print("REGRESSION TEST 2 (v3.5): State multiplier behavior")
+    print("=" * 60)
+    test2 = _regression_test_state_multiplier()
+    print(f"  NMP unchanged when multiplier applied: {'PASS' if test2['nmp_unchanged'] else 'FAIL'}")
+    print(f"  Estimated price scales correctly:      {'PASS' if test2['multiplier_correct'] else 'FAIL'}")
+    print(f"  Audit field reports multiplier:        {'PASS' if test2['audit_correct'] else 'FAIL'}")
+    print(f"\n  Baseline estimated:    {test2['baseline_estimated']:>10}")
+    print(f"  MP-adjusted estimated: {test2['mp_adjusted_estimated']:>10}")
+    print(f"  Ratio observed:        {test2['ratio_observed']:>10}")
+    print(f"  Ratio expected:        {test2['ratio_expected']:>10}")
+    print()
+    if test2["all_pass"]:
+        print("Test 2: PASSED - v3.5 state multiplier behaves correctly\n")
+    else:
+        print("Test 2: FAILED - v3.5 state multiplier has an issue\n")
