@@ -233,19 +233,22 @@
     padding: 4px;
   }
   .conf-ladder-band {
+    /* v3.5.1 fix #3: Left-aligned plain text (no pill background) to match
+       the Market Demand tooltip's label style. */
     font-weight: 700;
-    text-align: center;
-    padding: 2px 4px;
-    border-radius: 8px;
-    font-size: 0.66rem;
-    letter-spacing: 0.3px;
+    text-align: left;
+    padding: 0;
+    background: none;
+    border-radius: 0;
+    font-size: 0.68rem;
+    letter-spacing: 0;
   }
-  .conf-ladder-band.b-high    { color: #5bd47b; background: rgba(40,167,69,0.16); }
-  .conf-ladder-band.b-good    { color: #87dc9c; background: rgba(40,167,69,0.10); }
-  .conf-ladder-band.b-mod     { color: #ffc870; background: rgba(255,165,0,0.14); }
-  .conf-ladder-band.b-limited { color: #adb5bd; background: rgba(108,117,125,0.18); }
+  .conf-ladder-band.b-high    { color: #5bd47b; }
+  .conf-ladder-band.b-good    { color: #87dc9c; }
+  .conf-ladder-band.b-mod     { color: #ffc870; }
+  .conf-ladder-band.b-limited { color: #adb5bd; }
   .conf-ladder-row.is-active .conf-ladder-band {
-    box-shadow: 0 0 0 1px rgba(78,176,255,0.4);
+    box-shadow: none;
   }
   .conf-ladder-text {
     color: #c9cdd5;
@@ -1361,7 +1364,9 @@
               </div>
             </div>
             <div class="conf-ladder-action">
-              {% if confidence_msg %}{{ confidence_msg.action }}{% else %}Submit a verified deal in your area to improve calibration.{% endif %}
+              {# v3.5.1 fix #5: Generic explanation that confidence grows with real
+                 transaction data, replacing the previous credit-CTA. #}
+              Data confidence grows with real transaction data submitted by Sellers &amp; Buyers on AutoKnowMus.
             </div>
           </span>
         </span>
