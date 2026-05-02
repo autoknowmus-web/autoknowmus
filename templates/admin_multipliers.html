@@ -1,0 +1,412 @@
+{% extends "layout.html" %}
+{% block title %}Admin · State Multipliers — AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ============================================================
+     v3.5.1-r2: admin_multipliers.html
+     View + inline-edit table for state_multipliers.
+     One form per state; edit any subset of fields and submit.
+     Audit log section below shows the last 50 changes.
+     ============================================================ */
+  .admin-wrap { padding: 20px 28px 28px; }
+
+  .admin-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
+  }
+  .admin-title {
+    color: #4eb0ff; font-size: 1.4rem; font-weight: 700; margin: 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .admin-title .badge-admin {
+    background: #ff8c00; color: #1a1d24;
+    font-size: 0.65rem; font-weight: 800; padding: 3px 10px;
+    border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .admin-meta {
+    color: #6c757d; font-size: 0.78rem;
+  }
+  .admin-meta strong { color: #adb5bd; }
+
+  .admin-tabs {
+    display: flex; gap: 4px; margin-bottom: 14px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .admin-tab {
+    color: #adb5bd; text-decoration: none;
+    padding: 8px 14px; font-size: 0.86rem; font-weight: 600;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .admin-tab:hover { color: #4eb0ff; }
+  .admin-tab.active {
+    color: #4eb0ff; border-bottom-color: #4eb0ff;
+  }
+
+  .flash-success-admin {
+    background: #28a745; color: #fff; border-radius: 8px;
+    padding: 0.6rem 2.4rem 0.6rem 0.95rem; margin-bottom: 12px;
+    position: relative; font-size: 0.88rem; font-weight: 500;
+  }
+  .flash-error-admin {
+    background: #dc3545; color: #fff; border-radius: 8px;
+    padding: 0.6rem 2.4rem 0.6rem 0.95rem; margin-bottom: 12px;
+    position: relative; font-size: 0.88rem; font-weight: 500;
+  }
+  .flash-close-x {
+    position: absolute; top: 50%; right: 0.7rem; transform: translateY(-50%);
+    background: transparent; border: none; color: #fff;
+    font-size: 1.2rem; line-height: 1; cursor: pointer;
+  }
+
+  .helper-strip {
+    background: #14171d; border: 1px solid #2a2d34; border-left: 3px solid #4eb0ff;
+    border-radius: 7px; padding: 10px 14px; margin-bottom: 14px;
+    color: #adb5bd; font-size: 0.82rem; line-height: 1.45;
+  }
+  .helper-strip strong { color: #e6e6e6; }
+  .helper-strip code {
+    background: #0e1117; color: #4eb0ff; padding: 1px 5px;
+    border-radius: 3px; font-size: 0.78rem;
+  }
+
+  .mult-table-card {
+    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 10px;
+    overflow: hidden; margin-bottom: 18px;
+  }
+  .mult-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.82rem; color: #e6e6e6;
+  }
+  .mult-table thead th {
+    background: #14171d; color: #adb5bd;
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    padding: 10px 8px; text-align: left;
+    border-bottom: 1px solid #2a2d34;
+    position: sticky; top: 0; z-index: 2;
+  }
+  .mult-table thead th.num { text-align: right; }
+  .mult-table tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background 0.1s;
+  }
+  .mult-table tbody tr:hover { background: rgba(78,176,255,0.04); }
+  .mult-table tbody tr:last-child { border-bottom: none; }
+  .mult-table td {
+    padding: 6px 8px; vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+  }
+  .mult-table td.num { text-align: right; }
+  .mult-table td.state-code {
+    color: #4eb0ff; font-weight: 700; font-size: 0.88rem;
+    letter-spacing: 0.5px; min-width: 42px;
+  }
+  .mult-table td.state-name { color: #e6e6e6; min-width: 130px; }
+  .mult-table td.notes-cell {
+    color: #adb5bd; font-size: 0.76rem; font-style: italic;
+    max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mult-table td.last-updated {
+    color: #6c757d; font-size: 0.74rem; white-space: nowrap;
+  }
+
+  .mult-input {
+    background: #0e1117; color: #e6e6e6;
+    border: 1px solid #2a2d34; border-radius: 5px;
+    padding: 4px 7px; font-size: 0.82rem;
+    width: 80px; font-variant-numeric: tabular-nums;
+  }
+  .mult-input.wide { width: 100%; min-width: 160px; }
+  .mult-input:focus {
+    outline: none; border-color: #4eb0ff;
+    box-shadow: 0 0 0 0.15rem rgba(78,176,255,0.18);
+  }
+  .mult-select {
+    background: #0e1117; color: #e6e6e6;
+    border: 1px solid #2a2d34; border-radius: 5px;
+    padding: 4px 7px; font-size: 0.82rem; min-width: 90px;
+  }
+  .mult-select:focus { outline: none; border-color: #4eb0ff; }
+
+  .quality-pill {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .quality-high   { background: rgba(40,167,69,0.18);  color: #5bd47b; border: 1px solid rgba(40,167,69,0.45); }
+  .quality-medium { background: rgba(255,165,0,0.16);  color: #ffc870; border: 1px solid rgba(255,165,0,0.45); }
+  .quality-low    { background: rgba(220,53,69,0.16);  color: #ff8585; border: 1px solid rgba(220,53,69,0.45); }
+  .quality-none   { background: rgba(108,117,125,0.16); color: #adb5bd; border: 1px solid rgba(108,117,125,0.45); }
+
+  .btn-save {
+    background: #4eb0ff; color: #0e1117;
+    border: none; border-radius: 5px;
+    padding: 5px 12px; font-size: 0.78rem; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+  }
+  .btn-save:hover { background: #3a9de0; }
+  .btn-save:disabled {
+    background: #2a2d34; color: #6c757d; cursor: not-allowed;
+  }
+
+  .audit-card {
+    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 14px;
+  }
+  .audit-card h3 {
+    color: #e6e6e6; font-size: 1rem; font-weight: 700; margin: 0 0 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .audit-card h3 .audit-count {
+    color: #6c757d; font-size: 0.78rem; font-weight: 400;
+  }
+  .audit-table {
+    width: 100%; border-collapse: collapse; font-size: 0.78rem;
+  }
+  .audit-table th {
+    color: #6c757d; text-align: left; font-weight: 600;
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px;
+    padding: 6px 8px 4px; border-bottom: 1px solid #2a2d34;
+  }
+  .audit-table td {
+    color: #adb5bd; padding: 6px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: top;
+  }
+  .audit-table td.changes-col {
+    font-family: ui-monospace, 'SF Mono', monospace;
+    color: #4eb0ff; font-size: 0.74rem;
+    max-width: 360px; word-break: break-word;
+  }
+  .audit-table td.audit-state {
+    color: #4eb0ff; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .audit-table td.audit-by {
+    color: #adb5bd; font-size: 0.74rem;
+  }
+  .audit-empty {
+    color: #6c757d; font-style: italic; font-size: 0.82rem;
+    text-align: center; padding: 14px;
+  }
+
+  /* Mobile: collapse table to vertical card layout */
+  @media (max-width: 900px) {
+    .mult-table thead { display: none; }
+    .mult-table, .mult-table tbody, .mult-table tr, .mult-table td { display: block; width: 100%; }
+    .mult-table tr {
+      border: 1px solid #2a2d34; border-radius: 7px;
+      margin-bottom: 8px; padding: 8px;
+    }
+    .mult-table td {
+      padding: 4px 0; text-align: left !important;
+    }
+    .mult-table td::before {
+      content: attr(data-label) ': ';
+      color: #6c757d; font-weight: 600;
+      font-size: 0.72rem; text-transform: uppercase;
+      letter-spacing: 0.4px; display: inline-block;
+      min-width: 110px;
+    }
+    .mult-input, .mult-select { width: auto; min-width: 100px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# 36-entry state name map — same as seller.html / buyer.html. Lookup by code. #}
+{% set STATE_NAMES = {
+  'AN': 'Andaman & Nicobar Islands', 'AP': 'Andhra Pradesh', 'AR': 'Arunachal Pradesh',
+  'AS': 'Assam', 'BR': 'Bihar', 'CG': 'Chhattisgarh', 'CH': 'Chandigarh',
+  'DD': 'Daman & Diu', 'DL': 'Delhi', 'DN': 'Dadra & Nagar Haveli',
+  'GA': 'Goa', 'GJ': 'Gujarat', 'HP': 'Himachal Pradesh', 'HR': 'Haryana',
+  'JH': 'Jharkhand', 'JK': 'Jammu & Kashmir', 'KA': 'Karnataka', 'KL': 'Kerala',
+  'LA': 'Ladakh', 'LD': 'Lakshadweep', 'MH': 'Maharashtra', 'ML': 'Meghalaya',
+  'MN': 'Manipur', 'MP': 'Madhya Pradesh', 'MZ': 'Mizoram', 'NL': 'Nagaland',
+  'OD': 'Odisha', 'PB': 'Punjab', 'PY': 'Puducherry', 'RJ': 'Rajasthan',
+  'SK': 'Sikkim', 'TN': 'Tamil Nadu', 'TR': 'Tripura', 'TS': 'Telangana',
+  'UK': 'Uttarakhand', 'UP': 'Uttar Pradesh', 'WB': 'West Bengal'
+} %}
+
+{% macro fmt_inr(n) -%}
+  {%- if n is none or n == '' -%}—
+  {%- else -%}{{ '{:,}'.format(n|int) }}
+  {%- endif -%}
+{%- endmacro %}
+
+<div class="admin-wrap">
+
+  <div class="admin-header">
+    <h2 class="admin-title">
+      ⚙️ State Multipliers <span class="badge-admin">Admin</span>
+    </h2>
+    <div class="admin-meta">
+      Generated <strong>{{ now_display }}</strong>
+    </div>
+  </div>
+
+  <div class="admin-tabs">
+    <a href="{{ url_for('admin_multipliers') }}" class="admin-tab active">📐 State Multipliers</a>
+    <a href="{{ url_for('admin_feedback') }}"    class="admin-tab">💬 Feedback Calibration</a>
+  </div>
+
+  {% with flash_success = get_flashed_messages(category_filter=['success']) %}
+    {% if flash_success %}
+      {% for m in flash_success %}
+        <div class="flash-success-admin" id="fs-{{ loop.index }}">
+          ✅ {{ m }}
+          <button type="button" class="flash-close-x"
+                  onclick="document.getElementById('fs-{{ loop.index }}').remove()">&times;</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% with flash_error = get_flashed_messages(category_filter=['error']) %}
+    {% if flash_error %}
+      {% for m in flash_error %}
+        <div class="flash-error-admin" id="fe-{{ loop.index }}">
+          ⚠️ {{ m }}
+          <button type="button" class="flash-close-x"
+                  onclick="document.getElementById('fe-{{ loop.index }}').remove()">&times;</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="helper-strip">
+    <strong>How to edit:</strong>
+    Change any field (multiplier, road tax %, RTO fee, data quality, notes) and click <strong>Save</strong> on that row.
+    Only fields you fill are updated; blank fields are left untouched.
+    <br>
+    Multiplier safe range: <code>0.50 – 1.50</code>. Road tax %: <code>0 – 50</code>. RTO fee: <code>0 – 10,00,000</code>.
+    Every change is logged in the audit table below.
+  </div>
+
+  <div class="mult-table-card">
+    <table class="mult-table">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>State / UT</th>
+          <th class="num">Multiplier</th>
+          <th class="num">Road Tax %</th>
+          <th class="num">RTO Fee (₹)</th>
+          <th>Data Quality</th>
+          <th>Notes</th>
+          <th>Last Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if rows %}
+          {% for row in rows %}
+            {% set sc = row.state_code %}
+            {% set state_name = STATE_NAMES.get(sc, sc) %}
+            {% set quality = (row.data_quality or 'none')|lower %}
+            <tr>
+              <form method="POST" action="{{ url_for('admin_multipliers') }}" id="form-{{ sc }}">
+                <input type="hidden" name="state_code" value="{{ sc }}">
+
+                <td class="state-code" data-label="Code">{{ sc }}</td>
+                <td class="state-name" data-label="State">{{ state_name }}</td>
+
+                <td class="num" data-label="Multiplier">
+                  <input type="text" inputmode="decimal" name="multiplier"
+                         class="mult-input"
+                         placeholder="{{ '%.3f'|format(row.multiplier) if row.multiplier is not none else '—' }}"
+                         autocomplete="off">
+                </td>
+
+                <td class="num" data-label="Road Tax %">
+                  <input type="text" inputmode="decimal" name="road_tax_pct"
+                         class="mult-input"
+                         placeholder="{{ '%.2f'|format(row.road_tax_pct) if row.road_tax_pct is not none else '—' }}"
+                         autocomplete="off">
+                </td>
+
+                <td class="num" data-label="RTO Fee">
+                  <input type="text" inputmode="numeric" name="rto_fee_inr"
+                         class="mult-input"
+                         placeholder="{{ fmt_inr(row.rto_fee_inr) }}"
+                         autocomplete="off">
+                </td>
+
+                <td data-label="Data Quality">
+                  <span class="quality-pill quality-{{ quality }}">
+                    {{ row.data_quality or '—' }}
+                  </span>
+                  <select name="data_quality" class="mult-select" style="margin-left:5px;">
+                    <option value="">No change</option>
+                    <option value="high">high</option>
+                    <option value="medium">medium</option>
+                    <option value="low">low</option>
+                  </select>
+                </td>
+
+                <td class="notes-cell" data-label="Notes" title="{{ row.notes or '' }}">
+                  {{ row.notes or '—' }}
+                  <br>
+                  <input type="text" name="notes" class="mult-input wide"
+                         placeholder="(leave blank to keep)"
+                         maxlength="1000" autocomplete="off"
+                         style="margin-top:3px; font-size:0.74rem;">
+                </td>
+
+                <td class="last-updated" data-label="Updated">
+                  {% if row.last_updated %}
+                    {{ row.last_updated_display or row.last_updated[:10] }}<br>
+                    <span style="color:#6c757d; font-size:0.7rem;">{{ row.updated_by or '' }}</span>
+                  {% else %}—{% endif %}
+                </td>
+
+                <td data-label="">
+                  <button type="submit" class="btn-save">Save</button>
+                </td>
+              </form>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="9" style="text-align:center; padding:24px; color:#6c757d; font-style:italic;">
+              No state_multipliers rows found. Run Migration 1 first.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="audit-card">
+    <h3>
+      📜 Audit Log
+      <span class="audit-count">{{ audit_rows | length }} most recent change{{ 's' if audit_rows|length != 1 else '' }}</span>
+    </h3>
+    {% if audit_rows %}
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>State</th>
+            <th>Changed By</th>
+            <th>Changes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ar in audit_rows %}
+            <tr>
+              <td>{{ ar.changed_at_display or ar.changed_at[:16] }}</td>
+              <td class="audit-state">{{ ar.state_code }}</td>
+              <td class="audit-by">{{ ar.changed_by or '—' }}</td>
+              <td class="changes-col">{{ ar.changes }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="audit-empty">No audit entries yet — changes you make above will appear here.</div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
