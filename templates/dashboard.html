@@ -188,35 +188,31 @@
   }
   .feedback-module .fb-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
   .feedback-module .fb-btn {
     background: #1a1d24;
     border: 1px solid #2a2d34;
     border-radius: 8px;
-    padding: 9px 6px;
+    padding: 12px 8px;
     cursor: pointer;
     text-align: center;
     color: #e6e6e6;
-    font-size: 0.78rem;
+    font-size: 0.86rem;
     font-weight: 600;
     transition: border-color 0.15s, background 0.15s, transform 0.1s;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
   }
   .feedback-module .fb-btn:hover {
     border-color: #28a745;
     background: rgba(40,167,69,0.08);
     transform: translateY(-1px);
   }
-  .feedback-module .fb-btn .fb-emoji { font-size: 1.4rem; line-height: 1; }
-  .feedback-module .fb-btn .fb-label { font-size: 0.72rem; color: #adb5bd; }
-  .feedback-module .fb-btn[data-reaction="close"]:hover {
-    border-color: #ffa500; background: rgba(255,165,0,0.08);
-  }
+  .feedback-module .fb-btn .fb-emoji { font-size: 1.6rem; line-height: 1; }
   .feedback-module .fb-btn[data-reaction="wayoff"]:hover {
     border-color: #ff6b6b; background: rgba(255,107,107,0.08);
   }
@@ -345,6 +341,37 @@
   .feedback-module .fb-guest-cta a:hover { text-decoration: underline; }
   .feedback-module.is-guest .fb-guest-cta { display: block; }
 
+  /* v3.5.1: Footer hint — promotes deal submission as the bigger reward path */
+  .feedback-module .fb-footer-hint {
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px solid #2a2d34;
+    text-align: center;
+    color: #adb5bd;
+    font-size: 0.74rem;
+    line-height: 1.4;
+  }
+  .feedback-module .fb-footer-hint a {
+    color: #28a745;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .feedback-module .fb-footer-hint a:hover { text-decoration: underline; }
+  .feedback-module.is-guest .fb-footer-hint,
+  .feedback-module.is-thanked .fb-footer-hint { display: none; }
+
+  /* v3.5.1: Selected-button visual feedback when a reaction is active */
+  .feedback-module .fb-btn.is-selected[data-reaction="helpful"] {
+    border-color: #28a745;
+    background: rgba(40,167,69,0.16);
+    box-shadow: 0 0 0 1px rgba(40,167,69,0.3);
+  }
+  .feedback-module .fb-btn.is-selected[data-reaction="wayoff"] {
+    border-color: #ff6b6b;
+    background: rgba(255,107,107,0.14);
+    box-shadow: 0 0 0 1px rgba(255,107,107,0.3);
+  }
+
   /* ============================================================
      v3.5: GEO-AWARE CONFIDENCE TOOLTIP STYLES
      Replaces the static "Backed by 20+ verified deals" rows with
@@ -380,6 +407,12 @@
   }
 
   .slider-section { border-top: 1px solid #2a2d34; padding-top: 12px; }
+  /* v3.5.1: Slider now lives in its own card below the depreciation chart.
+     When inside .slider-card, drop the top border line (card already provides framing). */
+  .slider-card .slider-section { border-top: none; padding-top: 0; }
+  .slider-card .card-title {
+    margin-bottom: 10px;
+  }
   .slider-labels { display: flex; justify-content: space-between; color: #b0b0b0; font-size: 0.76rem; margin-bottom: 4px; }
   .slider-labels .left  { color: #ffa500; font-weight: 600; }
   .slider-labels .right { color: #28a745; font-weight: 600; }
@@ -1258,40 +1291,35 @@
         </div>
       </div>
 
-      {# v3.5: FEEDBACK MODULE — right under the price hero.
-         Logged-in users: live, posts to /api/feedback, awards credits.
-         Guests: greyed-out with signup CTA.
-         Per locked design: 50 credits for "helpful", 200 for "close"/"wayoff" (with price + source). #}
+      {# v3.5.1: FEEDBACK MODULE — right under the price hero.
+         Two reactions only: helpful + wayoff (drops 'close').
+         Both require actual_price + source. Both award 50 credits.
+         "Other" source reveals a free-text "Specify" field.
+         Submitting a verified deal still earns 100 credits (footer hint). #}
       <div class="feedback-module {% if not user %}is-guest{% endif %}" id="fb-module"
            data-valuation-id="{{ val.id if val.id != 'guest' else '' }}"
            data-is-guest="{{ '1' if not user else '0' }}">
         <div class="fb-title">
           Was this estimate helpful?
-          <span class="fb-sub">— takes 5 seconds, earn credits</span>
+          <span class="fb-sub">— Earn 50 credits (one-time per estimate)</span>
         </div>
 
         <div class="fb-row">
           <button type="button" class="fb-btn" data-reaction="helpful">
             <span class="fb-emoji">👍</span>
             <span>Helpful</span>
-            <span class="fb-label">+50 credits</span>
-          </button>
-          <button type="button" class="fb-btn" data-reaction="close">
-            <span class="fb-emoji">🤔</span>
-            <span>Close, but…</span>
-            <span class="fb-label">+200 credits</span>
           </button>
           <button type="button" class="fb-btn" data-reaction="wayoff">
             <span class="fb-emoji">👎</span>
             <span>Way off</span>
-            <span class="fb-label">+200 credits</span>
           </button>
         </div>
 
-        {# Detail panel — shown only when "close" or "wayoff" is clicked #}
+        {# Detail panel — required for BOTH reactions in v3.5.1.
+           User selects helpful/wayoff, panel opens, they enter actual_price + source. #}
         <div class="fb-detail-panel">
           <div class="fb-detail-headline">
-            <span class="fb-detail-icon" id="fb-detail-icon">🤔</span>
+            <span class="fb-detail-icon" id="fb-detail-icon">👍</span>
             <span id="fb-detail-text">Help us calibrate — what's the actual price?</span>
           </div>
           <div class="fb-detail-row">
@@ -1306,14 +1334,21 @@
               <option value="Dealer">Dealer</option>
               <option value="CarTrade">CarTrade</option>
               <option value="CarDekho">CarDekho</option>
+              <option value="Spinny">Spinny</option>
+              <option value="Cars24">Cars24</option>
               <option value="Friend/Family">Friend / Family</option>
               <option value="Other">Other</option>
             </select>
           </div>
+          {# v3.5.1: "Other" reveals this Specify text field (hidden by default). #}
+          <div class="fb-detail-row" id="fb-source-other-row" style="display:none;">
+            <label for="fb-source-other">Specify</label>
+            <input type="text" id="fb-source-other" placeholder="e.g. local dealer in HSR" maxlength="120">
+          </div>
           <div class="fb-error" id="fb-error"></div>
           <div class="fb-actions">
             <button type="button" class="fb-cancel" id="fb-cancel">Cancel</button>
-            <button type="button" class="fb-submit" id="fb-submit">Submit (+200 credits)</button>
+            <button type="button" class="fb-submit" id="fb-submit">Submit (+50 credits)</button>
           </div>
         </div>
 
@@ -1325,24 +1360,15 @@
         <div class="fb-guest-cta">
           <a href="{{ url_for('signup') }}">Sign up</a> to leave feedback and earn credits.
         </div>
+
+        {# v3.5.1: Footer hint promotes the bigger reward — submitting a verified deal. #}
+        <div class="fb-footer-hint">
+          💡 <a href="{{ url_for('submit_deal') }}">Submit a verified deal</a> to earn <strong>100 credits</strong> instead.
+        </div>
       </div>
 
-      <div class="slider-section">
-        <div class="slider-labels">
-          <span class="left">← Quick Sale</span>
-          <span class="right">Highest Price →</span>
-        </div>
-        <div class="slider-track-wrap">
-          <div class="slider-bubble" id="slider-bubble">₹ {{ l2dp(estimated) }}</div>
-          <input type="range" id="price-slider"
-                 min="{{ price_low }}" max="{{ price_high }}"
-                 value="{{ estimated }}" step="1000">
-        </div>
-        <div class="slider-info">
-          <div>Your price: <strong id="slider-price-text">₹ {{ l2dp(estimated) }}</strong></div>
-          <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
-        </div>
-      </div>
+      {# v3.5.1: Slider section moved OUT of this card to its own row below
+         the depreciation chart (where there's empty space). See .slider-card below. #}
     </div>
 
     <div class="card chart-card">
@@ -1377,6 +1403,32 @@
       {# v3.1: Chart caption explaining loss in first 30 days #}
       <div class="chart-caption">
         Your car loses about <strong>₹ {{ l2dp(chart_loss_pct.total_rupees) }}</strong> in value over the next 30 days. Every week you wait costs roughly <strong>₹ {{ l2dp(chart_loss_pct.weekly_rupees) }}</strong>.
+      </div>
+    </div>
+  </div>
+
+  {# v3.5.1: PRICE STRATEGY SLIDER — moved out of hero-combined to its own
+     full-width card below the depreciation chart. Fills the empty space.
+     User can still drag to see how price affects demand and days-to-sell. #}
+  <div class="card slider-card" style="margin-bottom: 12px;">
+    <div class="card-title">
+      Try different listing prices
+      <span class="sub">drag to see how price affects demand &amp; selling time</span>
+    </div>
+    <div class="slider-section">
+      <div class="slider-labels">
+        <span class="left">← Quick Sale</span>
+        <span class="right">Highest Price →</span>
+      </div>
+      <div class="slider-track-wrap">
+        <div class="slider-bubble" id="slider-bubble">₹ {{ l2dp(estimated) }}</div>
+        <input type="range" id="price-slider"
+               min="{{ price_low }}" max="{{ price_high }}"
+               value="{{ estimated }}" step="1000">
+      </div>
+      <div class="slider-info">
+        <div>Your price: <strong id="slider-price-text">₹ {{ l2dp(estimated) }}</strong></div>
+        <div class="days-badge">Days to sell: <span class="num" id="slider-days">{{ days_to_sell }}</span></div>
       </div>
     </div>
   </div>
@@ -1872,7 +1924,11 @@
   });
 
   // ============================================================
-  // v3.5: FEEDBACK MODULE HANDLER
+  // v3.5.1: FEEDBACK MODULE HANDLER
+  // - Two reactions only: helpful + wayoff
+  // - BOTH require actual_price + source (no quick-fire helpful anymore)
+  // - "Other" source reveals source_other text input
+  // - Both award 50 credits (DEAL submission still earns 100 — see footer hint)
   // ============================================================
   (function setupFeedback() {
     const fbModule = document.getElementById('fb-module');
@@ -1887,10 +1943,11 @@
     const submitBtn = document.getElementById('fb-submit');
     const cancelBtn = document.getElementById('fb-cancel');
     const errorEl = document.getElementById('fb-error');
-    const thanksEl = document.getElementById('fb-thanks');
     const thanksCreditsEl = document.getElementById('fb-thanks-credits');
     const priceInput = document.getElementById('fb-actual-price');
     const sourceInput = document.getElementById('fb-source');
+    const sourceOtherRow = document.getElementById('fb-source-other-row');
+    const sourceOtherInput = document.getElementById('fb-source-other');
 
     let currentReaction = null;
 
@@ -1902,11 +1959,26 @@
       errorEl.textContent = '';
       errorEl.classList.remove('show');
     }
+    function setSelectedButton(reaction) {
+      buttons.forEach(function(b) {
+        if (b.dataset.reaction === reaction) {
+          b.classList.add('is-selected');
+        } else {
+          b.classList.remove('is-selected');
+        }
+      });
+    }
+    function clearSelectedButton() {
+      buttons.forEach(function(b) { b.classList.remove('is-selected'); });
+    }
     function closeDetail() {
       fbModule.classList.remove('is-detail-open');
       currentReaction = null;
+      clearSelectedButton();
       priceInput.value = '';
       sourceInput.value = '';
+      sourceOtherInput.value = '';
+      sourceOtherRow.style.display = 'none';
       clearError();
     }
     function showThanks(credits) {
@@ -1914,7 +1986,18 @@
       fbModule.classList.add('is-thanked');
     }
 
-    async function postFeedback(reaction, actualPrice, source) {
+    // Show/hide source_other field based on source dropdown
+    sourceInput.addEventListener('change', function() {
+      if (sourceInput.value === 'Other') {
+        sourceOtherRow.style.display = '';
+        sourceOtherInput.focus();
+      } else {
+        sourceOtherRow.style.display = 'none';
+        sourceOtherInput.value = '';
+      }
+    });
+
+    async function postFeedback(reaction, actualPrice, source, sourceOther) {
       if (!valuationId) {
         showError('Cannot submit feedback for guest valuations. Sign up first.');
         return;
@@ -1922,20 +2005,40 @@
       const body = new FormData();
       body.append('valuation_id', valuationId);
       body.append('reaction', reaction);
-      if (actualPrice !== null && actualPrice !== undefined) body.append('actual_price', actualPrice);
-      if (source) body.append('source', source);
+      body.append('actual_price', actualPrice);
+      body.append('source', source);
+      if (sourceOther) body.append('source_other', sourceOther);
+
+      // Disable submit button during request to prevent double-submit
+      submitBtn.disabled = true;
+      const originalLabel = submitBtn.textContent;
+      submitBtn.textContent = 'Submitting…';
+
       try {
         const resp = await fetch('/api/feedback', { method: 'POST', body: body });
         const data = await resp.json();
         if (data.ok) {
           showThanks(data.credits_awarded);
         } else if (data.error === 'already_submitted') {
-          showError('You already submitted feedback for this valuation.');
+          showError("You've already shared feedback on this estimate.");
+          // Treat as success — show thanks state so user isn't stuck
+          setTimeout(function() { fbModule.classList.add('is-thanked'); }, 1500);
+        } else if (data.error === 'source_other_required') {
+          showError('Please specify what "Other" means in the field below.');
+        } else if (data.error === 'invalid_actual_price') {
+          showError('Please enter a valid price (positive number under ₹10 Crore).');
+        } else if (data.error === 'invalid_source') {
+          showError('Please select a valid source from the dropdown.');
+        } else if (data.error === 'valuation_not_found') {
+          showError('We could not find this estimate. Please refresh the page.');
         } else {
-          showError('Could not submit: ' + (data.error || 'unknown error'));
+          showError('Could not submit: ' + (data.detail || data.error || 'unknown error'));
         }
       } catch (e) {
         showError('Network error — please try again.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
       }
     }
 
@@ -1944,44 +2047,57 @@
         if (isGuest) return;  // greyed-out — pointer-events: none on parent
 
         const reaction = btn.dataset.reaction;
+        currentReaction = reaction;
+        setSelectedButton(reaction);
+
+        // v3.5.1: BOTH reactions open the detail panel.
         if (reaction === 'helpful') {
-          // No detail panel, fire immediately
-          postFeedback('helpful');
+          detailIcon.textContent = '👍';
+          detailText.textContent = "Great — what was the actual price you saw or got?";
         } else {
-          // Open detail panel for close/wayoff
-          currentReaction = reaction;
-          if (reaction === 'close') {
-            detailIcon.textContent = '🤔';
-            detailText.textContent = "Help us calibrate — what's the actual price?";
-          } else {
-            detailIcon.textContent = '👎';
-            detailText.textContent = "Tell us what's the right price so we can calibrate";
-          }
-          fbModule.classList.add('is-detail-open');
-          clearError();
+          detailIcon.textContent = '👎';
+          detailText.textContent = "Tell us what's the right price so we can calibrate";
         }
+        fbModule.classList.add('is-detail-open');
+        clearError();
+        // Focus price input for fast entry
+        setTimeout(function() { priceInput.focus(); }, 50);
       });
     });
 
     cancelBtn.addEventListener('click', closeDetail);
 
     submitBtn.addEventListener('click', function() {
+      if (!currentReaction) {
+        showError('Please pick Helpful or Way off first.');
+        return;
+      }
       const priceRaw = (priceInput.value || '').replace(/[,₹\s]/g, '').trim();
       const source = (sourceInput.value || '').trim();
+      const sourceOther = (sourceOtherInput.value || '').trim();
+
       if (!priceRaw) {
         showError('Please enter the actual price.');
+        priceInput.focus();
         return;
       }
       const priceInt = parseInt(priceRaw, 10);
       if (isNaN(priceInt) || priceInt <= 0) {
         showError('Price must be a positive number.');
+        priceInput.focus();
         return;
       }
       if (!source) {
         showError('Please select a source.');
+        sourceInput.focus();
         return;
       }
-      postFeedback(currentReaction, priceInt, source);
+      if (source === 'Other' && !sourceOther) {
+        showError('Please specify the source in the "Specify" field.');
+        sourceOtherInput.focus();
+        return;
+      }
+      postFeedback(currentReaction, priceInt, source, sourceOther);
     });
   })();
 
