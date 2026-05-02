@@ -4857,6 +4857,9 @@ def admin_multipliers():
              .order('state_code', desc=False)
              .execute())
         rows = r.data or []
+        # Format last_updated for display (DD-MMM-YYYY) per UI rule.
+        for row in rows:
+            row['last_updated_display'] = _format_txn_date(row.get('last_updated'))
     except Exception as e:
         app.logger.error(f"admin_multipliers fetch failed: {e}")
         rows = []
@@ -4893,14 +4896,22 @@ def admin_feedback():
     """
     Admin view of feedback aggregated by Brand × State × Model.
     Sorted by wayoff% desc; flags combos with N>=5 AND wayoff%>=40%.
+
+    v3.5.1-r2: Column references updated to match the ACTUAL feedback table
+    schema (which uses *_inr / state_code / fuel_type naming, not the names
+    that an earlier draft of this route assumed).
     """
     admin = current_user()
 
     try:
+        # v3.5.1-r2: Real columns on the feedback table.
         r = (supabase.table('feedback')
-             .select('id, valuation_id, user_id, reaction, actual_price, source, '
-                     'make, model, variant, fuel, year, estimated_price, user_state, user_city, '
-                     'created_at')
+             .select('id, valuation_id, user_email, reaction, '
+                     'actual_price_inr, price_source, source_other, '
+                     'make, model, variant, fuel_type, year, '
+                     'predicted_price_inr, state_code, city, '
+                     'gap_pct, confidence_score, confidence_tier, '
+                     'status, admin_notes, created_at')
              .order('created_at', desc=True)
              .execute())
         all_feedback = r.data or []
@@ -4909,30 +4920,36 @@ def admin_feedback():
         flash(f'Could not load feedback: {e}', 'error')
         all_feedback = []
 
-    # Aggregate by (make, state, model)
+    # Aggregate by (make, state_code, model)
     aggregates = defaultdict(lambda: {
         'helpful': 0,
-        'close': 0,
         'wayoff': 0,
         'total': 0,
         'sample_actual_prices': [],
         'sample_estimates': [],
+        'sample_gap_pcts': [],
     })
 
     for fb in all_feedback:
         make = fb.get('make') or 'Unknown'
         model = fb.get('model') or 'Unknown'
-        state = fb.get('user_state') or DEFAULT_STATE_CODE
+        state = fb.get('state_code') or DEFAULT_STATE_CODE
         key = (make, state, model)
         agg = aggregates[key]
         reaction = (fb.get('reaction') or '').lower()
-        if reaction in ('helpful', 'close', 'wayoff'):
+        # v3.5.1: only helpful/wayoff are valid reactions now ('close' was dropped)
+        if reaction in ('helpful', 'wayoff'):
             agg[reaction] += 1
             agg['total'] += 1
-        if fb.get('actual_price'):
-            agg['sample_actual_prices'].append(int(fb['actual_price']))
-        if fb.get('estimated_price'):
-            agg['sample_estimates'].append(int(fb['estimated_price']))
+        if fb.get('actual_price_inr'):
+            agg['sample_actual_prices'].append(int(fb['actual_price_inr']))
+        if fb.get('predicted_price_inr'):
+            agg['sample_estimates'].append(int(fb['predicted_price_inr']))
+        if fb.get('gap_pct') is not None:
+            try:
+                agg['sample_gap_pcts'].append(float(fb['gap_pct']))
+            except (ValueError, TypeError):
+                pass
 
     # Build display rows
     table_rows = []
@@ -4941,21 +4958,27 @@ def admin_feedback():
         if total == 0:
             continue
         wayoff_pct = round((agg['wayoff'] / total) * 100, 1)
-        close_pct = round((agg['close'] / total) * 100, 1)
         helpful_pct = round((agg['helpful'] / total) * 100, 1)
+        # Auto-flag rule: 5+ feedback rows AND >=40% wayoff means this combo
+        # likely has a calibration issue worth investigating.
         flagged = (total >= 5 and wayoff_pct >= 40.0)
 
         median_actual = None
         median_estimate = None
+        median_gap_pct = None
         try:
             actuals = sorted(agg['sample_actual_prices'])
             estimates = sorted(agg['sample_estimates'])
+            gaps = sorted(agg['sample_gap_pcts'])
             if actuals:
                 n = len(actuals)
                 median_actual = actuals[n // 2] if n % 2 == 1 else (actuals[n // 2 - 1] + actuals[n // 2]) // 2
             if estimates:
                 n = len(estimates)
                 median_estimate = estimates[n // 2] if n % 2 == 1 else (estimates[n // 2 - 1] + estimates[n // 2]) // 2
+            if gaps:
+                n = len(gaps)
+                median_gap_pct = round(gaps[n // 2] if n % 2 == 1 else (gaps[n // 2 - 1] + gaps[n // 2]) / 2, 1)
         except Exception:
             pass
 
@@ -4965,20 +4988,19 @@ def admin_feedback():
             'model': model,
             'total': total,
             'helpful': agg['helpful'],
-            'close': agg['close'],
             'wayoff': agg['wayoff'],
             'helpful_pct': helpful_pct,
-            'close_pct': close_pct,
             'wayoff_pct': wayoff_pct,
             'flagged': flagged,
             'median_actual': median_actual,
             'median_estimate': median_estimate,
+            'median_gap_pct': median_gap_pct,
         })
 
-    # Sort: flagged first, then by wayoff_pct desc
+    # Sort: flagged first, then by wayoff_pct desc, then by total desc
     table_rows.sort(key=lambda x: (not x['flagged'], -x['wayoff_pct'], -x['total']))
 
-    # Recent raw feedback (last 50)
+    # Recent raw feedback (last 50) for the list section
     recent = []
     for fb in all_feedback[:50]:
         recent.append({
@@ -4990,8 +5012,7 @@ def admin_feedback():
     # Top-line stats
     total_count = len(all_feedback)
     helpful_count = sum(1 for f in all_feedback if (f.get('reaction') or '').lower() == 'helpful')
-    close_count = sum(1 for f in all_feedback if (f.get('reaction') or '').lower() == 'close')
-    wayoff_count = sum(1 for f in all_feedback if (f.get('reaction') or '').lower() == 'wayoff')
+    wayoff_count  = sum(1 for f in all_feedback if (f.get('reaction') or '').lower() == 'wayoff')
 
     return render_template(
         'admin_feedback.html',
@@ -5001,7 +5022,6 @@ def admin_feedback():
         recent=recent,
         total_count=total_count,
         helpful_count=helpful_count,
-        close_count=close_count,
         wayoff_count=wayoff_count,
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
     )
