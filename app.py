@@ -285,9 +285,11 @@ INDIAN_CITIES_BY_STATE = {
     'WB': ['Kolkata', 'Howrah', 'Durgapur', 'Siliguri', 'Other'],
 }
 
-# Feedback rewards (credits)
-FEEDBACK_REWARD_HELPFUL = 50      # Quick thumbs-up reaction
-FEEDBACK_REWARD_DETAILED = 200    # 'close' or 'wayoff' reaction with actual price + source
+# v3.5.1: Feedback reward — unified at 50 credits for BOTH reactions (helpful, wayoff).
+# Both reactions now require actual_price + source. The 'close' reaction is dropped.
+# Net per (search + feedback) = -100 + 50 = -50 credits, so misuse is naturally bounded.
+# Submitting a verified deal still earns 100 credits (DEAL_REWARD_AMOUNT).
+FEEDBACK_REWARD = 50
 
 # Geo tier minimum thresholds for hierarchical sourcing
 MIN_DEALS_FOR_GEO_TIER = 5        # Minimum verified deals per tier (city/state/national)
@@ -674,32 +676,44 @@ def get_confidence_message(geo_tier, city_count, state_count, national_count, us
     """
     Generate user-facing tooltip message.
     Returns dict: { 'tier_label', 'message', 'action' }
-    Per locked hybrid disclosure rule: shows geographic tier consequence,
-    NOT the matrix mechanics.
+
+    v3.5.1: Tooltip ALWAYS references verified-deal counts at city / state / national
+    levels regardless of which tier was actually used. This gives the user transparency
+    into the data behind the estimate at every tier, including formula-driven cases.
+    Per locked hybrid disclosure rule: shows geographic tier consequence, NOT the
+    matrix mechanics.
     """
+    # Build the always-visible counts line — same across all tiers
+    counts_line = (
+        f"Based on verified deals in last 90 days: "
+        f"{city_count} in {user_city}, {state_count} in your state, "
+        f"{national_count} nationally."
+    )
+
     if geo_tier == 'city':
         return {
             'tier_label': 'city',
-            'message': f"Based on {city_count} verified deals in {user_city} in last 90 days.",
-            'action': 'Strong local data — pricing is well-calibrated for your area.',
+            'message': counts_line,
+            'action': f'Strong local data — pricing is well-calibrated for {user_city}.',
         }
     elif geo_tier == 'state':
         return {
             'tier_label': 'state',
-            'message': f"Based on {state_count} verified deals in your state in last 90 days.",
+            'message': counts_line,
             'action': f"Submit a deal from {user_city} to unlock city-specific pricing.",
         }
     elif geo_tier == 'national':
         return {
             'tier_label': 'national',
-            'message': f"Based on {national_count} verified deals nationally + pricing model.",
-            'action': 'Submit a deal in your area to improve local accuracy.',
+            'message': counts_line,
+            'action': f'Submit a deal in {user_city} to improve local accuracy.',
         }
     else:
+        # 'formula' tier — still show the counts, just be clear pricing model is in use
         return {
             'tier_label': 'formula',
-            'message': 'Estimate based on pricing model. No verified deals yet for this model.',
-            'action': 'Be the first to submit a deal — earn 100 credits and improve accuracy.',
+            'message': counts_line + ' Estimate driven by pricing model.',
+            'action': f'Submit a deal in {user_city} — earn 100 credits and improve accuracy.',
         }
 
 
@@ -2230,9 +2244,9 @@ def seller():
     except (ValueError, TypeError):
         return render_form(form_data, error='Invalid Year.')
 
+    # v3.5.1: Mileage is mandatory — no auto-default fallback.
     if not form_data['mileage']:
-        age = max(1, YEAR_END - year_int)
-        form_data['mileage'] = str(age * 10000)
+        return render_form(form_data, error='Mileage is required. Please enter the car\'s odometer reading.')
 
     try:
         mileage_int = int(form_data['mileage'])
@@ -3316,7 +3330,13 @@ def submit_deal():
             'asking_price':      request.args.get('asking_price', ''),
             'sale_price':        request.args.get('sale_price', ''),
             'has_proof':         request.args.get('has_proof', ''),
-            # v3.5
+            # v3.5.1: user_state + user_city are INDEPENDENT of reg_state/reg_district.
+            # Registration tells you where the car is registered; user_state/user_city
+            # tells you where the transaction happened (a KA-registered car can be sold
+            # in MH if the new buyer is in MH). Default to KA/Bangalore.
+            'user_state':        request.args.get('user_state', '') or DEFAULT_STATE_CODE,
+            'user_city':         request.args.get('user_city', '')  or DEFAULT_CITY,
+            # v3.5 legacy 'city' param: kept for backwards compat (alias of user_city)
             'city':              request.args.get('city', ''),
         }
         return render_form(prefill)
@@ -3339,7 +3359,11 @@ def submit_deal():
         'asking_price':      (request.form.get('asking_price') or '').strip(),
         'sale_price':        (request.form.get('sale_price') or '').strip(),
         'has_proof':         request.form.get('has_proof') == 'on',
-        # v3.5
+        # v3.5.1: user_state + user_city are independent of reg_state/reg_district.
+        # Default to KA/Bangalore when not provided.
+        'user_state':        (request.form.get('user_state') or '').strip().upper() or DEFAULT_STATE_CODE,
+        'user_city':         (request.form.get('user_city') or '').strip()         or DEFAULT_CITY,
+        # v3.5 legacy 'city' field: still accepted (will be overwritten by user_city below).
         'city':              (request.form.get('city') or '').strip(),
     }
 
@@ -4487,46 +4511,98 @@ def admin_refresh_prices():
 def api_feedback():
     """
     POST endpoint to capture user feedback on a valuation.
+
+    v3.5.1 changes:
+      - Two reactions only: 'helpful' / 'wayoff' ('close' dropped)
+      - Both require actual_price + source
+      - Both award 50 credits (FEEDBACK_REWARD)
+      - Adds source_other (free text) when source == 'Other'
+      - Inserts into the actual feedback table schema (user_email, state_code, city,
+        actual_price_inr, price_source, predicted_price_inr, fuel_type, gap_pct,
+        confidence_score, confidence_tier, status)
+      - Dedup by (valuation_id, user_email) via the partial unique index added in
+        Migration 3 (the DB itself enforces it)
+
     Body (form or JSON):
       valuation_id: int (FK to valuations.id) — required
-      reaction: 'helpful' | 'close' | 'wayoff' — required
-      actual_price: int (rupees) — required if reaction is 'close' or 'wayoff'
-      source: str (e.g. 'OLX', 'Dealer', 'CarTrade', 'Friend/Family', 'Other')
-              — required if reaction is 'close' or 'wayoff'
-      notes: str (optional, max 500 chars)
+      reaction: 'helpful' | 'wayoff' — required
+      actual_price: int (rupees) — required
+      source: str — required. One of: OLX, Dealer, CarTrade, CarDekho,
+              Spinny, Cars24, Friend/Family, Other
+      source_other: str — required only if source == 'Other' (max 120 chars)
+      notes: str — ignored (no column on table; kept for backward-compat clients)
 
     Returns JSON:
-      { ok: True, credits_awarded: int, new_balance: int }
-      or { ok: False, error: str }
+      { ok: True, credits_awarded: int, new_balance: int, message: str }
+      or { ok: False, error: str, detail?: str }
     """
     user = current_user()
     if not user:
         return jsonify({'ok': False, 'error': 'not_logged_in'}), 401
+
+    user_email = (user.get('email') or '').lower().strip()
+    if not user_email:
+        return jsonify({'ok': False, 'error': 'no_user_email'}), 400
 
     # Accept form-encoded or JSON
     payload_in = request.get_json(silent=True) or {}
     def _get(key, default=''):
         return (payload_in.get(key) if payload_in else None) or request.form.get(key) or default
 
-    valuation_id = _get('valuation_id', '')
+    valuation_id_raw = _get('valuation_id', '')
     reaction = (_get('reaction', '') or '').strip().lower()
     actual_price_raw = _get('actual_price', '')
-    source = (_get('source', '') or '').strip()
-    notes = (_get('notes', '') or '').strip()[:500]
+    source_raw = (_get('source', '') or '').strip()
+    source_other_raw = (_get('source_other', '') or '').strip()
 
-    # Validate valuation_id
+    # ---- Validate valuation_id ----
     try:
-        valuation_id_int = int(valuation_id)
+        valuation_id_int = int(valuation_id_raw)
+        if valuation_id_int <= 0:
+            raise ValueError
     except (ValueError, TypeError):
         return jsonify({'ok': False, 'error': 'invalid_valuation_id'}), 400
 
-    if reaction not in ('helpful', 'close', 'wayoff'):
-        return jsonify({'ok': False, 'error': 'invalid_reaction'}), 400
+    # ---- Validate reaction (v3.5.1: only helpful + wayoff) ----
+    if reaction not in ('helpful', 'wayoff'):
+        return jsonify({'ok': False, 'error': 'invalid_reaction',
+                        'detail': 'Reaction must be helpful or wayoff.'}), 400
 
-    # Verify valuation exists and belongs to this user
+    # ---- Validate source ----
+    ALLOWED_SOURCES = {
+        'OLX', 'Dealer', 'CarTrade', 'CarDekho',
+        'Spinny', 'Cars24', 'Friend/Family', 'Other',
+    }
+    if not source_raw:
+        return jsonify({'ok': False, 'error': 'source_required'}), 400
+    if source_raw not in ALLOWED_SOURCES:
+        return jsonify({'ok': False, 'error': 'invalid_source'}), 400
+
+    # If 'Other', source_other is required
+    source_other = None
+    if source_raw == 'Other':
+        if not source_other_raw:
+            return jsonify({'ok': False, 'error': 'source_other_required',
+                            'detail': 'Please specify the source.'}), 400
+        source_other = source_other_raw[:120]
+
+    # ---- Validate actual_price ----
+    if not actual_price_raw:
+        return jsonify({'ok': False, 'error': 'actual_price_required'}), 400
+    try:
+        cleaned_price = str(actual_price_raw).replace(',', '').replace('₹', '').strip()
+        actual_price_int = int(cleaned_price)
+        if actual_price_int <= 0 or actual_price_int > 100000000:
+            raise ValueError
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'error': 'invalid_actual_price'}), 400
+
+    # ---- Look up the valuation (must belong to this user) ----
     try:
         r = (supabase.table('valuations')
-             .select('id, user_id, make, model, variant, fuel, year, estimated_price, user_state, user_city')
+             .select('id, user_id, make, model, variant, fuel, year, '
+                     'estimated_price, user_state, user_city, '
+                     'confidence, geo_tier')
              .eq('id', valuation_id_int)
              .eq('user_id', user['id'])
              .limit(1)
@@ -4539,73 +4615,88 @@ def api_feedback():
     if not valuation:
         return jsonify({'ok': False, 'error': 'valuation_not_found'}), 404
 
-    # Validate price + source if reaction needs them
-    actual_price_int = None
-    if reaction in ('close', 'wayoff'):
-        if not source:
-            return jsonify({'ok': False, 'error': 'source_required'}), 400
-        if not actual_price_raw:
-            return jsonify({'ok': False, 'error': 'actual_price_required'}), 400
-        try:
-            cleaned = str(actual_price_raw).replace(',', '').replace('₹', '').strip()
-            actual_price_int = int(cleaned)
-            if actual_price_int <= 0 or actual_price_int > 100000000:
-                raise ValueError
-        except (ValueError, TypeError):
-            return jsonify({'ok': False, 'error': 'invalid_actual_price'}), 400
-
-    # Check for duplicate feedback (1 per user per valuation)
+    # ---- Check for duplicate feedback (1 per user_email per valuation_id) ----
+    # The DB has a partial unique index that enforces this, but we check first
+    # so the error is clean (409 Conflict) rather than a generic insert failure.
     try:
         r_dup = (supabase.table('feedback')
                  .select('id')
                  .eq('valuation_id', valuation_id_int)
-                 .eq('user_id', user['id'])
+                 .eq('user_email', user_email)
                  .limit(1)
                  .execute())
         if r_dup.data:
-            return jsonify({'ok': False, 'error': 'already_submitted'}), 409
+            return jsonify({'ok': False, 'error': 'already_submitted',
+                            'detail': 'You have already submitted feedback for this valuation.'}), 409
     except Exception as e:
         app.logger.warning(f"api_feedback: duplicate check failed (continuing): {e}")
 
-    # Determine reward
-    if reaction == 'helpful':
-        reward = FEEDBACK_REWARD_HELPFUL
-    else:
-        reward = FEEDBACK_REWARD_DETAILED
+    # ---- Compute gap_pct = (actual - predicted) / predicted * 100 ----
+    predicted_price = valuation.get('estimated_price') or 0
+    gap_pct = None
+    if predicted_price and predicted_price > 0:
+        try:
+            gap_pct = round(((actual_price_int - predicted_price) / predicted_price) * 100, 2)
+        except (TypeError, ZeroDivisionError):
+            gap_pct = None
 
-    # Insert feedback row
+    # ---- Build the price_source field. If 'Other', append the free text. ----
+    if source_raw == 'Other':
+        # Store full descriptor in price_source so admin queries don't need to JOIN
+        # source_other separately. source_other_raw also stored in its own column.
+        price_source_value = f"Other: {source_other}"[:120]
+    else:
+        price_source_value = source_raw
+
+    # ---- Build insert payload — MATCHING the actual feedback table schema ----
     fb_payload = {
-        'valuation_id': valuation_id_int,
-        'user_id': user['id'],
-        'reaction': reaction,
-        'actual_price': actual_price_int,
-        'source': source or None,
-        'notes': notes or None,
-        # Snapshot some fields from valuation for analytics
-        'make':    valuation.get('make'),
-        'model':   valuation.get('model'),
-        'variant': valuation.get('variant'),
-        'fuel':    valuation.get('fuel'),
-        'year':    valuation.get('year'),
-        'estimated_price': valuation.get('estimated_price'),
-        'user_state':      valuation.get('user_state'),
-        'user_city':       valuation.get('user_city'),
-        'credits_awarded': reward,
+        # Required NOT NULL columns
+        'reaction':             reaction,
+        'make':                 valuation.get('make'),
+        'model':                valuation.get('model'),
+        'state_code':           (valuation.get('user_state') or DEFAULT_STATE_CODE).upper(),
+        'city':                 valuation.get('user_city') or DEFAULT_CITY,
+        'predicted_price_inr':  int(predicted_price) if predicted_price else 0,
+        # Nullable but useful columns
+        'user_email':           user_email,
+        'variant':              valuation.get('variant'),
+        'year':                 valuation.get('year'),
+        'fuel_type':            valuation.get('fuel'),
+        'actual_price_inr':     actual_price_int,
+        'price_source':         price_source_value,
+        'gap_pct':              gap_pct,
+        'confidence_score':     valuation.get('confidence'),
+        'confidence_tier':      valuation.get('geo_tier') or 'formula',
+        'status':               'auto_awarded',
+        # v3.5.1 NEW columns (added by Migration 3)
+        'valuation_id':         valuation_id_int,
+        'source_other':         source_other,
     }
+
     try:
         ins = supabase.table('feedback').insert(fb_payload).execute()
         if not ins.data:
-            return jsonify({'ok': False, 'error': 'insert_failed'}), 500
+            return jsonify({'ok': False, 'error': 'insert_failed',
+                            'detail': 'Database returned no rows.'}), 500
     except Exception as e:
+        # Catch the unique-index violation specifically and return 409
+        err_str = str(e).lower()
+        if 'duplicate key' in err_str or 'unique' in err_str:
+            return jsonify({'ok': False, 'error': 'already_submitted',
+                            'detail': 'Feedback already submitted for this valuation.'}), 409
         app.logger.error(f"api_feedback insert failed: {e}")
         return jsonify({'ok': False, 'error': 'insert_failed', 'detail': str(e)}), 500
 
-    # Award credits
+    # ---- Award credits (v3.5.1: 50 for both reactions) ----
+    reward = FEEDBACK_REWARD
     current_credits = user.get('credits', 0) or 0
     new_balance = current_credits + reward
     try:
         update_user(user['id'], {'credits': new_balance})
-        car_label = f"{valuation.get('make','')} {valuation.get('model','')} {valuation.get('variant','')}".strip()
+        car_label = (
+            f"{valuation.get('make','')} {valuation.get('model','')} "
+            f"{valuation.get('variant','')}"
+        ).strip()
         log_credit_transaction(
             user_id=user['id'],
             type_='feedback_reward',
