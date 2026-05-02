@@ -197,6 +197,73 @@
     padding-top: 5px;
   }
 
+  /* ============================================================
+     v3.5.1 (revised): 4-tier confidence ladder inside Data Confidence
+     tooltip. Static educational scale; the row matching the actual
+     confidence value gets the .is-active highlight. Replaces the
+     previous "verified-deal counts" tooltip that mentioned 0 deals
+     and eroded user trust. Buyer flavor — slightly tighter than seller.
+     ============================================================ */
+  .conf-ladder-header {
+    display: block;
+    color: #adb5bd;
+    font-weight: 700;
+    font-size: 0.74rem;
+    margin-bottom: 5px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+  }
+  .conf-ladder { display: flex; flex-direction: column; gap: 0; }
+  .conf-ladder-row {
+    display: grid;
+    grid-template-columns: 76px 1fr;
+    gap: 7px;
+    padding: 4px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    align-items: start;
+    font-size: 0.7rem;
+    line-height: 1.4;
+  }
+  .conf-ladder-row:last-of-type { border-bottom: none; }
+  .conf-ladder-row.is-active {
+    background: rgba(78,176,255,0.10);
+    border-radius: 4px;
+    border-bottom-color: transparent;
+    margin: 0 -2px;
+    padding: 4px;
+  }
+  .conf-ladder-band {
+    font-weight: 700;
+    text-align: center;
+    padding: 2px 4px;
+    border-radius: 8px;
+    font-size: 0.66rem;
+    letter-spacing: 0.3px;
+  }
+  .conf-ladder-band.b-high    { color: #5bd47b; background: rgba(40,167,69,0.16); }
+  .conf-ladder-band.b-good    { color: #87dc9c; background: rgba(40,167,69,0.10); }
+  .conf-ladder-band.b-mod     { color: #ffc870; background: rgba(255,165,0,0.14); }
+  .conf-ladder-band.b-limited { color: #adb5bd; background: rgba(108,117,125,0.18); }
+  .conf-ladder-row.is-active .conf-ladder-band {
+    box-shadow: 0 0 0 1px rgba(78,176,255,0.4);
+  }
+  .conf-ladder-text {
+    color: #c9cdd5;
+    line-height: 1.4;
+  }
+  .conf-ladder-row.is-active .conf-ladder-text {
+    color: #e6e6e6;
+  }
+  .conf-ladder-action {
+    color: #adb5bd;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    font-style: italic;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 5px;
+    margin-top: 5px;
+  }
+
   .deal-section { border-top: 1px solid #2a2d34; padding-top: 8px; }
   .deal-banner {
     border-radius: 9px;
@@ -998,10 +1065,17 @@
      sub-text. Note: ex-showroom prices remain pegged to Bangalore (source data
      baseline). State-level adjustments applied at valuation time. #}
   {% if anchor_data %}
+    {# v3.5.1: Anchor strip wording adapts to user's location.
+       For Bangalore searches we keep "(Bangalore)" since it matches the user's city.
+       For other cities we drop the city-name from the main line and add a side-note
+       explaining that ex-showroom prices are pegged to Bangalore as the reference baseline. #}
+    {% set show_bangalore_label = (user_city or '')|lower == 'bangalore' %}
     <div class="anchor-strip {% if anchor_data.years_old > 7 %}is-aged{% endif %}">
       <div class="anchor-row">
         <span class="anchor-segment">
-          <span class="anchor-label">Ex-showroom (Bangalore):</span>
+          <span class="anchor-label">
+            Ex-showroom{% if show_bangalore_label %} (Bangalore){% endif %}:
+          </span>
           <span class="anchor-value">₹ {{ l2dp(anchor_data.ex_showroom) }}</span>
           <span class="anchor-label">({{ anchor_data.years_old }} yr{{ '' if anchor_data.years_old == 1 else 's' }} old)</span>
         </span>
@@ -1012,7 +1086,13 @@
         </span>
         <span class="anchor-pct">~{{ anchor_data.pct_off_new }}% off new</span>
       </div>
-      <div class="anchor-subtext">Latest ex-showroom price for the new version of this car</div>
+      <div class="anchor-subtext">
+        {% if show_bangalore_label %}
+          Latest ex-showroom price for the new version of this car
+        {% else %}
+          Latest ex-showroom price for the new version of this car (Bangalore reference; local pricing reflects {{ user_city }})
+        {% endif %}
+      </div>
     </div>
   {% endif %}
 
@@ -1247,37 +1327,51 @@
     </div>
 
     {# v3.5: Confidence kpi — geo-aware tooltip (buyer flavor).
-       Replaces the previous static "Backed by 20+ verified deals" rows. #}
+       v3.5.1 (revised): Static 4-tier confidence ladder. Replaces the previous
+       tooltip that named raw verified-deal counts which eroded user trust.
+       Tier copy locked per user's exact wording. #}
     <div class="kpi-card">
       <div class="kpi-label">
         Data Confidence
         <span class="info-wrap" id="conf-info-wrap">
           <span class="info-icon">i</span>
+          {% set conf_band =
+            'high'    if confidence >= 95 else
+            'good'    if confidence >= 80 else
+            'mod'     if confidence >= 60 else
+            'limited' %}
           <span class="info-tooltip wide" id="conf-tooltip">
-            {% set conf_tier = (confidence_msg.tier_label if confidence_msg else 'formula') or 'formula' %}
-            <span class="conf-tier-pill tier-{{ conf_tier }}">
-              {%- if conf_tier == 'city' -%}🏙️ Local data
-              {%- elif conf_tier == 'state' -%}📍 State data
-              {%- elif conf_tier == 'national' -%}🇮🇳 National data
-              {%- else -%}📊 Formula-driven
-              {%- endif -%}
-            </span>
-            <div class="conf-geo-headline">
-              {% if confidence_msg %}{{ confidence_msg.message }}{% else %}Confidence: {{ confidence }}%{% endif %}
+            <span class="conf-ladder-header">How confidence is calibrated</span>
+            <div class="conf-ladder">
+              <div class="conf-ladder-row {% if conf_band == 'high' %}is-active{% endif %}">
+                <span class="conf-ladder-band b-high">95–100%</span>
+                <span class="conf-ladder-text">Highly calibrated due to verified local transactions</span>
+              </div>
+              <div class="conf-ladder-row {% if conf_band == 'good' %}is-active{% endif %}">
+                <span class="conf-ladder-band b-good">80–94%</span>
+                <span class="conf-ladder-text">Well calibrated due to strong market data availability</span>
+              </div>
+              <div class="conf-ladder-row {% if conf_band == 'mod' %}is-active{% endif %}">
+                <span class="conf-ladder-band b-mod">60–79%</span>
+                <span class="conf-ladder-text">Moderately calibrated with available market data</span>
+              </div>
+              <div class="conf-ladder-row {% if conf_band == 'limited' %}is-active{% endif %}">
+                <span class="conf-ladder-band b-limited">Below 60%</span>
+                <span class="conf-ladder-text">Pricing model based estimate · Limited market data</span>
+              </div>
             </div>
-            <div class="conf-geo-action">
-              {% if confidence_msg %}{{ confidence_msg.action }}{% else %}Estimate based on the available data — submit a verified deal to improve accuracy.{% endif %}
+            <div class="conf-ladder-action">
+              {% if confidence_msg %}{{ confidence_msg.action }}{% else %}Submit a verified deal in your area to improve calibration.{% endif %}
             </div>
           </span>
         </span>
       </div>
       <div class="kpi-value" style="color:#4eb0ff;">{{ confidence }}%</div>
       <div class="kpi-sub">
-        {%- set conf_tier = (confidence_msg.tier_label if confidence_msg else 'formula') or 'formula' -%}
-        {%- if conf_tier == 'city' -%}From {{ user_city }} deals
-        {%- elif conf_tier == 'state' -%}From your state's deals
-        {%- elif conf_tier == 'national' -%}National + pricing model
-        {%- else -%}Pricing model only
+        {%- if conf_band == 'high' -%}Highly calibrated
+        {%- elif conf_band == 'good' -%}Well calibrated
+        {%- elif conf_band == 'mod' -%}Moderately calibrated
+        {%- else -%}Pricing model based
         {%- endif -%}
       </div>
     </div>
