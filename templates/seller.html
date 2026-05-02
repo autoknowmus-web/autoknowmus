@@ -227,12 +227,15 @@
           </select>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Mileage (KMs) <span class="optional-hint">(optional)</span></label>
+          <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
           {# Visible field formats as user types; hidden field carries the raw number for POST.
-             v3.5: forced dark bg via CSS to fix the white-bg autofill bug. #}
+             v3.5: forced dark bg via CSS to fix the white-bg autofill bug.
+             v3.5.1: Mileage is now MANDATORY (no auto-default fallback). The `required`
+             attribute on the visible input blocks empty submissions inline, before they
+             hit the backend. Backend also enforces this. #}
           <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
                  value="{{ form.mileage or '' }}" placeholder="e.g. 45,000"
-                 autocomplete="off">
+                 autocomplete="off" required>
           <input type="hidden" name="mileage" id="mileage-raw" value="{{ form.mileage or '' }}">
         </div>
         <div class="col-md-3">
@@ -499,5 +502,23 @@
   mileageDisplay.addEventListener('blur',  formatMileage);
   // On load, if prefilled as a bare number, format it
   formatMileage();
+
+  // v3.5.1: Form-level guard — block submission if mileage is empty.
+  // This catches cases where the visible field's `required` attr is bypassed
+  // (e.g. autofill). Returns focus to the field for fast correction.
+  const sellerForm = document.querySelector('form[action="{{ url_for("seller") }}"]');
+  if (sellerForm) {
+    sellerForm.addEventListener('submit', function(e) {
+      formatMileage(); // Ensure raw is in sync with display
+      if (!mileageRaw.value || parseInt(mileageRaw.value, 10) <= 0) {
+        e.preventDefault();
+        mileageDisplay.focus();
+        mileageDisplay.reportValidity && mileageDisplay.reportValidity();
+        if (!mileageDisplay.reportValidity) {
+          alert('Please enter the mileage (KMs).');
+        }
+      }
+    });
+  }
 </script>
 {% endblock %}
