@@ -6288,7 +6288,394 @@ def db_test():
         return f"✅ Supabase Connected! Users table reachable. Sample rows: {len(r.data)}"
     except Exception as e:
         return f"❌ DB error: {e}", 500
+# ============================================================
+# Phase 3 admin price tools — routes (added v3.7.0)
+# ============================================================
+# These routes are gated behind _is_admin(). Non-admin users get redirected.
+# All write operations go through the pending_reviews table — no direct
+# writes to the sheet outside of /admin/price-tools/approve.
+# ============================================================
 
+@app.route('/admin/price-tools')
+def price_tools():
+    """Render the 4-tab admin Price Tools page."""
+    user = session.get('user')
+    if not _is_admin(user):
+        flash('Admin access required.', 'error')
+        return redirect(url_for('role'))
+
+    # Fetch pending reviews for the queue
+    pending_resp = supabase.table('pending_reviews').select('*').eq(
+        'status', 'pending'
+    ).order('created_at', desc=True).limit(200).execute()
+    pending_rows = pending_resp.data or []
+
+    # Annotate each row for display
+    for r in pending_rows:
+        cp = r.get('current_price')
+        pp = r.get('proposed_price')
+        if cp and pp and cp > 0:
+            r['diff_pct'] = ((pp - cp) / cp) * 100
+        else:
+            r['diff_pct'] = None
+        # human-readable created_at
+        try:
+            ca_str = r.get('created_at', '')
+            if ca_str:
+                ca = datetime.fromisoformat(ca_str.replace('Z', '+00:00'))
+                r['created_at_display'] = ca.strftime('%d-%b %H:%M')
+            else:
+                r['created_at_display'] = ''
+        except Exception:
+            r['created_at_display'] = (r.get('created_at') or '')[:16]
+
+    # Counts for tab badges
+    pending_count = len(pending_rows)
+    try:
+        missing = car_data.find_missing_prices()
+    except Exception as e:
+        app.logger.warning(f'find_missing_prices failed: {e}')
+        missing = []
+    missing_count = len(missing)
+
+    # Build car_data JSON for the Refresh One picker (make -> model -> True)
+    car_data_for_picker = {}
+    try:
+        cd_dict = dict(car_data.CAR_DATA) if hasattr(car_data, 'CAR_DATA') else {}
+    except Exception:
+        cd_dict = {}
+
+    for make, models in cd_dict.items():
+        car_data_for_picker[make] = {}
+        for model, _data in models.items():
+            car_data_for_picker[make][model] = True
+
+    # Currently flagged discontinued variants (read from cache)
+    discontinued_rows = []
+    for make, models in cd_dict.items():
+        for model, mdata in models.items():
+            vfs = (mdata or {}).get('variant_fuel_status', {}) or {}
+            vfd = (mdata or {}).get('variant_fuel_dates', {}) or {}
+            vfp = (mdata or {}).get('variant_fuel_prices', {}) or {}
+            for variant, fuel_map in vfs.items():
+                for fuel, st in fuel_map.items():
+                    if st == 'discontinued':
+                        date_str = (vfd.get(variant) or {}).get(fuel) or ''
+                        price = (vfp.get(variant) or {}).get(fuel)
+                        discontinued_rows.append({
+                            'make': make, 'model': model,
+                            'variant': variant, 'fuel': fuel,
+                            'price': price,
+                            'last_known_price_date': date_str,
+                            'age_class': _age_class(date_str),
+                        })
+
+    return render_template(
+        'admin_price_tools.html',
+        user=user,
+        makes=sorted(cd_dict.keys()),
+        car_data_json=json.dumps(car_data_for_picker),
+        pending_reviews=pending_rows,
+        pending_count=pending_count,
+        missing_rows=missing,
+        missing_count=missing_count,
+        discontinued_rows=discontinued_rows,
+    )
+
+
+@app.route('/admin/price-tools/scrape-model', methods=['POST'])
+def price_tools_scrape_model():
+    """
+    Tab 1: Scrape every variant of a (make, model) from CarWale.
+    Compare against sheet. Queue reviews for any that differ or are new.
+    Returns JSON: {ok, rows: [...], reviews_created}
+    """
+    user = session.get('user')
+    if not _is_admin(user):
+        return jsonify({'ok': False, 'error': 'admin only'}), 403
+
+    make = request.form.get('make', '').strip()
+    model = request.form.get('model', '').strip()
+    if not (make and model):
+        return jsonify({'ok': False, 'error': 'make and model required'}), 400
+
+    try:
+        # Pull all sheet rows for this (make, model) — we scrape per-variant
+        sheet_rows_for_model = []
+        for r in sheets_writer.read_car_prices():
+            if r.get('make') == make and r.get('model') == model:
+                sheet_rows_for_model.append(r)
+
+        if not sheet_rows_for_model:
+            return jsonify({
+                'ok': False,
+                'error': f'No rows found in sheet for {make} {model}'
+            }), 400
+
+        # Probe with first row to get all_variants list + scraper_url
+        probe = sheet_rows_for_model[0]
+        scrape_result = price_scraper.fetch_price(
+            make=make, model=model,
+            variant=probe['variant'], fuel=probe['fuel'],
+        )
+        if not scrape_result.get('ok') and scrape_result.get('status') == 'error':
+            return jsonify({
+                'ok': False,
+                'error': scrape_result.get('error', 'scraper error')
+            }), 500
+
+        all_carwale_variants = scrape_result.get('all_variants') or []
+        scraper_url = scrape_result.get('url')
+
+        rows_out = []
+        reviews_created = 0
+
+        # Per-variant fetch (rate-limited internally by price_scraper)
+        for sheet_row in sheet_rows_for_model:
+            v = sheet_row['variant']
+            f = sheet_row['fuel']
+            try:
+                cur_price_str = (sheet_row.get('ex_showroom_price') or '').replace(',', '').strip()
+                current_price = int(cur_price_str) if cur_price_str else None
+            except (ValueError, TypeError):
+                current_price = None
+
+            r = price_scraper.fetch_price(make=make, model=model, variant=v, fuel=f)
+            scraper_status = r.get('status', 'error')
+            matched = r.get('matched_variant') or v
+            proposed_price = r.get('ex_showroom_inr')
+
+            outcome = 'unchanged'
+            review_type = None
+            diff_pct = None
+
+            if scraper_status in ('not_found', 'not_found_fuel'):
+                review_type = 'discontinued'
+                outcome = 'queued'
+                _create_pending_review(
+                    supabase, 'discontinued', make, model, v, f,
+                    current_price=current_price,
+                    proposed_price=None,
+                    matched_variant_name=matched,
+                    scraper_status=scraper_status,
+                    scraper_url=scraper_url,
+                )
+                reviews_created += 1
+            elif proposed_price and current_price:
+                diff_pct = ((proposed_price - current_price) / current_price) * 100
+                if abs(diff_pct) < 0.5:
+                    outcome = 'unchanged'
+                else:
+                    review_type = 'price_update'
+                    outcome = 'queued'
+                    _create_pending_review(
+                        supabase, 'price_update', make, model, v, f,
+                        current_price=current_price,
+                        proposed_price=proposed_price,
+                        matched_variant_name=matched,
+                        scraper_status=scraper_status,
+                        scraper_url=scraper_url,
+                    )
+                    reviews_created += 1
+            elif proposed_price and not current_price:
+                review_type = 'price_update'
+                outcome = 'queued'
+                _create_pending_review(
+                    supabase, 'price_update', make, model, v, f,
+                    current_price=None,
+                    proposed_price=proposed_price,
+                    matched_variant_name=matched,
+                    scraper_status=scraper_status,
+                    scraper_url=scraper_url,
+                )
+                reviews_created += 1
+            else:
+                outcome = 'no_price'
+
+            rows_out.append({
+                'variant': v,
+                'fuel': f,
+                'current_price': current_price,
+                'proposed_price': proposed_price,
+                'diff_pct': diff_pct,
+                'matched_variant_name': matched,
+                'scraper_status': scraper_status,
+                'review_type': review_type,
+                'outcome': outcome,
+            })
+
+        return jsonify({
+            'ok': True,
+            'make': make,
+            'model': model,
+            'rows': rows_out,
+            'reviews_created': reviews_created,
+            'all_carwale_variants_count': len(all_carwale_variants),
+        })
+
+    except Exception as e:
+        app.logger.exception('price_tools_scrape_model failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/price-tools/scrape-one', methods=['POST'])
+def price_tools_scrape_one():
+    """
+    Tab 2 (Find Missing): Scrape a single (make, model, variant, fuel) and
+    queue a review. Returns JSON: {ok, review_id, ...}
+    """
+    user = session.get('user')
+    if not _is_admin(user):
+        return jsonify({'ok': False, 'error': 'admin only'}), 403
+
+    make = request.form.get('make', '').strip()
+    model = request.form.get('model', '').strip()
+    variant = request.form.get('variant', '').strip()
+    fuel = request.form.get('fuel', '').strip()
+
+    if not all([make, model, variant, fuel]):
+        return jsonify({'ok': False, 'error': 'all fields required'}), 400
+
+    try:
+        r = price_scraper.fetch_price(make=make, model=model,
+                                       variant=variant, fuel=fuel)
+        if not r.get('ok'):
+            # Even on not_found, queue a discontinued review so admin sees it
+            if r.get('status') in ('not_found', 'not_found_fuel'):
+                rid = _create_pending_review(
+                    supabase, 'discontinued', make, model, variant, fuel,
+                    current_price=None,
+                    proposed_price=None,
+                    matched_variant_name=None,
+                    scraper_status=r.get('status'),
+                    scraper_url=r.get('url'),
+                )
+                return jsonify({'ok': True, 'review_id': rid,
+                                'review_type': 'discontinued'})
+            return jsonify({'ok': False,
+                            'error': r.get('error', 'scraper error')}), 500
+
+        proposed_price = r.get('ex_showroom_inr')
+        if not proposed_price:
+            return jsonify({'ok': True, 'review_id': None,
+                            'message': 'No price returned'})
+
+        rid = _create_pending_review(
+            supabase, 'price_update', make, model, variant, fuel,
+            current_price=None,
+            proposed_price=proposed_price,
+            matched_variant_name=r.get('matched_variant'),
+            scraper_status=r.get('status'),
+            scraper_url=r.get('url'),
+        )
+        return jsonify({'ok': True, 'review_id': rid,
+                        'review_type': 'price_update'})
+
+    except Exception as e:
+        app.logger.exception('price_tools_scrape_one failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/price-tools/approve', methods=['POST'])
+def price_tools_approve():
+    """
+    Tab 4: Approve a pending review. Writes to the sheet, marks review as
+    approved, refreshes car_data cache.
+    """
+    user = session.get('user')
+    if not _is_admin(user):
+        return jsonify({'ok': False, 'error': 'admin only'}), 403
+
+    review_id = request.form.get('review_id', '').strip()
+    if not review_id:
+        return jsonify({'ok': False, 'error': 'review_id required'}), 400
+
+    try:
+        # Fetch the review
+        resp = supabase.table('pending_reviews').select('*').eq(
+            'id', int(review_id)).limit(1).execute()
+        if not resp.data:
+            return jsonify({'ok': False, 'error': 'review not found'}), 404
+        r = resp.data[0]
+
+        if r['status'] != 'pending':
+            return jsonify({'ok': False,
+                            'error': f"review already {r['status']}"}), 400
+
+        # Dispatch to the right write function
+        rt = r['review_type']
+        if rt == 'price_update':
+            sheets_writer.write_price_update_v2(
+                make=r['make'], model=r['model'],
+                variant=r['variant'], fuel=r['fuel'],
+                new_price=int(r['proposed_price']),
+                source='CarWale',
+            )
+        elif rt == 'discontinued':
+            sheets_writer.write_discontinued_flag(
+                make=r['make'], model=r['model'],
+                variant=r['variant'], fuel=r['fuel'],
+            )
+        elif rt == 'new_variant':
+            sheets_writer.write_new_variant(
+                make=r['make'], model=r['model'],
+                variant=r['variant'], fuel=r['fuel'],
+                ex_showroom_price=int(r['proposed_price']),
+                source='CarWale',
+            )
+        else:
+            return jsonify({'ok': False,
+                            'error': f'unknown review_type: {rt}'}), 400
+
+        # Mark review as approved
+        supabase.table('pending_reviews').update({
+            'status': 'approved',
+            'reviewed_at': datetime.utcnow().isoformat(),
+            'reviewed_by': user['email'],
+        }).eq('id', int(review_id)).execute()
+
+        # Refresh car_data cache so the change is live immediately
+        try:
+            car_data.refresh_prices(force=True)
+        except Exception as e:
+            app.logger.warning(f'car_data.refresh_prices failed after approval: {e}')
+
+        return jsonify({'ok': True, 'review_id': int(review_id)})
+
+    except Exception as e:
+        app.logger.exception('price_tools_approve failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/price-tools/reject', methods=['POST'])
+def price_tools_reject():
+    """
+    Tab 4: Reject a pending review. No sheet change. Marks review as rejected.
+    """
+    user = session.get('user')
+    if not _is_admin(user):
+        return jsonify({'ok': False, 'error': 'admin only'}), 403
+
+    review_id = request.form.get('review_id', '').strip()
+    if not review_id:
+        return jsonify({'ok': False, 'error': 'review_id required'}), 400
+
+    try:
+        resp = supabase.table('pending_reviews').update({
+            'status': 'rejected',
+            'reviewed_at': datetime.utcnow().isoformat(),
+            'reviewed_by': user['email'],
+        }).eq('id', int(review_id)).eq('status', 'pending').execute()
+
+        if not resp.data:
+            return jsonify({'ok': False,
+                            'error': 'review not found or already handled'}), 404
+
+        return jsonify({'ok': True, 'review_id': int(review_id)})
+
+    except Exception as e:
+        app.logger.exception('price_tools_reject failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
 
