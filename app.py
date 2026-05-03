@@ -4848,7 +4848,60 @@ def admin_test_sheets_connection():
         # handled by the same worker.
         signal.alarm(0)
         signal.signal(signal.SIGALRM, previous_handler)
+@app.route("/admin/test-scraper")
+@login_required
+@admin_required
+def admin_test_scraper():
+    """
+    Proof-of-concept endpoint for price_scraper.py.
+    Pass query params: make, model, variant, fuel.
+    """
+    make = (request.args.get("make") or "").strip()
+    model = (request.args.get("model") or "").strip()
+    variant = (request.args.get("variant") or "").strip()
+    fuel = (request.args.get("fuel") or "").strip()
 
+    if not (make and model and variant and fuel):
+        return jsonify({
+            "ok": False,
+            "error": "missing_params",
+            "detail": (
+                "All four query params required: make, model, variant, fuel. "
+                "Example: /admin/test-scraper?make=Maruti+Suzuki&model=Swift"
+                "&variant=VXI&fuel=Petrol"
+            ),
+        }), 400
+
+    app.logger.info(
+        "[test-scraper] request: make=%r model=%r variant=%r fuel=%r",
+        make, model, variant, fuel,
+    )
+
+    try:
+        import price_scraper
+    except ImportError as e:
+        return jsonify({
+            "ok": False,
+            "error": "import_failed",
+            "detail": f"Could not import price_scraper: {e}",
+        }), 500
+
+    try:
+        result = price_scraper.fetch_price(make, model, variant, fuel)
+    except Exception as e:
+        app.logger.exception("[test-scraper] unexpected error")
+        return jsonify({
+            "ok": False,
+            "error": "scrape_exception",
+            "detail": f"{type(e).__name__}: {e}",
+        }), 500
+
+    response = {"ok": result["status"] in ("found", "ambiguous"), **result}
+    app.logger.info(
+        "[test-scraper] result: status=%s for %s/%s/%s/%s",
+        result.get("status"), make, model, variant, fuel,
+    )
+    return jsonify(response)
 
 # ============================================================
 # END app.py — Part 5
