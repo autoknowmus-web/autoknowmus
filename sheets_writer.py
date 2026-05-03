@@ -9,6 +9,27 @@ Data Google Sheet. It uses gspread + a service-account JSON credential
 with the Google Sheets API.
 
 ----------------------------------------------------------------------
+v3.6.2 — CRITICAL HOTFIX (process-wide socket timeout regression)
+----------------------------------------------------------------------
+v3.6.1 introduced `socket.setdefaulttimeout(10)` to bound Google API calls.
+The unintended consequence: this timeout applies PROCESS-WIDE to every
+socket created afterward — including Supabase httpx connections, Resend
+API calls, and any other long-running HTTP/2 stream. Once the user hit a
+page that triggered Google sheet loading, the global timeout kicked in,
+and subsequent Supabase reads on /role and /admin/data-health timed out
+(or got killed mid-stream by gunicorn at the 30s worker timeout boundary).
+
+v3.6.2 fix: replace the global setdefaulttimeout call with a scoped
+context manager (`_with_sheets_timeout()`) that:
+  1. Saves the previous default socket timeout
+  2. Sets it to our 10-second value
+  3. Runs the wrapped sheets call
+  4. ALWAYS restores the previous value (even on exception)
+
+Now Google API calls still time out after 10s, but the rest of the app
+keeps its normal (None = blocking) socket behavior. No interference.
+
+----------------------------------------------------------------------
 v3.6.1 — BUGFIX RELEASE (resolves the gunicorn-timeout hang)
 ----------------------------------------------------------------------
 Previous version (v3.6.0) hung gunicorn workers for 30 seconds when the
@@ -136,6 +157,39 @@ _credentials = None
 _gc_client = None
 _spreadsheet = None
 _lock = threading.Lock()
+
+
+# ============================================================
+# v3.6.2: SCOPED SOCKET TIMEOUT CONTEXT MANAGER
+# ============================================================
+
+import contextlib
+
+@contextlib.contextmanager
+def _with_sheets_timeout():
+    """
+    Context manager that temporarily sets the default socket timeout to
+    _GOOGLE_API_TIMEOUT_SECONDS (10s) for the duration of the wrapped call,
+    then ALWAYS restores the previous value — even if an exception is raised.
+
+    Why scoped instead of global: setting socket.setdefaulttimeout() globally
+    affects EVERY socket created afterward in the process, which breaks
+    Supabase httpx connections and other long-running HTTP streams. With
+    this context manager, only sockets created inside `with _with_sheets_timeout():`
+    blocks inherit the 10s timeout. Everything else keeps its normal behavior.
+
+    Caveat: if a network call STARTS inside the context but is still in
+    progress when the context exits, the timeout is restored mid-stream and
+    that specific socket keeps its 10s timeout (sockets snapshot the default
+    at creation time). In practice this is fine for our usage — gspread
+    completes its HTTP calls synchronously before returning.
+    """
+    previous = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(_GOOGLE_API_TIMEOUT_SECONDS)
+    try:
+        yield
+    finally:
+        socket.setdefaulttimeout(previous)
 
 
 # ============================================================
@@ -279,9 +333,13 @@ def _get_client():
     call repeatedly. The underlying HTTP session inside gspread handles
     token refresh automatically.
 
-    v3.6.1: We set a global socket timeout BEFORE building the client so
-    every subsequent network call inherits the timeout. This is the safest
-    way to bound all Google API operations.
+    v3.6.2: We use the scoped `_with_sheets_timeout()` context manager
+    around the OAuth handshake (which is the most likely thing to hang).
+    Every public function in this module also wraps its sheet calls in the
+    same context manager, so no Google API call can hang for >10 seconds.
+    Crucially: when the context exits, the default socket timeout is
+    restored — so other parts of the Flask app (Supabase, Resend, etc.)
+    keep their normal blocking socket behavior.
     """
     global _gc_client
 
@@ -297,15 +355,10 @@ def _get_client():
                 "Add `gspread` to requirements.txt and redeploy."
             )
 
-        # v3.6.1: Apply the timeout before the OAuth handshake fires.
-        # Note: this is process-wide. Other code paths in app.py that
-        # use httpx/requests aren't affected because they pass their own
-        # explicit timeouts. Only legacy socket-based calls inherit this.
-        socket.setdefaulttimeout(_GOOGLE_API_TIMEOUT_SECONDS)
-
         creds = _load_credentials()
         try:
-            _gc_client = gspread.authorize(creds)
+            with _with_sheets_timeout():
+                _gc_client = gspread.authorize(creds)
         except socket.timeout:
             raise RuntimeError(
                 f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) authorizing gspread "
@@ -335,7 +388,8 @@ def _get_spreadsheet():
 
         client = _get_client()
         try:
-            _spreadsheet = client.open_by_key(SHEET_ID)
+            with _with_sheets_timeout():
+                _spreadsheet = client.open_by_key(SHEET_ID)
         except socket.timeout:
             raise RuntimeError(
                 f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) opening sheet "
@@ -368,7 +422,8 @@ def _get_worksheet(tab_name: str):
     """Open a specific tab inside the spreadsheet. Not cached (tabs are cheap)."""
     spreadsheet = _get_spreadsheet()
     try:
-        return spreadsheet.worksheet(tab_name)
+        with _with_sheets_timeout():
+            return spreadsheet.worksheet(tab_name)
     except socket.timeout:
         raise RuntimeError(
             f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) opening tab "
@@ -379,7 +434,8 @@ def _get_worksheet(tab_name: str):
         if "not found" in err_str or "no worksheet" in err_str:
             available = []
             try:
-                available = [ws.title for ws in spreadsheet.worksheets()]
+                with _with_sheets_timeout():
+                    available = [ws.title for ws in spreadsheet.worksheets()]
             except Exception:
                 pass
             raise RuntimeError(
@@ -423,8 +479,9 @@ def get_sheet_metadata() -> Dict[str, Any]:
     """
     spreadsheet = _get_spreadsheet()
     try:
-        tabs = [ws.title for ws in spreadsheet.worksheets()]
-        title = spreadsheet.title
+        with _with_sheets_timeout():
+            tabs = [ws.title for ws in spreadsheet.worksheets()]
+            title = spreadsheet.title
     except socket.timeout:
         raise RuntimeError(
             f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) reading sheet metadata."
@@ -470,7 +527,8 @@ def health_check() -> Dict[str, Any]:
 
     ws = _get_worksheet(TAB_CAR_PRICES)
     try:
-        first_cell = ws.cell(1, 1).value
+        with _with_sheets_timeout():
+            first_cell = ws.cell(1, 1).value
     except socket.timeout:
         raise RuntimeError(
             f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) reading cell A1 of "
