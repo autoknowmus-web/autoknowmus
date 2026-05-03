@@ -9,3 +9,4 @@ python-dateutil==2.9.0
 resend==2.4.0
 gspread==6.1.4
 google-auth==2.34.0
+beautifulsoup4==4.12.3
