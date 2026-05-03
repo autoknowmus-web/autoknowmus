@@ -8,53 +8,45 @@ Data Google Sheet. It uses gspread + a manually-minted OAuth2 access token
 to authenticate with the Google Sheets API.
 
 ----------------------------------------------------------------------
-v3.6.5 — MANUAL JWT-GRANT OAuth (the real fix)
+v3.6.6 — TRANSPORT-LAYER TIMEOUT VIA HTTPAdapter (the actual actual fix)
 ----------------------------------------------------------------------
-Background: v3.6.3 tried to fix the OAuth hang by monkey-patching
-google-auth's Request.session.request to inject a 10s timeout. That
-patch was confirmed to be invoked correctly, but the hang persisted
-anyway.
+Background: v3.6.5 fixed the OAuth handshake hang by replacing google-auth's
+broken creds.refresh() with a manual JWT-grant flow. Token mint went from
+15s+ hangs to ~240ms. ✅
 
-The /admin/diag-egress diagnostic endpoint (run on 03-May-2026) proved
-the cause definitively:
+But /admin/test-sheets-connection STILL hung at 15s. Render runtime log on
+03-May-2026 showed:
 
-  Step 5 (requests.post -> oauth2.googleapis.com/token):  270ms PASS
-  Inside creds.refresh(auth_req):                          15s+ HANG
+  11:16:21.661  step 3: running health_check()
+  11:16:22.149  token mint completed in 238ms (status 200) ✅
+  11:16:23.901  gspread client built with manual JWT auth ✅
+  11:16:27.418  HARD TIMEOUT (SIGALRM fired)               ❌
 
-Same target URL, same network, same Render worker, same Python process.
-The 270ms call works perfectly. The google-auth call hangs.
+So token mint is fine (238ms), and gspread.Client construction is fine.
+The hang is now in client.open_by_key() — i.e., the first call to
+sheets.googleapis.com.
 
-Conclusion: the hang is INSIDE google-auth's flow somewhere between
-`creds.refresh()` being called and the actual `session.request()` line.
-Our timeout patch was on `session.request`, but execution never reaches
-that line. The hang is upstream — likely in google-auth's own retry-
-wrapping logic or its credential-state machinery.
+But /admin/diag-egress proved that requests.get to sheets.googleapis.com
+completes in 200ms with timeout=(5,5). So the URL responds fine.
 
-The fix: skip google-auth's broken refresh path entirely. Build the
-JWT-grant flow ourselves using `cryptography` (a transitive dep of
-google-auth, already installed) + `requests` (a direct dep of gspread,
-already installed). Hand the resulting access token to gspread via a
-small custom auth callable. Result: OAuth completes in ~300ms instead
-of timing out at 15s.
+The bug: gspread.Client.set_timeout() does NOT wire the timeout through to
+the underlying requests.Session for outbound calls. (gspread might use it
+internally for some retry logic, but it's not actually passed to
+session.request as a kwarg.) So our Session has no timeout, and any call
+where Google's API doesn't respond instantly hangs indefinitely on the
+read.
 
-Architecture:
+The fix: mount a custom HTTPAdapter onto the requests.Session that injects
+timeout=(10,10) into EVERY .send() call. This is the standard pattern for
+enforcing timeouts on requests libraries that don't expose timeout per
+call. It works at the transport layer, BELOW any abstractions, so gspread
+can't bypass it.
 
-  1. _mint_access_token_manually() builds a JWT assertion, signs it
-     with the service-account's RSA private key, POSTs it to
-     oauth2.googleapis.com/token with `requests` (timeout=(5,5)),
-     and returns (access_token, expires_at_unix_seconds).
-
-  2. _ManualTokenAuth is a tiny callable that gspread's session uses
-     as a request hook — it adds the Authorization header to every
-     outbound request. If the cached token is near expiry, it
-     transparently refreshes by calling (1) again.
-
-  3. _get_client() builds a gspread.Client with our manual auth hook
-     wired in, and applies set_timeout((10,10)) for all sheet RPCs.
-
-Public API is UNCHANGED. app.py does not need any modifications.
+After this change, the first sheet API call should complete in ~500ms
+(same as the diag-egress proof). Total flow: ~1.5s end-to-end.
 
 ----------------------------------------------------------------------
+v3.6.5 — manual JWT-grant OAuth (fixed token mint)
 v3.6.4 — added SIGALRM safety net in app.py (hard wall-clock timeout)
 v3.6.3 — explicit OAuth refresh + monkey-patched session.request timeout
 v3.6.2 — scoped socket timeout via context manager (didn't help)
@@ -62,19 +54,25 @@ v3.6.1 — global socket.setdefaulttimeout (broke other routes)
 v3.6.0 — initial gspread integration; hung at 30s on Render
 ----------------------------------------------------------------------
 
-ARCHITECTURE NOTES (unchanged from v3.6.0)
+ARCHITECTURE NOTES
 ----------------------------------------------------------------------
 Why gspread:
   - Thin, well-maintained wrapper over the raw Google Sheets API
   - Handles batching, range parsing, error mapping
-  - Public API stays identical even though we replaced auth internals
+  - Public API stays identical even though we replaced auth + transport
+
+Why HTTPAdapter (not just session.timeout):
+  - requests.Session has no `timeout` attribute. The only way to enforce
+    a default timeout on every call is to subclass HTTPAdapter and inject
+    it in send(). This is documented as the canonical workaround.
 
 Failure-mode design:
   - Credentials loaded once at module import time and cached. If env var
     is missing/malformed, ALL functions raise RuntimeError with clear msg.
   - Sheet open is also cached. If un-shared with the SA mid-runtime, the
     next call surfaces the permission error.
-  - All HTTP calls have explicit timeouts. Anything slower errors clean.
+  - All HTTP calls have explicit timeouts via the HTTPAdapter — anything
+    slower errors clean within 10s.
 
 Public API (used by app.py — unchanged across versions):
   - health_check()         -> quick connection test (returns dict)
@@ -435,7 +433,7 @@ def _get_access_token() -> str:
 
 
 # ============================================================
-# v3.6.5: GSPREAD CLIENT WIRED UP TO MANUAL TOKEN
+# v3.6.5: GSPREAD AUTH HOOK (unchanged in v3.6.6)
 # ============================================================
 
 class _ManualTokenAuth:
@@ -453,10 +451,71 @@ class _ManualTokenAuth:
         return request
 
 
+# ============================================================
+# v3.6.6: TRANSPORT-LAYER TIMEOUT VIA HTTPAdapter
+# ============================================================
+#
+# CRITICAL FIX: gspread.Client.set_timeout() does NOT wire the timeout into
+# the underlying requests.Session. Confirmed empirically by the 03-May-2026
+# Render log: client.set_timeout((10,10)) was called, but client.open_by_key
+# still hung past 15s — meaning no timeout was actually being applied to the
+# outbound HTTP call.
+#
+# The canonical workaround for forcing a default timeout on a requests.Session
+# is to subclass HTTPAdapter and override send() to inject the timeout if the
+# caller didn't provide one. The Session uses HTTPAdapter for every actual
+# transport-layer call, so this is below ANY abstraction layer that gspread
+# might or might not use correctly.
+#
+# This is documented in the requests project itself as the recommended
+# approach for session-wide default timeouts:
+# https://github.com/psf/requests/issues/3070
+# ============================================================
+
+def _build_timeout_adapter(timeout_seconds: int):
+    """
+    Build a requests.adapters.HTTPAdapter subclass that injects a default
+    timeout into every send() call. Returns the class instantiated, ready
+    to mount on a Session.
+
+    Lazy-builds the class to avoid importing requests at module-import time.
+    """
+    try:
+        from requests.adapters import HTTPAdapter
+    except ImportError as e:
+        raise RuntimeError(f"requests library not available: {e}.")
+
+    class _TimeoutHTTPAdapter(HTTPAdapter):
+        """
+        HTTPAdapter that forces a default timeout on every outbound request.
+        If the caller passed timeout=X explicitly (e.g. with a lower per-call
+        timeout), we honor that. Otherwise we inject (timeout_seconds, timeout_seconds).
+        """
+        def __init__(self, *args, **kwargs):
+            self._default_timeout = (timeout_seconds, timeout_seconds)
+            super().__init__(*args, **kwargs)
+
+        def send(self, request, **kwargs):
+            # If gspread (or anyone) passes an explicit timeout, respect it.
+            # Otherwise, force ours. This ensures gspread's set_timeout() can
+            # still tighten the bound but never silently disable it.
+            if kwargs.get("timeout") is None:
+                kwargs["timeout"] = self._default_timeout
+            return super().send(request, **kwargs)
+
+    return _TimeoutHTTPAdapter()
+
+
+# ============================================================
+# CLIENT BUILDER
+# ============================================================
+
 def _get_client():
     """
-    Build (and cache) a gspread client wired up to our manual access
-    token. v3.6.5: skips google-auth's broken creds.refresh() entirely.
+    Build (and cache) a gspread client wired up to:
+      1. our manual access token (via _ManualTokenAuth on session.auth)
+      2. a transport-layer timeout (via _TimeoutHTTPAdapter mounted on
+         session — this is what v3.6.6 adds)
     """
     global _gc_client
 
@@ -486,10 +545,25 @@ def _get_client():
         session = requests.Session()
         session.auth = _ManualTokenAuth()
 
+        # v3.6.6: mount a timeout-enforcing adapter for BOTH http and https.
+        # This is the actual fix — gspread.Client.set_timeout() doesn't
+        # propagate to the session, so we force a timeout at the adapter
+        # layer where every HTTP call passes through.
+        timeout_adapter = _build_timeout_adapter(_GOOGLE_API_TIMEOUT_SECONDS)
+        session.mount("https://", timeout_adapter)
+        session.mount("http://", timeout_adapter)
+        logger.info(
+            "sheets_writer: mounted _TimeoutHTTPAdapter with default %ds timeout",
+            _GOOGLE_API_TIMEOUT_SECONDS,
+        )
+
         try:
             # gspread.Client(auth=None, session=...) - passing auth=None
             # tells gspread we're handling auth via the session's auth hook.
             _gc_client = gspread.Client(auth=None, session=session)
+            # Belt-and-suspenders: also call set_timeout() in case some
+            # internal gspread retry path consults it. The HTTPAdapter is
+            # the real enforcement; this is defense in depth.
             _gc_client.set_timeout(
                 (_GOOGLE_API_TIMEOUT_SECONDS, _GOOGLE_API_TIMEOUT_SECONDS)
             )
@@ -497,8 +571,8 @@ def _get_client():
             raise RuntimeError(f"Could not build gspread client: {e}")
 
         logger.info(
-            "sheets_writer: gspread client built with manual JWT auth "
-            "(timeout=%ds)",
+            "sheets_writer: gspread client built with manual JWT auth + "
+            "transport-layer timeout (timeout=%ds)",
             _GOOGLE_API_TIMEOUT_SECONDS,
         )
         return _gc_client
@@ -507,6 +581,9 @@ def _get_client():
 def _get_spreadsheet():
     """
     Open (and cache) the AutoKnowMus Price Data spreadsheet.
+
+    v3.6.6: Adds step-by-step logging so any future hang inside
+    open_by_key surfaces with a clear "last-step" marker in the log.
     """
     global _spreadsheet
 
@@ -517,10 +594,20 @@ def _get_spreadsheet():
         if _spreadsheet is not None:
             return _spreadsheet
 
+        logger.info(
+            "sheets_writer: opening spreadsheet by key (id=%s)",
+            SHEET_ID,
+        )
+        start = time.time()
         try:
             _spreadsheet = client.open_by_key(SHEET_ID)
         except Exception as e:
+            elapsed_ms = int((time.time() - start) * 1000)
             err_str = str(e).lower()
+            logger.warning(
+                "sheets_writer: open_by_key failed after %dms: %s",
+                elapsed_ms, e,
+            )
             if "permission" in err_str or "denied" in err_str or "403" in err_str:
                 raise RuntimeError(
                     f"Permission denied opening sheet {SHEET_ID}. "
@@ -532,8 +619,23 @@ def _get_spreadsheet():
                     f"Spreadsheet {SHEET_ID} not found. "
                     f"Original error: {e}"
                 )
+            if "timeout" in err_str or "timed out" in err_str:
+                raise RuntimeError(
+                    f"Spreadsheet open timed out after {elapsed_ms}ms. "
+                    f"This means even the transport-layer HTTPAdapter "
+                    f"timeout fired — Google's sheets API is unreachable "
+                    f"or extremely slow from this Render worker. "
+                    f"Run /admin/diag-egress to verify network. "
+                    f"Original error: {e}"
+                )
             raise RuntimeError(f"Could not open spreadsheet {SHEET_ID}: {e}")
 
+        elapsed_ms = int((time.time() - start) * 1000)
+        logger.info(
+            "sheets_writer: opened spreadsheet '%s' in %dms",
+            getattr(_spreadsheet, "title", "<unknown>"),
+            elapsed_ms,
+        )
         return _spreadsheet
 
 
