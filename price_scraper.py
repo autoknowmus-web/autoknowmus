@@ -602,20 +602,37 @@ def fetch_price(
                               "fuelTypeId", "specsSummary"):
                         if k in v0:
                             v_val = v0[k]
-                            # Truncate large values
-                            if isinstance(v_val, dict):
+                            # v2.5: For priceOverview specifically, dump the FULL
+                            # contents (not just keys) so we can see if exShowRoomPrice
+                            # is actually a number or "Available on request" / 0 / None.
+                            if k == "priceOverview" and isinstance(v_val, dict):
+                                first_v_sample[k] = dict(v_val)  # full copy
+                            elif isinstance(v_val, dict):
                                 first_v_sample[k] = {"_keys": sorted(v_val.keys())[:15]}
                             elif isinstance(v_val, list):
                                 first_v_sample[k] = {"_listlen": len(v_val),
                                                      "_first": v_val[0] if v_val else None}
                             else:
                                 first_v_sample[k] = v_val
+                # Also sample the SECOND variant's priceOverview to confirm the
+                # pattern — first variant might be a "default" with no price set.
+                second_v_priceOverview = None
+                if isinstance(mp_versions, list) and len(mp_versions) >= 2:
+                    v1 = mp_versions[1]
+                    if isinstance(v1, dict):
+                        po1 = v1.get("priceOverview")
+                        if isinstance(po1, dict):
+                            second_v_priceOverview = {
+                                "versionName": v1.get("versionName"),
+                                "priceOverview": dict(po1),
+                            }
             logger.warning(
                 "[parse-fail] url=%s | top_keys=%s | modelPage.keys=%s | "
                 "versions type=%s len=%d | first_version_keys=%s | "
-                "first_version_sample=%s",
+                "first_version_sample=%s | second_version_priceOverview=%s",
                 url, top_keys[:30], mp_keys[:30], mp_versions_type,
-                mp_versions_len, first_v_keys, first_v_sample
+                mp_versions_len, first_v_keys, first_v_sample,
+                second_v_priceOverview
             )
         except Exception as _diag_e:
             logger.warning("[parse-fail] diag log failed: %s", _diag_e)
