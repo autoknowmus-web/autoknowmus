@@ -1,837 +1,631 @@
 """
-price_scraper.py
-----------------
-AutoKnowMus — External price scraper for ex-showroom price intelligence.
+price_scraper.py — CarWale ex-showroom price scraper for AutoKnowMus
+=====================================================================
 
-Phase 1: CarWale only. Phase 2 (future): add CarDekho as cross-validator.
+VERSION: v2.0 (03-May-2026)
+Rewritten after v1.0 failed: CarWale's HTML is React-rendered, so the
+prices are NOT in the rendered DOM (which is what BeautifulSoup CSS
+selectors would see). They live inside a `window.__INITIAL_STATE__`
+JSON blob in a <script> tag.
 
-Given a (make, model, variant, fuel) tuple, this module returns one of:
-  - 'found'     → scraped price + URL + scraped_at timestamp
-  - 'ambiguous' → multiple matching variants found, top N candidates returned
-  - 'not_found' → CarWale doesn't have this car (likely discontinued or naming drift)
-  - 'no_slug'   → no carwale_slug registered for this make/model
-  - 'error'     → scrape failed (rate-limit, captcha, network, parse error)
+WHAT THIS MODULE DOES:
+    Public function `fetch_price(make, model, variant, fuel)` returns
+    a dict with the ex-showroom price for a single (make, model, variant,
+    fuel) combo, scraped live from carwale.com.
 
-The slug for each (make, model) is read from the `model_slugs` tab in the
-AutoKnowMus Price Data Google Sheet. Run populate_slugs.py once to fill
-that tab automatically.
+PUBLIC API SHAPE (unchanged from v1.0 — app.py's /admin/test-scraper
+route does NOT need any changes):
 
-----------------------------------------------------------------------
-ARCHITECTURE
-----------------------------------------------------------------------
-Public API:
-  - fetch_price(make, model, variant, fuel) -> dict with status + payload
-  - normalize_variant(s) -> str  (exposed for unit testing)
-  - get_carwale_url(make, model) -> str | None
+    {
+      "ok": True,
+      "status": "found" | "found_multiple" | "found_fuzzy"
+                | "not_found" | "not_found_fuel" | "no_slug"
+                | "error",
+      "make": str,
+      "model": str,
+      "variant": str,
+      "fuel": str,
+      "ex_showroom_inr": int | None,
+      "matched_variant": str | None,        # full versionName from CarWale
+      "url": str | None,                     # CarWale URL we hit
+      "scraped_at": ISO timestamp,
+      "candidates_considered": int,          # how many variants we matched
+      "all_variants": list[str] | None,      # for debug — full list when matching
+      "error": str | None,                   # human-readable error
+    }
 
-Internal flow for fetch_price():
-  1. Look up the carwale_slug for (make, model). If missing → 'no_slug'.
-  2. Construct the CarWale model page URL.
-  3. Fetch with rate-limit (2s ± 0.5s jitter), retries with backoff.
-  4. Parse the variant table from the HTML.
-  5. Filter variants by fuel.
-  6. Match the requested variant string against scraped variants:
-     a. Try normalized match first (strip transmission/fuel tokens, lowercase)
-     b. If no normalized match, try fuzzy match (difflib, threshold 0.85)
-  7. Return one match → 'found'. Multiple matches → 'ambiguous'. None → 'not_found'.
+HIGH-LEVEL FLOW:
+    1. Read the model_slugs tab to look up the carwale_slug for
+       (make, model). Cached in-memory for SLUG_CACHE_TTL.
+    2. Build URL: https://www.carwale.com/{slug}/
+    3. Rate-limited HTTP GET (User-Agent spoofed, retries on 429/503).
+    4. Find `window.__INITIAL_STATE__ = {...};` inside the response.
+    5. Walk balanced braces to extract the JSON, parse with json.loads.
+    6. Pull `modelPage.versions` — list of variant dicts with
+       priceOverview.exShowRoomPrice (clean integer rupees).
+    7. Match user's variant: normalize names (strip fuel/transmission/
+       trim modifiers), filter by fuel, return cheapest match (because
+       a user typing "VXI Petrol" usually means the base VXI Petrol,
+       not VXI (O) or VXI Petrol AMT).
 
-Variant matching rationale:
-  Indian car variants often differ by suffixes like AT/AMT/MT/CVT (transmission)
-  and Petrol/Diesel/CNG (fuel). The fuel is filtered separately. The
-  transmission is part of the variant string but admins might omit it in the
-  sheet (e.g. "VXI" in sheet vs "VXI AT" on CarWale). Normalized matching
-  strips these tokens for the primary comparison.
+DEPENDENCIES:
+    - requests (already in requirements.txt)
+    - stdlib: json, re, time, threading, datetime, random, logging
 
-Rate limiting:
-  Default 2s ± 0.5s jitter between requests. Tunable via SCRAPE_INTERVAL_SECONDS.
-  Background cron jobs run at night so we don't need to be fast — we need to
-  be invisible to CarWale's rate limiters.
-
-Bot detection mitigation:
-  - Browser-like User-Agent
-  - Standard Accept / Accept-Language headers
-  - Connection reuse via a module-level requests.Session
-  - Exponential backoff on 503/429: 1s → 2s → 4s → 8s, max 4 retries
-  - If all retries fail, return 'error' status (NOT 'not_found') so admin
-    can distinguish "CarWale was unhappy" from "CarWale doesn't have this"
-
-----------------------------------------------------------------------
-DEPENDENCIES
-----------------------------------------------------------------------
-  - requests (already in requirements.txt)
-  - beautifulsoup4 (NEW — add to requirements.txt: `beautifulsoup4==4.12.3`)
-  - sheets_writer (already in repo)
-
-If beautifulsoup4 is missing, the module raises ImportError on first call
-with a helpful message.
+NOT USED (despite v1.0 leaving them in requirements.txt):
+    - beautifulsoup4: removed from this module's logic. Left in
+      requirements.txt for harmless safety net — Render won't redeploy
+      just to drop one line. Cleanup pass later.
 """
 
-import os
-import re
-import time
-import random
+from __future__ import annotations
+
+import json
 import logging
+import random
+import re
 import threading
-import difflib
+import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+import requests
 
+# Local — model_slugs tab lookups
+from sheets_writer import read_model_slugs
 
 # ============================================================
-# CONFIGURATION
+# CONFIG
 # ============================================================
 
-CARWALE_BASE_URL = "https://www.carwale.com"
+CARWALE_BASE = "https://www.carwale.com"
 
-# Rate limiting — locked at 2s ± 0.5s jitter per user decision.
-SCRAPE_INTERVAL_SECONDS = 2.0
-SCRAPE_JITTER_SECONDS = 0.5
-
-# Retry policy for transient HTTP failures (503/429/timeout).
+# Rate-limit knobs
+MIN_REQ_INTERVAL_SECS = 2.0
+JITTER_SECS = 0.5
 MAX_RETRIES = 4
-RETRY_BACKOFF_BASE = 1.0  # seconds; doubles each retry: 1, 2, 4, 8
+BACKOFF_BASE_SECS = 1.0  # 1, 2, 4, 8
 
-# HTTP timeouts — bounded well below gunicorn's 30s worker timeout.
-HTTP_CONNECT_TIMEOUT = 5
-HTTP_READ_TIMEOUT = 15
-HTTP_TIMEOUT = (HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT)
+# HTTP timeouts
+CONNECT_TIMEOUT_SECS = 8.0
+READ_TIMEOUT_SECS = 20.0
 
-# Variant matching — locked at 0.85 fuzzy threshold per user decision,
-# but normalized comparison runs first.
-FUZZY_MATCH_THRESHOLD = 0.85
+# Slug cache (in-process, single-worker — Render free tier)
+SLUG_CACHE_TTL_SECS = 3600  # 1 hour
 
-# Tokens stripped during normalized variant comparison. These are filtered
-# separately (fuel) or are non-discriminating suffixes (transmission).
-TRANSMISSION_TOKENS = {"at", "amt", "mt", "cvt", "dct", "ivt", "tct"}
-FUEL_TOKENS = {"petrol", "diesel", "cng", "hev", "phev", "bev", "electric", "hybrid"}
+# Browser-like User-Agent — CarWale's CDN is sensitive to bot UAs
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/121.0.0.0 Safari/537.36"
+)
 
-# Browser-like headers — minimum set to look like a real visitor.
-BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/121.0.0.0 Safari/537.36"
-    ),
-    "Accept": (
-        "text/html,application/xhtml+xml,application/xml;q=0.9,"
-        "image/avif,image/webp,*/*;q=0.8"
-    ),
-    "Accept-Language": "en-IN,en-US;q=0.9,en;q=0.8",
+DEFAULT_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-IN,en;q=0.9",
     "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
 }
 
+# Tokens to strip when comparing variant names. Lowercased.
+VARIANT_NOISE_TOKENS = (
+    "petrol", "diesel", "cng", "electric", "hybrid",
+    "phev", "hev", "bev", "ev",
+    "manual", "automatic", "amt", "cvt", "ivt", "dct", "dsg",
+    "tiptronic", "stronic", "torque converter", "tc",
+    "dual tone", "dual-tone", "dualtone",
+)
 
-# ============================================================
-# MODULE-LEVEL STATE
-# ============================================================
-
-_session = None
-_last_request_at: float = 0.0  # unix seconds; for rate limiting
-_slug_cache: Optional[Dict[Tuple[str, str], str]] = None  # (make, model) -> slug
-_slug_cache_loaded_at: float = 0.0
-_lock = threading.Lock()
-
-# Cache slugs for 1 hour. If admin updates the sheet, force a reset
-# via reset_caches().
-SLUG_CACHE_TTL_SECONDS = 3600
+logger = logging.getLogger("price_scraper")
+logger.setLevel(logging.INFO)
 
 
 # ============================================================
-# RATE LIMITING
+# RATE LIMITER (process-global, thread-safe)
 # ============================================================
 
-def _rate_limit_wait():
-    """
-    Sleep so successive scrape requests are spaced out by SCRAPE_INTERVAL ± jitter.
-    Thread-safe so concurrent scrapes (if any) cooperate.
-    """
+_rate_lock = threading.Lock()
+_last_request_at = 0.0
+
+
+def _wait_for_rate_limit() -> None:
+    """Block until we're at least MIN_REQ_INTERVAL_SECS (+jitter) after the
+    last outbound request. Thread-safe."""
     global _last_request_at
-    with _lock:
-        now = time.time()
+    with _rate_lock:
+        now = time.monotonic()
         elapsed = now - _last_request_at
-        target_interval = SCRAPE_INTERVAL_SECONDS + random.uniform(
-            -SCRAPE_JITTER_SECONDS, SCRAPE_JITTER_SECONDS
-        )
-        if elapsed < target_interval:
-            sleep_for = target_interval - elapsed
-            logger.debug("price_scraper: rate-limit sleeping %.2fs", sleep_for)
-            time.sleep(sleep_for)
-        _last_request_at = time.time()
+        wait_floor = MIN_REQ_INTERVAL_SECS + random.uniform(0.0, JITTER_SECS)
+        if elapsed < wait_floor:
+            time.sleep(wait_floor - elapsed)
+        _last_request_at = time.monotonic()
 
 
 # ============================================================
-# HTTP SESSION
+# SLUG CACHE
 # ============================================================
 
-def _get_session():
-    """Lazy-build a single requests.Session for connection reuse."""
-    global _session
-    with _lock:
-        if _session is not None:
-            return _session
+_slug_cache: Dict[Tuple[str, str], str] = {}
+_slug_cache_built_at: float = 0.0
+_slug_cache_lock = threading.Lock()
+
+
+def _normalize_make_model(make: str, model: str) -> Tuple[str, str]:
+    """Trim + collapse internal whitespace. Don't touch case — sheet stores
+    canonical-cased names like 'Maruti Suzuki' / 'Swift'."""
+    return " ".join(make.split()).strip(), " ".join(model.split()).strip()
+
+
+def _refresh_slug_cache() -> None:
+    """Rebuild slug cache from sheet's model_slugs tab. Safe to call on
+    miss — read_model_slugs returns [] if the tab doesn't exist."""
+    global _slug_cache, _slug_cache_built_at
+    with _slug_cache_lock:
         try:
-            import requests
-        except ImportError as e:
-            raise RuntimeError(f"requests library not available: {e}.")
-        _session = requests.Session()
-        _session.headers.update(BROWSER_HEADERS)
-        logger.info("price_scraper: built requests.Session with browser headers")
-        return _session
+            rows = read_model_slugs()
+        except Exception as e:
+            logger.warning("slug cache refresh failed: %s", e)
+            return
+        new_cache: Dict[Tuple[str, str], str] = {}
+        for row in rows:
+            mk = (row.get("make") or "").strip()
+            md = (row.get("model") or "").strip()
+            slug = (row.get("carwale_slug") or "").strip()
+            if not mk or not md or not slug:
+                continue
+            if slug == "NEEDS_MANUAL_FIX":
+                continue
+            new_cache[(mk, md)] = slug
+        _slug_cache = new_cache
+        _slug_cache_built_at = time.monotonic()
+        logger.info("slug cache refreshed: %d entries", len(_slug_cache))
 
 
-def _http_get(url: str, op_label: str = "fetch") -> str:
-    """
-    GET a URL with rate limiting, retries, and exponential backoff.
-    Returns response body as str. Raises RuntimeError on hard failure.
-    """
-    try:
-        import requests
-    except ImportError as e:
-        raise RuntimeError(f"requests library not available: {e}.")
+def _get_slug(make: str, model: str) -> Optional[str]:
+    """Look up CarWale slug for (make, model). Refreshes the cache if it's
+    stale or empty. Returns None if not found / NEEDS_MANUAL_FIX."""
+    mk, md = _normalize_make_model(make, model)
+    age = time.monotonic() - _slug_cache_built_at
+    if not _slug_cache or age > SLUG_CACHE_TTL_SECS:
+        _refresh_slug_cache()
+    return _slug_cache.get((mk, md))
 
-    session = _get_session()
-    last_error = None
 
-    for attempt in range(1, MAX_RETRIES + 1):
-        _rate_limit_wait()
+# ============================================================
+# HTTP FETCH WITH RETRY
+# ============================================================
 
-        start = time.time()
+class FetchError(Exception):
+    """Raised when we can't fetch a page after retries."""
+
+
+def _http_get(url: str) -> str:
+    """GET a URL with rate limiting, retries on 429/503, exponential backoff.
+    Returns the HTML body as a str. Raises FetchError on terminal failure."""
+    last_err: Optional[str] = None
+    for attempt in range(MAX_RETRIES):
+        _wait_for_rate_limit()
         try:
-            resp = session.get(url, timeout=HTTP_TIMEOUT, allow_redirects=True)
-        except requests.exceptions.Timeout as e:
-            elapsed = int((time.time() - start) * 1000)
-            last_error = f"timeout after {elapsed}ms ({e})"
-            logger.warning(
-                "price_scraper: %s attempt %d/%d → %s",
-                op_label, attempt, MAX_RETRIES, last_error,
+            resp = requests.get(
+                url,
+                headers=DEFAULT_HEADERS,
+                timeout=(CONNECT_TIMEOUT_SECS, READ_TIMEOUT_SECS),
+                allow_redirects=True,
             )
-            if attempt < MAX_RETRIES:
-                _backoff_sleep(attempt)
+        except requests.exceptions.Timeout as e:
+            last_err = f"timeout: {e}"
+            wait = BACKOFF_BASE_SECS * (2 ** attempt)
+            logger.warning("[%s] timeout (attempt %d/%d), backing off %.1fs",
+                          url, attempt + 1, MAX_RETRIES, wait)
+            time.sleep(wait)
             continue
         except requests.exceptions.RequestException as e:
-            last_error = f"network error: {e}"
-            logger.warning(
-                "price_scraper: %s attempt %d/%d → %s",
-                op_label, attempt, MAX_RETRIES, last_error,
-            )
-            if attempt < MAX_RETRIES:
-                _backoff_sleep(attempt)
+            last_err = f"request_exception: {e}"
+            wait = BACKOFF_BASE_SECS * (2 ** attempt)
+            logger.warning("[%s] request error (attempt %d/%d): %s",
+                          url, attempt + 1, MAX_RETRIES, e)
+            time.sleep(wait)
             continue
 
-        elapsed_ms = int((time.time() - start) * 1000)
-
-        if resp.status_code == 200:
-            logger.info(
-                "price_scraper: %s OK in %dms (%d bytes)",
-                op_label, elapsed_ms, len(resp.content),
-            )
-            return resp.text
-
-        if resp.status_code == 404:
-            logger.info(
-                "price_scraper: %s → 404 (page does not exist) for %s",
-                op_label, url,
-            )
-            raise _NotFoundError(f"404 from CarWale for {url}")
-
+        # Got a response. Check status.
         if resp.status_code in (429, 503):
-            last_error = f"HTTP {resp.status_code} (rate-limited or unavailable)"
-            logger.warning(
-                "price_scraper: %s attempt %d/%d → %s",
-                op_label, attempt, MAX_RETRIES, last_error,
-            )
-            if attempt < MAX_RETRIES:
-                _backoff_sleep(attempt)
+            last_err = f"http_{resp.status_code}"
+            wait = BACKOFF_BASE_SECS * (2 ** attempt)
+            logger.warning("[%s] HTTP %d (attempt %d/%d), backing off %.1fs",
+                          url, resp.status_code, attempt + 1, MAX_RETRIES, wait)
+            time.sleep(wait)
             continue
-
-        # Other 4xx/5xx: don't retry, bubble up.
-        body_preview = (resp.text or "")[:200]
-        raise RuntimeError(
-            f"{op_label} returned HTTP {resp.status_code} for {url}. "
-            f"Body preview: {body_preview}"
-        )
-
-    raise RuntimeError(
-        f"{op_label} failed after {MAX_RETRIES} attempts. Last error: {last_error}"
-    )
-
-
-def _backoff_sleep(attempt: int):
-    """Exponential backoff: 1s, 2s, 4s, 8s ..."""
-    sleep_for = RETRY_BACKOFF_BASE * (2 ** (attempt - 1))
-    logger.debug("price_scraper: backing off %.1fs before retry", sleep_for)
-    time.sleep(sleep_for)
-
-
-class _NotFoundError(Exception):
-    """Internal-only: CarWale returned 404 for a URL we built."""
-    pass
+        if resp.status_code == 404:
+            raise FetchError(f"HTTP 404 — page not found: {url}")
+        if resp.status_code >= 400:
+            raise FetchError(f"HTTP {resp.status_code} for {url}")
+        # 2xx — return body
+        return resp.text
+    raise FetchError(f"max retries exhausted ({MAX_RETRIES}); last_err={last_err}")
 
 
 # ============================================================
-# SLUG LOOKUP (from model_slugs tab)
+# JSON EXTRACTION FROM CARWALE HTML
 # ============================================================
 
-def _load_slug_cache() -> Dict[Tuple[str, str], str]:
-    """
-    Load the model_slugs tab from the Google Sheet into an in-memory cache.
-    Cache lives for SLUG_CACHE_TTL_SECONDS (1 hour) before refresh.
+INITIAL_STATE_NEEDLE = "__INITIAL_STATE__"
 
-    Returns dict keyed by (make_lower_stripped, model_lower_stripped) → slug.
-    """
-    global _slug_cache, _slug_cache_loaded_at
 
-    with _lock:
-        now = time.time()
-        if (_slug_cache is not None
-                and (now - _slug_cache_loaded_at) < SLUG_CACHE_TTL_SECONDS):
-            return _slug_cache
-
-    # Load outside the lock since it's a network call.
-    try:
-        import sheets_writer
-    except ImportError as e:
-        raise RuntimeError(
-            f"Could not import sheets_writer: {e}. "
-            "price_scraper depends on sheets_writer for slug lookup."
+def _extract_initial_state(html: str) -> Dict[str, Any]:
+    """Locate `window.__INITIAL_STATE__ = { ... };` in the HTML and return
+    the parsed dict. Walks balanced braces (string-aware) to find the JSON
+    end — safer than regex for nested objects.
+    Raises ValueError on any failure."""
+    idx = html.find(INITIAL_STATE_NEEDLE)
+    if idx < 0:
+        raise ValueError(
+            f"'{INITIAL_STATE_NEEDLE}' not found in HTML "
+            f"(page may be a redirect, error page, or layout changed)"
         )
+    eq_idx = html.find("=", idx)
+    if eq_idx < 0:
+        raise ValueError(f"no '=' after {INITIAL_STATE_NEEDLE}")
+    # Skip whitespace after '='
+    i = eq_idx + 1
+    while i < len(html) and html[i] in " \t\n\r":
+        i += 1
+    if i >= len(html) or html[i] != "{":
+        raise ValueError(f"expected '{{' after = (got {html[i:i+10]!r})")
 
-    try:
-        rows = sheets_writer.read_model_slugs()
-    except Exception as e:
-        raise RuntimeError(f"Failed to read model_slugs tab: {e}")
-
-    cache: Dict[Tuple[str, str], str] = {}
-    for r in rows:
-        make = (r.get("make") or "").strip()
-        model = (r.get("model") or "").strip()
-        slug = (r.get("carwale_slug") or "").strip()
-        if not make or not model or not slug:
+    # Balanced-brace walk, string-aware so braces inside string literals
+    # don't count toward the depth counter.
+    depth = 0
+    in_string = False
+    escape = False
+    start = i
+    for j in range(i, len(html)):
+        ch = html[j]
+        if escape:
+            escape = False
             continue
-        if slug == "NEEDS_MANUAL_FIX":
+        if ch == "\\":
+            escape = True
             continue
-        key = (make.lower(), model.lower())
-        cache[key] = slug
-
-    with _lock:
-        _slug_cache = cache
-        _slug_cache_loaded_at = time.time()
-
-    logger.info("price_scraper: loaded %d slugs into cache", len(cache))
-    return cache
-
-
-def _lookup_slug(make: str, model: str) -> Optional[str]:
-    """Return the carwale_slug for (make, model), or None if not registered."""
-    cache = _load_slug_cache()
-    key = (make.strip().lower(), model.strip().lower())
-    return cache.get(key)
-
-
-# ============================================================
-# URL CONSTRUCTION
-# ============================================================
-
-def get_carwale_url(make: str, model: str) -> Optional[str]:
-    """
-    Build the CarWale model page URL given a (make, model). Returns None
-    if no slug is registered.
-
-    Example: ('Maruti Suzuki', 'Swift') → 'https://www.carwale.com/maruti-suzuki-cars/swift/'
-
-    The URL pattern is: {base}/{make-slug}-cars/{model-slug}/
-    """
-    slug = _lookup_slug(make, model)
-    if not slug:
-        return None
-    # Slug format expected from sheet: 'maruti-suzuki/swift'
-    # We split into make-slug and model-slug.
-    if "/" not in slug:
-        logger.warning(
-            "price_scraper: invalid slug format for (%s, %s): %r "
-            "(expected 'make-slug/model-slug')",
-            make, model, slug,
-        )
-        return None
-    make_slug, model_slug = slug.split("/", 1)
-    return f"{CARWALE_BASE_URL}/{make_slug}-cars/{model_slug}/"
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                blob = html[start:j + 1]
+                try:
+                    return json.loads(blob)
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"JSON parse failed: {e}") from e
+    raise ValueError("unterminated JSON — never reached depth 0")
 
 
 # ============================================================
-# VARIANT NORMALIZATION & MATCHING
+# VARIANT MATCHING
 # ============================================================
 
-# Tokens to expand before normalization. Order matters — longer first so
-# we don't double-expand.
-_VARIANT_EXPANSIONS = [
-    ("+", " plus "),
-]
+_paren_re = re.compile(r"\([^)]*\)")
+_ws_re = re.compile(r"\s+")
 
 
-def normalize_variant(s: str) -> str:
-    """
-    Normalize a variant string for comparison:
-      1. Lowercase
-      2. Expand '+' → 'plus'
-      3. Strip transmission tokens (AT/AMT/MT/CVT/DCT/IVT/TCT)
-      4. Strip fuel tokens (Petrol/Diesel/CNG/HEV/PHEV/BEV/Electric/Hybrid)
-      5. Strip punctuation (keep alphanumeric and spaces)
-      6. Collapse multiple spaces, strip ends
+def _normalize_variant_name(name: str) -> str:
+    """Strip fuel/transmission/decorative tokens to get just the trim name.
 
     Examples:
-      'VXI AT'        → 'vxi'
-      'VXI AT Petrol' → 'vxi'
-      'ZXI+ DT'       → 'zxi plus dt'
-      'Sigma 1.2L MT' → 'sigma 12l'
-      'XZA Plus'      → 'xza plus'
-    """
-    if not s:
-        return ""
-    s = s.lower()
+        "VXi Petrol Manual"             -> "vxi"
+        "VXi (O) Petrol Automatic"      -> "vxi"
+        "ZXi Plus Petrol Manual Dual Tone" -> "zxi plus"
+        "S(O) Diesel AMT"               -> "s"
 
-    for old, new in _VARIANT_EXPANSIONS:
-        s = s.replace(old, new)
-
-    # Tokenize on whitespace, drop transmission/fuel tokens.
-    tokens = re.split(r"\s+", s)
-    kept = []
-    for tok in tokens:
-        # Strip punctuation from the token before checking.
-        clean_tok = re.sub(r"[^\w]+", "", tok)
-        if not clean_tok:
-            continue
-        if clean_tok in TRANSMISSION_TOKENS:
-            continue
-        if clean_tok in FUEL_TOKENS:
-            continue
-        kept.append(clean_tok)
-
-    return " ".join(kept).strip()
+    The cleaned form is what we compare against the user's input."""
+    s = (name or "").lower().strip()
+    # Drop parenthetical groups e.g. "(O)", "(AMT)", "(MT)"
+    s = _paren_re.sub(" ", s)
+    # Replace each known noise token with a space (whole-substring replace
+    # is fine here — none of the tokens appear inside trim names like
+    # "ZXi Plus" or "Sportz")
+    for tok in VARIANT_NOISE_TOKENS:
+        s = s.replace(tok, " ")
+    # Collapse whitespace
+    s = _ws_re.sub(" ", s).strip()
+    # Trim hyphens / dashes left over from removals
+    s = s.strip("- ")
+    return s
 
 
-def _match_variants(target_variant: str,
-                    candidates: List[Dict[str, Any]]
-                    ) -> Tuple[str, List[Dict[str, Any]]]:
-    """
-    Match the target_variant against a list of scraped variant dicts.
-
-    Each candidate dict has at least keys: 'variant', 'price', 'fuel'.
-    (Already pre-filtered to the right fuel by the caller.)
-
-    Strategy:
-      1. Normalized exact match — if exactly one candidate's normalized
-         variant equals the target's normalized variant → return it.
-      2. Normalized exact match returning multiple → 'ambiguous'.
-      3. Fuzzy match — compute difflib ratio against each candidate's
-         RAW variant string. If best score ≥ FUZZY_MATCH_THRESHOLD AND
-         no other candidate is within 0.05 of the best → return best.
-         Else → 'ambiguous' with top 3 candidates.
-      4. No fuzzy match clears threshold → 'not_found'.
-
-    Returns (status, matched_candidates) where status is one of:
-      'found', 'ambiguous', 'not_found'.
-    """
-    if not candidates:
-        return ("not_found", [])
-
-    target_norm = normalize_variant(target_variant)
-
-    # Strategy 1: normalized match
-    norm_matches = [
-        c for c in candidates
-        if normalize_variant(c.get("variant", "")) == target_norm
-    ]
-    if len(norm_matches) == 1:
-        return ("found", norm_matches)
-    if len(norm_matches) > 1:
-        return ("ambiguous", norm_matches)
-
-    # Strategy 2: fuzzy match (raw strings)
-    scored = []
-    for c in candidates:
-        raw_v = c.get("variant", "")
-        score = difflib.SequenceMatcher(
-            None, target_variant.lower(), raw_v.lower()
-        ).ratio()
-        scored.append((score, c))
-    scored.sort(key=lambda x: x[0], reverse=True)
-
-    best_score = scored[0][0] if scored else 0.0
-    if best_score < FUZZY_MATCH_THRESHOLD:
-        # Even the best candidate is below threshold — return ambiguous
-        # so admin can pick from the top 3.
-        top3 = [c for _, c in scored[:3]]
-        return ("not_found", top3)
-
-    # Best score clears threshold. Check if it's clearly the best (no near-tie).
-    if len(scored) == 1:
-        return ("found", [scored[0][1]])
-    second_best_score = scored[1][0]
-    if (best_score - second_best_score) >= 0.05:
-        return ("found", [scored[0][1]])
-
-    # Near-tie → ambiguous.
-    top3 = [c for _, c in scored[:3]]
-    return ("ambiguous", top3)
-
-
-# ============================================================
-# CARWALE HTML PARSING
-# ============================================================
-
-def _parse_carwale_variants(html: str, model_url: str) -> List[Dict[str, Any]]:
-    """
-    Parse the CarWale model page HTML and extract a list of variant dicts.
-
-    Each variant dict has:
-      {
-        'variant': str,        # e.g. 'VXI AT'
-        'price': int,          # ex-showroom price in INR (e.g. 825000)
-        'fuel': str,           # 'Petrol' / 'Diesel' / 'CNG' / etc.
-        'transmission': str,   # 'Manual' / 'Automatic' (best effort)
-        'url': str,            # variant deep-link if present, else model_url
-      }
-
-    CarWale's HTML structure has changed over time. As of 2026-05, the
-    variant table is typically rendered server-side at
-    /{make}-cars/{model}/ in a section labeled "Price List" with
-    individual variant rows.
-
-    NOTE: This parser uses CSS selectors based on observed CarWale HTML
-    structure. If CarWale changes their layout, this function may need
-    updates. We log warnings on parse failures so we know when to revisit.
-    """
-    try:
-        from bs4 import BeautifulSoup
-    except ImportError as e:
-        raise RuntimeError(
-            f"beautifulsoup4 not installed: {e}. "
-            "Add `beautifulsoup4==4.12.3` to requirements.txt."
-        )
-
-    soup = BeautifulSoup(html, "html.parser")
-    variants: List[Dict[str, Any]] = []
-
-    # ----------------------------------------------------------
-    # CarWale price-list parsing
-    # ----------------------------------------------------------
-    # As of May 2026, CarWale renders variants in a structure like:
-    #   <div class="o-cpzZyB"> ... variant rows ...
-    #   <a href="/.../variant-name/" class="o-...">
-    #       <span>VXI AT</span>
-    #       <span>Petrol · Manual · 22.4 kmpl</span>
-    #       <span>Rs. 8.25 Lakh*</span>
-    #   </a>
-    #
-    # We use multiple selector strategies and pick the first that yields
-    # results. This makes us resilient to minor CSS class hash changes.
-    # ----------------------------------------------------------
-
-    # Strategy 1: Look for variant cards/rows by structural pattern —
-    # any <a> or <div> containing both a price string and a variant name.
-    # Prices on CarWale are formatted as "Rs. X.YY Lakh" or "Rs. X,XX,XXX".
-    price_pattern = re.compile(
-        r"(?:Rs\.?|₹)\s*([\d,]+(?:\.\d+)?)\s*(Lakh|Crore|cr|L)?",
-        re.IGNORECASE,
-    )
-
-    # Look for all elements that look like variant rows: contain a price
-    # string and at least one of the fuel keywords.
-    fuel_keywords_re = re.compile(
-        r"\b(petrol|diesel|cng|electric|hybrid|hev|phev|bev)\b",
-        re.IGNORECASE,
-    )
-
-    # Find candidate variant containers — anything with both a price and
-    # a fuel keyword in its text.
-    candidate_blocks = []
-    for elem in soup.find_all(["a", "div", "li", "tr"]):
-        text = elem.get_text(" ", strip=True)
-        if not text:
-            continue
-        if not price_pattern.search(text):
-            continue
-        if not fuel_keywords_re.search(text):
-            continue
-        # Avoid huge containers — prefer leaf-ish elements.
-        if len(text) > 400:
-            continue
-        candidate_blocks.append((elem, text))
-
-    if not candidate_blocks:
-        logger.warning(
-            "price_scraper: parser found no variant blocks on %s. "
-            "CarWale layout may have changed.",
-            model_url,
-        )
-        return []
-
-    # Deduplicate: prefer smaller blocks (more leaf-like), drop blocks
-    # that are ancestors of other candidates.
-    candidate_blocks.sort(key=lambda x: len(x[1]))
-
-    seen_signatures = set()
-    for elem, text in candidate_blocks:
-        # Build a "signature" from price + first fuel mention to dedupe.
-        price_match = price_pattern.search(text)
-        fuel_match = fuel_keywords_re.search(text)
-        if not price_match or not fuel_match:
-            continue
-
-        price_str = price_match.group(1)
-        price_unit = (price_match.group(2) or "").lower()
-        price_inr = _parse_price_to_inr(price_str, price_unit)
-        if price_inr is None or price_inr < 100000:  # sanity floor: <1L is suspect
-            continue
-
-        fuel_raw = fuel_match.group(1).lower()
-        fuel = _normalize_fuel(fuel_raw)
-
-        # Variant name: extract from the FIRST text token before any
-        # separator like "·", "•", "|" or before the fuel/price string.
-        variant_name = _extract_variant_name(text, fuel_raw, price_match.group(0))
-        if not variant_name:
-            continue
-
-        signature = (variant_name.lower(), price_inr, fuel)
-        if signature in seen_signatures:
-            continue
-        seen_signatures.add(signature)
-
-        # Variant deep link if this elem is an <a>
-        href = ""
-        if elem.name == "a" and elem.get("href"):
-            href = elem.get("href")
-            if href.startswith("/"):
-                href = CARWALE_BASE_URL + href
-
-        # Transmission detection — look for AT/AMT/MT/CVT in the text.
-        transmission = _detect_transmission(text)
-
-        variants.append({
-            "variant": variant_name,
-            "price": price_inr,
-            "fuel": fuel,
-            "transmission": transmission,
-            "url": href or model_url,
-        })
-
-    logger.info(
-        "price_scraper: parsed %d variants from %s",
-        len(variants), model_url,
-    )
-    return variants
-
-
-def _parse_price_to_inr(price_str: str, unit: str) -> Optional[int]:
-    """
-    Convert a CarWale-formatted price into INR rupees.
-
-    '8.25', 'lakh'        → 825000
-    '12,50,000', ''       → 1250000
-    '1.2', 'crore'        → 12000000
-    '8,25,000', 'lakh'    → 825000  (the unit is supplementary)
-    """
-    try:
-        cleaned = price_str.replace(",", "")
-        val = float(cleaned)
-    except (ValueError, AttributeError):
-        return None
-
-    unit_l = (unit or "").lower()
-    if unit_l in ("lakh", "l") and val < 10000:
-        # "8.25 Lakh" → 8.25 * 100000
-        return int(round(val * 100000))
-    if unit_l in ("crore", "cr") and val < 1000:
-        return int(round(val * 10000000))
-    # No unit, or large absolute number with unit
-    if val >= 100000:
-        return int(val)
-    # Sanity fallback: small number with no unit is suspect; treat as Lakh
-    if val < 100:
-        return int(round(val * 100000))
-    return int(val)
-
-
-def _normalize_fuel(raw: str) -> str:
-    """Map a raw fuel string from CarWale to our standard fuel names."""
-    raw_l = raw.lower().strip()
-    if raw_l == "petrol":
-        return "Petrol"
-    if raw_l == "diesel":
-        return "Diesel"
-    if raw_l == "cng":
-        return "CNG"
-    if raw_l in ("electric", "bev"):
-        return "BEV"
-    if raw_l in ("hev", "hybrid"):
-        return "HEV"
-    if raw_l == "phev":
-        return "PHEV"
-    return raw_l.title()
-
-
-def _detect_transmission(text: str) -> str:
-    """Best-effort transmission detection from variant text."""
-    text_l = text.lower()
-    if re.search(r"\b(automatic|amt|cvt|dct|ivt|tct)\b", text_l):
-        return "Automatic"
-    if re.search(r"\bat\b", text_l):
-        return "Automatic"
-    if re.search(r"\b(manual|mt)\b", text_l):
-        return "Manual"
+def _get_fuel_from_version(v: Dict[str, Any]) -> str:
+    """Extract human-readable fuel type from a version dict's specsSummary
+    (which is more reliable than fuelTypeId — that field is sometimes 0
+    even when fuel is set, as we observed on the Swift page)."""
+    for spec in v.get("specsSummary") or []:
+        if spec.get("itemName") == "Fuel Type":
+            return (spec.get("value") or "").strip()
+    # Fallback: parse from versionName ("VXi Petrol Manual" -> "Petrol")
+    name = (v.get("versionName") or "").lower()
+    for fuel in ("petrol", "diesel", "cng", "electric", "hybrid"):
+        if fuel in name:
+            return fuel.capitalize()
     return ""
 
 
-def _extract_variant_name(text: str, fuel_raw: str, price_token: str) -> str:
-    """
-    Pull the variant name out of a variant row's text.
-    Strategy: take everything before the first occurrence of fuel or price.
-    """
-    # Find the earliest cut point.
-    cut = len(text)
-    fuel_pos = text.lower().find(fuel_raw.lower())
-    if fuel_pos > 0 and fuel_pos < cut:
-        cut = fuel_pos
-    price_pos = text.find(price_token)
-    if price_pos > 0 and price_pos < cut:
-        cut = price_pos
+def _parse_variants(state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Pull a clean variant list from the parsed __INITIAL_STATE__ dict.
+    Each item: {versionName, displayName, maskingName, fuel,
+                 ex_showroom, on_road}."""
+    versions = (state.get("modelPage") or {}).get("versions") or []
+    out: List[Dict[str, Any]] = []
+    for v in versions:
+        po = v.get("priceOverview") or {}
+        ex = po.get("exShowRoomPrice") or 0
+        if not isinstance(ex, (int, float)) or ex <= 0:
+            # Skip variants with no usable ex-showroom price
+            continue
+        out.append({
+            "versionName": (v.get("versionName") or "").strip(),
+            "displayName": (v.get("displayName") or "").strip(),
+            "maskingName": (v.get("versionMaskingName") or "").strip(),
+            "fuel": _get_fuel_from_version(v),
+            "ex_showroom": int(ex),
+            "on_road": int(po.get("price") or 0),
+        })
+    return out
 
-    name = text[:cut].strip()
-    # Strip trailing separators
-    name = re.sub(r"[\s·•|,\-]+$", "", name).strip()
-    # Strip leading "Variant:" labels if any
-    name = re.sub(r"^variant\s*:\s*", "", name, flags=re.IGNORECASE)
-    # Cap length
-    if len(name) > 80:
-        name = name[:80].rsplit(" ", 1)[0]
-    return name
+
+def _match_variant(
+    variants: List[Dict[str, Any]],
+    user_variant: str,
+    user_fuel: str,
+) -> Tuple[str, Optional[Dict[str, Any]], List[str]]:
+    """Find the user's variant in the parsed variant list.
+
+    Strategy:
+        1. Normalize user_variant ("VXI" -> "vxi", "ZXi Plus" -> "zxi plus").
+        2. Filter variants by fuel match (case-insensitive).
+        3. Find variants with the SAME normalized name. Cheapest wins
+           (the user's "VXI Petrol" is the base VXI Petrol — they didn't
+           ask for the AMT or the Optional pack).
+        4. If no exact match, try prefix match.
+        5. Token-overlap fallback.
+        6. Return (status, best_variant_dict_or_None, candidates_list).
+
+    Returns:
+        ('found', dict, [name])               — exactly 1 candidate
+        ('found_multiple', dict, [names])     — multiple matches, picked cheapest
+        ('found_fuzzy', dict, [names])        — prefix/token fallback fired
+        ('not_found_fuel', None, [all names]) — fuel filter rejected everything
+        ('not_found', None, [fuel-matched names]) — fuel ok, name didn't match
+    """
+    user_norm = _normalize_variant_name(user_variant)
+    if not user_norm:
+        return ("not_found", None, [v["versionName"] for v in variants])
+
+    # 2. Filter by fuel
+    fuel_norm = (user_fuel or "").strip().lower()
+    if fuel_norm:
+        fuel_filtered = [v for v in variants if v["fuel"].lower() == fuel_norm]
+        if not fuel_filtered:
+            return ("not_found_fuel", None, [v["versionName"] for v in variants])
+    else:
+        fuel_filtered = list(variants)
+
+    # 3. Exact match on normalized name
+    exact = [v for v in fuel_filtered if _normalize_variant_name(v["versionName"]) == user_norm]
+    if exact:
+        best = min(exact, key=lambda v: v["ex_showroom"])
+        status = "found" if len(exact) == 1 else "found_multiple"
+        return (status, best, [v["versionName"] for v in exact])
+
+    # 4. Prefix fallback
+    starts = [v for v in fuel_filtered if _normalize_variant_name(v["versionName"]).startswith(user_norm)]
+    if starts:
+        best = min(starts, key=lambda v: v["ex_showroom"])
+        return ("found_fuzzy", best, [v["versionName"] for v in starts])
+
+    # 5. Token-overlap fallback
+    user_tokens = set(user_norm.split())
+    if user_tokens:
+        token_match = []
+        for v in fuel_filtered:
+            v_tokens = set(_normalize_variant_name(v["versionName"]).split())
+            if user_tokens & v_tokens:
+                token_match.append(v)
+        if token_match:
+            best = min(token_match, key=lambda v: v["ex_showroom"])
+            return ("found_fuzzy", best, [v["versionName"] for v in token_match])
+
+    return ("not_found", None, [v["versionName"] for v in fuel_filtered])
 
 
 # ============================================================
 # PUBLIC API
 # ============================================================
 
-def fetch_price(make: str, model: str, variant: str, fuel: str) -> Dict[str, Any]:
-    """
-    Fetch the latest ex-showroom price for a (make, model, variant, fuel).
+def fetch_price(
+    make: str,
+    model: str,
+    variant: str,
+    fuel: str,
+) -> Dict[str, Any]:
+    """Scrape the ex-showroom price for a single variant from CarWale.
 
-    Returns a dict:
-      {
-        "status": "found" | "ambiguous" | "not_found" | "no_slug" | "error",
-        "make": str, "model": str, "variant": str, "fuel": str,
-        "url": str | None,           # CarWale model page URL
-        "scraped_at": ISO timestamp,
-        "match": {                   # only when status='found'
-          "variant": str,
-          "price": int,
-          "fuel": str,
-          "transmission": str,
-          "url": str,
-        },
-        "candidates": [...],         # when status='ambiguous' or 'not_found'
-        "error": str,                # when status='error'
-      }
+    All output statuses (see module docstring) are reported as JSON-safe
+    dicts. Never raises — every failure mode is encoded in the dict.
 
-    Never raises — all failures are returned as status='error' with a
-    human-readable message in 'error' key. This makes it safe to call
-    from cron jobs without try/except wrapping.
+    Args:
+        make: e.g. "Maruti Suzuki"
+        model: e.g. "Swift"
+        variant: e.g. "VXI" or "ZXi Plus"
+        fuel: e.g. "Petrol" / "Diesel" / "CNG" / "Electric"
+
+    Returns:
+        Dict matching the public API shape in the module docstring.
     """
+    started_at = datetime.now(timezone.utc).isoformat()
+
     result: Dict[str, Any] = {
+        "ok": False,
         "status": "error",
         "make": make,
         "model": model,
         "variant": variant,
         "fuel": fuel,
+        "ex_showroom_inr": None,
+        "matched_variant": None,
         "url": None,
-        "scraped_at": datetime.now(timezone.utc).isoformat(),
+        "scraped_at": started_at,
+        "candidates_considered": 0,
+        "all_variants": None,
+        "error": None,
     }
 
+    # 1. Slug lookup
     try:
-        # ---- 1. Look up slug
-        url = get_carwale_url(make, model)
-        if url is None:
-            result["status"] = "no_slug"
-            result["error"] = (
-                f"No carwale_slug registered for ({make}, {model}). "
-                "Run populate_slugs.py or add manually to model_slugs tab."
-            )
-            return result
-        result["url"] = url
-
-        # ---- 2. Fetch HTML
-        try:
-            html = _http_get(url, op_label=f"carwale[{make}/{model}]")
-        except _NotFoundError:
-            result["status"] = "not_found"
-            result["error"] = f"CarWale returned 404 for {url} (model may be discontinued)."
-            return result
-
-        # ---- 3. Parse variants
-        all_variants = _parse_carwale_variants(html, url)
-        if not all_variants:
-            result["status"] = "error"
-            result["error"] = (
-                f"Parsed 0 variants from {url}. CarWale layout may have "
-                "changed; the parser needs updating."
-            )
-            return result
-
-        # ---- 4. Filter by fuel
-        target_fuel = _normalize_fuel(fuel)
-        fuel_filtered = [v for v in all_variants if v["fuel"] == target_fuel]
-        if not fuel_filtered:
-            available_fuels = sorted(set(v["fuel"] for v in all_variants))
-            result["status"] = "not_found"
-            result["error"] = (
-                f"No {target_fuel} variants found on {url}. "
-                f"Available fuels: {available_fuels}."
-            )
-            result["candidates"] = all_variants[:5]
-            return result
-
-        # ---- 5. Match variant
-        match_status, matched = _match_variants(variant, fuel_filtered)
-
-        if match_status == "found":
-            result["status"] = "found"
-            result["match"] = matched[0]
-            return result
-
-        if match_status == "ambiguous":
-            result["status"] = "ambiguous"
-            result["candidates"] = matched
-            result["error"] = (
-                f"Multiple variants matched ({len(matched)}). "
-                "Admin must pick the right one."
-            )
-            return result
-
-        # not_found
-        result["status"] = "not_found"
-        result["candidates"] = matched  # top 3 nearest
+        slug = _get_slug(make, model)
+    except Exception as e:
+        result["error"] = f"slug_lookup_failed: {e}"
+        return result
+    if not slug:
+        result["status"] = "no_slug"
         result["error"] = (
-            f"No {target_fuel} variant matched '{variant}' on {url}. "
-            f"Closest candidates returned for review."
+            f"No carwale_slug found in model_slugs tab for "
+            f"({make!r}, {model!r}). Populate the row or run populate_slugs.py."
         )
         return result
 
-    except Exception as e:
-        logger.exception("price_scraper: unexpected error in fetch_price")
+    # 2. Build URL
+    url = f"{CARWALE_BASE}/{slug}/"
+    result["url"] = url
+
+    # 3. Fetch HTML
+    try:
+        html = _http_get(url)
+    except FetchError as e:
         result["status"] = "error"
-        result["error"] = f"{type(e).__name__}: {e}"
+        result["error"] = f"fetch_failed: {e}"
+        return result
+    except Exception as e:
+        result["status"] = "error"
+        result["error"] = f"fetch_exception: {e.__class__.__name__}: {e}"
         return result
 
+    # 4. Extract __INITIAL_STATE__ JSON
+    try:
+        state = _extract_initial_state(html)
+    except ValueError as e:
+        result["status"] = "error"
+        result["error"] = (
+            f"Could not extract __INITIAL_STATE__ from {url} ({e}). "
+            "CarWale layout may have changed; the parser needs updating."
+        )
+        return result
 
-def reset_caches():
-    """Force-clear caches. Call after admin updates model_slugs tab."""
-    global _slug_cache, _slug_cache_loaded_at, _session
-    with _lock:
-        _slug_cache = None
-        _slug_cache_loaded_at = 0.0
-        _session = None
-    logger.info("price_scraper: caches reset")
+    # 5. Parse variant list
+    variants = _parse_variants(state)
+    if not variants:
+        result["status"] = "error"
+        result["error"] = (
+            f"Parsed 0 variants from {url}. The page may be a discontinued-model "
+            "stub, a redirect, or CarWale layout may have changed."
+        )
+        return result
+
+    # 6. Match user's request
+    status, best, candidates = _match_variant(variants, variant, fuel)
+    result["all_variants"] = [v["versionName"] for v in variants]
+    result["candidates_considered"] = len(candidates)
+
+    if best is None:
+        result["status"] = status
+        if status == "not_found_fuel":
+            result["error"] = (
+                f"Fuel {fuel!r} not available for {make} {model}. "
+                f"Available fuels: {sorted({v['fuel'] for v in variants if v['fuel']})}"
+            )
+        else:
+            result["error"] = (
+                f"Variant {variant!r} (fuel {fuel!r}) not found among "
+                f"{len(candidates)} fuel-matched variants on {url}."
+            )
+        return result
+
+    # 7. Found a match
+    result["ok"] = True
+    result["status"] = status
+    result["ex_showroom_inr"] = best["ex_showroom"]
+    result["matched_variant"] = best["versionName"]
+    return result
+
+
+# ============================================================
+# DIAGNOSTIC HELPERS
+# ============================================================
+
+def list_variants(make: str, model: str) -> Dict[str, Any]:
+    """List all variants of a model from CarWale. Useful for debugging
+    when fetch_price returns 'not_found' — caller can see what's actually
+    on the page."""
+    started_at = datetime.now(timezone.utc).isoformat()
+    result: Dict[str, Any] = {
+        "ok": False,
+        "make": make,
+        "model": model,
+        "url": None,
+        "variants": None,
+        "scraped_at": started_at,
+        "error": None,
+    }
+    slug = _get_slug(make, model)
+    if not slug:
+        result["error"] = f"no slug for ({make!r}, {model!r})"
+        return result
+    url = f"{CARWALE_BASE}/{slug}/"
+    result["url"] = url
+    try:
+        html = _http_get(url)
+        state = _extract_initial_state(html)
+        variants = _parse_variants(state)
+    except Exception as e:
+        result["error"] = f"{e.__class__.__name__}: {e}"
+        return result
+    result["ok"] = True
+    result["variants"] = [
+        {
+            "versionName": v["versionName"],
+            "fuel": v["fuel"],
+            "ex_showroom_inr": v["ex_showroom"],
+            "on_road_inr": v["on_road"],
+        }
+        for v in variants
+    ]
+    return result
+
+
+# ============================================================
+# Module-level smoke test
+# ============================================================
+
+if __name__ == "__main__":
+    import pprint
+    logging.basicConfig(level=logging.INFO)
+    print("=" * 60)
+    print("price_scraper.py v2.0 smoke test")
+    print("=" * 60)
+
+    test_cases = [
+        ("Maruti Suzuki", "Swift", "VXI", "Petrol"),
+        ("Maruti Suzuki", "Swift", "LXI", "Petrol"),
+        ("Maruti Suzuki", "Swift", "VXI", "CNG"),
+        ("Hyundai", "Creta", "E", "Petrol"),
+    ]
+    for make, model, variant, fuel in test_cases:
+        print(f"\n--- {make} {model} {variant} {fuel} ---")
+        r = fetch_price(make, model, variant, fuel)
+        if r.get("all_variants") and len(r["all_variants"]) > 5:
+            r["all_variants"] = r["all_variants"][:5] + [f"... +{len(r['all_variants']) - 5} more"]
+        pprint.pprint(r)
