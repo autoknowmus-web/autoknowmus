@@ -40,12 +40,94 @@ import car_data as _car_data_module
 # v3.5: Now accepts state_multiplier param (applied at final step only).
 from pricing_engine import compute_market_valuation, MIN_EFFECTIVE_LISTINGS
 
+# === Phase 3 (admin price tools) imports — added v3.7.0 ===
+from datetime import datetime, timedelta, date as date_cls
+import price_scraper
+import sheets_writer
+import car_data
+
 # Alerts dispatcher (v1 email alerts)
 from alert_dispatcher import dispatch_deal_alerts_async, send_weekly_digest
 
 # Test dispatcher functions are imported lazily inside admin endpoints
 # so this module loads even if alert_dispatcher hasn't been updated yet.
+# ============================================================
+# Phase 3 admin price tools — helper functions
+# ============================================================
 
+def _is_admin(user) -> bool:
+    """True if the logged-in user is the admin. Mirrors layout.html convention."""
+    if not user or not user.get('email'):
+        return False
+    return user['email'].lower() == 'autoknowmus@gmail.com'
+
+
+def _ddmmmyyyy(dt) -> str:
+    """Format datetime/date as DD-MMM-YYYY (e.g. 04-May-2026)."""
+    if dt is None:
+        return ''
+    if isinstance(dt, str):
+        return dt
+    return dt.strftime('%d-%b-%Y')
+
+
+def _age_class(date_str: str) -> str:
+    """
+    Returns CSS class for price-age coloring:
+      pt-age-fresh  (≤ 1 month)
+      pt-age-warn   (1–3 months)
+      pt-age-stale  (> 3 months)
+      pt-age-never  (no date set)
+    Input: 'DD-MMM-YYYY' string or empty.
+    """
+    if not date_str:
+        return 'pt-age-never'
+    try:
+        dt = datetime.strptime(date_str, '%d-%b-%Y').date()
+    except (ValueError, TypeError):
+        return 'pt-age-never'
+    age_days = (date_cls.today() - dt).days
+    if age_days <= 31:
+        return 'pt-age-fresh'
+    if age_days <= 92:
+        return 'pt-age-warn'
+    return 'pt-age-stale'
+
+
+def _create_pending_review(supabase, review_type, make, model, variant, fuel,
+                           current_price=None, proposed_price=None,
+                           matched_variant_name=None, scraper_status=None,
+                           scraper_url=None) -> int:
+    """
+    Insert a row into pending_reviews. Returns the new review id.
+    Skips insertion if an identical pending review already exists
+    (same review_type + car identity + status='pending').
+    """
+    # Dedup: don't queue the same review twice
+    dup_check = supabase.table('pending_reviews').select('id').eq(
+        'review_type', review_type
+    ).eq('make', make).eq('model', model).eq('variant', variant).eq(
+        'fuel', fuel
+    ).eq('status', 'pending').execute()
+    if dup_check.data:
+        return dup_check.data[0]['id']  # return existing id, don't double-queue
+
+    payload = {
+        'review_type': review_type,
+        'make': make,
+        'model': model,
+        'variant': variant,
+        'fuel': fuel,
+        'current_price': current_price,
+        'proposed_price': proposed_price,
+        'scraped_at': datetime.utcnow().isoformat(),
+        'matched_variant_name': matched_variant_name,
+        'scraper_status': scraper_status,
+        'scraper_url': scraper_url,
+        'status': 'pending',
+    }
+    result = supabase.table('pending_reviews').insert(payload).execute()
+    return result.data[0]['id']
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-change-me')
 
