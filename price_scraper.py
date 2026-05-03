@@ -580,18 +580,42 @@ def fetch_price(
     # 5. Parse variant list
     variants = _parse_variants(state)
     if not variants:
-        # v2.3 diag: log the JSON structure so we can see what CarWale
-        # actually returned. Render-IP responses may differ from local tests.
         try:
             top_keys = sorted(state.keys()) if isinstance(state, dict) else []
             mp = state.get("modelPage") if isinstance(state, dict) else None
             mp_keys = sorted(mp.keys()) if isinstance(mp, dict) else []
-            mp_versions_type = type(mp.get("versions")).__name__ if isinstance(mp, dict) else "n/a"
-            mp_versions_len = len(mp.get("versions") or []) if isinstance(mp, dict) else 0
+            mp_versions = mp.get("versions") if isinstance(mp, dict) else None
+            mp_versions_type = type(mp_versions).__name__
+            mp_versions_len = len(mp_versions or []) if isinstance(mp_versions, list) else 0
+            # v2.4 diag: dump first version's keys + sample fields so we can see
+            # the actual schema (price fields might be renamed or differently nested).
+            first_v_keys = []
+            first_v_sample = {}
+            if isinstance(mp_versions, list) and mp_versions:
+                v0 = mp_versions[0]
+                if isinstance(v0, dict):
+                    first_v_keys = sorted(v0.keys())
+                    # Sample a few likely-relevant fields
+                    for k in ("versionName", "displayName", "versionMaskingName",
+                              "priceOverview", "price", "exShowRoomPrice",
+                              "onRoadPrice", "priceData", "fuelType",
+                              "fuelTypeId", "specsSummary"):
+                        if k in v0:
+                            v_val = v0[k]
+                            # Truncate large values
+                            if isinstance(v_val, dict):
+                                first_v_sample[k] = {"_keys": sorted(v_val.keys())[:15]}
+                            elif isinstance(v_val, list):
+                                first_v_sample[k] = {"_listlen": len(v_val),
+                                                     "_first": v_val[0] if v_val else None}
+                            else:
+                                first_v_sample[k] = v_val
             logger.warning(
                 "[parse-fail] url=%s | top_keys=%s | modelPage.keys=%s | "
-                "versions type=%s len=%d",
-                url, top_keys[:30], mp_keys[:30], mp_versions_type, mp_versions_len
+                "versions type=%s len=%d | first_version_keys=%s | "
+                "first_version_sample=%s",
+                url, top_keys[:30], mp_keys[:30], mp_versions_type,
+                mp_versions_len, first_v_keys, first_v_sample
             )
         except Exception as _diag_e:
             logger.warning("[parse-fail] diag log failed: %s", _diag_e)
