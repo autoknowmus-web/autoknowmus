@@ -7,3 +7,5 @@ bcrypt==4.2.0
 Pillow==11.0.0
 python-dateutil==2.9.0
 resend==2.4.0
+gspread==6.1.4
+google-auth==2.34.0
