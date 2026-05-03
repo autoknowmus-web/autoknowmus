@@ -2,18 +2,31 @@
 price_scraper.py — CarWale ex-showroom price scraper for AutoKnowMus
 =====================================================================
 
-VERSION: v2.0 (03-May-2026)
-Rewritten after v1.0 failed: CarWale's HTML is React-rendered, so the
-prices are NOT in the rendered DOM (which is what BeautifulSoup CSS
-selectors would see). They live inside a `window.__INITIAL_STATE__`
-JSON blob in a <script> tag.
+VERSION: v2.1 (03-May-2026)
+
+CHANGELOG:
+    v2.1 — URL builder fix.
+        Sheet stores slugs as `{make-slug}/{model-slug}` (e.g.
+        "maruti-suzuki/swift"). CarWale's actual URL convention is
+        `{make-slug}-cars/{model-slug}/` (e.g. "maruti-suzuki-cars/swift/").
+        v2.0 hit /maruti-suzuki/swift/ → 404 across the board.
+        v2.1 introduces _slug_to_url_path() which appends "-cars" to the
+        make portion at URL-build time. Sheet untouched. Manual-fix slugs
+        (land-rover/freelander-2, toyota/landcruiserprado) work the same
+        way — verified universal across makes including Land Rover, Lexus,
+        Mercedes-Benz, Rolls-Royce, BMW.
+
+    v2.0 — Rewritten parser. v1.0's BeautifulSoup CSS selectors didn't
+        work against CarWale's React-rendered DOM. v2.0 extracts
+        window.__INITIAL_STATE__ JSON blob and walks balanced braces to
+        get the variant list. Public API shape unchanged.
 
 WHAT THIS MODULE DOES:
     Public function `fetch_price(make, model, variant, fuel)` returns
     a dict with the ex-showroom price for a single (make, model, variant,
     fuel) combo, scraped live from carwale.com.
 
-PUBLIC API SHAPE (unchanged from v1.0 — app.py's /admin/test-scraper
+PUBLIC API SHAPE (unchanged from v2.0 — app.py's /admin/test-scraper
 route does NOT need any changes):
 
     {
@@ -37,7 +50,8 @@ route does NOT need any changes):
 HIGH-LEVEL FLOW:
     1. Read the model_slugs tab to look up the carwale_slug for
        (make, model). Cached in-memory for SLUG_CACHE_TTL.
-    2. Build URL: https://www.carwale.com/{slug}/
+    2. Build URL via _slug_to_url_path: "maruti-suzuki/swift"
+       -> "https://www.carwale.com/maruti-suzuki-cars/swift/"
     3. Rate-limited HTTP GET (User-Agent spoofed, retries on 429/503).
     4. Find `window.__INITIAL_STATE__ = {...};` inside the response.
     5. Walk balanced braces to extract the JSON, parse with json.loads.
@@ -51,11 +65,6 @@ HIGH-LEVEL FLOW:
 DEPENDENCIES:
     - requests (already in requirements.txt)
     - stdlib: json, re, time, threading, datetime, random, logging
-
-NOT USED (despite v1.0 leaving them in requirements.txt):
-    - beautifulsoup4: removed from this module's logic. Left in
-      requirements.txt for harmless safety net — Render won't redeploy
-      just to drop one line. Cleanup pass later.
 """
 
 from __future__ import annotations
@@ -191,6 +200,48 @@ def _get_slug(make: str, model: str) -> Optional[str]:
     if not _slug_cache or age > SLUG_CACHE_TTL_SECS:
         _refresh_slug_cache()
     return _slug_cache.get((mk, md))
+
+
+# ============================================================
+# v2.1: SLUG -> URL PATH
+# ============================================================
+
+def _slug_to_url_path(slug: str) -> str:
+    """Convert a sheet slug to the CarWale URL path segment.
+
+    The model_slugs sheet stores slugs in the form '{make-slug}/{model-slug}'
+    (e.g. 'maruti-suzuki/swift', 'land-rover/freelander-2'). CarWale's URL
+    convention adds '-cars' to the make portion:
+        'maruti-suzuki/swift'      -> 'maruti-suzuki-cars/swift'
+        'land-rover/freelander-2'  -> 'land-rover-cars/freelander-2'
+        'toyota/landcruiserprado'  -> 'toyota-cars/landcruiserprado'
+
+    Verified universal: land-rover-cars, lexus-cars, mercedes-benz-cars,
+    rolls-royce-cars, bmw-cars all resolve on carwale.com.
+
+    Defensive: if the slug already contains '-cars/' we leave it alone
+    (so a future hand-edit in the sheet won't double-stamp).
+    Defensive: if the slug has no '/' (unexpected shape), fall back to
+    appending '-cars/' so we still produce a syntactically valid URL —
+    this will likely 404 but the error will be visible and traceable.
+    """
+    s = (slug or "").strip().strip("/")
+    if not s:
+        return ""
+    # Already has -cars/ — leave alone (caller hand-edited the sheet)
+    if "-cars/" in s:
+        return s
+    if "/" not in s:
+        # Unexpected shape; best-effort fallback
+        return f"{s}-cars"
+    make_part, _, rest = s.partition("/")
+    return f"{make_part}-cars/{rest}"
+
+
+def _build_url(slug: str) -> str:
+    """Public URL for a given sheet slug. Centralized so fetch_price and
+    list_variants stay in lockstep."""
+    return f"{CARWALE_BASE}/{_slug_to_url_path(slug)}/"
 
 
 # ============================================================
@@ -498,8 +549,9 @@ def fetch_price(
         )
         return result
 
-    # 2. Build URL
-    url = f"{CARWALE_BASE}/{slug}/"
+    # 2. Build URL — v2.1: routed through _slug_to_url_path() so
+    # 'maruti-suzuki/swift' becomes '.../maruti-suzuki-cars/swift/'.
+    url = _build_url(slug)
     result["url"] = url
 
     # 3. Fetch HTML
@@ -584,7 +636,8 @@ def list_variants(make: str, model: str) -> Dict[str, Any]:
     if not slug:
         result["error"] = f"no slug for ({make!r}, {model!r})"
         return result
-    url = f"{CARWALE_BASE}/{slug}/"
+    # v2.1: same URL builder as fetch_price so both paths stay in lockstep.
+    url = _build_url(slug)
     result["url"] = url
     try:
         html = _http_get(url)
@@ -614,8 +667,28 @@ if __name__ == "__main__":
     import pprint
     logging.basicConfig(level=logging.INFO)
     print("=" * 60)
-    print("price_scraper.py v2.0 smoke test")
+    print("price_scraper.py v2.1 smoke test")
     print("=" * 60)
+
+    # Quick unit-style check on _slug_to_url_path before hitting the network
+    print("\n--- _slug_to_url_path unit checks ---")
+    cases = [
+        ("maruti-suzuki/swift",       "maruti-suzuki-cars/swift"),
+        ("hyundai/creta",              "hyundai-cars/creta"),
+        ("land-rover/freelander-2",    "land-rover-cars/freelander-2"),
+        ("toyota/landcruiserprado",    "toyota-cars/landcruiserprado"),
+        ("mercedes-benz/c-class",      "mercedes-benz-cars/c-class"),
+        # Already has -cars/ → leave alone
+        ("bmw-cars/x1",                "bmw-cars/x1"),
+        # No slash → fallback
+        ("audi",                       "audi-cars"),
+        # Empty
+        ("",                           ""),
+    ]
+    for inp, expected in cases:
+        got = _slug_to_url_path(inp)
+        ok = "✓" if got == expected else "✗"
+        print(f"  {ok} {inp!r:35s} -> {got!r:40s} (expected {expected!r})")
 
     test_cases = [
         ("Maruti Suzuki", "Swift", "VXI", "Petrol"),
