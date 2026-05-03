@@ -8,6 +8,27 @@ no google-auth. Just JWT-grant OAuth (proven working in 238ms) + plain
 HTTPS calls (proven working in 200ms via /admin/diag-egress).
 
 ----------------------------------------------------------------------
+v3.6.8 — model_slugs tab support (additive, no breaking changes)
+----------------------------------------------------------------------
+New in this version (purely additive — all v3.6.7 code unchanged):
+
+  - TAB_MODEL_SLUGS constant ("model_slugs")
+  - MODEL_SLUGS_COLUMNS constant
+  - read_model_slugs() public function — returns rows as list of dicts
+  - write_model_slug(make, model, slug, note=None) public function —
+    inserts or updates a row keyed on (make, model)
+
+These are used by:
+  - price_scraper.py (reads slugs to know which CarWale URL to fetch)
+  - populate_slugs.py (one-time script: writes auto-resolved slugs)
+
+If the model_slugs tab does not exist in the sheet, read_model_slugs()
+returns [] gracefully so existing flows are not affected. The tab must
+be created manually before populate_slugs.py is run for the first time:
+  Sheet → add tab named "model_slugs" with column headers in row 1:
+  A: make    B: model    C: carwale_slug    D: notes
+
+----------------------------------------------------------------------
 v3.6.7 — DIRECT REST API (gspread/google-auth fully bypassed)
 ----------------------------------------------------------------------
 Background — what we tried before:
@@ -52,14 +73,15 @@ ARCHITECTURE
      _mint_access_token_manually() → POSTs to oauth2.googleapis.com/token
      _get_access_token() → cached token, auto-refresh near expiry
 
-2. Google Sheets REST API client (new in v3.6.7):
+2. Google Sheets REST API client (v3.6.7+):
      _sheets_get(path, params=None) → GET with auth header + timeout
      _sheets_post(path, json_body) → POST with auth header + timeout
      Both use a module-level `requests.Session` for connection reuse.
 
-3. Public API (unchanged from earlier versions):
-     health_check, read_car_prices, find_row, write_price_update,
-     get_service_account_email, get_sheet_metadata, reset_caches
+3. Public API:
+     v3.6.7: health_check, read_car_prices, find_row, write_price_update,
+             get_service_account_email, get_sheet_metadata, reset_caches
+     v3.6.8: + read_model_slugs, write_model_slug
 
 The Google Sheets REST API endpoints we use:
   GET  /v4/spreadsheets/{id}?fields=properties.title,sheets.properties.title
@@ -122,6 +144,7 @@ TAB_CAR_PRICES = "car_prices"
 TAB_DEPRECIATION = "depreciation_curve"
 TAB_MULTIPLIERS = "multipliers"
 TAB_META = "meta"
+TAB_MODEL_SLUGS = "model_slugs"  # v3.6.8
 
 # Expected column headers for car_prices tab.
 CAR_PRICES_COLUMNS = [
@@ -132,6 +155,14 @@ CAR_PRICES_COLUMNS = [
     "ex_showroom_price",   # E
     "active",              # F
     "notes",               # G
+]
+
+# Expected column headers for model_slugs tab (v3.6.8).
+MODEL_SLUGS_COLUMNS = [
+    "make",                # A
+    "model",               # B
+    "carwale_slug",        # C   format: 'make-slug/model-slug'
+    "notes",               # D   auto-resolved date or NEEDS_MANUAL_FIX reason
 ]
 
 # Hard timeouts — bounded well below gunicorn's 30s worker timeout.
@@ -415,6 +446,16 @@ def _get_access_token() -> str:
         return token
 
 
+
+# ============================================================
+# END OF PART 1/2 — sheets_writer.py v3.6.8
+# Continue pasting Part 2/2 after this line.
+# ============================================================
+# ============================================================
+# CONTINUATION OF sheets_writer.py v3.6.8 — PART 2/2
+# Paste this AFTER Part 1/2 in the same file.
+# ============================================================
+
 # ============================================================
 # v3.6.7: DIRECT GOOGLE SHEETS REST API CLIENT
 # ============================================================
@@ -670,7 +711,7 @@ def _write_cells_batch(updates: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 # ============================================================
-# PUBLIC API (UNCHANGED ACROSS VERSIONS)
+# PUBLIC API — CORE (UNCHANGED ACROSS VERSIONS)
 # ============================================================
 
 def get_service_account_email() -> str:
@@ -840,9 +881,189 @@ def write_price_update(make: str, model: str, variant: str, fuel: str,
     }
 
 
+# ============================================================
+# v3.6.8: PUBLIC API — model_slugs tab
+# ============================================================
+#
+# Used by:
+#   - price_scraper.py (reads slugs to know which CarWale URL to fetch)
+#   - populate_slugs.py (one-time script: writes auto-resolved slugs)
+#
+# Sheet setup required (one time, manual):
+#   In the AutoKnowMus Price Data Google Sheet, add a tab named
+#   "model_slugs" with these column headers in row 1:
+#     A: make    B: model    C: carwale_slug    D: notes
+#
+# Slug format stored in column C: 'make-slug/model-slug'
+#   e.g. 'maruti-suzuki/swift'
+#   The price_scraper splits this into the URL pattern:
+#     https://www.carwale.com/{make-slug}-cars/{model-slug}/
+#
+# When auto-resolution fails, the slug column is set to 'NEEDS_MANUAL_FIX'
+# so the admin knows which rows need a human visiting CarWale to find
+# the right URL.
+# ============================================================
+
+def read_model_slugs() -> List[Dict[str, Any]]:
+    """
+    Read the model_slugs tab and return as a list of dicts.
+    Each dict has MODEL_SLUGS_COLUMNS keys plus _row_number (1-indexed).
+    Header row is excluded.
+
+    If the tab doesn't exist yet, returns []. (This makes it safe to call
+    before populate_slugs.py has run for the first time, or before the
+    admin has manually created the tab.)
+
+    Returns:
+      [
+        {"make": "Maruti Suzuki", "model": "Swift",
+         "carwale_slug": "maruti-suzuki/swift", "notes": "Auto-resolved 03-May-2026",
+         "_row_number": 2},
+        ...
+      ]
+    """
+    # Guard against the tab not existing. Cheaper than a 404 from the API
+    # and avoids polluting logs with errors during normal startup.
+    metadata = _fetch_sheet_metadata_raw()
+    if TAB_MODEL_SLUGS not in metadata.get("tabs", []):
+        logger.info(
+            "sheets_writer: model_slugs tab does not exist yet; returning []. "
+            "Create the tab with column headers: make, model, carwale_slug, notes "
+            "to enable price scraping."
+        )
+        return []
+
+    all_values = _fetch_tab_values(TAB_MODEL_SLUGS)
+    if not all_values:
+        return []
+
+    rows = []
+    for idx, row in enumerate(all_values[1:], start=2):
+        padded = list(row) + [""] * (len(MODEL_SLUGS_COLUMNS) - len(row))
+        rec = {
+            col: padded[i] if i < len(padded) else ""
+            for i, col in enumerate(MODEL_SLUGS_COLUMNS)
+        }
+        rec["_row_number"] = idx
+        rows.append(rec)
+    return rows
+
+
+def write_model_slug(make: str, model: str, slug: str,
+                     note: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Insert or update a row in the model_slugs tab keyed on (make, model).
+
+    If a row exists with matching (make, model) → update its carwale_slug
+    and notes columns.
+    If no row exists → append a new row at the bottom of the tab.
+
+    Args:
+      make:  the make name as it appears in car_prices (e.g. "Maruti Suzuki")
+      model: the model name as it appears in car_prices (e.g. "Swift")
+      slug:  the resolved slug "make-slug/model-slug" or "NEEDS_MANUAL_FIX"
+      note:  optional override for the notes column. If omitted, a default
+             is generated based on whether the slug is resolved or not.
+
+    Returns:
+      {
+        "ok": True,
+        "action": "updated" | "appended",
+        "row_number": int,
+        "make": str, "model": str, "carwale_slug": str, "notes": str,
+      }
+    """
+    if not make or not model:
+        raise RuntimeError("make and model are required to write a slug")
+    if not slug:
+        raise RuntimeError(
+            "slug cannot be empty (use 'NEEDS_MANUAL_FIX' if unresolved)"
+        )
+
+    today_str = date.today().strftime("%d-%b-%Y")
+    if note is None:
+        if slug == "NEEDS_MANUAL_FIX":
+            note = f"Auto-derivation failed {today_str}"
+        else:
+            note = f"Auto-resolved {today_str}"
+
+    # Look up existing row by (make, model)
+    existing = read_model_slugs()
+    target_row = None
+    for r in existing:
+        if r.get("make") == make and r.get("model") == model:
+            target_row = r
+            break
+
+    if target_row is not None:
+        # Update existing row in place — only columns C and D.
+        row_num = target_row["_row_number"]
+        updates = [
+            {
+                "range": f"{TAB_MODEL_SLUGS}!C{row_num}",
+                "values": [[slug]],
+            },
+            {
+                "range": f"{TAB_MODEL_SLUGS}!D{row_num}",
+                "values": [[note]],
+            },
+        ]
+        _write_cells_batch(updates)
+        logger.info(
+            "sheets_writer: updated model_slugs row %d | %s/%s | slug=%s",
+            row_num, make, model, slug,
+        )
+        return {
+            "ok": True,
+            "action": "updated",
+            "row_number": row_num,
+            "make": make,
+            "model": model,
+            "carwale_slug": slug,
+            "notes": note,
+        }
+
+    # Append new row at the bottom of the tab.
+    # The "next" row number = max existing row + 1, or 2 if tab is empty
+    # (row 1 is the header).
+    last_row_num = max(
+        (r["_row_number"] for r in existing),
+        default=1,  # header row at row 1
+    )
+    new_row_num = last_row_num + 1
+
+    updates = [
+        {
+            "range": f"{TAB_MODEL_SLUGS}!A{new_row_num}:D{new_row_num}",
+            "values": [[make, model, slug, note]],
+        },
+    ]
+    _write_cells_batch(updates)
+    logger.info(
+        "sheets_writer: appended model_slugs row %d | %s/%s | slug=%s",
+        new_row_num, make, model, slug,
+    )
+    return {
+        "ok": True,
+        "action": "appended",
+        "row_number": new_row_num,
+        "make": make,
+        "model": model,
+        "carwale_slug": slug,
+        "notes": note,
+    }
+
+
+# ============================================================
+# CACHE RESET
+# ============================================================
+
 def reset_caches():
     """
     Force-clear module-level caches.
+
+    v3.6.8: also clears _sheet_metadata_cache so a freshly-added
+    model_slugs tab gets picked up without restarting the worker.
     """
     global _sa_info, _access_token, _access_token_expires_at
     global _session, _sheet_metadata_cache
