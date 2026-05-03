@@ -391,27 +391,28 @@ def _get_client():
         # ─── Step 1: Pre-flight OAuth refresh with explicit timeout ─────
         # If the private_key is malformed or Google's OAuth endpoint is
         # unreachable, this raises within ~10s instead of hanging forever.
-        # google.auth's Request.__call__ has a `timeout=120` default which
-        # is way too long for our gunicorn worker (30s timeout). We call
-        # refresh() directly with a custom auth_req that wraps the requests
-        # library's session — but the timeout actually gets applied by
-        # google-auth internally when it calls auth_req(timeout=...).
+        #
+        # CRITICAL DETAIL: google.auth.transport.requests.Request.__call__
+        # ALWAYS passes `timeout=_DEFAULT_TIMEOUT` (120s) to session.request,
+        # regardless of whether the caller specified one. Earlier attempts
+        # to set a timeout on socket-level or check `if 'timeout' not in kwargs`
+        # didn't work because the kwarg is ALWAYS present. We have to
+        # FORCE-override it on every call by replacing whatever value is
+        # there with our 10s value.
         try:
             auth_req = GoogleAuthRequest()
-            # google.auth.credentials.Credentials.refresh() signature is
-            # refresh(request) — no timeout kwarg. The timeout has to be
-            # baked into the GoogleAuthRequest behavior. For the actual
-            # network call, google-auth uses requests under the hood; the
-            # 120s default applies. The cleanest workaround: monkey-patch
-            # auth_req's session.request to inject a timeout. We do it on
-            # this single short-lived Request instance — NOT globally — so
-            # nothing else in the process is affected.
             original_request = auth_req.session.request
+
             def _request_with_timeout(method, url, **kwargs):
-                if 'timeout' not in kwargs or kwargs['timeout'] is None:
-                    kwargs['timeout'] = (_GOOGLE_API_TIMEOUT_SECONDS,
-                                         _GOOGLE_API_TIMEOUT_SECONDS)
+                # Force-override regardless of whether timeout is already in
+                # kwargs. google-auth's Request.__call__ always passes
+                # timeout=120 explicitly, so we must always replace it.
+                kwargs['timeout'] = (
+                    _GOOGLE_API_TIMEOUT_SECONDS,  # connect timeout
+                    _GOOGLE_API_TIMEOUT_SECONDS,  # read timeout
+                )
                 return original_request(method, url, **kwargs)
+
             auth_req.session.request = _request_with_timeout
 
             creds.refresh(auth_req)
