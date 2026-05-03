@@ -11,7 +11,7 @@ How it works:
      - depreciation_curve: age → retention % rows
      - multipliers: condition/owner/fuel multiplier rows
      - meta: data_version, last_updated, etc.
-     - listings: NEW — current market listings for the 740Li engine
+     - listings: current market listings for the 740Li engine
   2. If a Google Sheet is reachable, its data is used.
   3. If any tab fails to fetch or is empty, falls back to bundled FALLBACK_*
      data in this file. The app NEVER breaks for users.
@@ -22,19 +22,34 @@ Environment variables required:
   GSHEET_DEPRECIATION_URL
   GSHEET_MULTIPLIERS_URL
   GSHEET_META_URL
-  GSHEET_LISTINGS_URL  ← NEW (separate spreadsheet, single tab named 'listings')
+  GSHEET_LISTINGS_URL  (separate spreadsheet, single tab named 'listings')
 
 Optional:
   PRICE_CACHE_TTL_SECONDS (default 3600 = 1 hour)
 
-CHANGES IN THIS VERSION (Phase 1A migration):
-  - get_variant_base_price() now accepts optional `fuel` parameter
-    (fixes silent v2.8 ex-showroom ceiling failure in app.py)
-  - get_base_price() now returns the lowest-priced variant deterministically
-    (was: dict iteration order, intermittent across deploys)
-  - NEW: listings cache layer for the 740Li pricing engine
-  - NEW: get_listings_for_car() helper that the engine consumes
-  - NEW: LISTINGS_DATA_FRESH module flag for app.py routing logic
+CHANGES IN THIS VERSION (per-fuel pricing fix, v3.6.0):
+  - PARSER FIX: _parse_car_prices() now stores per-(variant, fuel) prices
+    in a new nested dict `variant_fuel_prices`, alongside the existing flat
+    `variants` dict. The flat dict still holds the FIRST-seen-fuel price for
+    each variant (preserves backward compatibility for any code path that
+    reads `variants` directly, e.g. JSON to templates, dropdown population).
+  - get_variant_base_price() now uses `variant_fuel_prices` when fuel is
+    provided AND a per-fuel price exists, otherwise falls through to the old
+    `variants` lookup. Means: for cars where the sheet has distinct Petrol/
+    Diesel/HEV prices for the same variant (e.g. Honda City, Hyundai Creta),
+    the engine now uses the correct fuel-specific ex-showroom price instead
+    of silently dropping all but the first parsed fuel's price.
+  - _merge_with_fallback() carries `variant_fuel_prices` through the merge.
+    Fallback dict is NOT updated to per-fuel; it stays at the old flat shape.
+    The lookup gracefully falls through to flat when per-fuel is unavailable.
+
+PRIOR CHANGES (Phase 1A migration, retained):
+  - get_variant_base_price() accepts optional `fuel` parameter (now actually
+    used, not just a no-op as it was before this fix)
+  - get_base_price() returns the lowest-priced variant deterministically
+  - listings cache layer for the 740Li pricing engine
+  - get_listings_for_car() helper that the engine consumes
+  - LISTINGS_DATA_FRESH module flag for app.py routing logic
 
 MIGRATION PATH: To move from public CSV to private Google Sheets API later:
   1. Create a GCP service account, enable Google Sheets API
@@ -64,7 +79,7 @@ GSHEET_PRICES_URL       = os.environ.get("GSHEET_PRICES_URL", "")
 GSHEET_DEPRECIATION_URL = os.environ.get("GSHEET_DEPRECIATION_URL", "")
 GSHEET_MULTIPLIERS_URL  = os.environ.get("GSHEET_MULTIPLIERS_URL", "")
 GSHEET_META_URL         = os.environ.get("GSHEET_META_URL", "")
-GSHEET_LISTINGS_URL     = os.environ.get("GSHEET_LISTINGS_URL", "")  # NEW
+GSHEET_LISTINGS_URL     = os.environ.get("GSHEET_LISTINGS_URL", "")
 
 # Listings engine threshold (locked decision — N>=5 effective listings to use 740Li engine)
 LISTINGS_MIN_FOR_ENGINE = 5
@@ -123,6 +138,14 @@ LUXURY_BRANDS = {"Audi", "BMW", "Mercedes-Benz", "Jaguar", "Land Rover", "Lexus"
 # FALLBACK DATA — used whenever Google Sheets is unreachable or empty.
 # This is the complete current dataset. Keep it in sync with the sheet.
 # Updating this requires a code deploy; updating the sheet does not.
+#
+# NOTE: FALLBACK_CAR_DATA uses the old flat-per-variant shape. It does NOT
+# carry per-fuel prices — that data lives only in the live sheet (and only
+# for variants where the sheet has distinct fuel rows with distinct prices).
+# When the sheet is unreachable and we run on fallback alone, get_variant_
+# base_price() gracefully falls through to the flat lookup. This means
+# fallback gives a less-precise answer for fuel-differentiated variants, but
+# it never crashes and never returns nothing.
 # ============================================================
 
 FALLBACK_CAR_DATA = {
@@ -436,9 +459,9 @@ _cache = {
     "depreciation": None,
     "multipliers": None,
     "meta": None,
-    "listings": None,           # NEW — list of dicts
-    "listings_source": "uninitialized",  # NEW — "sheet" | "fallback" | "uninitialized"
-    "listings_last_error": None,         # NEW
+    "listings": None,
+    "listings_source": "uninitialized",
+    "listings_last_error": None,
     "last_fetch": 0,
     "last_error": None,
     "source": "uninitialized",
@@ -460,7 +483,27 @@ def _fetch_csv(url: str) -> List[Dict[str, str]]:
 def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
     """
     Parse car_prices tab into nested CAR_DATA.
+
     Columns: make, model, variant, fuel, ex_showroom_price, active, notes
+
+    Output structure per (make, model):
+      {
+        "variants":            {variant: price}            # FIRST-seen-fuel price per variant
+        "variant_fuel_prices": {variant: {fuel: price}}    # NEW: full per-(variant, fuel) prices
+        "fuels":               [fuel, fuel, ...]           # canonical-ordered fuel list
+      }
+
+    The dual-dict design preserves backward compat:
+      - Templates / dropdowns / JSON serialization keep reading `variants` (flat)
+      - The pricing engine reads `variant_fuel_prices` via get_variant_base_price()
+        when a fuel is provided and per-fuel data exists, falling back to `variants`
+        otherwise.
+
+    Why this matters: previously, if the sheet had Honda City V Petrol=11.99L,
+    Diesel=11.05L, HEV=11.05L (three rows), the parser kept only the first row's
+    price (11.99L) for variant V and dropped the others silently. The engine then
+    used 11.99L for ALL three fuels, applied a fuel_premium multiplier on top,
+    and produced wrong valuations for Diesel and HEV. Now both prices are kept.
     """
     data = {}
     for row in rows:
@@ -481,9 +524,21 @@ def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
         if make not in data:
             data[make] = {}
         if model not in data[make]:
-            data[make][model] = {"variants": {}, "fuels": []}
+            data[make][model] = {
+                "variants": {},
+                "variant_fuel_prices": {},  # NEW
+                "fuels": [],
+            }
+        # Flat dict — keeps the FIRST-seen-fuel price for backward compat.
         if variant not in data[make][model]["variants"]:
             data[make][model]["variants"][variant] = price
+        # NEW per-(variant, fuel) dict — captures every distinct fuel price.
+        # Last write wins if the sheet has duplicate (variant, fuel) rows,
+        # which would be a sheet-side data error worth flagging separately.
+        if variant not in data[make][model]["variant_fuel_prices"]:
+            data[make][model]["variant_fuel_prices"][variant] = {}
+        data[make][model]["variant_fuel_prices"][variant][fuel] = price
+        # Fuel list — unchanged.
         if fuel not in data[make][model]["fuels"]:
             data[make][model]["fuels"].append(fuel)
     fuel_order = ["Petrol", "Diesel", "CNG", "HEV", "PHEV", "BEV"]
@@ -640,6 +695,16 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
     """
     Merge sheet data on top of fallback. Sheet wins where it has data.
     Variants present only in fallback remain available.
+
+    NOTE: The fallback dict uses the OLD shape (no `variant_fuel_prices`).
+    This merge function:
+      - Always initializes `variant_fuel_prices` as an empty dict for every
+        (make, model) seeded from fallback, so downstream lookups never
+        KeyError on the new field.
+      - Copies sheet-side `variant_fuel_prices` over the empty placeholder
+        when the sheet provides data for that (make, model).
+      - Leaves `variant_fuel_prices` empty for fallback-only entries — the
+        engine then falls through to the flat `variants` lookup gracefully.
     """
     merged = {}
     for make, models in fallback_data.items():
@@ -647,6 +712,7 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
         for model, data in models.items():
             merged[make][model] = {
                 "variants": dict(data["variants"]),
+                "variant_fuel_prices": {},  # NEW: empty for fallback-only
                 "fuels": list(data["fuels"]),
             }
     for make, models in sheet_data.items():
@@ -654,9 +720,22 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
             merged[make] = {}
         for model, data in models.items():
             if model not in merged[make]:
-                merged[make][model] = {"variants": {}, "fuels": []}
+                merged[make][model] = {
+                    "variants": {},
+                    "variant_fuel_prices": {},
+                    "fuels": [],
+                }
+            # Flat variants — sheet wins per-variant.
             for variant, price in data["variants"].items():
                 merged[make][model]["variants"][variant] = price
+            # Per-fuel prices — sheet wins per-(variant, fuel).
+            sheet_vf = data.get("variant_fuel_prices", {})
+            for variant, fuel_map in sheet_vf.items():
+                if variant not in merged[make][model]["variant_fuel_prices"]:
+                    merged[make][model]["variant_fuel_prices"][variant] = {}
+                for fuel, price in fuel_map.items():
+                    merged[make][model]["variant_fuel_prices"][variant][fuel] = price
+            # Fuel list — union with canonical sort.
             fuel_set = set(merged[make][model]["fuels"]) | set(data["fuels"])
             fuel_order = ["Petrol", "Diesel", "CNG", "HEV", "PHEV", "BEV"]
             merged[make][model]["fuels"] = [f for f in fuel_order if f in fuel_set]
@@ -721,7 +800,7 @@ def _refresh_cache(force: bool = False) -> Dict:
             _cache["meta"] = FALLBACK_META
 
         # ============================================================
-        # NEW — Listings fetch (independent failure mode from prices)
+        # Listings fetch (independent failure mode from prices)
         # If listings fail, the engine simply can't use the 740Li engine
         # for any car, and falls back to depreciation. Prices/etc still work.
         # ============================================================
@@ -753,6 +832,14 @@ def _refresh_cache(force: bool = False) -> Dict:
         else:
             _cache["source"] = "fallback"
 
+        # Compute fuel-distinct price count for diagnostics — how many
+        # (make, model, variant, fuel) tuples have a sheet-sourced price.
+        fuel_distinct_prices = 0
+        for m in _cache["car_data"].values():
+            for d in m.values():
+                for v_map in d.get("variant_fuel_prices", {}).values():
+                    fuel_distinct_prices += len(v_map)
+
         return {
             "status": "refreshed" if not errors else "partial_error",
             "source": _cache["source"],
@@ -764,13 +851,13 @@ def _refresh_cache(force: bool = False) -> Dict:
                 for m in _cache["car_data"].values()
                 for d in m.values()
             ),
+            "fuel_distinct_prices": fuel_distinct_prices,  # NEW
             "data_version": _cache["meta"].get("data_version", "?"),
             "sheet_overrides": sum(
                 len(d["variants"])
                 for m in sheet_car_data.values()
                 for d in m.values()
             ),
-            # NEW — listings status in admin refresh response
             "listings_count": len(_cache["listings"]) if _cache["listings"] else 0,
             "listings_source": _cache["listings_source"],
             "listings_error": _cache["listings_last_error"],
@@ -801,15 +888,21 @@ def refresh_prices(force: bool = True) -> Dict:
 def get_cache_status() -> Dict:
     """Diagnostics for admin dashboard."""
     _ensure_loaded()
+    # Compute fuel-distinct count on demand
+    fuel_distinct_prices = 0
+    for m in _cache["car_data"].values():
+        for d in m.values():
+            for v_map in d.get("variant_fuel_prices", {}).values():
+                fuel_distinct_prices += len(v_map)
     return {
         "source": _cache["source"],
         "last_fetch_age_seconds": int(time.time() - _cache["last_fetch"]),
         "last_error": _cache["last_error"],
         "cache_ttl": PRICE_CACHE_TTL_SECONDS,
         "makes": len(_cache["car_data"]),
+        "fuel_distinct_prices": fuel_distinct_prices,  # NEW — admin can see how many per-fuel prices loaded
         "data_version": _cache["meta"].get("data_version", "?"),
         "last_updated": _cache["meta"].get("last_updated", "?"),
-        # NEW — listings diagnostics
         "listings_count": len(_cache["listings"]) if _cache["listings"] else 0,
         "listings_source": _cache["listings_source"],
         "listings_last_error": _cache["listings_last_error"],
@@ -849,24 +942,43 @@ def get_fuels(make: str, model: str) -> List[str]:
 def get_variant_base_price(make: str, model: str, variant: str,
                            fuel: Optional[str] = None) -> Optional[int]:
     """
-    Returns the ex-showroom base price for a variant.
+    Returns the ex-showroom base price for a (variant, fuel) pair.
 
-    The `fuel` parameter is accepted for backward-compatibility with callers
-    that pass it (e.g. _apply_ex_showroom_ceiling in app.py). In the current
-    data model, prices are stored at (make, model, variant) level and not
-    per-fuel — so fuel is currently ignored. If/when the prices sheet is
-    extended to per-fuel pricing, this function's contract supports it
-    without needing call-site changes.
+    Lookup order:
+      1. If `fuel` is provided AND `variant_fuel_prices[variant][fuel]` exists,
+         return that exact per-fuel price.
+      2. Otherwise, fall through to the flat `variants[variant]` price (which
+         is the FIRST-seen-fuel price from the parser, preserving previous
+         behavior for callers that don't pass `fuel`).
+      3. If neither lookup hits, return None.
 
-    NOTE: This signature fix resolves the silent v2.8 ex-showroom ceiling
-    failure where app.py was calling with 4 args but the function only
-    accepted 3, causing TypeError → silent except → ceiling never firing.
+    This means cars where the sheet has distinct per-fuel prices for the same
+    variant (e.g. Honda City V Petrol=11.99L vs Diesel=11.05L vs HEV=11.05L)
+    now produce correct fuel-specific valuations. Previously, all three fuels
+    silently used the Petrol price plus the fuel_premium multiplier on top.
+
+    Backward compat:
+      - Callers that don't pass `fuel` get the same answer as before.
+      - Callers that pass `fuel` for a (variant, fuel) without per-fuel data
+        in the sheet (e.g. fallback-only entries, or models still on the old
+        flat shape) gracefully fall through to the flat price. They will not
+        get a None where they previously got a number.
     """
     _ensure_loaded()
     try:
-        return _cache["car_data"][make][model]["variants"].get(variant)
+        model_data = _cache["car_data"][make][model]
     except KeyError:
         return None
+
+    # Step 1: try per-fuel lookup
+    if fuel:
+        vfp = model_data.get("variant_fuel_prices", {})
+        variant_fuels = vfp.get(variant)
+        if variant_fuels and fuel in variant_fuels:
+            return variant_fuels[fuel]
+
+    # Step 2: fall through to flat
+    return model_data["variants"].get(variant)
 
 
 def get_base_price(make: str, model: str) -> Optional[int]:
@@ -874,10 +986,8 @@ def get_base_price(make: str, model: str) -> Optional[int]:
     Returns the LOWEST-priced variant for a model — used as a rough anchor
     in the v2.8 ex-showroom ceiling fallback path and admin guardrail checks.
 
-    PREVIOUSLY: returned `next(iter(variants.values()))` which depended on
-    Python dict iteration order. Generally stable in CPython 3.7+ but could
-    drift if the prices sheet was re-ordered. Now explicitly returns the
-    minimum, which is deterministic regardless of ordering.
+    Returns the minimum across the flat `variants` dict, which is deterministic
+    regardless of dict iteration order.
     """
     _ensure_loaded()
     try:
@@ -912,7 +1022,7 @@ def get_multiplier(category: str, key: str) -> float:
 
 
 # ============================================================
-# NEW — LISTINGS API (consumed by 740Li engine in pricing_740Li.py)
+# LISTINGS API (consumed by 740Li engine in pricing_740Li.py)
 # ============================================================
 
 def get_listings_for_car(make: str, model: str, variant: str, fuel: str,
@@ -951,7 +1061,6 @@ def get_listings_for_car(make: str, model: str, variant: str, fuel: str,
         freshness_days = LISTINGS_DEFAULT_FRESHNESS_DAYS
 
     today = datetime.now().date()
-    cutoff_date = today.replace()  # placeholder
     from datetime import timedelta
     cutoff_date = today - timedelta(days=freshness_days)
 
@@ -1005,7 +1114,11 @@ def get_listings_freshness_status() -> Dict:
 # ============================================================
 
 def compute_base_valuation(make, model, variant, fuel, year, mileage, condition, owner):
-    """Pure formula-based valuation. Returns int rupees or None."""
+    """Pure formula-based valuation. Returns int rupees or None.
+
+    Now uses fuel-specific ex-showroom price when the sheet provides one
+    (via get_variant_base_price). Falls through to flat price otherwise.
+    """
     base = get_variant_base_price(make, model, variant, fuel)
     if base is None:
         return None
@@ -1132,6 +1245,14 @@ class _LazyDict(dict):
     Acts like the CAR_DATA dict, but stays in sync with the live cache.
     Inherits from dict so json.dumps() and other dict-expecting code work
     natively. Every access re-syncs from _cache to reflect latest refreshes.
+
+    NOTE: When this dict is JSON-serialized (e.g. for embedding in the
+    seller form template), every (make, model) entry will include the new
+    `variant_fuel_prices` key alongside `variants` and `fuels`. Templates
+    that previously read `variants` and `fuels` are unaffected — they just
+    have an extra key available. If the embedded JSON size matters for page
+    weight, consider stripping `variant_fuel_prices` at serialization time
+    via the to_dict() helper plus a custom transform.
     """
     def _sync(self):
         _ensure_loaded()
@@ -1177,7 +1298,7 @@ CAR_DATA = _LazyDict()
 BASE_PRICE_DATA_VERSION = FALLBACK_META.get("data_version", "?")
 BASE_PRICE_LAST_UPDATED = FALLBACK_META.get("last_updated", "?")
 
-# NEW — module-level flag for app.py routing logic
+# Module-level flag for app.py routing logic
 LISTINGS_DATA_FRESH = False
 
 
@@ -1203,7 +1324,15 @@ try:
     _n = len(_cache["car_data"]) if _cache["car_data"] else 0
     _ln = len(_cache["listings"]) if _cache["listings"] else 0
     _lsrc = _cache.get("listings_source", "?")
+    # Count fuel-distinct prices for startup log
+    _vfp_count = sum(
+        len(v_map)
+        for m in _cache["car_data"].values()
+        for d in m.values()
+        for v_map in d.get("variant_fuel_prices", {}).values()
+    )
     print(f"[car_data] Loaded {_n} makes. Source: {_src}. "
+          f"Per-fuel prices: {_vfp_count}. "
           f"Listings: {_ln} ({_lsrc}).")
 except Exception as _e:
     print(f"[car_data] Startup load failed: {_e}. Will retry on first request. "
