@@ -580,6 +580,21 @@ def fetch_price(
     # 5. Parse variant list
     variants = _parse_variants(state)
     if not variants:
+        # v2.3 diag: log the JSON structure so we can see what CarWale
+        # actually returned. Render-IP responses may differ from local tests.
+        try:
+            top_keys = sorted(state.keys()) if isinstance(state, dict) else []
+            mp = state.get("modelPage") if isinstance(state, dict) else None
+            mp_keys = sorted(mp.keys()) if isinstance(mp, dict) else []
+            mp_versions_type = type(mp.get("versions")).__name__ if isinstance(mp, dict) else "n/a"
+            mp_versions_len = len(mp.get("versions") or []) if isinstance(mp, dict) else 0
+            logger.warning(
+                "[parse-fail] url=%s | top_keys=%s | modelPage.keys=%s | "
+                "versions type=%s len=%d",
+                url, top_keys[:30], mp_keys[:30], mp_versions_type, mp_versions_len
+            )
+        except Exception as _diag_e:
+            logger.warning("[parse-fail] diag log failed: %s", _diag_e)
         result["status"] = "error"
         result["error"] = (
             f"Parsed 0 variants from {url}. The page may be a discontinued-model "
