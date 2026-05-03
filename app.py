@@ -2630,6 +2630,11 @@ def seller_dashboard(valuation_id):
         user_city=val_user_city,
         confidence_msg=confidence_msg,
         state_multiplier_applied=val.get('state_multiplier_applied') or 1.000,
+    # v3.7.0: Discontinued badge data
+        variant_status=car_data.get_variant_status(
+            make=val['make'], model=val['model'],
+            variant=val['variant'], fuel=val['fuel'],
+        ),
     )
 
 # ============================================================
@@ -3087,6 +3092,10 @@ def buyer_dashboard():
         user_city=user_city_norm,
         confidence_msg=confidence_msg,
         state_multiplier_applied=(audit.get('state_multiplier_applied') if audit else 1.000) or 1.000,
+        # v3.7.0: Discontinued badge data
+        variant_status=car_data.get_variant_status(
+            make=make, model=model, variant=variant, fuel=fuel,
+        ),
     )
 
 
