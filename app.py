@@ -1,3 +1,10 @@
+# ============================================================
+# app.py — Part 1
+# ------------------------------------------------------------
+# Paste this BLOCK FIRST as line 1 of your new app.py.
+# Continue pasting Part 2 IMMEDIATELY below the last line of this block.
+# ============================================================
+
 import os
 import re
 import csv
@@ -1159,6 +1166,17 @@ def count_recent_deals(user_id, days=7):
     except Exception as e:
         app.logger.warning(f"count_recent_deals failed: {e}")
         return 0
+
+# ============================================================
+# END app.py — Part 1
+# Continue with Part 2 immediately below.
+# ============================================================
+# ============================================================
+# app.py — Part 2
+# ------------------------------------------------------------
+# Paste this BLOCK immediately below the last line of Part 1.
+# Continue pasting Part 3 immediately below the last line of this block.
+# ============================================================
 
 
 # ============================================================
@@ -2532,6 +2550,17 @@ def seller_dashboard(valuation_id):
         state_multiplier_applied=val.get('state_multiplier_applied') or 1.000,
     )
 
+# ============================================================
+# END app.py — Part 2
+# Continue with Part 3 immediately below.
+# ============================================================
+# ============================================================
+# app.py — Part 3
+# ------------------------------------------------------------
+# Paste this BLOCK immediately below the last line of Part 2.
+# Continue pasting Part 4 immediately below the last line of this block.
+# ============================================================
+
 
 @app.route('/request-credits', methods=['POST'])
 @login_required
@@ -3552,6 +3581,17 @@ def submit_deal():
     )
     return redirect(url_for('role'))
 
+# ============================================================
+# END app.py — Part 3
+# Continue with Part 4 immediately below.
+# ============================================================
+# ============================================================
+# app.py — Part 4
+# ------------------------------------------------------------
+# Paste this BLOCK immediately below the last line of Part 3.
+# Continue pasting Part 5 immediately below the last line of this block.
+# ============================================================
+
 
 # ============================================================
 # CREDIT HISTORY (preserved from current — no v3.5 changes)
@@ -4149,6 +4189,24 @@ def admin_flag_user(user_id):
 
 
 # ============================================================
+# END app.py — Part 4
+# Continue with Part 5 immediately below.
+# ============================================================
+# ============================================================
+# app.py — Part 5
+# ------------------------------------------------------------
+# Paste this BLOCK immediately below the last line of Part 4.
+# Continue pasting Part 6 immediately below the last line of this block.
+#
+# NOTE: This part contains the NEW endpoint for the Google Cloud
+# setup verification — /admin/test-sheets-connection. After deploy,
+# visit https://autoknowmus.com/admin/test-sheets-connection while
+# logged in as autoknowmus@gmail.com to confirm the sheets writer
+# wiring is working end-to-end.
+# ============================================================
+
+
+# ============================================================
 # v2.9: ADMIN — USER ACTIVITY DASHBOARD (preserved from current)
 # ============================================================
 
@@ -4527,6 +4585,111 @@ def admin_refresh_prices():
 
 
 # ============================================================
+# v3.6: SHEETS WRITER TEST ENDPOINT  ← NEW IN THIS RELEASE
+# ------------------------------------------------------------
+# Tiny health-check route to verify the Google Sheets API setup.
+# Once verified once, the actual price-tools UI (coming next) will
+# use sheets_writer.py for real reads/writes. This endpoint exists
+# purely for diagnostics so you can confirm the entire chain works:
+#
+#   Render env var → service account creds → gspread client →
+#   spreadsheet open → tab open → cell read.
+#
+# After deploy, visit:
+#   https://autoknowmus.com/admin/test-sheets-connection
+# while logged in as autoknowmus@gmail.com.
+#
+# Expected success response:
+#   { "ok": true,
+#     "sheet_id": "1ZGDlq-...",
+#     "sheet_title": "AutoKnowMus Price Data",
+#     "tabs": ["car_prices", "depreciation_curve", ...],
+#     "first_cell": "make",
+#     "service_account_email": "sheets-writer@autoknowmus-prod..." }
+#
+# Any failure returns ok=false with a clear `detail` message AND the
+# service-account email — so even on permission-denied, you know
+# which email to share the sheet with.
+# ============================================================
+
+@app.route('/admin/test-sheets-connection')
+@login_required
+@admin_required
+def admin_test_sheets_connection():
+    """
+    End-to-end test of the Google Sheets API setup.
+
+    Steps performed:
+      1. Load GOOGLE_SERVICE_ACCOUNT_JSON env var
+      2. Build credentials
+      3. Authorize gspread client
+      4. Open the AutoKnowMus Price Data sheet by ID
+      5. Read cell A1 of the car_prices tab (should be "make")
+
+    Returns JSON with full diagnostic details on success, or a clear error
+    message on failure. Exposes the service-account email regardless, so the
+    admin always knows which email to share the sheet with if step 4 fails
+    with a permission error.
+    """
+    # Import inside the route so a missing/broken sheets_writer.py never
+    # prevents app.py from booting. The error surfaces only when admin hits
+    # this endpoint.
+    try:
+        import sheets_writer
+    except ImportError as e:
+        return jsonify({
+            "ok": False,
+            "error": "sheets_writer_module_missing",
+            "detail": str(e),
+            "hint": "sheets_writer.py is not in the repo or has a syntax error.",
+        }), 500
+
+    # Always include the service-account email in the response, even on
+    # failure — that's the email the admin needs to share the sheet with.
+    sa_email = "<unknown — credentials not loaded>"
+    try:
+        sa_email = sheets_writer.get_service_account_email()
+    except Exception:
+        pass  # already covered by the <unknown> default
+
+    try:
+        result = sheets_writer.health_check()
+        app.logger.info(
+            "admin_test_sheets_connection: OK | sheet=%s | tabs=%s | first_cell=%r",
+            result.get("sheet_title"), result.get("tabs"), result.get("first_cell"),
+        )
+        return jsonify(result), 200
+    except RuntimeError as e:
+        app.logger.warning(f"admin_test_sheets_connection failed: {e}")
+        return jsonify({
+            "ok": False,
+            "error": "health_check_failed",
+            "detail": str(e),
+            "service_account_email": sa_email,
+        }), 500
+    except Exception as e:
+        app.logger.exception("admin_test_sheets_connection unexpected error")
+        return jsonify({
+            "ok": False,
+            "error": "unexpected_error",
+            "detail": str(e),
+            "service_account_email": sa_email,
+        }), 500
+
+
+# ============================================================
+# END app.py — Part 5
+# Continue with Part 6 immediately below.
+# ============================================================
+# ============================================================
+# app.py — Part 6
+# ------------------------------------------------------------
+# Paste this BLOCK immediately below the last line of Part 5.
+# Continue pasting Part 7 immediately below the last line of this block.
+# ============================================================
+
+
+# ============================================================
 # v3.5 NEW ROUTES — FEEDBACK API + ADMIN MULTIPLIERS + ADMIN FEEDBACK
 # ============================================================
 
@@ -4890,6 +5053,18 @@ def admin_multipliers():
         audit_rows=audit_rows,
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
     )
+
+
+# ============================================================
+# END app.py — Part 6
+# Continue with Part 7 immediately below.
+# ============================================================
+# ============================================================
+# app.py — Part 7
+# ------------------------------------------------------------
+# Paste this BLOCK immediately below the last line of Part 6.
+# Continue pasting Part 8 immediately below the last line of this block.
+# ============================================================
 
 
 @app.route('/admin/feedback')
@@ -5313,6 +5488,18 @@ def admin_research():
     )
 
 
+# ============================================================
+# END app.py — Part 7
+# Continue with Part 8 immediately below.
+# ============================================================
+# ============================================================
+# app.py — Part last
+# ------------------------------------------------------------
+# Paste this BLOCK immediately below the last line of Part 7.
+# This is the FINAL part — once pasted, your app.py is complete.
+# ============================================================
+
+
 @app.route('/admin/research/<entry_id>/edit', methods=['POST'])
 @login_required
 @admin_required
@@ -5704,3 +5891,8 @@ def db_test():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+
+# ============================================================
+# END app.py — Part last
+# Your app.py is now complete. Save the file and commit.
+# ============================================================
