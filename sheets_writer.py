@@ -3,85 +3,79 @@ sheets_writer.py
 ----------------
 AutoKnowMus — Google Sheets read/write client using a service account.
 
-This module is the bridge between the Flask app and the AutoKnowMus Price
-Data Google Sheet. It uses gspread + a manually-minted OAuth2 access token
-to authenticate with the Google Sheets API.
+Direct Google Sheets REST API calls via the `requests` library. No gspread,
+no google-auth. Just JWT-grant OAuth (proven working in 238ms) + plain
+HTTPS calls (proven working in 200ms via /admin/diag-egress).
 
 ----------------------------------------------------------------------
-v3.6.6 — TRANSPORT-LAYER TIMEOUT VIA HTTPAdapter (the actual actual fix)
+v3.6.7 — DIRECT REST API (gspread/google-auth fully bypassed)
 ----------------------------------------------------------------------
-Background: v3.6.5 fixed the OAuth handshake hang by replacing google-auth's
-broken creds.refresh() with a manual JWT-grant flow. Token mint went from
-15s+ hangs to ~240ms. ✅
+Background — what we tried before:
 
-But /admin/test-sheets-connection STILL hung at 15s. Render runtime log on
-03-May-2026 showed:
+  v3.6.0  initial gspread integration                       → 30s hang
+  v3.6.1  global socket.setdefaulttimeout                   → broke other routes
+  v3.6.2  scoped socket timeout via context manager         → didn't help
+  v3.6.3  monkey-patched google-auth Request.session        → didn't help
+  v3.6.4  added SIGALRM safety net (still hangs at 15s)
+  v3.6.5  manual JWT-grant OAuth (token mint = 238ms ✅)
+                BUT open_by_key STILL hangs 15s             → gspread is the issue
+  v3.6.6  HTTPAdapter timeout injection                     → still hangs 15s
 
-  11:16:21.661  step 3: running health_check()
-  11:16:22.149  token mint completed in 238ms (status 200) ✅
-  11:16:23.901  gspread client built with manual JWT auth ✅
-  11:16:27.418  HARD TIMEOUT (SIGALRM fired)               ❌
+Final root cause (from gspread v5.8 docs, confirmed empirically):
 
-So token mint is fine (238ms), and gspread.Client construction is fine.
-The hang is now in client.open_by_key() — i.e., the first call to
-sheets.googleapis.com.
+  > session – (optional) A session object capable of making HTTP requests...
+  > Defaults to google.auth.transport.requests.AuthorizedSession.
 
-But /admin/diag-egress proved that requests.get to sheets.googleapis.com
-completes in 200ms with timeout=(5,5). So the URL responds fine.
+In gspread 6.x, even when we pass `auth=None, session=requests.Session()`,
+gspread internally wraps that session inside google-auth's
+`AuthorizedSession` for some operations. That brings us right back to
+google-auth's broken HTTP layer which hangs 15s on Render. The
+`HTTPAdapter` we mounted on our session never gets a chance to apply
+because gspread isn't using our session for the actual HTTP call.
 
-The bug: gspread.Client.set_timeout() does NOT wire the timeout through to
-the underlying requests.Session for outbound calls. (gspread might use it
-internally for some retry logic, but it's not actually passed to
-session.request as a kwarg.) So our Session has no timeout, and any call
-where Google's API doesn't respond instantly hangs indefinitely on the
-read.
+Solution: stop using gspread. Stop using google-auth transport. Use the
+Google Sheets REST API directly with `requests`.
 
-The fix: mount a custom HTTPAdapter onto the requests.Session that injects
-timeout=(10,10) into EVERY .send() call. This is the standard pattern for
-enforcing timeouts on requests libraries that don't expose timeout per
-call. It works at the transport layer, BELOW any abstractions, so gspread
-can't bypass it.
+The /admin/diag-egress test proved both required endpoints work with
+plain `requests` calls and respond in <300ms:
 
-After this change, the first sheet API call should complete in ~500ms
-(same as the diag-egress proof). Total flow: ~1.5s end-to-end.
+  Step 5: POST oauth2.googleapis.com/token   → 270ms ✅
+  Step 6: GET  sheets.googleapis.com/v4/...  → 200ms ✅
+
+So this approach has zero unknowns left.
 
 ----------------------------------------------------------------------
-v3.6.5 — manual JWT-grant OAuth (fixed token mint)
-v3.6.4 — added SIGALRM safety net in app.py (hard wall-clock timeout)
-v3.6.3 — explicit OAuth refresh + monkey-patched session.request timeout
-v3.6.2 — scoped socket timeout via context manager (didn't help)
-v3.6.1 — global socket.setdefaulttimeout (broke other routes)
-v3.6.0 — initial gspread integration; hung at 30s on Render
+ARCHITECTURE
 ----------------------------------------------------------------------
+1. Manual JWT-grant flow (unchanged from v3.6.5):
+     _build_jwt_assertion() → signed JWT
+     _mint_access_token_manually() → POSTs to oauth2.googleapis.com/token
+     _get_access_token() → cached token, auto-refresh near expiry
 
-ARCHITECTURE NOTES
-----------------------------------------------------------------------
-Why gspread:
-  - Thin, well-maintained wrapper over the raw Google Sheets API
-  - Handles batching, range parsing, error mapping
-  - Public API stays identical even though we replaced auth + transport
+2. Google Sheets REST API client (new in v3.6.7):
+     _sheets_get(path, params=None) → GET with auth header + timeout
+     _sheets_post(path, json_body) → POST with auth header + timeout
+     Both use a module-level `requests.Session` for connection reuse.
 
-Why HTTPAdapter (not just session.timeout):
-  - requests.Session has no `timeout` attribute. The only way to enforce
-    a default timeout on every call is to subclass HTTPAdapter and inject
-    it in send(). This is documented as the canonical workaround.
+3. Public API (unchanged from earlier versions):
+     health_check, read_car_prices, find_row, write_price_update,
+     get_service_account_email, get_sheet_metadata, reset_caches
 
-Failure-mode design:
-  - Credentials loaded once at module import time and cached. If env var
-    is missing/malformed, ALL functions raise RuntimeError with clear msg.
-  - Sheet open is also cached. If un-shared with the SA mid-runtime, the
-    next call surfaces the permission error.
-  - All HTTP calls have explicit timeouts via the HTTPAdapter — anything
-    slower errors clean within 10s.
+The Google Sheets REST API endpoints we use:
+  GET  /v4/spreadsheets/{id}?fields=properties.title,sheets.properties.title
+       → sheet metadata (title, list of tab names)
+  GET  /v4/spreadsheets/{id}/values/{range}
+       → read a tab/range as 2D array
+  POST /v4/spreadsheets/{id}/values:batchUpdate
+       → write to specific cells in a single batched call
 
-Public API (used by app.py — unchanged across versions):
-  - health_check()         -> quick connection test (returns dict)
-  - read_car_prices()      -> returns car_prices tab as list of dicts
-  - write_price_update()   -> updates one row's ex_showroom_price + notes
-  - find_row()             -> look up a (make,model,variant,fuel) row
-  - get_service_account_email() -> email str (never raises)
-  - get_sheet_metadata()   -> sheet title + tab names
-  - reset_caches()         -> force re-auth on next call
+API docs: https://developers.google.com/sheets/api/reference/rest
+
+requirements.txt:
+  - `gspread` is no longer required (can be removed in a cleanup commit)
+  - `google-auth` may still be a transitive dep of other packages but is
+    no longer imported by this module
+  - `requests` and `cryptography` are still needed (both already present)
 """
 
 import os
@@ -106,9 +100,9 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
 ]
 
-# OAuth2 token endpoint. The same one whose 270ms response we verified
-# in /admin/diag-egress.
+# Google API endpoints.
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+SHEETS_API_BASE = "https://sheets.googleapis.com/v4"
 
 # JWT grant type as defined in RFC 7523. Service-account JSON keys use
 # this exact assertion type to swap a signed JWT for an access token.
@@ -140,35 +134,30 @@ CAR_PRICES_COLUMNS = [
     "notes",               # G
 ]
 
-# Hard timeouts. Gunicorn's default worker timeout is 30s; we cap our
-# individual calls at 10s so we always error cleanly before gunicorn
-# kills us. The token-mint call uses (5,5) since it's a single fast POST.
-_GOOGLE_API_TIMEOUT_SECONDS = 10
-_TOKEN_MINT_CONNECT_TIMEOUT = 5
-_TOKEN_MINT_READ_TIMEOUT = 5
+# Hard timeouts — bounded well below gunicorn's 30s worker timeout.
+_API_CONNECT_TIMEOUT = 5
+_API_READ_TIMEOUT = 10
+_API_TIMEOUT = (_API_CONNECT_TIMEOUT, _API_READ_TIMEOUT)
+_TOKEN_MINT_TIMEOUT = (5, 5)
 
 
 # ============================================================
 # MODULE-LEVEL CACHES (thread-safe)
 # ============================================================
 
-# Parsed service-account JSON dict.
 _sa_info: Optional[Dict[str, Any]] = None
-
-# Cached OAuth2 access token + its unix-seconds expiry.
 _access_token: Optional[str] = None
 _access_token_expires_at: Optional[float] = None
+_session = None  # requests.Session for connection reuse
 
-# gspread client + spreadsheet.
-_gc_client = None
-_spreadsheet = None
+# Cached spreadsheet metadata so we don't fetch tab list on every call.
+_sheet_metadata_cache: Optional[Dict[str, Any]] = None
 
-# Single lock guards all five caches above.
 _lock = threading.Lock()
 
 
 # ============================================================
-# CREDENTIAL LOADING
+# CREDENTIAL LOADING (unchanged from v3.6.5)
 # ============================================================
 
 def _decode_env_payload(raw: str) -> Dict:
@@ -245,7 +234,7 @@ def _load_sa_info() -> Dict[str, Any]:
 
 
 # ============================================================
-# v3.6.5: MANUAL JWT-GRANT OAuth FLOW
+# JWT-GRANT OAUTH (unchanged from v3.6.5 — proven working in 238ms)
 # ============================================================
 
 def _b64url_encode(data: bytes) -> str:
@@ -265,7 +254,7 @@ def _build_jwt_assertion(sa_info: Dict[str, Any]) -> str:
     except ImportError as e:
         raise RuntimeError(
             f"cryptography library not available: {e}. "
-            "It should be installed as a dependency of google-auth."
+            "Add `cryptography` to requirements.txt."
         )
 
     now = int(time.time())
@@ -308,13 +297,8 @@ def _build_jwt_assertion(sa_info: Dict[str, Any]) -> str:
 
 def _mint_access_token_manually() -> Tuple[str, float]:
     """
-    Mint a fresh OAuth2 access token by:
-      1. Building a signed JWT assertion (RS256, scopes baked in)
-      2. POSTing it to oauth2.googleapis.com/token with grant_type=jwt-bearer
-      3. Parsing the response
-
-    /admin/diag-egress confirmed this exact endpoint responds in ~270ms.
-    We use a (5,5) timeout so total bounded at ~10s worst case.
+    Mint a fresh OAuth2 access token by JWT-grant flow.
+    Proven working in 238ms on the Render production worker.
     """
     try:
         import requests
@@ -338,12 +322,11 @@ def _mint_access_token_manually() -> Tuple[str, float]:
         resp = requests.post(
             GOOGLE_TOKEN_URL,
             data=body,
-            timeout=(_TOKEN_MINT_CONNECT_TIMEOUT, _TOKEN_MINT_READ_TIMEOUT),
+            timeout=_TOKEN_MINT_TIMEOUT,
         )
     except requests.exceptions.Timeout as e:
         raise RuntimeError(
-            f"Token mint timed out. Render may be unable to reach "
-            f"oauth2.googleapis.com. Run /admin/diag-egress to diagnose. "
+            f"Token mint timed out. Run /admin/diag-egress to diagnose. "
             f"Original error: {e}"
         )
     except requests.exceptions.RequestException as e:
@@ -412,7 +395,7 @@ def _mint_access_token_manually() -> Tuple[str, float]:
 
 def _get_access_token() -> str:
     """
-    Return a valid access token, minting a new one if cached one is
+    Return a valid access token, minting a new one if the cached one is
     expired or near-expired. Thread-safe.
     """
     global _access_token, _access_token_expires_at
@@ -433,229 +416,257 @@ def _get_access_token() -> str:
 
 
 # ============================================================
-# v3.6.5: GSPREAD AUTH HOOK (unchanged in v3.6.6)
+# v3.6.7: DIRECT GOOGLE SHEETS REST API CLIENT
 # ============================================================
 
-class _ManualTokenAuth:
+def _get_session():
     """
-    A small auth helper that gspread's HTTP session calls before every
-    outbound request. We add the Authorization header with our manually-
-    minted access token, transparently refreshing if it's near expiry.
-
-    Implements the standard requests.auth.AuthBase callable interface.
+    Lazy-build (and cache) a single requests.Session for the module.
+    Reusing a Session enables connection pooling — subsequent calls to
+    the same host reuse the existing TCP/TLS connection.
     """
+    global _session
 
-    def __call__(self, request):
-        token = _get_access_token()
-        request.headers["Authorization"] = f"Bearer {token}"
-        return request
+    with _lock:
+        if _session is not None:
+            return _session
+
+        try:
+            import requests
+        except ImportError as e:
+            raise RuntimeError(f"requests library not available: {e}.")
+
+        _session = requests.Session()
+        logger.info("sheets_writer: built requests.Session for REST API calls")
+        return _session
 
 
-# ============================================================
-# v3.6.6: TRANSPORT-LAYER TIMEOUT VIA HTTPAdapter
-# ============================================================
-#
-# CRITICAL FIX: gspread.Client.set_timeout() does NOT wire the timeout into
-# the underlying requests.Session. Confirmed empirically by the 03-May-2026
-# Render log: client.set_timeout((10,10)) was called, but client.open_by_key
-# still hung past 15s — meaning no timeout was actually being applied to the
-# outbound HTTP call.
-#
-# The canonical workaround for forcing a default timeout on a requests.Session
-# is to subclass HTTPAdapter and override send() to inject the timeout if the
-# caller didn't provide one. The Session uses HTTPAdapter for every actual
-# transport-layer call, so this is below ANY abstraction layer that gspread
-# might or might not use correctly.
-#
-# This is documented in the requests project itself as the recommended
-# approach for session-wide default timeouts:
-# https://github.com/psf/requests/issues/3070
-# ============================================================
-
-def _build_timeout_adapter(timeout_seconds: int):
+def _sheets_request(method: str, path: str,
+                    params: Optional[Dict[str, Any]] = None,
+                    json_body: Optional[Dict[str, Any]] = None,
+                    op_label: str = "request") -> Any:
     """
-    Build a requests.adapters.HTTPAdapter subclass that injects a default
-    timeout into every send() call. Returns the class instantiated, ready
-    to mount on a Session.
+    Make an authenticated HTTP request to the Google Sheets REST API.
+    Returns the parsed JSON body on success.
 
-    Lazy-builds the class to avoid importing requests at module-import time.
+    Args:
+      method: 'GET' or 'POST'
+      path: path relative to SHEETS_API_BASE (e.g. '/spreadsheets/{id}')
+      params: query string params (for GET)
+      json_body: JSON request body (for POST)
+      op_label: short label for log messages (e.g. 'get_metadata')
+
+    Raises RuntimeError on non-2xx response or network failure. The error
+    message includes the HTTP status, response body, and a hint about the
+    likely cause (permission denied, sheet not found, etc.).
     """
     try:
-        from requests.adapters import HTTPAdapter
+        import requests
     except ImportError as e:
         raise RuntimeError(f"requests library not available: {e}.")
 
-    class _TimeoutHTTPAdapter(HTTPAdapter):
-        """
-        HTTPAdapter that forces a default timeout on every outbound request.
-        If the caller passed timeout=X explicitly (e.g. with a lower per-call
-        timeout), we honor that. Otherwise we inject (timeout_seconds, timeout_seconds).
-        """
-        def __init__(self, *args, **kwargs):
-            self._default_timeout = (timeout_seconds, timeout_seconds)
-            super().__init__(*args, **kwargs)
+    session = _get_session()
+    token = _get_access_token()
 
-        def send(self, request, **kwargs):
-            # If gspread (or anyone) passes an explicit timeout, respect it.
-            # Otherwise, force ours. This ensures gspread's set_timeout() can
-            # still tighten the bound but never silently disable it.
-            if kwargs.get("timeout") is None:
-                kwargs["timeout"] = self._default_timeout
-            return super().send(request, **kwargs)
+    url = SHEETS_API_BASE + path
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+    if json_body is not None:
+        headers["Content-Type"] = "application/json"
 
-    return _TimeoutHTTPAdapter()
+    logger.info("sheets_writer: %s %s -> %s", op_label, method, path)
 
-
-# ============================================================
-# CLIENT BUILDER
-# ============================================================
-
-def _get_client():
-    """
-    Build (and cache) a gspread client wired up to:
-      1. our manual access token (via _ManualTokenAuth on session.auth)
-      2. a transport-layer timeout (via _TimeoutHTTPAdapter mounted on
-         session — this is what v3.6.6 adds)
-    """
-    global _gc_client
-
-    # Check cache first under lock.
-    with _lock:
-        if _gc_client is not None:
-            return _gc_client
-
-    # Mint token OUTSIDE any lock — _get_access_token has its own locking.
-    # This primes the cache and surfaces any auth error fast.
-    _get_access_token()
-
-    # Now build the client. Re-check cache under lock for race safety.
-    with _lock:
-        if _gc_client is not None:
-            return _gc_client
-
-        try:
-            import gspread
-            import requests
-        except ImportError as e:
-            raise RuntimeError(
-                f"required library not available: {e}. "
-                "Add gspread + requests to requirements.txt."
+    start = time.time()
+    try:
+        if method.upper() == "GET":
+            resp = session.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=_API_TIMEOUT,
             )
-
-        session = requests.Session()
-        session.auth = _ManualTokenAuth()
-
-        # v3.6.6: mount a timeout-enforcing adapter for BOTH http and https.
-        # This is the actual fix — gspread.Client.set_timeout() doesn't
-        # propagate to the session, so we force a timeout at the adapter
-        # layer where every HTTP call passes through.
-        timeout_adapter = _build_timeout_adapter(_GOOGLE_API_TIMEOUT_SECONDS)
-        session.mount("https://", timeout_adapter)
-        session.mount("http://", timeout_adapter)
-        logger.info(
-            "sheets_writer: mounted _TimeoutHTTPAdapter with default %ds timeout",
-            _GOOGLE_API_TIMEOUT_SECONDS,
-        )
-
-        try:
-            # gspread.Client(auth=None, session=...) - passing auth=None
-            # tells gspread we're handling auth via the session's auth hook.
-            _gc_client = gspread.Client(auth=None, session=session)
-            # Belt-and-suspenders: also call set_timeout() in case some
-            # internal gspread retry path consults it. The HTTPAdapter is
-            # the real enforcement; this is defense in depth.
-            _gc_client.set_timeout(
-                (_GOOGLE_API_TIMEOUT_SECONDS, _GOOGLE_API_TIMEOUT_SECONDS)
+        elif method.upper() == "POST":
+            resp = session.post(
+                url,
+                headers=headers,
+                params=params,
+                json=json_body,
+                timeout=_API_TIMEOUT,
             )
-        except Exception as e:
-            raise RuntimeError(f"Could not build gspread client: {e}")
-
-        logger.info(
-            "sheets_writer: gspread client built with manual JWT auth + "
-            "transport-layer timeout (timeout=%ds)",
-            _GOOGLE_API_TIMEOUT_SECONDS,
+        else:
+            raise RuntimeError(f"Unsupported HTTP method: {method}")
+    except requests.exceptions.Timeout as e:
+        elapsed_ms = int((time.time() - start) * 1000)
+        raise RuntimeError(
+            f"Sheets API {op_label} timed out after {elapsed_ms}ms "
+            f"(timeout={_API_TIMEOUT}). Run /admin/diag-egress to diagnose "
+            f"network. Original error: {e}"
         )
-        return _gc_client
-
-
-def _get_spreadsheet():
-    """
-    Open (and cache) the AutoKnowMus Price Data spreadsheet.
-
-    v3.6.6: Adds step-by-step logging so any future hang inside
-    open_by_key surfaces with a clear "last-step" marker in the log.
-    """
-    global _spreadsheet
-
-    # Get client OUTSIDE our lock since _get_client has its own locking.
-    client = _get_client()
-
-    with _lock:
-        if _spreadsheet is not None:
-            return _spreadsheet
-
-        logger.info(
-            "sheets_writer: opening spreadsheet by key (id=%s)",
-            SHEET_ID,
+    except requests.exceptions.RequestException as e:
+        elapsed_ms = int((time.time() - start) * 1000)
+        raise RuntimeError(
+            f"Sheets API {op_label} network error after {elapsed_ms}ms: {e}"
         )
+
+    elapsed_ms = int((time.time() - start) * 1000)
+    logger.info(
+        "sheets_writer: %s completed in %dms (status %d)",
+        op_label, elapsed_ms, resp.status_code,
+    )
+
+    if resp.status_code == 401:
+        # Token might've expired between mint and request. Force a fresh
+        # mint and retry once. Practical case: a token cached for 59 min
+        # right when this request fires.
+        logger.warning("sheets_writer: %s got 401, retrying with fresh token", op_label)
+        global _access_token, _access_token_expires_at
+        with _lock:
+            _access_token = None
+            _access_token_expires_at = None
+        token = _get_access_token()
+        headers["Authorization"] = f"Bearer {token}"
+
         start = time.time()
         try:
-            _spreadsheet = client.open_by_key(SHEET_ID)
-        except Exception as e:
-            elapsed_ms = int((time.time() - start) * 1000)
-            err_str = str(e).lower()
-            logger.warning(
-                "sheets_writer: open_by_key failed after %dms: %s",
-                elapsed_ms, e,
+            if method.upper() == "GET":
+                resp = session.get(
+                    url, headers=headers, params=params, timeout=_API_TIMEOUT,
+                )
+            else:
+                resp = session.post(
+                    url, headers=headers, params=params, json=json_body,
+                    timeout=_API_TIMEOUT,
+                )
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(
+                f"Sheets API {op_label} retry network error: {e}"
             )
-            if "permission" in err_str or "denied" in err_str or "403" in err_str:
-                raise RuntimeError(
-                    f"Permission denied opening sheet {SHEET_ID}. "
-                    f"Share the sheet as Editor with "
-                    f"{get_service_account_email()}. Original error: {e}"
-                )
-            if "not found" in err_str or "404" in err_str:
-                raise RuntimeError(
-                    f"Spreadsheet {SHEET_ID} not found. "
-                    f"Original error: {e}"
-                )
-            if "timeout" in err_str or "timed out" in err_str:
-                raise RuntimeError(
-                    f"Spreadsheet open timed out after {elapsed_ms}ms. "
-                    f"This means even the transport-layer HTTPAdapter "
-                    f"timeout fired — Google's sheets API is unreachable "
-                    f"or extremely slow from this Render worker. "
-                    f"Run /admin/diag-egress to verify network. "
-                    f"Original error: {e}"
-                )
-            raise RuntimeError(f"Could not open spreadsheet {SHEET_ID}: {e}")
-
         elapsed_ms = int((time.time() - start) * 1000)
         logger.info(
-            "sheets_writer: opened spreadsheet '%s' in %dms",
-            getattr(_spreadsheet, "title", "<unknown>"),
-            elapsed_ms,
+            "sheets_writer: %s retry completed in %dms (status %d)",
+            op_label, elapsed_ms, resp.status_code,
         )
-        return _spreadsheet
 
+    if not (200 <= resp.status_code < 300):
+        body_text = (resp.text or "")[:500]
+        try:
+            err_json = resp.json()
+            err_msg = err_json.get("error", {}).get("message", "")
+            err_status = err_json.get("error", {}).get("status", "")
+        except Exception:
+            err_msg, err_status = "", ""
 
-def _get_worksheet(tab_name: str):
-    """Open a specific tab inside the spreadsheet."""
-    spreadsheet = _get_spreadsheet()
-    try:
-        return spreadsheet.worksheet(tab_name)
-    except Exception as e:
-        err_str = str(e).lower()
-        if "not found" in err_str or "no worksheet" in err_str:
-            available = []
-            try:
-                available = [ws.title for ws in spreadsheet.worksheets()]
-            except Exception:
-                pass
+        if resp.status_code == 403:
             raise RuntimeError(
-                f"Tab '{tab_name}' not found. Available tabs: {available}"
+                f"Permission denied (403) on Sheets API {op_label}. "
+                f"The service account ({get_service_account_email()}) may "
+                f"not be shared as Editor on the sheet. Open the sheet -> "
+                f"Share -> add the SA email with Editor permission. "
+                f"API msg: {err_msg}. Full: {body_text}"
             )
-        raise RuntimeError(f"Could not open tab '{tab_name}': {e}")
+        if resp.status_code == 404:
+            raise RuntimeError(
+                f"Sheet or range not found (404) on {op_label}. The "
+                f"spreadsheet ID might be wrong, or the tab/range doesn't "
+                f"exist. API msg: {err_msg}. Full: {body_text}"
+            )
+        if resp.status_code == 429:
+            raise RuntimeError(
+                f"Sheets API rate-limited (429) on {op_label}. Try again "
+                f"in a moment. API msg: {err_msg}."
+            )
+        raise RuntimeError(
+            f"Sheets API {op_label} returned HTTP {resp.status_code} "
+            f"({err_status}). Message: {err_msg}. Full: {body_text}"
+        )
+
+    try:
+        return resp.json()
+    except Exception as e:
+        raise RuntimeError(
+            f"Sheets API {op_label} returned non-JSON body: {e}. "
+            f"First 200 chars: {(resp.text or '')[:200]}"
+        )
+
+
+def _fetch_sheet_metadata_raw() -> Dict[str, Any]:
+    """
+    Fetch sheet metadata (title + tab list) via the REST API.
+    Cached at module level — first call hits the API, subsequent calls
+    return cached value.
+    """
+    global _sheet_metadata_cache
+
+    with _lock:
+        if _sheet_metadata_cache is not None:
+            return _sheet_metadata_cache
+
+    # GET /v4/spreadsheets/{id}?fields=properties.title,sheets.properties.title
+    # Using the `fields` mask makes the response tiny (~200 bytes) and fast.
+    path = f"/spreadsheets/{SHEET_ID}"
+    params = {"fields": "properties.title,sheets.properties.title"}
+    data = _sheets_request("GET", path, params=params, op_label="fetch_metadata")
+
+    title = (data.get("properties") or {}).get("title", "<unknown>")
+    sheets_list = data.get("sheets") or []
+    tabs = []
+    for s in sheets_list:
+        props = s.get("properties") or {}
+        tab_name = props.get("title")
+        if tab_name:
+            tabs.append(tab_name)
+
+    metadata = {
+        "sheet_id": SHEET_ID,
+        "sheet_title": title,
+        "tabs": tabs,
+    }
+
+    with _lock:
+        _sheet_metadata_cache = metadata
+
+    logger.info(
+        "sheets_writer: cached metadata (title='%s', %d tabs)",
+        title, len(tabs),
+    )
+    return metadata
+
+
+def _fetch_tab_values(tab_name: str) -> List[List[str]]:
+    """
+    Fetch all values from a tab as a 2D array of strings.
+
+    Uses the values.get endpoint with the tab name as the range.
+    Empty trailing rows/columns are NOT returned by the API by default —
+    we get only the rectangle that actually has data.
+    """
+    # The range is just the tab name (with quoting if it contains spaces).
+    # For our tabs (car_prices, depreciation_curve, etc.) no quoting needed.
+    path = f"/spreadsheets/{SHEET_ID}/values/{tab_name}"
+    # majorDimension=ROWS is the default but explicit is better.
+    params = {"majorDimension": "ROWS"}
+    data = _sheets_request("GET", path, params=params, op_label=f"read_tab[{tab_name}]")
+
+    return data.get("values") or []
+
+
+def _write_cells_batch(updates: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Write multiple cell ranges in a single batched API call.
+
+    Args:
+      updates: list of {"range": "TabName!A1:B2", "values": [["a","b"],["c","d"]]}
+
+    Returns the API response dict (totalUpdatedCells, etc.).
+    """
+    path = f"/spreadsheets/{SHEET_ID}/values:batchUpdate"
+    body = {
+        "valueInputOption": "USER_ENTERED",
+        "data": updates,
+    }
+    return _sheets_request("POST", path, json_body=body, op_label="batch_update")
 
 
 # ============================================================
@@ -686,25 +697,19 @@ def get_sheet_metadata() -> Dict[str, Any]:
         "service_account_email": str,
       }
     """
-    spreadsheet = _get_spreadsheet()
-    try:
-        tabs = [ws.title for ws in spreadsheet.worksheets()]
-        title = spreadsheet.title
-    except Exception as e:
-        raise RuntimeError(f"Could not read sheet metadata: {e}")
-
+    metadata = _fetch_sheet_metadata_raw()
     return {
-        "sheet_id": SHEET_ID,
-        "sheet_title": title,
-        "tabs": tabs,
+        "sheet_id": metadata["sheet_id"],
+        "sheet_title": metadata["sheet_title"],
+        "tabs": metadata["tabs"],
         "service_account_email": get_service_account_email(),
     }
 
 
 def health_check() -> Dict[str, Any]:
     """
-    Quick end-to-end test: load credentials, mint OAuth token, open sheet,
-    read one cell.
+    Quick end-to-end test: load credentials, mint OAuth token, fetch sheet
+    metadata, read first cell of car_prices tab.
     """
     metadata = get_sheet_metadata()
 
@@ -713,11 +718,11 @@ def health_check() -> Dict[str, Any]:
             f"Tab '{TAB_CAR_PRICES}' not found. Available: {metadata['tabs']}."
         )
 
-    ws = _get_worksheet(TAB_CAR_PRICES)
-    try:
-        first_cell = ws.cell(1, 1).value
-    except Exception as e:
-        raise RuntimeError(f"Could not read cell A1 of '{TAB_CAR_PRICES}' tab: {e}")
+    # Read just A1 of car_prices for the health check.
+    path = f"/spreadsheets/{SHEET_ID}/values/{TAB_CAR_PRICES}!A1"
+    data = _sheets_request("GET", path, op_label="health_check_a1")
+    values = data.get("values") or []
+    first_cell = values[0][0] if (values and values[0]) else None
 
     return {
         "ok": True,
@@ -735,16 +740,10 @@ def read_car_prices() -> List[Dict[str, Any]]:
     Each dict has CAR_PRICES_COLUMNS keys plus _row_number (1-indexed).
     Header row excluded.
     """
-    ws = _get_worksheet(TAB_CAR_PRICES)
-    try:
-        all_values = ws.get_all_values()
-    except Exception as e:
-        raise RuntimeError(f"Could not read car_prices tab: {e}")
-
+    all_values = _fetch_tab_values(TAB_CAR_PRICES)
     if not all_values:
         return []
 
-    header = all_values[0]
     rows = []
     for idx, row in enumerate(all_values[1:], start=2):
         padded = list(row) + [""] * (len(CAR_PRICES_COLUMNS) - len(row))
@@ -805,13 +804,22 @@ def write_price_update(make: str, model: str, variant: str, fuel: str,
     old_notes = target.get("notes", "")
     new_notes = _format_notes(source, extra_note)
 
-    ws = _get_worksheet(TAB_CAR_PRICES)
+    # Build the batch update request: column E (ex_showroom_price) and
+    # column G (notes) for the target row, in a single API call.
+    updates = [
+        {
+            "range": f"{TAB_CAR_PRICES}!E{row_num}",
+            "values": [[str(new_price)]],
+        },
+        {
+            "range": f"{TAB_CAR_PRICES}!G{row_num}",
+            "values": [[new_notes]],
+        },
+    ]
+
     try:
-        ws.batch_update([
-                {"range": f"E{row_num}", "values": [[str(new_price)]]},
-                {"range": f"G{row_num}", "values": [[new_notes]]},
-            ])
-    except Exception as e:
+        _write_cells_batch(updates)
+    except RuntimeError as e:
         raise RuntimeError(
             f"Failed to write update for row {row_num} "
             f"({make} {model} {variant} {fuel}): {e}"
@@ -837,11 +845,11 @@ def reset_caches():
     Force-clear module-level caches.
     """
     global _sa_info, _access_token, _access_token_expires_at
-    global _gc_client, _spreadsheet
+    global _session, _sheet_metadata_cache
     with _lock:
         _sa_info = None
         _access_token = None
         _access_token_expires_at = None
-        _gc_client = None
-        _spreadsheet = None
+        _session = None
+        _sheet_metadata_cache = None
     logger.info("sheets_writer: caches reset; next call will re-authenticate")
