@@ -4600,6 +4600,131 @@ def admin_refresh_prices():
 # silently ignored by an HTTP library.
 # ============================================================
 
+# ============================================================
+# DIAGNOSTIC ENDPOINT — paste this anywhere in app.py for now
+# (e.g. right above the existing admin_test_sheets_connection)
+# ------------------------------------------------------------
+# Tests Render's egress to Google's APIs at every layer:
+#   1. DNS resolution
+#   2. Raw TCP connect
+#   3. TLS handshake
+#   4. HTTPS GET (no auth)
+#   5. POST to oauth2.googleapis.com/token (the actual call that hangs)
+#
+# This bypasses google-auth and gspread entirely. If THIS endpoint
+# also hangs, we know it's a Render egress problem. If THIS works
+# fine, we know the hang is specifically inside google-auth.
+#
+# After diagnosis, you can delete this entire route from app.py.
+# ============================================================
+
+@app.route('/admin/diag-egress')
+@login_required
+@admin_required
+def admin_diag_egress():
+    """Run raw network tests against Google APIs from Render."""
+    import socket
+    import ssl
+    import time
+    import urllib.request
+    import urllib.error
+    import json as json_mod
+
+    results = []
+
+    def step(name, fn):
+        start = time.time()
+        try:
+            fn_result = fn()
+            elapsed = time.time() - start
+            results.append({
+                "step": name,
+                "ok": True,
+                "elapsed_s": round(elapsed, 3),
+                "detail": fn_result,
+            })
+        except Exception as e:
+            elapsed = time.time() - start
+            results.append({
+                "step": name,
+                "ok": False,
+                "elapsed_s": round(elapsed, 3),
+                "error": f"{type(e).__name__}: {str(e)[:200]}",
+            })
+
+    # ---- Step 1: DNS resolution ----
+    def _dns():
+        ips = socket.gethostbyname_ex('oauth2.googleapis.com')
+        return {"hostname": ips[0], "addresses": ips[2][:3]}
+    step("dns_resolve_oauth2", _dns)
+
+    # ---- Step 2: raw TCP connect (5s timeout) ----
+    def _tcp():
+        sock = socket.create_connection(('oauth2.googleapis.com', 443), timeout=5)
+        sock.close()
+        return "connected"
+    step("tcp_connect_oauth2_443", _tcp)
+
+    # ---- Step 3: TLS handshake (5s timeout) ----
+    def _tls():
+        ctx = ssl.create_default_context()
+        with socket.create_connection(('oauth2.googleapis.com', 443), timeout=5) as raw:
+            with ctx.wrap_socket(raw, server_hostname='oauth2.googleapis.com') as tls:
+                cert = tls.getpeercert()
+                return {
+                    "tls_version": tls.version(),
+                    "cipher": tls.cipher()[0] if tls.cipher() else None,
+                    "cert_subject_cn": next(
+                        (v for k, v in cert.get('subject', [[]])[0] if k == 'commonName'),
+                        None
+                    ) if cert.get('subject') else None,
+                }
+    step("tls_handshake_oauth2", _tls)
+
+    # ---- Step 4: HTTPS GET to oauth2 endpoint ----
+    def _https_get():
+        # urllib uses its own timeout. We expect 4xx because GET isn't supported,
+        # but ANY HTTP response at all proves egress works.
+        req = urllib.request.Request('https://oauth2.googleapis.com/token')
+        try:
+            resp = urllib.request.urlopen(req, timeout=5)
+            return {"status": resp.status, "note": "unexpectedly succeeded"}
+        except urllib.error.HTTPError as e:
+            return {"status": e.code, "note": "got HTTP response (good — means egress works)"}
+    step("https_get_oauth2_token", _https_get)
+
+    # ---- Step 5: requests library with explicit timeout ----
+    def _requests_post():
+        import requests
+        # Empty POST — we expect 400 from Google. Just want to confirm
+        # `requests` library can complete the call within timeout.
+        resp = requests.post(
+            'https://oauth2.googleapis.com/token',
+            data={"grant_type": "test"},
+            timeout=(5, 5),
+        )
+        return {"status_code": resp.status_code, "elapsed": "see step elapsed_s"}
+    step("requests_post_oauth2_token", _requests_post)
+
+    # ---- Step 6: same but to sheets API ----
+    def _https_get_sheets():
+        import requests
+        resp = requests.get(
+            'https://sheets.googleapis.com/v4/spreadsheets/test',
+            timeout=(5, 5),
+        )
+        return {"status_code": resp.status_code, "note": "401/403 = egress OK"}
+    step("requests_get_sheets_api", _https_get_sheets)
+
+    return jsonify({
+        "ok": True,
+        "tests": results,
+        "summary": {
+            "all_passed": all(r.get("ok") for r in results),
+            "any_slow": any(r.get("elapsed_s", 0) > 3 for r in results),
+        },
+    }), 200
+
 @app.route('/admin/test-sheets-connection')
 @login_required
 @admin_required
