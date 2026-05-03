@@ -8,96 +8,32 @@ no google-auth. Just JWT-grant OAuth (proven working in 238ms) + plain
 HTTPS calls (proven working in 200ms via /admin/diag-egress).
 
 ----------------------------------------------------------------------
+v3.7.0 — Phase 3 admin price tools support
+----------------------------------------------------------------------
+New in this version (additive — all v3.6.8 code unchanged):
+
+  - CAR_PRICES_COLUMNS extended with two new headers:
+      H: status                  (empty | "discontinued")
+      I: last_known_price_date   (DD-MMM-YYYY)
+  - write_price_update_v2() — like write_price_update() but ALSO sets
+    column I to today's date. Used for "price_update" review approvals.
+  - write_discontinued_flag() — sets H="discontinued" + I=today. Leaves
+    price (col E) and notes (col G) unchanged. Used for "discontinued"
+    review approvals to preserve the last known price for valuations.
+  - write_new_variant() — appends a brand new row at the bottom of
+    car_prices. Used for "new_variant" review approvals.
+
+Used by:
+  - app.py admin price tools routes (Phase 3)
+  - The same module also continues serving Phase 2 features:
+    health_check, find_row, write_price_update, read_model_slugs,
+    write_model_slug, etc.
+
+----------------------------------------------------------------------
 v3.6.8 — model_slugs tab support (additive, no breaking changes)
-----------------------------------------------------------------------
-New in this version (purely additive — all v3.6.7 code unchanged):
-
-  - TAB_MODEL_SLUGS constant ("model_slugs")
-  - MODEL_SLUGS_COLUMNS constant
-  - read_model_slugs() public function — returns rows as list of dicts
-  - write_model_slug(make, model, slug, note=None) public function —
-    inserts or updates a row keyed on (make, model)
-
-These are used by:
-  - price_scraper.py (reads slugs to know which CarWale URL to fetch)
-  - populate_slugs.py (one-time script: writes auto-resolved slugs)
-
-If the model_slugs tab does not exist in the sheet, read_model_slugs()
-returns [] gracefully so existing flows are not affected. The tab must
-be created manually before populate_slugs.py is run for the first time:
-  Sheet → add tab named "model_slugs" with column headers in row 1:
-  A: make    B: model    C: carwale_slug    D: notes
-
-----------------------------------------------------------------------
-v3.6.7 — DIRECT REST API (gspread/google-auth fully bypassed)
-----------------------------------------------------------------------
-Background — what we tried before:
-
-  v3.6.0  initial gspread integration                       → 30s hang
-  v3.6.1  global socket.setdefaulttimeout                   → broke other routes
-  v3.6.2  scoped socket timeout via context manager         → didn't help
-  v3.6.3  monkey-patched google-auth Request.session        → didn't help
-  v3.6.4  added SIGALRM safety net (still hangs at 15s)
-  v3.6.5  manual JWT-grant OAuth (token mint = 238ms ✅)
-                BUT open_by_key STILL hangs 15s             → gspread is the issue
-  v3.6.6  HTTPAdapter timeout injection                     → still hangs 15s
-
-Final root cause (from gspread v5.8 docs, confirmed empirically):
-
-  > session – (optional) A session object capable of making HTTP requests...
-  > Defaults to google.auth.transport.requests.AuthorizedSession.
-
-In gspread 6.x, even when we pass `auth=None, session=requests.Session()`,
-gspread internally wraps that session inside google-auth's
-`AuthorizedSession` for some operations. That brings us right back to
-google-auth's broken HTTP layer which hangs 15s on Render. The
-`HTTPAdapter` we mounted on our session never gets a chance to apply
-because gspread isn't using our session for the actual HTTP call.
-
-Solution: stop using gspread. Stop using google-auth transport. Use the
-Google Sheets REST API directly with `requests`.
-
-The /admin/diag-egress test proved both required endpoints work with
-plain `requests` calls and respond in <300ms:
-
-  Step 5: POST oauth2.googleapis.com/token   → 270ms ✅
-  Step 6: GET  sheets.googleapis.com/v4/...  → 200ms ✅
-
-So this approach has zero unknowns left.
-
-----------------------------------------------------------------------
-ARCHITECTURE
-----------------------------------------------------------------------
-1. Manual JWT-grant flow (unchanged from v3.6.5):
-     _build_jwt_assertion() → signed JWT
-     _mint_access_token_manually() → POSTs to oauth2.googleapis.com/token
-     _get_access_token() → cached token, auto-refresh near expiry
-
-2. Google Sheets REST API client (v3.6.7+):
-     _sheets_get(path, params=None) → GET with auth header + timeout
-     _sheets_post(path, json_body) → POST with auth header + timeout
-     Both use a module-level `requests.Session` for connection reuse.
-
-3. Public API:
-     v3.6.7: health_check, read_car_prices, find_row, write_price_update,
-             get_service_account_email, get_sheet_metadata, reset_caches
-     v3.6.8: + read_model_slugs, write_model_slug
-
-The Google Sheets REST API endpoints we use:
-  GET  /v4/spreadsheets/{id}?fields=properties.title,sheets.properties.title
-       → sheet metadata (title, list of tab names)
-  GET  /v4/spreadsheets/{id}/values/{range}
-       → read a tab/range as 2D array
-  POST /v4/spreadsheets/{id}/values:batchUpdate
-       → write to specific cells in a single batched call
-
-API docs: https://developers.google.com/sheets/api/reference/rest
-
-requirements.txt:
-  - `gspread` is no longer required (can be removed in a cleanup commit)
-  - `google-auth` may still be a transitive dep of other packages but is
-    no longer imported by this module
-  - `requests` and `cryptography` are still needed (both already present)
+v3.6.7 — Direct REST API (gspread/google-auth fully bypassed)
+v3.6.5 — Manual JWT-grant OAuth
+(History trimmed; see git log for full evolution.)
 """
 
 import os
@@ -116,26 +52,18 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # ============================================================
 
-# Required scopes for read AND write access to a single sheet.
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.file",
 ]
 
-# Google API endpoints.
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 SHEETS_API_BASE = "https://sheets.googleapis.com/v4"
 
-# JWT grant type as defined in RFC 7523. Service-account JSON keys use
-# this exact assertion type to swap a signed JWT for an access token.
 JWT_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer"
 
-# Access tokens from Google's OAuth2 endpoint live for 1 hour by default.
-# We refresh slightly before expiry to avoid edge-case 401s.
 TOKEN_REFRESH_SAFETY_MARGIN_SECONDS = 60
 
-# The AutoKnowMus Price Data sheet. ID is hardcoded because there's exactly
-# one of these per environment, and it never changes.
 DEFAULT_SHEET_ID = "1ZGDlq-qWA17ChBf2KJy0pmpYMBaAPconwquVXqMh9Oc"
 SHEET_ID = os.environ.get("AUTOKNOWMUS_SHEET_ID", DEFAULT_SHEET_ID)
 
@@ -144,25 +72,28 @@ TAB_CAR_PRICES = "car_prices"
 TAB_DEPRECIATION = "depreciation_curve"
 TAB_MULTIPLIERS = "multipliers"
 TAB_META = "meta"
-TAB_MODEL_SLUGS = "model_slugs"  # v3.6.8
+TAB_MODEL_SLUGS = "model_slugs"
 
 # Expected column headers for car_prices tab.
+# v3.7.0: added H (status) and I (last_known_price_date).
 CAR_PRICES_COLUMNS = [
-    "make",                # A
-    "model",               # B
-    "variant",             # C
-    "fuel",                # D
-    "ex_showroom_price",   # E
-    "active",              # F
-    "notes",               # G
+    "make",                      # A
+    "model",                     # B
+    "variant",                   # C
+    "fuel",                      # D
+    "ex_showroom_price",         # E
+    "active",                    # F
+    "notes",                     # G
+    "status",                    # H  (v3.7.0: empty or "discontinued")
+    "last_known_price_date",     # I  (v3.7.0: DD-MMM-YYYY)
 ]
 
 # Expected column headers for model_slugs tab (v3.6.8).
 MODEL_SLUGS_COLUMNS = [
-    "make",                # A
-    "model",               # B
-    "carwale_slug",        # C   format: 'make-slug/model-slug'
-    "notes",               # D   auto-resolved date or NEEDS_MANUAL_FIX reason
+    "make",
+    "model",
+    "carwale_slug",
+    "notes",
 ]
 
 # Hard timeouts — bounded well below gunicorn's 30s worker timeout.
@@ -181,22 +112,17 @@ _access_token: Optional[str] = None
 _access_token_expires_at: Optional[float] = None
 _session = None  # requests.Session for connection reuse
 
-# Cached spreadsheet metadata so we don't fetch tab list on every call.
 _sheet_metadata_cache: Optional[Dict[str, Any]] = None
 
 _lock = threading.Lock()
 
 
 # ============================================================
-# CREDENTIAL LOADING (unchanged from v3.6.5)
+# CREDENTIAL LOADING
 # ============================================================
 
 def _decode_env_payload(raw: str) -> Dict:
-    """
-    Accept the GOOGLE_SERVICE_ACCOUNT_JSON env var in either form:
-      1. Base64-encoded JSON (recommended)
-      2. Raw JSON (legacy, fragile)
-    """
+    """Accept GOOGLE_SERVICE_ACCOUNT_JSON env var as base64 or raw JSON."""
     raw = raw.strip()
     if not raw:
         raise RuntimeError(
@@ -269,15 +195,11 @@ def _load_sa_info() -> Dict[str, Any]:
 # ============================================================
 
 def _b64url_encode(data: bytes) -> str:
-    """URL-safe base64 encoding without padding (RFC 7515)."""
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
 def _build_jwt_assertion(sa_info: Dict[str, Any]) -> str:
-    """
-    Build a signed JWT to use as the assertion in a JWT-grant OAuth2 request.
-    Per RFC 7523. Uses RS256 (RSASSA-PKCS1-v1_5 with SHA-256).
-    """
+    """RFC 7523 signed JWT using RS256."""
     try:
         from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import padding
@@ -327,10 +249,6 @@ def _build_jwt_assertion(sa_info: Dict[str, Any]) -> str:
 
 
 def _mint_access_token_manually() -> Tuple[str, float]:
-    """
-    Mint a fresh OAuth2 access token by JWT-grant flow.
-    Proven working in 238ms on the Render production worker.
-    """
     try:
         import requests
     except ImportError as e:
@@ -425,10 +343,7 @@ def _mint_access_token_manually() -> Tuple[str, float]:
 
 
 def _get_access_token() -> str:
-    """
-    Return a valid access token, minting a new one if the cached one is
-    expired or near-expired. Thread-safe.
-    """
+    """Return a valid access token, minting a new one if needed. Thread-safe."""
     global _access_token, _access_token_expires_at
 
     with _lock:
@@ -438,7 +353,6 @@ def _get_access_token() -> str:
                 and now < (_access_token_expires_at - TOKEN_REFRESH_SAFETY_MARGIN_SECONDS)):
             return _access_token
 
-    # Mint OUTSIDE the lock since it's a network call. Re-acquire to write.
     token, expires_at = _mint_access_token_manually()
     with _lock:
         _access_token = token
@@ -446,26 +360,20 @@ def _get_access_token() -> str:
         return token
 
 
-
 # ============================================================
-# END OF PART 1/2 — sheets_writer.py v3.6.8
+# END OF PART 1/2 — sheets_writer.py v3.7.0
 # Continue pasting Part 2/2 after this line.
 # ============================================================
 # ============================================================
-# CONTINUATION OF sheets_writer.py v3.6.8 — PART 2/2
+# CONTINUATION OF sheets_writer.py v3.7.0 — PART 2/2
 # Paste this AFTER Part 1/2 in the same file.
 # ============================================================
 
 # ============================================================
-# v3.6.7: DIRECT GOOGLE SHEETS REST API CLIENT
+# DIRECT GOOGLE SHEETS REST API CLIENT (unchanged from v3.6.7)
 # ============================================================
 
 def _get_session():
-    """
-    Lazy-build (and cache) a single requests.Session for the module.
-    Reusing a Session enables connection pooling — subsequent calls to
-    the same host reuse the existing TCP/TLS connection.
-    """
     global _session
 
     with _lock:
@@ -486,21 +394,7 @@ def _sheets_request(method: str, path: str,
                     params: Optional[Dict[str, Any]] = None,
                     json_body: Optional[Dict[str, Any]] = None,
                     op_label: str = "request") -> Any:
-    """
-    Make an authenticated HTTP request to the Google Sheets REST API.
-    Returns the parsed JSON body on success.
-
-    Args:
-      method: 'GET' or 'POST'
-      path: path relative to SHEETS_API_BASE (e.g. '/spreadsheets/{id}')
-      params: query string params (for GET)
-      json_body: JSON request body (for POST)
-      op_label: short label for log messages (e.g. 'get_metadata')
-
-    Raises RuntimeError on non-2xx response or network failure. The error
-    message includes the HTTP status, response body, and a hint about the
-    likely cause (permission denied, sheet not found, etc.).
-    """
+    """Make an authenticated HTTP request to the Google Sheets REST API."""
     try:
         import requests
     except ImportError as e:
@@ -523,18 +417,11 @@ def _sheets_request(method: str, path: str,
     try:
         if method.upper() == "GET":
             resp = session.get(
-                url,
-                headers=headers,
-                params=params,
-                timeout=_API_TIMEOUT,
+                url, headers=headers, params=params, timeout=_API_TIMEOUT,
             )
         elif method.upper() == "POST":
             resp = session.post(
-                url,
-                headers=headers,
-                params=params,
-                json=json_body,
-                timeout=_API_TIMEOUT,
+                url, headers=headers, params=params, json=json_body, timeout=_API_TIMEOUT,
             )
         else:
             raise RuntimeError(f"Unsupported HTTP method: {method}")
@@ -558,9 +445,6 @@ def _sheets_request(method: str, path: str,
     )
 
     if resp.status_code == 401:
-        # Token might've expired between mint and request. Force a fresh
-        # mint and retry once. Practical case: a token cached for 59 min
-        # right when this request fires.
         logger.warning("sheets_writer: %s got 401, retrying with fresh token", op_label)
         global _access_token, _access_token_expires_at
         with _lock:
@@ -577,8 +461,7 @@ def _sheets_request(method: str, path: str,
                 )
             else:
                 resp = session.post(
-                    url, headers=headers, params=params, json=json_body,
-                    timeout=_API_TIMEOUT,
+                    url, headers=headers, params=params, json=json_body, timeout=_API_TIMEOUT,
                 )
         except requests.exceptions.RequestException as e:
             raise RuntimeError(
@@ -633,19 +516,12 @@ def _sheets_request(method: str, path: str,
 
 
 def _fetch_sheet_metadata_raw() -> Dict[str, Any]:
-    """
-    Fetch sheet metadata (title + tab list) via the REST API.
-    Cached at module level — first call hits the API, subsequent calls
-    return cached value.
-    """
     global _sheet_metadata_cache
 
     with _lock:
         if _sheet_metadata_cache is not None:
             return _sheet_metadata_cache
 
-    # GET /v4/spreadsheets/{id}?fields=properties.title,sheets.properties.title
-    # Using the `fields` mask makes the response tiny (~200 bytes) and fast.
     path = f"/spreadsheets/{SHEET_ID}"
     params = {"fields": "properties.title,sheets.properties.title"}
     data = _sheets_request("GET", path, params=params, op_label="fetch_metadata")
@@ -676,32 +552,15 @@ def _fetch_sheet_metadata_raw() -> Dict[str, Any]:
 
 
 def _fetch_tab_values(tab_name: str) -> List[List[str]]:
-    """
-    Fetch all values from a tab as a 2D array of strings.
-
-    Uses the values.get endpoint with the tab name as the range.
-    Empty trailing rows/columns are NOT returned by the API by default —
-    we get only the rectangle that actually has data.
-    """
-    # The range is just the tab name (with quoting if it contains spaces).
-    # For our tabs (car_prices, depreciation_curve, etc.) no quoting needed.
+    """Fetch all values from a tab as a 2D array of strings."""
     path = f"/spreadsheets/{SHEET_ID}/values/{tab_name}"
-    # majorDimension=ROWS is the default but explicit is better.
     params = {"majorDimension": "ROWS"}
     data = _sheets_request("GET", path, params=params, op_label=f"read_tab[{tab_name}]")
-
     return data.get("values") or []
 
 
 def _write_cells_batch(updates: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Write multiple cell ranges in a single batched API call.
-
-    Args:
-      updates: list of {"range": "TabName!A1:B2", "values": [["a","b"],["c","d"]]}
-
-    Returns the API response dict (totalUpdatedCells, etc.).
-    """
+    """Write multiple cell ranges in a single batched API call."""
     path = f"/spreadsheets/{SHEET_ID}/values:batchUpdate"
     body = {
         "valueInputOption": "USER_ENTERED",
@@ -711,14 +570,11 @@ def _write_cells_batch(updates: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 # ============================================================
-# PUBLIC API — CORE (UNCHANGED ACROSS VERSIONS)
+# PUBLIC API — CORE
 # ============================================================
 
 def get_service_account_email() -> str:
-    """
-    Return the SA email. Returns "<unknown>" on failure — never raises.
-    Safe to call from error-handling paths.
-    """
+    """Return the SA email. Returns "<unknown>" on failure — never raises."""
     try:
         info = _load_sa_info()
         return info.get("client_email", "<unknown>")
@@ -727,17 +583,6 @@ def get_service_account_email() -> str:
 
 
 def get_sheet_metadata() -> Dict[str, Any]:
-    """
-    Return basic sheet info for diagnostics.
-
-    Returns:
-      {
-        "sheet_id": str,
-        "sheet_title": str,
-        "tabs": [str, ...],
-        "service_account_email": str,
-      }
-    """
     metadata = _fetch_sheet_metadata_raw()
     return {
         "sheet_id": metadata["sheet_id"],
@@ -748,10 +593,6 @@ def get_sheet_metadata() -> Dict[str, Any]:
 
 
 def health_check() -> Dict[str, Any]:
-    """
-    Quick end-to-end test: load credentials, mint OAuth token, fetch sheet
-    metadata, read first cell of car_prices tab.
-    """
     metadata = get_sheet_metadata()
 
     if TAB_CAR_PRICES not in metadata["tabs"]:
@@ -759,7 +600,6 @@ def health_check() -> Dict[str, Any]:
             f"Tab '{TAB_CAR_PRICES}' not found. Available: {metadata['tabs']}."
         )
 
-    # Read just A1 of car_prices for the health check.
     path = f"/spreadsheets/{SHEET_ID}/values/{TAB_CAR_PRICES}!A1"
     data = _sheets_request("GET", path, op_label="health_check_a1")
     values = data.get("values") or []
@@ -780,6 +620,10 @@ def read_car_prices() -> List[Dict[str, Any]]:
     Read the entire car_prices tab and return as list of dicts.
     Each dict has CAR_PRICES_COLUMNS keys plus _row_number (1-indexed).
     Header row excluded.
+
+    v3.7.0: Each dict now includes 'status' and 'last_known_price_date'
+    in addition to the original 7 keys. Old callers that don't read
+    these keys are unaffected (they just get extra keys they ignore).
     """
     all_values = _fetch_tab_values(TAB_CAR_PRICES)
     if not all_values:
@@ -795,9 +639,7 @@ def read_car_prices() -> List[Dict[str, Any]]:
 
 
 def find_row(make: str, model: str, variant: str, fuel: str) -> Optional[Dict[str, Any]]:
-    """
-    Find row matching (make, model, variant, fuel) EXACTLY (case-sensitive).
-    """
+    """Find row matching (make, model, variant, fuel) EXACTLY (case-sensitive)."""
     all_rows = read_car_prices()
     for r in all_rows:
         if (r["make"] == make
@@ -809,7 +651,6 @@ def find_row(make: str, model: str, variant: str, fuel: str) -> Optional[Dict[st
 
 
 def _format_notes(source: str, extra: Optional[str] = None) -> str:
-    """Build the notes-cell value: 'DD-MMM-YYYY {source}'."""
     today_str = date.today().strftime("%d-%b-%Y")
     parts = [today_str, source]
     if extra:
@@ -817,11 +658,21 @@ def _format_notes(source: str, extra: Optional[str] = None) -> str:
     return " ".join(parts)
 
 
+def _today_ddmmmyyyy() -> str:
+    """Returns today's date as DD-MMM-YYYY (e.g. '04-May-2026')."""
+    return date.today().strftime("%d-%b-%Y")
+
+
 def write_price_update(make: str, model: str, variant: str, fuel: str,
                        new_price: int, source: str = "Manual",
                        extra_note: Optional[str] = None) -> Dict[str, Any]:
     """
-    Update the ex_showroom_price (col E) and notes (col G) of a single row.
+    LEGACY: Update the ex_showroom_price (col E) and notes (col G) of a single row.
+    Does NOT touch status (col H) or last_known_price_date (col I).
+
+    Kept for backward compatibility with any pre-v3.7.0 callers. New code
+    in app.py admin price tools should use write_price_update_v2() instead,
+    which also stamps the last_known_price_date column.
     """
     if not isinstance(new_price, int) or new_price < 0:
         raise RuntimeError(
@@ -845,8 +696,6 @@ def write_price_update(make: str, model: str, variant: str, fuel: str,
     old_notes = target.get("notes", "")
     new_notes = _format_notes(source, extra_note)
 
-    # Build the batch update request: column E (ex_showroom_price) and
-    # column G (notes) for the target row, in a single API call.
     updates = [
         {
             "range": f"{TAB_CAR_PRICES}!E{row_num}",
@@ -882,54 +731,300 @@ def write_price_update(make: str, model: str, variant: str, fuel: str,
 
 
 # ============================================================
-# v3.6.8: PUBLIC API — model_slugs tab
+# v3.7.0: Phase 3 admin price tools — write functions
 # ============================================================
 #
-# Used by:
-#   - price_scraper.py (reads slugs to know which CarWale URL to fetch)
-#   - populate_slugs.py (one-time script: writes auto-resolved slugs)
+# Three new functions, one per review type:
+#   write_price_update_v2 — for "price_update" reviews (existing variant, new price)
+#   write_discontinued_flag — for "discontinued" reviews (existing variant, mark stale)
+#   write_new_variant — for "new_variant" reviews (insert new row)
 #
-# Sheet setup required (one time, manual):
-#   In the AutoKnowMus Price Data Google Sheet, add a tab named
-#   "model_slugs" with these column headers in row 1:
-#     A: make    B: model    C: carwale_slug    D: notes
-#
-# Slug format stored in column C: 'make-slug/model-slug'
-#   e.g. 'maruti-suzuki/swift'
-#   The price_scraper splits this into the URL pattern:
-#     https://www.carwale.com/{make-slug}-cars/{model-slug}/
-#
-# When auto-resolution fails, the slug column is set to 'NEEDS_MANUAL_FIX'
-# so the admin knows which rows need a human visiting CarWale to find
-# the right URL.
+# All three write to the SAME car_prices sheet but in different ways:
+#   price_update_v2 → updates cols E (price), G (notes), I (date)
+#   discontinued    → updates cols H (status), I (date) only — leaves price/notes
+#   new_variant     → appends a fresh row at the bottom with all 9 cols filled
+# ============================================================
+
+def write_price_update_v2(make: str, model: str, variant: str, fuel: str,
+                          new_price: int, source: str = "CarWale",
+                          extra_note: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Phase 3: Update ex_showroom_price + notes + last_known_price_date of an
+    existing row. Used when admin approves a "price_update" review.
+
+    Updates 3 cells:
+      col E (ex_showroom_price) -> new_price
+      col G (notes)             -> "DD-MMM-YYYY {source} {extra_note}"
+      col I (last_known_price_date) -> "DD-MMM-YYYY"
+
+    Does NOT touch col H (status) — preserves any existing "discontinued" flag
+    in the unlikely case that one was set then later overridden by a new price.
+
+    Args:
+      make, model, variant, fuel: must match an existing row exactly
+      new_price: positive int (rupees, e.g. 658900 for 6.58 Lakh)
+      source: tag for the notes column (default "CarWale" for scraper-sourced)
+      extra_note: optional extra string appended to notes (e.g. "auto-approved")
+
+    Raises RuntimeError if the row doesn't exist or the API call fails.
+    """
+    if not isinstance(new_price, int) or new_price < 0:
+        raise RuntimeError(
+            f"new_price must be a non-negative int, got "
+            f"{type(new_price).__name__}={new_price!r}"
+        )
+
+    target = find_row(make, model, variant, fuel)
+    if target is None:
+        raise RuntimeError(
+            f"Row not found for ({make}, {model}, {variant}, {fuel}). "
+            f"Cannot write price update. Use write_new_variant() to insert."
+        )
+
+    row_num = target["_row_number"]
+    old_price_str = target.get("ex_showroom_price", "")
+    try:
+        old_price = int(old_price_str.replace(",", "")) if old_price_str else 0
+    except (ValueError, TypeError):
+        old_price = 0
+    old_notes = target.get("notes", "")
+    today_str = _today_ddmmmyyyy()
+    new_notes = _format_notes(source, extra_note)
+
+    updates = [
+        {
+            "range": f"{TAB_CAR_PRICES}!E{row_num}",
+            "values": [[str(new_price)]],
+        },
+        {
+            "range": f"{TAB_CAR_PRICES}!G{row_num}",
+            "values": [[new_notes]],
+        },
+        {
+            "range": f"{TAB_CAR_PRICES}!I{row_num}",
+            "values": [[today_str]],
+        },
+    ]
+
+    try:
+        _write_cells_batch(updates)
+    except RuntimeError as e:
+        raise RuntimeError(
+            f"Failed to write price update for row {row_num} "
+            f"({make} {model} {variant} {fuel}): {e}"
+        )
+
+    logger.info(
+        "sheets_writer v3.7.0: write_price_update_v2 row %d | %s %s %s %s | "
+        "price %d -> %d | date %s",
+        row_num, make, model, variant, fuel, old_price, new_price, today_str,
+    )
+
+    return {
+        "ok": True,
+        "action": "price_update",
+        "row_number": row_num,
+        "old_price": old_price,
+        "new_price": new_price,
+        "old_notes": old_notes,
+        "new_notes": new_notes,
+        "last_known_price_date": today_str,
+    }
+
+
+def write_discontinued_flag(make: str, model: str, variant: str, fuel: str,
+                            note: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Phase 3: Mark an existing row as discontinued by setting:
+      col H (status) -> "discontinued"
+      col I (last_known_price_date) -> today's date
+
+    Critical: does NOT touch col E (price) or col G (notes). The price stays
+    available so existing owners of this car can still get valuations using
+    the last known number. The dashboard shows a "Discontinued · last
+    verified DATE" badge based on the col H + col I values.
+
+    Args:
+      make, model, variant, fuel: must match an existing row exactly
+      note: optional admin note appended to notes column (col G).
+            If provided, col G is also updated. If None, col G is untouched.
+
+    Raises RuntimeError if the row doesn't exist or the API call fails.
+    """
+    target = find_row(make, model, variant, fuel)
+    if target is None:
+        raise RuntimeError(
+            f"Row not found for ({make}, {model}, {variant}, {fuel}). "
+            f"Cannot mark discontinued."
+        )
+
+    row_num = target["_row_number"]
+    today_str = _today_ddmmmyyyy()
+
+    updates = [
+        {
+            "range": f"{TAB_CAR_PRICES}!H{row_num}",
+            "values": [["discontinued"]],
+        },
+        {
+            "range": f"{TAB_CAR_PRICES}!I{row_num}",
+            "values": [[today_str]],
+        },
+    ]
+
+    # Optional: append a note to col G if admin provided one
+    if note:
+        existing_notes = target.get("notes", "")
+        merged_notes = f"{existing_notes} | Discontinued {today_str}: {note}".strip(" |")
+        updates.append({
+            "range": f"{TAB_CAR_PRICES}!G{row_num}",
+            "values": [[merged_notes]],
+        })
+
+    try:
+        _write_cells_batch(updates)
+    except RuntimeError as e:
+        raise RuntimeError(
+            f"Failed to write discontinued flag for row {row_num} "
+            f"({make} {model} {variant} {fuel}): {e}"
+        )
+
+    logger.info(
+        "sheets_writer v3.7.0: write_discontinued_flag row %d | %s %s %s %s | "
+        "status=discontinued | date %s",
+        row_num, make, model, variant, fuel, today_str,
+    )
+
+    return {
+        "ok": True,
+        "action": "discontinued",
+        "row_number": row_num,
+        "status": "discontinued",
+        "last_known_price_date": today_str,
+    }
+
+
+def write_new_variant(make: str, model: str, variant: str, fuel: str,
+                      ex_showroom_price: int,
+                      source: str = "CarWale",
+                      extra_note: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Phase 3: Append a brand new row to car_prices for a variant that doesn't
+    exist yet. Used when admin approves a "new_variant" review.
+
+    Inserts at the bottom of the tab with all 9 columns filled:
+      A: make
+      B: model
+      C: variant     (CarWale's verbose name, e.g. "VXi Petrol Manual")
+      D: fuel
+      E: ex_showroom_price
+      F: active                       -> "TRUE"
+      G: notes                        -> "DD-MMM-YYYY {source} {extra_note}"
+      H: status                       -> "" (empty = active)
+      I: last_known_price_date        -> "DD-MMM-YYYY"
+
+    Args:
+      make, model, variant, fuel: car identity (variant is CarWale's verbose name)
+      ex_showroom_price: positive int (rupees)
+      source: tag for the notes column (default "CarWale")
+      extra_note: optional extra string appended to notes
+
+    Raises RuntimeError if a row with this (make, model, variant, fuel) already
+    exists (in which case caller should use write_price_update_v2 instead).
+
+    NOTE: Does NOT validate that the variant name doesn't already exist with a
+    DIFFERENT fuel — that's allowed (e.g. "VXi Petrol" and "VXi Diesel" are two
+    valid rows). The check is only on the full (make, model, variant, fuel) tuple.
+    """
+    if not isinstance(ex_showroom_price, int) or ex_showroom_price < 0:
+        raise RuntimeError(
+            f"ex_showroom_price must be a non-negative int, got "
+            f"{type(ex_showroom_price).__name__}={ex_showroom_price!r}"
+        )
+    if not all([make, model, variant, fuel]):
+        raise RuntimeError(
+            "make, model, variant, fuel are all required (got empty value)"
+        )
+
+    # Guard: don't insert duplicate (make, model, variant, fuel)
+    existing = find_row(make, model, variant, fuel)
+    if existing is not None:
+        raise RuntimeError(
+            f"Row already exists for ({make}, {model}, {variant}, {fuel}) "
+            f"at row {existing['_row_number']}. Use write_price_update_v2() "
+            f"to update an existing row, not write_new_variant()."
+        )
+
+    # Find the next free row at the bottom by reading the tab.
+    # Note: read_car_prices() returns rows starting from row 2 (header is row 1).
+    # The next free row is max existing _row_number + 1, or 2 if tab is empty.
+    all_rows = read_car_prices()
+    last_row_num = max(
+        (r["_row_number"] for r in all_rows),
+        default=1,  # header is row 1
+    )
+    new_row_num = last_row_num + 1
+
+    today_str = _today_ddmmmyyyy()
+    new_notes = _format_notes(source, extra_note)
+
+    # Single batch with all 9 cells in cols A through I
+    updates = [
+        {
+            "range": f"{TAB_CAR_PRICES}!A{new_row_num}:I{new_row_num}",
+            "values": [[
+                make,
+                model,
+                variant,
+                fuel,
+                str(ex_showroom_price),
+                "TRUE",
+                new_notes,
+                "",  # status = active
+                today_str,
+            ]],
+        },
+    ]
+
+    try:
+        _write_cells_batch(updates)
+    except RuntimeError as e:
+        raise RuntimeError(
+            f"Failed to insert new variant row at row {new_row_num} "
+            f"({make} {model} {variant} {fuel}): {e}"
+        )
+
+    logger.info(
+        "sheets_writer v3.7.0: write_new_variant inserted row %d | "
+        "%s %s %s %s | price=%d | date %s",
+        new_row_num, make, model, variant, fuel, ex_showroom_price, today_str,
+    )
+
+    return {
+        "ok": True,
+        "action": "new_variant",
+        "row_number": new_row_num,
+        "make": make,
+        "model": model,
+        "variant": variant,
+        "fuel": fuel,
+        "ex_showroom_price": ex_showroom_price,
+        "last_known_price_date": today_str,
+        "notes": new_notes,
+    }
+
+
+# ============================================================
+# PUBLIC API — model_slugs tab (v3.6.8, unchanged)
 # ============================================================
 
 def read_model_slugs() -> List[Dict[str, Any]]:
-    """
-    Read the model_slugs tab and return as a list of dicts.
-    Each dict has MODEL_SLUGS_COLUMNS keys plus _row_number (1-indexed).
-    Header row is excluded.
-
-    If the tab doesn't exist yet, returns []. (This makes it safe to call
-    before populate_slugs.py has run for the first time, or before the
-    admin has manually created the tab.)
-
-    Returns:
-      [
-        {"make": "Maruti Suzuki", "model": "Swift",
-         "carwale_slug": "maruti-suzuki/swift", "notes": "Auto-resolved 03-May-2026",
-         "_row_number": 2},
-        ...
-      ]
-    """
-    # Guard against the tab not existing. Cheaper than a 404 from the API
-    # and avoids polluting logs with errors during normal startup.
+    """Read the model_slugs tab. Returns [] if tab doesn't exist."""
     metadata = _fetch_sheet_metadata_raw()
     if TAB_MODEL_SLUGS not in metadata.get("tabs", []):
         logger.info(
             "sheets_writer: model_slugs tab does not exist yet; returning []. "
-            "Create the tab with column headers: make, model, carwale_slug, notes "
-            "to enable price scraping."
+            "Create the tab with column headers: make, model, carwale_slug, notes"
         )
         return []
 
@@ -951,28 +1046,7 @@ def read_model_slugs() -> List[Dict[str, Any]]:
 
 def write_model_slug(make: str, model: str, slug: str,
                      note: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Insert or update a row in the model_slugs tab keyed on (make, model).
-
-    If a row exists with matching (make, model) → update its carwale_slug
-    and notes columns.
-    If no row exists → append a new row at the bottom of the tab.
-
-    Args:
-      make:  the make name as it appears in car_prices (e.g. "Maruti Suzuki")
-      model: the model name as it appears in car_prices (e.g. "Swift")
-      slug:  the resolved slug "make-slug/model-slug" or "NEEDS_MANUAL_FIX"
-      note:  optional override for the notes column. If omitted, a default
-             is generated based on whether the slug is resolved or not.
-
-    Returns:
-      {
-        "ok": True,
-        "action": "updated" | "appended",
-        "row_number": int,
-        "make": str, "model": str, "carwale_slug": str, "notes": str,
-      }
-    """
+    """Insert or update a row in model_slugs keyed on (make, model)."""
     if not make or not model:
         raise RuntimeError("make and model are required to write a slug")
     if not slug:
@@ -980,14 +1054,13 @@ def write_model_slug(make: str, model: str, slug: str,
             "slug cannot be empty (use 'NEEDS_MANUAL_FIX' if unresolved)"
         )
 
-    today_str = date.today().strftime("%d-%b-%Y")
+    today_str = _today_ddmmmyyyy()
     if note is None:
         if slug == "NEEDS_MANUAL_FIX":
             note = f"Auto-derivation failed {today_str}"
         else:
             note = f"Auto-resolved {today_str}"
 
-    # Look up existing row by (make, model)
     existing = read_model_slugs()
     target_row = None
     for r in existing:
@@ -996,7 +1069,6 @@ def write_model_slug(make: str, model: str, slug: str,
             break
 
     if target_row is not None:
-        # Update existing row in place — only columns C and D.
         row_num = target_row["_row_number"]
         updates = [
             {
@@ -1023,12 +1095,9 @@ def write_model_slug(make: str, model: str, slug: str,
             "notes": note,
         }
 
-    # Append new row at the bottom of the tab.
-    # The "next" row number = max existing row + 1, or 2 if tab is empty
-    # (row 1 is the header).
     last_row_num = max(
         (r["_row_number"] for r in existing),
-        default=1,  # header row at row 1
+        default=1,
     )
     new_row_num = last_row_num + 1
 
@@ -1059,12 +1128,7 @@ def write_model_slug(make: str, model: str, slug: str,
 # ============================================================
 
 def reset_caches():
-    """
-    Force-clear module-level caches.
-
-    v3.6.8: also clears _sheet_metadata_cache so a freshly-added
-    model_slugs tab gets picked up without restarting the worker.
-    """
+    """Force-clear module-level caches."""
     global _sa_info, _access_token, _access_token_expires_at
     global _session, _sheet_metadata_cache
     with _lock:
@@ -1074,3 +1138,7 @@ def reset_caches():
         _session = None
         _sheet_metadata_cache = None
     logger.info("sheets_writer: caches reset; next call will re-authenticate")
+
+# ============================================================
+# END OF PART 2/2 — sheets_writer.py v3.7.0
+# ============================================================
