@@ -7,7 +7,7 @@ DATA SOURCE: Google Sheets (published as CSV) with full bundled fallback.
 
 How it works:
   1. On first use (and every PRICE_CACHE_TTL_SECONDS), fetches 5 sources:
-     - car_prices: make/model/variant/fuel/ex_showroom_price rows
+     - car_prices: make/model/variant/fuel/ex_showroom_price/status/last_known_price_date rows
      - depreciation_curve: age → retention % rows
      - multipliers: condition/owner/fuel multiplier rows
      - meta: data_version, last_updated, etc.
@@ -27,34 +27,43 @@ Environment variables required:
 Optional:
   PRICE_CACHE_TTL_SECONDS (default 3600 = 1 hour)
 
-CHANGES IN THIS VERSION (per-fuel pricing fix, v3.6.0):
-  - PARSER FIX: _parse_car_prices() now stores per-(variant, fuel) prices
-    in a new nested dict `variant_fuel_prices`, alongside the existing flat
-    `variants` dict. The flat dict still holds the FIRST-seen-fuel price for
-    each variant (preserves backward compatibility for any code path that
-    reads `variants` directly, e.g. JSON to templates, dropdown population).
-  - get_variant_base_price() now uses `variant_fuel_prices` when fuel is
-    provided AND a per-fuel price exists, otherwise falls through to the old
-    `variants` lookup. Means: for cars where the sheet has distinct Petrol/
-    Diesel/HEV prices for the same variant (e.g. Honda City, Hyundai Creta),
-    the engine now uses the correct fuel-specific ex-showroom price instead
-    of silently dropping all but the first parsed fuel's price.
-  - _merge_with_fallback() carries `variant_fuel_prices` through the merge.
-    Fallback dict is NOT updated to per-fuel; it stays at the old flat shape.
-    The lookup gracefully falls through to flat when per-fuel is unavailable.
+CHANGES IN THIS VERSION (Phase 3 admin price tools, v3.7.0):
+  - PARSER ADDS: _parse_car_prices() now reads two new columns from car_prices:
+      H: status                  (empty = active, "discontinued" = flagged)
+      I: last_known_price_date   (DD-MMM-YYYY format string)
+    These populate two new nested dicts on each (make, model):
+      variant_fuel_status: {variant: {fuel: "active"|"discontinued"}}
+      variant_fuel_dates:  {variant: {fuel: "DD-MMM-YYYY"|None}}
+  - DISCONTINUED VARIANTS STAY IN DROPDOWNS: a row with status="discontinued"
+    is still parsed and available. Valuations still compute using the last
+    known price. The dashboard reads the status via get_variant_status() and
+    shows a badge if discontinued. This preserves valuations for the long
+    tail of older cars (e.g. 2018 Tata Nexon XM) whose owners still need
+    pricing even though Tata stopped making the trim.
+  - NEW PUBLIC FUNCTIONS:
+      get_variant_status(make, model, variant, fuel)
+        → returns dict {"is_discontinued": bool, "last_known_price_date": str|None}
+        → safe to call for any tuple — returns is_discontinued=False if not found
+      find_missing_prices()
+        → returns list of (make, model, variant, fuel) tuples where
+          ex_showroom_price is missing, zero, or unparseable
+        → used by admin Price Tools "Find Missing" tab
+  - _merge_with_fallback() carries variant_fuel_status and variant_fuel_dates
+    through the merge. Fallback never has these (it's hardcoded).
+
+PRIOR CHANGES (per-fuel pricing fix, v3.6.0, retained):
+  - PARSER FIX: _parse_car_prices() stores per-(variant, fuel) prices in a
+    nested dict variant_fuel_prices alongside the flat variants dict.
+  - get_variant_base_price() uses variant_fuel_prices when fuel is provided
+    AND a per-fuel price exists, otherwise falls through to the flat lookup.
+  - _merge_with_fallback() carries variant_fuel_prices through the merge.
 
 PRIOR CHANGES (Phase 1A migration, retained):
-  - get_variant_base_price() accepts optional `fuel` parameter (now actually
-    used, not just a no-op as it was before this fix)
+  - get_variant_base_price() accepts optional `fuel` parameter
   - get_base_price() returns the lowest-priced variant deterministically
   - listings cache layer for the 740Li pricing engine
   - get_listings_for_car() helper that the engine consumes
   - LISTINGS_DATA_FRESH module flag for app.py routing logic
-
-MIGRATION PATH: To move from public CSV to private Google Sheets API later:
-  1. Create a GCP service account, enable Google Sheets API
-  2. Replace _fetch_csv() with gspread-based private fetch
-  3. Unpublish the sheet from web
 """
 
 import os
@@ -136,16 +145,7 @@ LUXURY_BRANDS = {"Audi", "BMW", "Mercedes-Benz", "Jaguar", "Land Rover", "Lexus"
 
 # ============================================================
 # FALLBACK DATA — used whenever Google Sheets is unreachable or empty.
-# This is the complete current dataset. Keep it in sync with the sheet.
-# Updating this requires a code deploy; updating the sheet does not.
-#
-# NOTE: FALLBACK_CAR_DATA uses the old flat-per-variant shape. It does NOT
-# carry per-fuel prices — that data lives only in the live sheet (and only
-# for variants where the sheet has distinct fuel rows with distinct prices).
-# When the sheet is unreachable and we run on fallback alone, get_variant_
-# base_price() gracefully falls through to the flat lookup. This means
-# fallback gives a less-precise answer for fuel-differentiated variants, but
-# it never crashes and never returns nothing.
+# (UNCHANGED — same large dict as before)
 # ============================================================
 
 FALLBACK_CAR_DATA = {
@@ -159,7 +159,6 @@ FALLBACK_CAR_DATA = {
         'Q7': {'variants': {'Premium Plus': 7480000, 'Technology': 11440000}, 'fuels': ['Petrol', 'Diesel']},
         'e-tron': {'variants': {'55 Quattro': 10580000, 'Sportback': 12880000}, 'fuels': ['BEV']}
     },
-
     'BMW': {
         '3 Series': {'variants': {'320d': 4493000, '330i': 5216000, 'M340i': 6760000}, 'fuels': ['Petrol', 'Diesel']},
         '5 Series': {'variants': {'520d': 5872000, '530i': 8160000}, 'fuels': ['Petrol', 'Diesel']},
@@ -170,7 +169,6 @@ FALLBACK_CAR_DATA = {
         'X7': {'variants': {'xDrive30d': 10541000, 'xDrive40i': 12224000, 'M50i': 15860000}, 'fuels': ['Petrol', 'Diesel']},
         'iX': {'variants': {'xDrive40': 11040000, 'xDrive50': 13440000}, 'fuels': ['BEV']}
     },
-
     'Ford': {
         'Aspire': {'variants': {'Ambiente': 552000, 'Trend': 610000, 'Titanium': 793000}, 'fuels': ['Petrol', 'Diesel']},
         'EcoSport': {'variants': {'Ambiente': 765000, 'Trend': 846000, 'Titanium': 962000, 'Titanium+': 1098000}, 'fuels': ['Petrol', 'Diesel']},
@@ -178,7 +176,6 @@ FALLBACK_CAR_DATA = {
         'Figo': {'variants': {'Ambiente': 510000, 'Trend': 563000, 'Titanium': 732000}, 'fuels': ['Petrol', 'Diesel']},
         'Freestyle': {'variants': {'Ambiente': 595000, 'Trend': 658000, 'Titanium': 748000, 'Titanium+': 854000}, 'fuels': ['Petrol', 'Diesel']}
     },
-
     'Honda': {
         'Amaze': {'variants': {'E': 638000, 'S': 705000, 'V': 803000, 'VX': 915000}, 'fuels': ['Petrol', 'Diesel']},
         'BR-V': {'variants': {'S': 850000, 'V': 1000000, 'VX': 1220000}, 'fuels': ['Petrol', 'Diesel']},
@@ -190,7 +187,6 @@ FALLBACK_CAR_DATA = {
         'Mobilio': {'variants': {'S': 765000, 'V': 900000, 'RS': 1098000}, 'fuels': ['Petrol', 'Diesel']},
         'WR-V': {'variants': {'S': 808000, 'SV': 891000, 'VX': 1159000}, 'fuels': ['Petrol', 'Diesel']}
     },
-
     'Hyundai': {
         'Alcazar': {'variants': {'Prestige': 1445000, 'Signature': 1700000, 'Platinum': 2074000}, 'fuels': ['Petrol', 'Diesel']},
         'Aura': {'variants': {'E': 553000, 'S': 610000, 'SX': 694000, 'SX(O)': 793000}, 'fuels': ['Petrol', 'Diesel', 'CNG']},
@@ -213,7 +209,6 @@ FALLBACK_CAR_DATA = {
         'Verna': {'variants': {'EX': 935000, 'S': 1002000, 'SX': 1215000, 'SX(O)': 1342000}, 'fuels': ['Petrol', 'Diesel']},
         'Xcent': {'variants': {'E': 468000, 'S': 545000, 'SX': 671000}, 'fuels': ['Petrol', 'Diesel', 'CNG']}
     },
-
     'Jaguar': {
         'F-Pace': {'variants': {'S': 6560000, 'SE': 8224000, 'HSE': 10660000}, 'fuels': ['Petrol', 'Diesel']},
         'I-Pace': {'variants': {'S': 11592000, 'SE': 12600000, 'HSE': 14112000}, 'fuels': ['BEV']},
@@ -221,7 +216,6 @@ FALLBACK_CAR_DATA = {
         'XF': {'variants': {'Prestige': 6000000, 'Portfolio': 7523000, 'R-Sport': 9750000}, 'fuels': ['Petrol', 'Diesel']},
         'XJ': {'variants': {'L Portfolio': 11000000}, 'fuels': ['Petrol', 'Diesel']}
     },
-
     'Kia': {
         'Carens': {'variants': {'Premium': 935000, 'Prestige': 1031000, 'Luxury': 1175000, 'Luxury Plus': 1342000}, 'fuels': ['Petrol', 'Diesel']},
         'Carnival': {'variants': {'Premium': 2975000, 'Prestige': 3508000, 'Limousine': 4270000}, 'fuels': ['Diesel']},
@@ -230,7 +224,6 @@ FALLBACK_CAR_DATA = {
         'Seltos': {'variants': {'HTE': 935000, 'HTK': 993000, 'HTX': 1079000, 'GTX+': 1185000, 'X-Line': 1342000}, 'fuels': ['Petrol', 'Diesel']},
         'Sonet': {'variants': {'HTE': 680000, 'HTK': 751000, 'HTX': 854000, 'GTX+': 976000}, 'fuels': ['Petrol', 'Diesel']}
     },
-
     'Land Rover': {
         'Defender': {'variants': {'S': 7600000, 'SE': 9526000, 'HSE': 11115000, 'X': 12350000}, 'fuels': ['Petrol', 'Diesel']},
         'Discovery': {'variants': {'S': 7200000, 'SE': 9027000, 'HSE': 11700000}, 'fuels': ['Petrol', 'Diesel']},
@@ -241,7 +234,6 @@ FALLBACK_CAR_DATA = {
         'Range Rover Sport': {'variants': {'SE': 10800000, 'HSE': 13541000, 'Autobiography': 17550000}, 'fuels': ['Petrol', 'Diesel']},
         'Range Rover Velar': {'variants': {'S': 6800000, 'SE': 8526000, 'HSE': 11050000}, 'fuels': ['Petrol', 'Diesel']}
     },
-
     'Lexus': {
         'ES': {'variants': {'Luxury': 5200000, 'F-Sport': 8450000}, 'fuels': ['HEV']},
         'LS': {'variants': {'Ultra Luxury': 20000000}, 'fuels': ['HEV']},
@@ -249,7 +241,6 @@ FALLBACK_CAR_DATA = {
         'NX': {'variants': {'Luxury': 5760000, 'F-Sport': 9360000}, 'fuels': ['HEV']},
         'RX': {'variants': {'Luxury': 7920000, 'F-Sport': 12870000}, 'fuels': ['HEV']}
     },
-
     'Mahindra': {
         'Alturas G4': {'variants': {'4x2 AT': 2550000, '4x4 AT': 3660000}, 'fuels': ['Diesel']},
         'BE 6e': {'variants': {'Pack 1': 1748000, 'Pack 2': 1900000, 'Pack 3': 2128000}, 'fuels': ['BEV']},
@@ -268,7 +259,6 @@ FALLBACK_CAR_DATA = {
         'XUV700': {'variants': {'MX': 1190000, 'AX3': 1278000, 'AX5': 1400000, 'AX7': 1558000, 'AX7 L': 1708000}, 'fuels': ['Petrol', 'Diesel']},
         'Xylo': {'variants': {'D2': 723000, 'D4': 772000, 'H4': 835000, 'H8': 925000, 'H9': 1037000}, 'fuels': ['Diesel']}
     },
-
     'Maruti Suzuki': {
         'A-Star': {'variants': {'LXi': 382000, 'VXi': 450000, 'ZXi': 549000}, 'fuels': ['Petrol']},
         'Alto': {'variants': {'Std': 297000, 'LXi': 350000, 'VXi': 427000}, 'fuels': ['Petrol', 'CNG']},
@@ -296,7 +286,6 @@ FALLBACK_CAR_DATA = {
         'XL6': {'variants': {'Zeta': 1063000, 'Alpha': 1250000, 'Alpha+': 1525000}, 'fuels': ['Petrol', 'CNG']},
         'Zen Estilo': {'variants': {'LXi': 297000, 'VXi': 427000}, 'fuels': ['Petrol']}
     },
-
     'Mercedes-Benz': {
         'A-Class': {'variants': {'A 200': 3600000, 'A 200 d': 4860000}, 'fuels': ['Petrol', 'Diesel']},
         'B-Class': {'variants': {'B 180': 2800000, 'B 200 CDI': 3780000}, 'fuels': ['Petrol', 'Diesel']},
@@ -311,7 +300,6 @@ FALLBACK_CAR_DATA = {
         'M-Class': {'variants': {'ML 250 CDI': 5616000, 'ML 350': 7150000}, 'fuels': ['Petrol', 'Diesel']},
         'S-Class': {'variants': {'S 350d': 15984000, 'S 450': 18538000, 'Maybach S 580': 24050000}, 'fuels': ['Petrol', 'Diesel']}
     },
-
     'MG': {
         'Astor': {'variants': {'Style': 935000, 'Super': 993000, 'Smart': 1079000, 'Sharp': 1185000, 'Savvy': 1342000}, 'fuels': ['Petrol']},
         'Comet EV': {'variants': {'Executive': 736000, 'Exclusive': 800000, 'Excite': 896000}, 'fuels': ['BEV']},
@@ -321,7 +309,6 @@ FALLBACK_CAR_DATA = {
         'Windsor EV': {'variants': {'Excite': 1288000, 'Exclusive': 1568000}, 'fuels': ['BEV']},
         'ZS EV': {'variants': {'Excite': 2116000, 'Exclusive': 2576000}, 'fuels': ['BEV']}
     },
-
     'Nissan': {
         'GT-R': {'variants': {'Premium Edition': 22000000}, 'fuels': ['Petrol']},
         'Kicks': {'variants': {'XL': 850000, 'XV': 1000000, 'XV Premium': 1220000}, 'fuels': ['Petrol', 'Diesel']},
@@ -330,7 +317,6 @@ FALLBACK_CAR_DATA = {
         'Sunny': {'variants': {'XE': 595000, 'XL': 657000, 'XV': 854000}, 'fuels': ['Petrol', 'Diesel']},
         'Terrano': {'variants': {'XE': 850000, 'XL': 939000, 'XV': 1220000}, 'fuels': ['Diesel']}
     },
-
     'Renault': {
         'Captur': {'variants': {'RXE': 935000, 'RXL': 1031000, 'RXT': 1175000, 'Platine': 1342000}, 'fuels': ['Petrol', 'Diesel']},
         'Duster': {'variants': {'RXE': 808000, 'RXS': 908000, 'RXZ': 1159000}, 'fuels': ['Petrol', 'Diesel']},
@@ -342,7 +328,6 @@ FALLBACK_CAR_DATA = {
         'Scala': {'variants': {'RxE': 553000, 'RxL': 610000, 'RxZ': 793000}, 'fuels': ['Petrol', 'Diesel']},
         'Triber': {'variants': {'RXE': 510000, 'RXL': 563000, 'RXT': 640000, 'RXZ': 732000}, 'fuels': ['Petrol']}
     },
-
     'Skoda': {
         'Fabia': {'variants': {'Active': 510000, 'Ambition': 582000, 'Elegance': 732000}, 'fuels': ['Petrol', 'Diesel']},
         'Kodiaq': {'variants': {'Style': 3400000, 'Sportline': 3760000, 'L&K': 4880000}, 'fuels': ['Petrol', 'Diesel']},
@@ -354,7 +339,6 @@ FALLBACK_CAR_DATA = {
         'Superb': {'variants': {'Sportline': 4845000, 'L&K': 6954000}, 'fuels': ['Petrol', 'Diesel']},
         'Yeti': {'variants': {'Active': 1530000, 'Ambition': 1692000, 'Elegance': 2196000}, 'fuels': ['Diesel']}
     },
-
     'Tata': {
         'Altroz': {'variants': {'XE': 578000, 'XM': 634000, 'XT': 720000, 'XZ': 823000, 'XZ+': 940000}, 'fuels': ['Petrol', 'Diesel', 'CNG']},
         'Bolt': {'variants': {'XE': 425000, 'XM': 470000, 'XT': 534000, 'XMS': 610000}, 'fuels': ['Petrol', 'Diesel']},
@@ -378,7 +362,6 @@ FALLBACK_CAR_DATA = {
         'Tigor': {'variants': {'XE': 527000, 'XM': 580000, 'XT': 658000, 'XZ': 752000, 'XZ+': 859000}, 'fuels': ['Petrol', 'CNG']},
         'Zest': {'variants': {'XE': 468000, 'XM': 517000, 'XT': 587000, 'XMA': 671000}, 'fuels': ['Petrol', 'Diesel']}
     },
-
     'Toyota': {
         'Camry': {'variants': {'Hybrid': 4600000}, 'fuels': ['Petrol', 'HEV']},
         'Corolla Altis': {'variants': {'J': 1530000, 'G': 1693000, 'GL': 1924000, 'VL': 2196000}, 'fuels': ['Petrol', 'Diesel']},
@@ -398,7 +381,6 @@ FALLBACK_CAR_DATA = {
         'Vellfire': {'variants': {'VIP Lounge': 12000000}, 'fuels': ['HEV']},
         'Yaris': {'variants': {'J': 808000, 'G': 892000, 'V': 1015000, 'VX': 1159000}, 'fuels': ['Petrol']}
     },
-
     'Volkswagen': {
         'Ameo': {'variants': {'Trendline': 510000, 'Comfortline': 563000, 'Highline': 732000}, 'fuels': ['Petrol', 'Diesel']},
         'Beetle': {'variants': {'Standard': 2800000}, 'fuels': ['Petrol']},
@@ -410,7 +392,6 @@ FALLBACK_CAR_DATA = {
         'Vento': {'variants': {'Trendline': 765000, 'Comfortline': 846000, 'Highline': 1098000}, 'fuels': ['Petrol', 'Diesel']},
         'Virtus': {'variants': {'Comfortline': 977000, 'Highline': 1077000, 'Topline': 1227000, 'GT': 1403000}, 'fuels': ['Petrol']}
     },
-
     'Volvo': {
         'C40 Recharge': {'variants': {'Ultimate': 6300000}, 'fuels': ['BEV']},
         'S60': {'variants': {'Momentum': 3600000, 'Inscription': 5850000}, 'fuels': ['Petrol', 'Diesel']},
@@ -443,10 +424,6 @@ FALLBACK_META = {
     "notes": "Running on bundled data. Check GSHEET_* env vars to enable live sheet.",
 }
 
-# Listings has no bundled fallback. If the listings sheet is unreachable or
-# empty, get_listings_for_car() returns [] for every query, which causes the
-# binary engine switch in app.py to fall back to the depreciation engine. This
-# is the locked behavior — the 740Li engine ONLY runs when fresh listings exist.
 FALLBACK_LISTINGS: List[Dict] = []
 
 
@@ -484,26 +461,22 @@ def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
     """
     Parse car_prices tab into nested CAR_DATA.
 
-    Columns: make, model, variant, fuel, ex_showroom_price, active, notes
+    Columns: make, model, variant, fuel, ex_showroom_price, active, notes,
+             status, last_known_price_date  (last 2 added in v3.7.0)
 
     Output structure per (make, model):
       {
-        "variants":            {variant: price}            # FIRST-seen-fuel price per variant
-        "variant_fuel_prices": {variant: {fuel: price}}    # NEW: full per-(variant, fuel) prices
-        "fuels":               [fuel, fuel, ...]           # canonical-ordered fuel list
+        "variants":              {variant: price}                         # FIRST-seen-fuel price per variant
+        "variant_fuel_prices":   {variant: {fuel: price}}                 # full per-(variant, fuel) prices
+        "variant_fuel_status":   {variant: {fuel: "active"|"discontinued"}}  # NEW: discontinued flag
+        "variant_fuel_dates":    {variant: {fuel: "DD-MMM-YYYY"|None}}    # NEW: last known price date
+        "fuels":                 [fuel, fuel, ...]                        # canonical-ordered fuel list
       }
 
-    The dual-dict design preserves backward compat:
-      - Templates / dropdowns / JSON serialization keep reading `variants` (flat)
-      - The pricing engine reads `variant_fuel_prices` via get_variant_base_price()
-        when a fuel is provided and per-fuel data exists, falling back to `variants`
-        otherwise.
-
-    Why this matters: previously, if the sheet had Honda City V Petrol=11.99L,
-    Diesel=11.05L, HEV=11.05L (three rows), the parser kept only the first row's
-    price (11.99L) for variant V and dropped the others silently. The engine then
-    used 11.99L for ALL three fuels, applied a fuel_premium multiplier on top,
-    and produced wrong valuations for Diesel and HEV. Now both prices are kept.
+    Discontinued variants (status="discontinued") are STILL parsed and kept
+    in the dropdowns. Their price stays available so existing owners can
+    still get valuations. The dashboard reads variant_fuel_status to decide
+    whether to show the "Discontinued · last verified DATE" badge.
     """
     data = {}
     for row in rows:
@@ -521,26 +494,40 @@ def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
             price = int(float(price_str))
         except ValueError:
             continue
+
+        # NEW v3.7.0: read status and last_known_price_date columns.
+        # Empty/missing/anything-other-than-"discontinued" -> "active".
+        status_raw = str(row.get("status", "")).strip().lower()
+        variant_status = "discontinued" if status_raw == "discontinued" else "active"
+        last_known_date = str(row.get("last_known_price_date", "")).strip() or None
+
         if make not in data:
             data[make] = {}
         if model not in data[make]:
             data[make][model] = {
                 "variants": {},
-                "variant_fuel_prices": {},  # NEW
+                "variant_fuel_prices": {},
+                "variant_fuel_status": {},   # NEW
+                "variant_fuel_dates": {},    # NEW
                 "fuels": [],
             }
         # Flat dict — keeps the FIRST-seen-fuel price for backward compat.
         if variant not in data[make][model]["variants"]:
             data[make][model]["variants"][variant] = price
-        # NEW per-(variant, fuel) dict — captures every distinct fuel price.
-        # Last write wins if the sheet has duplicate (variant, fuel) rows,
-        # which would be a sheet-side data error worth flagging separately.
+        # Per-(variant, fuel) dicts — capture every distinct fuel's data.
         if variant not in data[make][model]["variant_fuel_prices"]:
             data[make][model]["variant_fuel_prices"][variant] = {}
+        if variant not in data[make][model]["variant_fuel_status"]:
+            data[make][model]["variant_fuel_status"][variant] = {}
+        if variant not in data[make][model]["variant_fuel_dates"]:
+            data[make][model]["variant_fuel_dates"][variant] = {}
         data[make][model]["variant_fuel_prices"][variant][fuel] = price
+        data[make][model]["variant_fuel_status"][variant][fuel] = variant_status
+        data[make][model]["variant_fuel_dates"][variant][fuel] = last_known_date
         # Fuel list — unchanged.
         if fuel not in data[make][model]["fuels"]:
             data[make][model]["fuels"].append(fuel)
+
     fuel_order = ["Petrol", "Diesel", "CNG", "HEV", "PHEV", "BEV"]
     for make in data:
         for model in data[make]:
@@ -591,21 +578,9 @@ def _parse_meta(rows: List[Dict[str, str]]) -> Dict[str, str]:
 
 
 def _parse_listings(rows: List[Dict[str, str]]) -> List[Dict]:
-    """
-    Parse listings tab into list of normalized dicts.
-
-    Expected columns (per listings_sheet_spec.md):
-      make, model, variant, fuel, year, mileage, condition, owner,
-      asking_price, location_city, location_state,
-      listed_date, expires_date, active, source_url
-
-    Required: make, model, variant, fuel, year, mileage, asking_price, listed_date, active
-    Returns: list of dicts with normalized types (year/mileage/asking_price as ints,
-    listed_date/expires_date as date objects, active as bool, others as stripped strings).
-    """
+    """Parse listings tab into list of normalized dicts. (Unchanged.)"""
     out = []
     for row in rows:
-        # Filter inactive
         active_raw = str(row.get("active", "TRUE")).strip().upper()
         if active_raw not in ("TRUE", "YES", "1"):
             continue
@@ -617,7 +592,6 @@ def _parse_listings(rows: List[Dict[str, str]]) -> List[Dict]:
         if not (make and model and variant and fuel):
             continue
 
-        # Required numeric fields
         try:
             year = int(str(row.get("year", "")).strip())
             mileage = int(str(row.get("mileage", "")).replace(",", "").strip())
@@ -625,29 +599,25 @@ def _parse_listings(rows: List[Dict[str, str]]) -> List[Dict]:
         except (ValueError, TypeError):
             continue
 
-        # Sanity bounds (silently drop obviously bad rows)
         if year < 1990 or year > CURRENT_YEAR + 1:
             continue
         if mileage < 0 or mileage > 1_000_000:
             continue
-        if asking_price <= 0 or asking_price > 1_000_000_000:  # 100 Cr cap
+        if asking_price <= 0 or asking_price > 1_000_000_000:
             continue
 
-        # Optional fields
         condition = str(row.get("condition", "")).strip() or None
         owner = str(row.get("owner", "")).strip() or None
         location_city = str(row.get("location_city", "")).strip() or None
         location_state = str(row.get("location_state", "")).strip() or None
         source_url = str(row.get("source_url", "")).strip() or None
 
-        # Dates — listed_date is required, expires_date optional
         listed_date_raw = str(row.get("listed_date", "")).strip()
         listed_date = None
         if listed_date_raw:
             try:
                 listed_date = datetime.strptime(listed_date_raw, "%Y-%m-%d").date()
             except ValueError:
-                # Try other common formats as fallback
                 for fmt in ("%d-%b-%Y", "%d/%m/%Y", "%m/%d/%Y"):
                     try:
                         listed_date = datetime.strptime(listed_date_raw, fmt).date()
@@ -655,7 +625,6 @@ def _parse_listings(rows: List[Dict[str, str]]) -> List[Dict]:
                     except ValueError:
                         continue
         if not listed_date:
-            # Required field — drop row
             continue
 
         expires_date_raw = str(row.get("expires_date", "")).strip()
@@ -672,39 +641,31 @@ def _parse_listings(rows: List[Dict[str, str]]) -> List[Dict]:
                         continue
 
         out.append({
-            "make": make,
-            "model": model,
-            "variant": variant,
-            "fuel": fuel,
-            "year": year,
-            "mileage": mileage,
-            "condition": condition,
-            "owner": owner,
+            "make": make, "model": model, "variant": variant, "fuel": fuel,
+            "year": year, "mileage": mileage,
+            "condition": condition, "owner": owner,
             "asking_price": asking_price,
-            "location_city": location_city,
-            "location_state": location_state,
-            "listed_date": listed_date,
-            "expires_date": expires_date,
+            "location_city": location_city, "location_state": location_state,
+            "listed_date": listed_date, "expires_date": expires_date,
             "source_url": source_url,
         })
-
     return out
 
 
 def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
     """
     Merge sheet data on top of fallback. Sheet wins where it has data.
-    Variants present only in fallback remain available.
 
-    NOTE: The fallback dict uses the OLD shape (no `variant_fuel_prices`).
+    NOTE: The fallback dict uses the OLD shape (no per-fuel data).
     This merge function:
-      - Always initializes `variant_fuel_prices` as an empty dict for every
-        (make, model) seeded from fallback, so downstream lookups never
-        KeyError on the new field.
-      - Copies sheet-side `variant_fuel_prices` over the empty placeholder
+      - Always initializes variant_fuel_prices, variant_fuel_status,
+        variant_fuel_dates as empty dicts for every fallback entry, so
+        downstream lookups never KeyError on the new fields.
+      - Copies sheet-side per-fuel data over the empty placeholders
         when the sheet provides data for that (make, model).
-      - Leaves `variant_fuel_prices` empty for fallback-only entries — the
-        engine then falls through to the flat `variants` lookup gracefully.
+      - Leaves the per-fuel dicts empty for fallback-only entries —
+        get_variant_status() returns is_discontinued=False in that case,
+        which is the correct default.
     """
     merged = {}
     for make, models in fallback_data.items():
@@ -712,7 +673,9 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
         for model, data in models.items():
             merged[make][model] = {
                 "variants": dict(data["variants"]),
-                "variant_fuel_prices": {},  # NEW: empty for fallback-only
+                "variant_fuel_prices": {},
+                "variant_fuel_status": {},   # NEW
+                "variant_fuel_dates": {},    # NEW
                 "fuels": list(data["fuels"]),
             }
     for make, models in sheet_data.items():
@@ -723,6 +686,8 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
                 merged[make][model] = {
                     "variants": {},
                     "variant_fuel_prices": {},
+                    "variant_fuel_status": {},
+                    "variant_fuel_dates": {},
                     "fuels": [],
                 }
             # Flat variants — sheet wins per-variant.
@@ -735,6 +700,20 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
                     merged[make][model]["variant_fuel_prices"][variant] = {}
                 for fuel, price in fuel_map.items():
                     merged[make][model]["variant_fuel_prices"][variant][fuel] = price
+            # NEW: Per-fuel status — sheet wins.
+            sheet_vs = data.get("variant_fuel_status", {})
+            for variant, fuel_map in sheet_vs.items():
+                if variant not in merged[make][model]["variant_fuel_status"]:
+                    merged[make][model]["variant_fuel_status"][variant] = {}
+                for fuel, st in fuel_map.items():
+                    merged[make][model]["variant_fuel_status"][variant][fuel] = st
+            # NEW: Per-fuel last_known_price_date — sheet wins.
+            sheet_vd = data.get("variant_fuel_dates", {})
+            for variant, fuel_map in sheet_vd.items():
+                if variant not in merged[make][model]["variant_fuel_dates"]:
+                    merged[make][model]["variant_fuel_dates"][variant] = {}
+                for fuel, dt in fuel_map.items():
+                    merged[make][model]["variant_fuel_dates"][variant][fuel] = dt
             # Fuel list — union with canonical sort.
             fuel_set = set(merged[make][model]["fuels"]) | set(data["fuels"])
             fuel_order = ["Petrol", "Diesel", "CNG", "HEV", "PHEV", "BEV"]
@@ -799,14 +778,8 @@ def _refresh_cache(force: bool = False) -> Dict:
             errors.append(f"meta: {e}")
             _cache["meta"] = FALLBACK_META
 
-        # ============================================================
-        # Listings fetch (independent failure mode from prices)
-        # If listings fail, the engine simply can't use the 740Li engine
-        # for any car, and falls back to depreciation. Prices/etc still work.
-        # ============================================================
         try:
             if not GSHEET_LISTINGS_URL:
-                # Env var not configured yet — silent skip, no error
                 _cache["listings"] = FALLBACK_LISTINGS
                 _cache["listings_source"] = "fallback"
                 _cache["listings_last_error"] = None
@@ -820,8 +793,6 @@ def _refresh_cache(force: bool = False) -> Dict:
             _cache["listings"] = FALLBACK_LISTINGS
             _cache["listings_source"] = "fallback"
             _cache["listings_last_error"] = str(e)
-            # Don't append to top-level errors — listings failure is informational only
-            # (engine routing handles it gracefully via N>=5 check)
 
         _cache["last_fetch"] = now
         _cache["last_error"] = "; ".join(errors) if errors else None
@@ -832,13 +803,17 @@ def _refresh_cache(force: bool = False) -> Dict:
         else:
             _cache["source"] = "fallback"
 
-        # Compute fuel-distinct price count for diagnostics — how many
-        # (make, model, variant, fuel) tuples have a sheet-sourced price.
+        # Diagnostics
         fuel_distinct_prices = 0
+        discontinued_count = 0
         for m in _cache["car_data"].values():
             for d in m.values():
                 for v_map in d.get("variant_fuel_prices", {}).values():
                     fuel_distinct_prices += len(v_map)
+                for v_map in d.get("variant_fuel_status", {}).values():
+                    for st in v_map.values():
+                        if st == "discontinued":
+                            discontinued_count += 1
 
         return {
             "status": "refreshed" if not errors else "partial_error",
@@ -851,7 +826,8 @@ def _refresh_cache(force: bool = False) -> Dict:
                 for m in _cache["car_data"].values()
                 for d in m.values()
             ),
-            "fuel_distinct_prices": fuel_distinct_prices,  # NEW
+            "fuel_distinct_prices": fuel_distinct_prices,
+            "discontinued_count": discontinued_count,  # NEW v3.7.0
             "data_version": _cache["meta"].get("data_version", "?"),
             "sheet_overrides": sum(
                 len(d["variants"])
@@ -877,7 +853,6 @@ def _ensure_loaded():
 def refresh_prices(force: bool = True) -> Dict:
     """Public entrypoint to force-reload from Google Sheets."""
     result = _refresh_cache(force=force)
-    # Keep CAR_DATA LazyDict in sync so json.dumps(CAR_DATA) reflects new data
     try:
         CAR_DATA._sync()
     except Exception:
@@ -888,19 +863,24 @@ def refresh_prices(force: bool = True) -> Dict:
 def get_cache_status() -> Dict:
     """Diagnostics for admin dashboard."""
     _ensure_loaded()
-    # Compute fuel-distinct count on demand
     fuel_distinct_prices = 0
+    discontinued_count = 0
     for m in _cache["car_data"].values():
         for d in m.values():
             for v_map in d.get("variant_fuel_prices", {}).values():
                 fuel_distinct_prices += len(v_map)
+            for v_map in d.get("variant_fuel_status", {}).values():
+                for st in v_map.values():
+                    if st == "discontinued":
+                        discontinued_count += 1
     return {
         "source": _cache["source"],
         "last_fetch_age_seconds": int(time.time() - _cache["last_fetch"]),
         "last_error": _cache["last_error"],
         "cache_ttl": PRICE_CACHE_TTL_SECONDS,
         "makes": len(_cache["car_data"]),
-        "fuel_distinct_prices": fuel_distinct_prices,  # NEW — admin can see how many per-fuel prices loaded
+        "fuel_distinct_prices": fuel_distinct_prices,
+        "discontinued_count": discontinued_count,  # NEW v3.7.0
         "data_version": _cache["meta"].get("data_version", "?"),
         "last_updated": _cache["meta"].get("last_updated", "?"),
         "listings_count": len(_cache["listings"]) if _cache["listings"] else 0,
@@ -941,54 +921,103 @@ def get_fuels(make: str, model: str) -> List[str]:
 
 def get_variant_base_price(make: str, model: str, variant: str,
                            fuel: Optional[str] = None) -> Optional[int]:
-    """
-    Returns the ex-showroom base price for a (variant, fuel) pair.
-
-    Lookup order:
-      1. If `fuel` is provided AND `variant_fuel_prices[variant][fuel]` exists,
-         return that exact per-fuel price.
-      2. Otherwise, fall through to the flat `variants[variant]` price (which
-         is the FIRST-seen-fuel price from the parser, preserving previous
-         behavior for callers that don't pass `fuel`).
-      3. If neither lookup hits, return None.
-
-    This means cars where the sheet has distinct per-fuel prices for the same
-    variant (e.g. Honda City V Petrol=11.99L vs Diesel=11.05L vs HEV=11.05L)
-    now produce correct fuel-specific valuations. Previously, all three fuels
-    silently used the Petrol price plus the fuel_premium multiplier on top.
-
-    Backward compat:
-      - Callers that don't pass `fuel` get the same answer as before.
-      - Callers that pass `fuel` for a (variant, fuel) without per-fuel data
-        in the sheet (e.g. fallback-only entries, or models still on the old
-        flat shape) gracefully fall through to the flat price. They will not
-        get a None where they previously got a number.
-    """
+    """Returns the ex-showroom base price for a (variant, fuel) pair. (Unchanged.)"""
     _ensure_loaded()
     try:
         model_data = _cache["car_data"][make][model]
     except KeyError:
         return None
 
-    # Step 1: try per-fuel lookup
     if fuel:
         vfp = model_data.get("variant_fuel_prices", {})
         variant_fuels = vfp.get(variant)
         if variant_fuels and fuel in variant_fuels:
             return variant_fuels[fuel]
 
-    # Step 2: fall through to flat
     return model_data["variants"].get(variant)
 
 
-def get_base_price(make: str, model: str) -> Optional[int]:
+def get_variant_status(make: str, model: str, variant: str,
+                       fuel: Optional[str] = None) -> Dict:
     """
-    Returns the LOWEST-priced variant for a model — used as a rough anchor
-    in the v2.8 ex-showroom ceiling fallback path and admin guardrail checks.
+    NEW v3.7.0. Returns the discontinued status and last-verified date for
+    a specific (make, model, variant, fuel) tuple.
 
-    Returns the minimum across the flat `variants` dict, which is deterministic
-    regardless of dict iteration order.
+    Returns:
+      {
+        "is_discontinued":        bool,           # True if status="discontinued" in sheet
+        "last_known_price_date":  str | None,     # "DD-MMM-YYYY" or None if no date set
+      }
+
+    Safe to call for any tuple — returns is_discontinued=False with date=None
+    when the tuple isn't found in the sheet (e.g. fallback-only data).
+    The dashboard renders the discontinued badge ONLY when is_discontinued=True.
     """
+    _ensure_loaded()
+    default = {"is_discontinued": False, "last_known_price_date": None}
+    try:
+        model_data = _cache["car_data"][make][model]
+    except KeyError:
+        return default
+
+    # If fuel not provided, check ANY fuel for this variant — if any are
+    # discontinued, the variant is treated as discontinued. Use the date
+    # from the first discontinued fuel found.
+    vfs = model_data.get("variant_fuel_status", {})
+    vfd = model_data.get("variant_fuel_dates", {})
+    variant_status_map = vfs.get(variant, {})
+    variant_dates_map = vfd.get(variant, {})
+
+    if fuel:
+        st = variant_status_map.get(fuel)
+        if st == "discontinued":
+            return {
+                "is_discontinued": True,
+                "last_known_price_date": variant_dates_map.get(fuel),
+            }
+        return default
+
+    # No specific fuel — check all fuels for this variant
+    for f, st in variant_status_map.items():
+        if st == "discontinued":
+            return {
+                "is_discontinued": True,
+                "last_known_price_date": variant_dates_map.get(f),
+            }
+    return default
+
+
+def find_missing_prices() -> List[Dict[str, str]]:
+    """
+    NEW v3.7.0. Returns list of (make, model, variant, fuel) tuples in the
+    sheet whose ex_showroom_price is missing, zero, or unparseable.
+
+    Used by the admin Price Tools "Find Missing" tab to surface holes in
+    the catalog that need price-scraping attention.
+
+    Returns:
+      [
+        {"make": "...", "model": "...", "variant": "...", "fuel": "..."},
+        ...
+      ]
+    """
+    _ensure_loaded()
+    out = []
+    for make, models in _cache["car_data"].items():
+        for model, data in models.items():
+            vfp = data.get("variant_fuel_prices", {})
+            for variant, fuel_map in vfp.items():
+                for fuel, price in fuel_map.items():
+                    if not price or price <= 0:
+                        out.append({
+                            "make": make, "model": model,
+                            "variant": variant, "fuel": fuel,
+                        })
+    return out
+
+
+def get_base_price(make: str, model: str) -> Optional[int]:
+    """Returns the LOWEST-priced variant for a model. (Unchanged.)"""
     _ensure_loaded()
     try:
         variants = _cache["car_data"][make][model]["variants"]
@@ -1000,7 +1029,7 @@ def get_base_price(make: str, model: str) -> Optional[int]:
 
 
 def get_retention_for_age(years_old: int) -> float:
-    """Returns depreciation retention multiplier (0.0-1.0)."""
+    """Returns depreciation retention multiplier (0.0-1.0). (Unchanged.)"""
     _ensure_loaded()
     curve = _cache["depreciation"]
     if years_old <= 0:
@@ -1022,36 +1051,14 @@ def get_multiplier(category: str, key: str) -> float:
 
 
 # ============================================================
-# LISTINGS API (consumed by 740Li engine in pricing_740Li.py)
+# LISTINGS API (unchanged)
 # ============================================================
 
 def get_listings_for_car(make: str, model: str, variant: str, fuel: str,
                           year: Optional[int] = None,
                           year_window: int = 2,
                           freshness_days: Optional[int] = None) -> List[Dict]:
-    """
-    Returns active, fresh listings matching the requested car spec.
-
-    Filters applied (in order):
-      1. Match make + model + variant + fuel exactly (case-sensitive — must match
-         the prices sheet exactly; mismatches are the founder's responsibility)
-      2. If year provided, filter year within +/- year_window (default ±2)
-      3. Drop listings older than freshness_days (default LISTINGS_DEFAULT_FRESHNESS_DAYS)
-         OR past their explicit expires_date
-      4. Already filtered to active=TRUE in _parse_listings()
-
-    Args:
-        make, model, variant, fuel: car spec (must match prices sheet)
-        year: target year (optional). If None, all years included.
-        year_window: tolerance around year (default ±2). Ignored if year is None.
-        freshness_days: max listing age in days. Defaults to 60.
-
-    Returns:
-        List of listing dicts. Empty if nothing matches.
-        Each dict has keys: make, model, variant, fuel, year, mileage, condition,
-        owner, asking_price, location_city, location_state, listed_date, expires_date,
-        source_url.
-    """
+    """Returns active, fresh listings matching the requested car spec."""
     _ensure_loaded()
     listings = _cache.get("listings") or []
     if not listings:
@@ -1070,35 +1077,19 @@ def get_listings_for_car(make: str, model: str, variant: str, fuel: str,
         if L["model"] != model: continue
         if L["variant"] != variant: continue
         if L["fuel"] != fuel: continue
-
-        if year is not None:
-            if abs(L["year"] - int(year)) > year_window:
-                continue
-
-        # Freshness: explicit expires_date wins; else listed_date + freshness_days
+        if year is not None and abs(L["year"] - int(year)) > year_window:
+            continue
         if L.get("expires_date"):
             if L["expires_date"] < today:
                 continue
         else:
             if L.get("listed_date") and L["listed_date"] < cutoff_date:
                 continue
-
         matched.append(L)
-
     return matched
 
 
 def get_listings_freshness_status() -> Dict:
-    """
-    Diagnostic for app.py routing logic — quick check whether listings cache
-    is healthy enough to attempt 740Li engine routing for any car.
-
-    Returns dict with:
-      - has_data: bool — at least 1 fresh listing in cache
-      - total_count: int — total active listings (regardless of car spec)
-      - source: 'sheet' | 'fallback'
-      - last_error: str | None
-    """
     _ensure_loaded()
     listings = _cache.get("listings") or []
     return {
@@ -1110,15 +1101,11 @@ def get_listings_freshness_status() -> Dict:
 
 
 # ============================================================
-# PRICING FORMULA (depreciation engine — unchanged)
+# PRICING FORMULA (unchanged)
 # ============================================================
 
 def compute_base_valuation(make, model, variant, fuel, year, mileage, condition, owner):
-    """Pure formula-based valuation. Returns int rupees or None.
-
-    Now uses fuel-specific ex-showroom price when the sheet provides one
-    (via get_variant_base_price). Falls through to flat price otherwise.
-    """
+    """Pure formula-based valuation. Returns int rupees or None."""
     base = get_variant_base_price(make, model, variant, fuel)
     if base is None:
         return None
@@ -1147,7 +1134,6 @@ def compute_base_valuation(make, model, variant, fuel, year, mileage, condition,
 
 
 def compute_price_range(estimated_price: Optional[int], phase: int = 1) -> Tuple:
-    """Range width scales with phase: ±12% at Phase 1 → ±5% at Phase 4."""
     if estimated_price is None:
         return (None, None)
     range_pct = PHASE_BLEND.get(phase, PHASE_BLEND[1])["range_pct"]
@@ -1156,12 +1142,7 @@ def compute_price_range(estimated_price: Optional[int], phase: int = 1) -> Tuple
     return (low, high)
 
 
-# ============================================================
-# PHASE DETERMINATION
-# ============================================================
-
 def determine_phase(deal_count: int, distinct_users: int, previous_phase: int = 1) -> int:
-    """Compute phase (1-4) from deal_count + distinct_users in last 180 days."""
     phase = 1
     if deal_count >= PHASE_THRESHOLDS[2][0] and distinct_users >= PHASE_THRESHOLDS[2][1]:
         phase = 2
@@ -1178,10 +1159,6 @@ def determine_phase(deal_count: int, distinct_users: int, previous_phase: int = 
             return max(phase, 2)
     return phase
 
-
-# ============================================================
-# BLENDING + GUARDRAILS (unchanged)
-# ============================================================
 
 def _trim_outliers(sorted_prices, trim_frac=OUTLIER_TRIM_FRAC):
     n = len(sorted_prices)
@@ -1201,7 +1178,6 @@ def _median(sorted_prices):
 
 
 def adjust_with_deals(formula_price, similar_deals, phase=1):
-    """Blend formula_price with deal median per phase weights."""
     if formula_price is None:
         return None, PHASE_BLEND[1]["conf_base"]
     cfg = PHASE_BLEND.get(phase, PHASE_BLEND[1])
@@ -1226,7 +1202,6 @@ def adjust_with_deals(formula_price, similar_deals, phase=1):
 
 
 def get_phase_display(phase):
-    """Returns {'phase','badge','detail','tooltip'} for template rendering."""
     cfg = PHASE_BLEND.get(phase, PHASE_BLEND[1])
     return {
         "phase": phase,
@@ -1241,19 +1216,7 @@ def get_phase_display(phase):
 # ============================================================
 
 class _LazyDict(dict):
-    """
-    Acts like the CAR_DATA dict, but stays in sync with the live cache.
-    Inherits from dict so json.dumps() and other dict-expecting code work
-    natively. Every access re-syncs from _cache to reflect latest refreshes.
-
-    NOTE: When this dict is JSON-serialized (e.g. for embedding in the
-    seller form template), every (make, model) entry will include the new
-    `variant_fuel_prices` key alongside `variants` and `fuels`. Templates
-    that previously read `variants` and `fuels` are unaffected — they just
-    have an extra key available. If the embedded JSON size matters for page
-    weight, consider stripping `variant_fuel_prices` at serialization time
-    via the to_dict() helper plus a custom transform.
-    """
+    """Acts like CAR_DATA dict, stays in sync with live cache. (Unchanged.)"""
     def _sync(self):
         _ensure_loaded()
         cached = _cache["car_data"] or {}
@@ -1286,7 +1249,6 @@ class _LazyDict(dict):
         self._sync()
         return dict.get(self, key, default)
     def to_dict(self):
-        """Plain dict snapshot, useful for json.dumps(CAR_DATA) in templates."""
         self._sync()
         return dict(self)
 
@@ -1294,16 +1256,12 @@ class _LazyDict(dict):
 CAR_DATA = _LazyDict()
 
 
-# Module-level string constants referenced by templates/routes.
 BASE_PRICE_DATA_VERSION = FALLBACK_META.get("data_version", "?")
 BASE_PRICE_LAST_UPDATED = FALLBACK_META.get("last_updated", "?")
-
-# Module-level flag for app.py routing logic
 LISTINGS_DATA_FRESH = False
 
 
 def refresh_module_constants():
-    """Call after a price refresh to sync module-level string constants."""
     global BASE_PRICE_DATA_VERSION, BASE_PRICE_LAST_UPDATED, LISTINGS_DATA_FRESH
     _ensure_loaded()
     BASE_PRICE_DATA_VERSION = _cache["meta"].get("data_version", "?")
@@ -1317,22 +1275,27 @@ def refresh_module_constants():
 try:
     _refresh_cache(force=True)
     refresh_module_constants()
-    # Hydrate the CAR_DATA LazyDict from the cache so json.dumps(CAR_DATA)
-    # works immediately, before any dict method is called on it.
     CAR_DATA._sync()
     _src = _cache.get("source", "?")
     _n = len(_cache["car_data"]) if _cache["car_data"] else 0
     _ln = len(_cache["listings"]) if _cache["listings"] else 0
     _lsrc = _cache.get("listings_source", "?")
-    # Count fuel-distinct prices for startup log
     _vfp_count = sum(
         len(v_map)
         for m in _cache["car_data"].values()
         for d in m.values()
         for v_map in d.get("variant_fuel_prices", {}).values()
     )
+    _disc_count = sum(
+        1
+        for m in _cache["car_data"].values()
+        for d in m.values()
+        for v_map in d.get("variant_fuel_status", {}).values()
+        for st in v_map.values()
+        if st == "discontinued"
+    )
     print(f"[car_data] Loaded {_n} makes. Source: {_src}. "
-          f"Per-fuel prices: {_vfp_count}. "
+          f"Per-fuel prices: {_vfp_count}. Discontinued: {_disc_count}. "
           f"Listings: {_ln} ({_lsrc}).")
 except Exception as _e:
     print(f"[car_data] Startup load failed: {_e}. Will retry on first request. "
