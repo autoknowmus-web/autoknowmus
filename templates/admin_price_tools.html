@@ -1,1 +1,1046 @@
+{% extends "layout.html" %}
+{% block title %}Price Tools — AutoKnowMus Admin{% endblock %}
 
+{% block extra_head %}
+<style>
+  .price-tools-wrap { padding: 14px 30px 30px; }
+
+  /* Sub-tab nav inside the price-tools page (4 tabs) */
+  .pt-subtabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid #2a2d34;
+    flex-wrap: wrap;
+  }
+  .pt-subtab {
+    background: transparent;
+    border: none;
+    color: #adb5bd;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    border-radius: 6px 6px 0 0;
+    transition: all 0.15s;
+  }
+  .pt-subtab:hover {
+    color: #fff;
+    background: rgba(255,165,0,0.06);
+  }
+  .pt-subtab.active {
+    color: #ffa500;
+    border-bottom-color: #ffa500;
+    background: rgba(255,165,0,0.08);
+  }
+  .pt-subtab .pt-count-badge {
+    background: #4e54ff;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+    line-height: 1.4;
+  }
+  .pt-subtab.active .pt-count-badge { background: #ffa500; }
+  .pt-subtab .pt-count-badge.zero { background: #2a2d34; color: #6c757d; }
+
+  .pt-panel { display: none; }
+  .pt-panel.active { display: block; }
+
+  .pt-section-title {
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pt-section-subtitle {
+    color: #adb5bd;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin-bottom: 18px;
+  }
+
+  /* Tab 1: Refresh One — picker form */
+  .pt-form-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .pt-form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .pt-form-field label {
+    display: block;
+    color: #b0b0b0;
+    font-size: 0.78rem;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .pt-form-field select,
+  .pt-form-field input {
+    width: 100%;
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+  .pt-form-field select:focus,
+  .pt-form-field input:focus {
+    outline: none;
+    border-color: #ffa500;
+  }
+  .pt-form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .pt-btn {
+    background: #ffa500;
+    color: #14171d;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .pt-btn:hover { background: #ffb733; }
+  .pt-btn:disabled,
+  .pt-btn.is-loading {
+    background: #2a2d34;
+    color: #6c757d;
+    cursor: not-allowed;
+  }
+  .pt-btn-secondary {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2d34;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .pt-btn-secondary:hover {
+    border-color: #6c757d;
+    color: #fff;
+  }
+  .pt-btn-approve {
+    background: #28a745;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .pt-btn-approve:hover { background: #2bb84d; }
+  .pt-btn-approve:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
+  .pt-btn-reject {
+    background: transparent;
+    color: #ff6b6b;
+    border: 1px solid #ff6b6b40;
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .pt-btn-reject:hover {
+    background: rgba(255,107,107,0.1);
+    border-color: #ff6b6b;
+    color: #ff6b6b;
+  }
+
+  /* Result table for scrape results & pending reviews */
+  .pt-results-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .pt-results-card .pt-results-title {
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pt-results-card .pt-results-meta {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    font-weight: 400;
+    margin-left: auto;
+  }
+
+  .pt-results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .pt-results-table th {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    text-align: left;
+    padding: 7px 8px 4px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .pt-results-table th.num,
+  .pt-results-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pt-results-table th.actions,
+  .pt-results-table td.actions { text-align: center; white-space: nowrap; }
+  .pt-results-table td {
+    padding: 8px 8px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+  }
+  .pt-results-table tr:last-child td { border-bottom: none; }
+  .pt-results-table tr.pt-row-discontinued td { background: rgba(255,140,0,0.04); }
+  .pt-results-table tr.pt-row-new td { background: rgba(40,167,69,0.04); }
+
+  /* Diff display */
+  .pt-diff-pos { color: #5bd47b; font-weight: 600; }
+  .pt-diff-neg { color: #ff8585; font-weight: 600; }
+  .pt-diff-zero { color: #6c757d; }
+
+  /* Status pills inside tables */
+  .pt-status-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .pt-status-pill.found            { background: rgba(40,167,69,0.18);  color: #5bd47b; border: 1px solid rgba(40,167,69,0.5); }
+  .pt-status-pill.found_multiple   { background: rgba(40,167,69,0.18);  color: #5bd47b; border: 1px solid rgba(40,167,69,0.5); }
+  .pt-status-pill.found_fuzzy      { background: rgba(255,165,0,0.18);  color: #ffc870; border: 1px solid rgba(255,165,0,0.5); }
+  .pt-status-pill.not_found        { background: rgba(255,107,107,0.18); color: #ff8585; border: 1px solid rgba(255,107,107,0.5); }
+  .pt-status-pill.error            { background: rgba(108,117,125,0.18); color: #adb5bd; border: 1px solid rgba(108,117,125,0.5); }
+  .pt-status-pill.new              { background: rgba(78,84,255,0.18);  color: #8a90ff; border: 1px solid rgba(78,84,255,0.5); }
+
+  /* Price-age coloring */
+  .pt-age-fresh { color: #5bd47b; font-weight: 600; }   /* <= 1 month */
+  .pt-age-warn  { color: #ffa500; font-weight: 600; }   /* 1-3 months */
+  .pt-age-stale { color: #ff8585; font-weight: 600; }   /* > 3 months */
+  .pt-age-never { color: #6c757d; font-style: italic; }
+
+  /* Empty state */
+  .pt-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #adb5bd;
+    background: #1a1d24;
+    border: 1px dashed #2a2d34;
+    border-radius: 10px;
+  }
+  .pt-empty .pt-empty-icon { font-size: 2rem; margin-bottom: 8px; }
+  .pt-empty p { margin: 4px 0; }
+
+  /* Loading state */
+  .pt-loading {
+    text-align: center;
+    padding: 30px 20px;
+    color: #ffa500;
+    font-size: 0.9rem;
+  }
+
+  /* Inline messages */
+  .pt-msg {
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .pt-msg.show { display: block; }
+  .pt-msg-success { background: rgba(40,167,69,0.12); color: #5bd47b; border: 1px solid rgba(40,167,69,0.4); }
+  .pt-msg-error   { background: rgba(255,107,107,0.12); color: #ff8585; border: 1px solid rgba(255,107,107,0.4); }
+  .pt-msg-info    { background: rgba(78,84,255,0.12); color: #8a90ff; border: 1px solid rgba(78,84,255,0.4); }
+
+  /* Variant-name disambiguation tooltip */
+  .pt-vname-cell {
+    font-size: 0.78rem;
+    color: #adb5bd;
+    line-height: 1.4;
+  }
+  .pt-vname-cell .pt-vname-our {
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.84rem;
+  }
+  .pt-vname-cell .pt-vname-cw {
+    color: #adb5bd;
+    font-style: italic;
+    font-size: 0.74rem;
+    margin-top: 2px;
+  }
+
+  /* Confirmation modal (review queue) */
+  .pt-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .pt-modal-overlay.show { display: flex; }
+  .pt-modal {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 20px 24px;
+    max-width: 520px;
+    width: 90%;
+    color: #e6e6e6;
+  }
+  .pt-modal h3 {
+    margin: 0 0 12px;
+    color: #fff;
+    font-size: 1.05rem;
+  }
+  .pt-modal-body {
+    color: #adb5bd;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+  .pt-modal-body .pt-modal-detail {
+    background: #14171d;
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-top: 10px;
+    color: #e6e6e6;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.82rem;
+  }
+  .pt-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  @media (max-width: 700px) {
+    .price-tools-wrap { padding: 12px 16px 24px; }
+    .pt-results-table th:nth-child(3),
+    .pt-results-table td:nth-child(3) { display: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="price-tools-wrap">
+
+  {# Standard back button — top-left, grey, per UI rule #}
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
+
+  {# Admin pill-tab nav — Step 9 will add this row to layout.html or a partial.
+     For now the price-tools page renders its own header. #}
+  <h2 style="color:#ffa500; font-size:1.4rem; font-weight:700; margin-bottom:4px;">
+    🛠 AutoKnowMus — Price Tools
+  </h2>
+  <p style="color:#adb5bd; font-size:0.88rem; margin-bottom:20px;">
+    Scrape CarWale prices, review proposed changes, approve writes to the
+    <code>car_prices</code> Google Sheet. Approvals trigger an automatic
+    cache refresh so changes appear in user valuations within seconds.
+  </p>
+
+  {# === Sub-tab nav: 4 tabs ============================================ #}
+  <div class="pt-subtabs" role="tablist">
+    <button type="button" class="pt-subtab active" data-tab="refresh-one" role="tab">
+      🔄 Refresh One
+    </button>
+    <button type="button" class="pt-subtab" data-tab="find-missing" role="tab">
+      🔍 Find Missing
+      <span class="pt-count-badge {{ 'zero' if missing_count == 0 else '' }}" id="pt-count-missing">{{ missing_count }}</span>
+    </button>
+    <button type="button" class="pt-subtab" data-tab="suspected-discontinued" role="tab">
+      ⚠️ Suspected Discontinued
+      <span class="pt-count-badge zero" id="pt-count-disc">0</span>
+    </button>
+    <button type="button" class="pt-subtab" data-tab="review-queue" role="tab">
+      📥 Review Queue
+      <span class="pt-count-badge {{ 'zero' if pending_count == 0 else '' }}" id="pt-count-queue">{{ pending_count }}</span>
+    </button>
+  </div>
+
+  {# Inline message slot — shared across tabs #}
+  <div class="pt-msg pt-msg-success" id="pt-msg-success"></div>
+  <div class="pt-msg pt-msg-error"   id="pt-msg-error"></div>
+  <div class="pt-msg pt-msg-info"    id="pt-msg-info"></div>
+
+  {# ==================================================================
+     TAB 1 — Refresh One
+     ================================================================== #}
+  <div class="pt-panel active" data-panel="refresh-one">
+
+    <div class="pt-section-title">🔄 Refresh One model</div>
+    <p class="pt-section-subtitle">
+      Pick a make + model, hit <strong>Scrape now</strong>. We fetch every variant's
+      current ex-showroom price from CarWale and compare to what's in the sheet.
+      Any differences become pending reviews you can approve in the Review Queue tab.
+    </p>
+
+    <div class="pt-form-card">
+      <div class="pt-form-row">
+        <div class="pt-form-field">
+          <label for="ro-make">Make</label>
+          <select id="ro-make">
+            <option value="">— Select make —</option>
+            {% for m in makes %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="pt-form-field">
+          <label for="ro-model">Model</label>
+          <select id="ro-model" disabled>
+            <option value="">— Select make first —</option>
+          </select>
+        </div>
+      </div>
+      <div class="pt-form-actions">
+        <button type="button" class="pt-btn" id="ro-scrape-btn" disabled>Scrape now</button>
+        <span style="color:#6c757d; font-size:0.78rem;">~3 seconds per model. Results appear below.</span>
+      </div>
+    </div>
+
+    <div id="ro-results"></div>
+  </div>
+
+  {# ==================================================================
+     TAB 2 — Find Missing
+     ================================================================== #}
+  <div class="pt-panel" data-panel="find-missing">
+
+    <div class="pt-section-title">🔍 Find Missing prices</div>
+    <p class="pt-section-subtitle">
+      Variants in the catalog whose <code>ex_showroom_price</code> is missing or zero.
+      These need scraping to fill in. Click <strong>Scrape</strong> on any row to fetch
+      the price from CarWale and queue it for review.
+    </p>
+
+    {% if missing_rows %}
+      <div class="pt-results-card">
+        <div class="pt-results-title">
+          {{ missing_rows|length }} variant{{ '' if missing_rows|length == 1 else 's' }} need price data
+        </div>
+        <table class="pt-results-table">
+          <thead>
+            <tr>
+              <th>Make</th>
+              <th>Model</th>
+              <th>Variant</th>
+              <th>Fuel</th>
+              <th class="actions">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in missing_rows %}
+            <tr>
+              <td>{{ row.make }}</td>
+              <td>{{ row.model }}</td>
+              <td>{{ row.variant }}</td>
+              <td>{{ row.fuel }}</td>
+              <td class="actions">
+                <button type="button" class="pt-btn-approve pt-fm-scrape"
+                        data-make="{{ row.make }}"
+                        data-model="{{ row.model }}"
+                        data-variant="{{ row.variant }}"
+                        data-fuel="{{ row.fuel }}">
+                  Scrape
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="pt-empty">
+        <div class="pt-empty-icon">✅</div>
+        <p><strong>No missing prices.</strong></p>
+        <p>Every variant in the catalog has an ex-showroom price set.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ==================================================================
+     TAB 3 — Suspected Discontinued
+     ================================================================== #}
+  <div class="pt-panel" data-panel="suspected-discontinued">
+
+    <div class="pt-section-title">⚠️ Suspected Discontinued variants</div>
+    <p class="pt-section-subtitle">
+      Variants whose latest CarWale scrape returned <code>not_found</code> — meaning the
+      manufacturer has retired or renamed that trim. These need admin attention. Approving a
+      flag preserves the existing price (so existing owners can still get valuations) and
+      stamps today's date as the last verified price date.
+    </p>
+
+    <div class="pt-form-card" style="margin-bottom:14px;">
+      <p style="margin:0 0 10px; color:#adb5bd; font-size:0.85rem;">
+        Pending reviews of type <code>discontinued</code> appear in the Review Queue tab.
+        To find new ones, run scrapes via <strong>Refresh One</strong> on models you suspect
+        have stale variants.
+      </p>
+      <div class="pt-form-actions">
+        <a href="{{ url_for('price_tools', tab='review-queue') }}#discontinued"
+           class="pt-btn-secondary">View discontinued reviews in queue →</a>
+      </div>
+    </div>
+
+    {# Show a snapshot of currently-flagged variants (status="discontinued" in sheet). #}
+    {% if discontinued_rows %}
+      <div class="pt-results-card">
+        <div class="pt-results-title">
+          Currently flagged as discontinued
+          <span class="pt-results-meta">{{ discontinued_rows|length }} variant{{ '' if discontinued_rows|length == 1 else 's' }}</span>
+        </div>
+        <table class="pt-results-table">
+          <thead>
+            <tr>
+              <th>Make</th>
+              <th>Model</th>
+              <th>Variant</th>
+              <th>Fuel</th>
+              <th class="num">Last Known Price</th>
+              <th>Verified On</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in discontinued_rows %}
+            <tr class="pt-row-discontinued">
+              <td>{{ row.make }}</td>
+              <td>{{ row.model }}</td>
+              <td>{{ row.variant }}</td>
+              <td>{{ row.fuel }}</td>
+              <td class="num">₹ {{ row.price | inr if row.price else '—' }}</td>
+              <td class="{{ row.age_class }}">{{ row.last_known_price_date or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="pt-empty">
+        <div class="pt-empty-icon">📋</div>
+        <p><strong>No variants currently flagged as discontinued.</strong></p>
+        <p>When you approve a "discontinued" review, the variant appears here.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ==================================================================
+     TAB 4 — Review Queue
+     ================================================================== #}
+  <div class="pt-panel" data-panel="review-queue">
+
+    <div class="pt-section-title">📥 Review Queue</div>
+    <p class="pt-section-subtitle">
+      Pending changes awaiting your review. Approving writes the change to the
+      <code>car_prices</code> sheet immediately. Rejecting marks the review as handled with no change.
+    </p>
+
+    {% if pending_reviews %}
+      <div class="pt-results-card">
+        <div class="pt-results-title">
+          {{ pending_reviews|length }} pending review{{ '' if pending_reviews|length == 1 else 's' }}
+          <span class="pt-results-meta">Newest first · approving auto-refreshes valuations</span>
+        </div>
+        <table class="pt-results-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Car</th>
+              <th>Variant (ours / CarWale)</th>
+              <th class="num">Current</th>
+              <th class="num">Proposed</th>
+              <th class="num">Δ</th>
+              <th>Status</th>
+              <th>When</th>
+              <th class="actions">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in pending_reviews %}
+            <tr class="{% if r.review_type == 'discontinued' %}pt-row-discontinued{% elif r.review_type == 'new_variant' %}pt-row-new{% endif %}">
+              <td>
+                {% if r.review_type == 'price_update' %}<span class="pt-status-pill found">Update</span>
+                {% elif r.review_type == 'discontinued' %}<span class="pt-status-pill not_found">Disc</span>
+                {% elif r.review_type == 'new_variant' %}<span class="pt-status-pill new">New</span>
+                {% endif %}
+              </td>
+              <td>{{ r.make }} {{ r.model }} <span style="color:#6c757d;">·</span> {{ r.fuel }}</td>
+              <td class="pt-vname-cell">
+                <div class="pt-vname-our">{{ r.variant }}</div>
+                {% if r.matched_variant_name and r.matched_variant_name != r.variant %}
+                  <div class="pt-vname-cw">CarWale: {{ r.matched_variant_name }}</div>
+                {% endif %}
+              </td>
+              <td class="num">{% if r.current_price %}₹ {{ r.current_price | inr }}{% else %}—{% endif %}</td>
+              <td class="num">{% if r.proposed_price %}₹ {{ r.proposed_price | inr }}{% else %}—{% endif %}</td>
+              <td class="num">
+                {% if r.diff_pct is not none %}
+                  <span class="{% if r.diff_pct > 0 %}pt-diff-pos{% elif r.diff_pct < 0 %}pt-diff-neg{% else %}pt-diff-zero{% endif %}">
+                    {{ '%+.1f'|format(r.diff_pct) }}%
+                  </span>
+                {% else %}<span class="pt-diff-zero">—</span>{% endif %}
+              </td>
+              <td>
+                {% if r.scraper_status %}
+                  <span class="pt-status-pill {{ r.scraper_status }}">{{ r.scraper_status|replace('_', ' ') }}</span>
+                {% endif %}
+              </td>
+              <td style="color:#adb5bd; font-size:0.78rem;">{{ r.created_at_display }}</td>
+              <td class="actions">
+                <button type="button" class="pt-btn-approve pt-rq-approve"
+                        data-id="{{ r.id }}" data-type="{{ r.review_type }}"
+                        data-car="{{ r.make }} {{ r.model }} {{ r.variant }} {{ r.fuel }}"
+                        data-current="{{ r.current_price or '' }}"
+                        data-proposed="{{ r.proposed_price or '' }}">
+                  Approve
+                </button>
+                <button type="button" class="pt-btn-reject pt-rq-reject"
+                        data-id="{{ r.id }}"
+                        data-car="{{ r.make }} {{ r.model }} {{ r.variant }} {{ r.fuel }}">
+                  Reject
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="pt-empty">
+        <div class="pt-empty-icon">📬</div>
+        <p><strong>Queue is empty.</strong></p>
+        <p>Run scrapes via <strong>Refresh One</strong> or <strong>Find Missing</strong> to populate the queue.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {# Confirmation modal #}
+  <div class="pt-modal-overlay" id="pt-modal">
+    <div class="pt-modal">
+      <h3 id="pt-modal-title">Confirm action</h3>
+      <div class="pt-modal-body" id="pt-modal-body"></div>
+      <div class="pt-modal-actions">
+        <button type="button" class="pt-btn-secondary" id="pt-modal-cancel">Cancel</button>
+        <button type="button" class="pt-btn" id="pt-modal-confirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  // ============================================================
+  // Tab switching
+  // ============================================================
+  const subtabs = document.querySelectorAll('.pt-subtab');
+  const panels = document.querySelectorAll('.pt-panel');
+  subtabs.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const tab = btn.dataset.tab;
+      subtabs.forEach(b => b.classList.toggle('active', b === btn));
+      panels.forEach(p => p.classList.toggle('active', p.dataset.panel === tab));
+      // Update URL fragment for deep linking
+      try { history.replaceState(null, '', '#' + tab); } catch (e) {}
+    });
+  });
+
+  // Honour ?tab=foo or #foo on initial load
+  (function activateInitialTab() {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = params.get('tab');
+    const fromHash = window.location.hash.replace(/^#/, '');
+    const want = fromQuery || fromHash;
+    if (!want) return;
+    const target = document.querySelector('.pt-subtab[data-tab="' + want + '"]');
+    if (target) target.click();
+  })();
+
+  // ============================================================
+  // Inline message helpers
+  // ============================================================
+  function showMsg(kind, text, autoHide) {
+    const el = document.getElementById('pt-msg-' + kind);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('show');
+    // hide other kinds
+    ['success', 'error', 'info'].forEach(function(k) {
+      if (k !== kind) document.getElementById('pt-msg-' + k).classList.remove('show');
+    });
+    if (autoHide) {
+      setTimeout(function() { el.classList.remove('show'); }, 5000);
+    }
+  }
+  function clearMsgs() {
+    ['success', 'error', 'info'].forEach(function(k) {
+      document.getElementById('pt-msg-' + k).classList.remove('show');
+    });
+  }
+
+  // ============================================================
+  // Price formatting
+  // ============================================================
+  function inrFmt(n) {
+    if (n === null || n === undefined || n === '') return '—';
+    n = parseInt(n, 10);
+    if (isNaN(n)) return '—';
+    return '₹ ' + n.toLocaleString('en-IN');
+  }
+
+  // ============================================================
+  // Tab 1: Refresh One — chained make → model dropdowns
+  // ============================================================
+  const roMake = document.getElementById('ro-make');
+  const roModel = document.getElementById('ro-model');
+  const roBtn = document.getElementById('ro-scrape-btn');
+  const roResults = document.getElementById('ro-results');
+
+  // car_data is injected by Flask as a JSON dict
+  const CAR_DATA = {{ car_data_json | safe }};
+
+  roMake.addEventListener('change', function() {
+    const make = roMake.value;
+    roModel.innerHTML = '<option value="">— Select model —</option>';
+    if (!make || !CAR_DATA[make]) {
+      roModel.disabled = true;
+      roBtn.disabled = true;
+      return;
+    }
+    const models = Object.keys(CAR_DATA[make]).sort();
+    models.forEach(function(m) {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      roModel.appendChild(opt);
+    });
+    roModel.disabled = false;
+    roBtn.disabled = true;
+  });
+  roModel.addEventListener('change', function() {
+    roBtn.disabled = !roModel.value;
+  });
+
+  roBtn.addEventListener('click', function() {
+    const make = roMake.value;
+    const model = roModel.value;
+    if (!make || !model) return;
+    clearMsgs();
+    roBtn.disabled = true;
+    roBtn.textContent = 'Scraping…';
+    roBtn.classList.add('is-loading');
+    roResults.innerHTML = '<div class="pt-loading">Fetching from CarWale… (~3 seconds)</div>';
+
+    const body = new FormData();
+    body.append('make', make);
+    body.append('model', model);
+
+    fetch('{{ url_for("price_tools_scrape_model") }}', { method: 'POST', body: body })
+      .then(r => r.json())
+      .then(function(data) {
+        roBtn.disabled = false;
+        roBtn.textContent = 'Scrape now';
+        roBtn.classList.remove('is-loading');
+
+        if (!data.ok) {
+          roResults.innerHTML = '';
+          showMsg('error', 'Scrape failed: ' + (data.error || 'unknown error'));
+          return;
+        }
+
+        roResults.innerHTML = renderScrapeResults(data);
+        if (data.reviews_created > 0) {
+          showMsg('success',
+            data.reviews_created + ' review' + (data.reviews_created === 1 ? '' : 's') +
+            ' added to the queue. Open the Review Queue tab to approve.', true);
+          // Update queue badge
+          const qBadge = document.getElementById('pt-count-queue');
+          if (qBadge) {
+            const cur = parseInt(qBadge.textContent || '0', 10);
+            qBadge.textContent = cur + data.reviews_created;
+            qBadge.classList.remove('zero');
+          }
+        } else {
+          showMsg('info', 'No changes detected — sheet is up to date for this model.', true);
+        }
+      })
+      .catch(function(err) {
+        roBtn.disabled = false;
+        roBtn.textContent = 'Scrape now';
+        roBtn.classList.remove('is-loading');
+        roResults.innerHTML = '';
+        showMsg('error', 'Network error: ' + err.message);
+      });
+  });
+
+  function renderScrapeResults(data) {
+    if (!data.rows || data.rows.length === 0) {
+      return '<div class="pt-empty"><p>No variants returned from CarWale for this model.</p></div>';
+    }
+    let html = '<div class="pt-results-card">';
+    html += '<div class="pt-results-title">Scrape results for ' + escapeHtml(data.make) + ' ' + escapeHtml(data.model);
+    html += '<span class="pt-results-meta">' + data.rows.length + ' variants · ' + data.reviews_created + ' added to queue</span></div>';
+    html += '<table class="pt-results-table">';
+    html += '<thead><tr><th>Variant</th><th>Fuel</th><th class="num">Sheet</th><th class="num">CarWale</th><th class="num">Δ</th><th>Result</th></tr></thead><tbody>';
+    data.rows.forEach(function(r) {
+      const rowCls = r.review_type === 'new_variant' ? 'pt-row-new' :
+                     r.review_type === 'discontinued' ? 'pt-row-discontinued' : '';
+      let diffCell = '<span class="pt-diff-zero">—</span>';
+      if (r.diff_pct !== null && r.diff_pct !== undefined) {
+        const cls = r.diff_pct > 0 ? 'pt-diff-pos' : r.diff_pct < 0 ? 'pt-diff-neg' : 'pt-diff-zero';
+        const sign = r.diff_pct > 0 ? '+' : '';
+        diffCell = '<span class="' + cls + '">' + sign + r.diff_pct.toFixed(1) + '%</span>';
+      }
+      html += '<tr class="' + rowCls + '">';
+      html += '<td><div style="color:#fff;font-weight:600;font-size:0.84rem;">' + escapeHtml(r.variant) + '</div>';
+      if (r.matched_variant_name && r.matched_variant_name !== r.variant) {
+        html += '<div style="color:#adb5bd;font-style:italic;font-size:0.74rem;margin-top:2px;">CW: ' + escapeHtml(r.matched_variant_name) + '</div>';
+      }
+      html += '</td>';
+      html += '<td>' + escapeHtml(r.fuel) + '</td>';
+      html += '<td class="num">' + (r.current_price ? inrFmt(r.current_price) : '<span style="color:#6c757d;">—</span>') + '</td>';
+      html += '<td class="num">' + (r.proposed_price ? inrFmt(r.proposed_price) : '<span style="color:#6c757d;">—</span>') + '</td>';
+      html += '<td class="num">' + diffCell + '</td>';
+      html += '<td>';
+      if (r.outcome === 'unchanged') {
+        html += '<span style="color:#5bd47b;font-size:0.78rem;">✓ matches sheet</span>';
+      } else if (r.outcome === 'queued') {
+        html += '<span style="color:#ffa500;font-size:0.78rem;">→ queued</span>';
+      } else {
+        html += '<span style="color:#ff8585;font-size:0.78rem;">' + escapeHtml(r.outcome) + '</span>';
+      }
+      html += '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+    });
+  }
+
+  // ============================================================
+  // Tab 2: Find Missing — single-row scrape buttons
+  // ============================================================
+  document.querySelectorAll('.pt-fm-scrape').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const make = btn.dataset.make;
+      const model = btn.dataset.model;
+      const variant = btn.dataset.variant;
+      const fuel = btn.dataset.fuel;
+      clearMsgs();
+      btn.disabled = true;
+      btn.textContent = 'Scraping…';
+
+      const body = new FormData();
+      body.append('make', make);
+      body.append('model', model);
+      body.append('variant', variant);
+      body.append('fuel', fuel);
+
+      fetch('{{ url_for("price_tools_scrape_one") }}', { method: 'POST', body: body })
+        .then(r => r.json())
+        .then(function(data) {
+          if (!data.ok) {
+            btn.disabled = false;
+            btn.textContent = 'Scrape';
+            showMsg('error', 'Scrape failed: ' + (data.error || 'unknown'));
+            return;
+          }
+          if (data.review_id) {
+            btn.textContent = '✓ Queued';
+            btn.style.background = '#5bd47b';
+            showMsg('success', 'Queued for review. Open Review Queue to approve.', true);
+            const qBadge = document.getElementById('pt-count-queue');
+            if (qBadge) {
+              qBadge.textContent = (parseInt(qBadge.textContent || '0', 10) + 1);
+              qBadge.classList.remove('zero');
+            }
+          } else {
+            btn.textContent = 'No price found';
+            btn.disabled = true;
+            showMsg('info', 'CarWale returned no price for this variant.', true);
+          }
+        })
+        .catch(function(err) {
+          btn.disabled = false;
+          btn.textContent = 'Scrape';
+          showMsg('error', 'Network error: ' + err.message);
+        });
+    });
+  });
+
+  // ============================================================
+  // Tab 4: Review Queue — approve / reject with confirm modal
+  // ============================================================
+  const modal = document.getElementById('pt-modal');
+  const modalTitle = document.getElementById('pt-modal-title');
+  const modalBody = document.getElementById('pt-modal-body');
+  const modalConfirm = document.getElementById('pt-modal-confirm');
+  const modalCancel = document.getElementById('pt-modal-cancel');
+  let modalAction = null;
+
+  modalCancel.addEventListener('click', function() {
+    modal.classList.remove('show');
+    modalAction = null;
+  });
+  modalConfirm.addEventListener('click', function() {
+    if (modalAction) modalAction();
+    modal.classList.remove('show');
+    modalAction = null;
+  });
+
+  document.querySelectorAll('.pt-rq-approve').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const id = btn.dataset.id;
+      const type = btn.dataset.type;
+      const car = btn.dataset.car;
+      const currentP = btn.dataset.current;
+      const proposedP = btn.dataset.proposed;
+
+      modalTitle.textContent = 'Approve and write to sheet?';
+      let detail = '<strong>' + escapeHtml(car) + '</strong><br>';
+      if (type === 'price_update') {
+        detail += 'Will update price: ' + (currentP ? inrFmt(currentP) : '—') +
+                  ' → <strong style="color:#5bd47b;">' + inrFmt(proposedP) + '</strong>';
+      } else if (type === 'discontinued') {
+        detail += 'Will mark as <strong style="color:#ffa500;">discontinued</strong>. ' +
+                  'Price stays at ' + (currentP ? inrFmt(currentP) : '—') + ' (existing valuations keep working).';
+      } else if (type === 'new_variant') {
+        detail += 'Will <strong style="color:#5bd47b;">insert new row</strong> at price ' + inrFmt(proposedP) +
+                  '. Variant becomes available in user dropdowns after refresh.';
+      }
+      modalBody.innerHTML = 'This will write to the Google Sheet immediately and refresh the price cache.' +
+                            '<div class="pt-modal-detail">' + detail + '</div>';
+
+      modalAction = function() {
+        clearMsgs();
+        btn.disabled = true;
+        btn.textContent = '…';
+        const body = new FormData();
+        body.append('review_id', id);
+        fetch('{{ url_for("price_tools_approve") }}', { method: 'POST', body: body })
+          .then(r => r.json())
+          .then(function(data) {
+            if (data.ok) {
+              showMsg('success', 'Approved. Sheet updated and cache refreshed.', true);
+              const tr = btn.closest('tr');
+              if (tr) {
+                tr.style.opacity = '0.4';
+                setTimeout(function() { tr.remove(); decrementQueueBadge(); }, 600);
+              }
+            } else {
+              btn.disabled = false;
+              btn.textContent = 'Approve';
+              showMsg('error', 'Approve failed: ' + (data.error || 'unknown'));
+            }
+          })
+          .catch(function(err) {
+            btn.disabled = false;
+            btn.textContent = 'Approve';
+            showMsg('error', 'Network error: ' + err.message);
+          });
+      };
+      modal.classList.add('show');
+    });
+  });
+
+  document.querySelectorAll('.pt-rq-reject').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const id = btn.dataset.id;
+      const car = btn.dataset.car;
+
+      modalTitle.textContent = 'Reject this review?';
+      modalBody.innerHTML = 'No changes will be made to the sheet. The review will be marked as handled.' +
+                            '<div class="pt-modal-detail">' + escapeHtml(car) + '</div>';
+
+      modalAction = function() {
+        clearMsgs();
+        btn.disabled = true;
+        btn.textContent = '…';
+        const body = new FormData();
+        body.append('review_id', id);
+        fetch('{{ url_for("price_tools_reject") }}', { method: 'POST', body: body })
+          .then(r => r.json())
+          .then(function(data) {
+            if (data.ok) {
+              showMsg('info', 'Rejected. No change to sheet.', true);
+              const tr = btn.closest('tr');
+              if (tr) {
+                tr.style.opacity = '0.4';
+                setTimeout(function() { tr.remove(); decrementQueueBadge(); }, 600);
+              }
+            } else {
+              btn.disabled = false;
+              btn.textContent = 'Reject';
+              showMsg('error', 'Reject failed: ' + (data.error || 'unknown'));
+            }
+          })
+          .catch(function(err) {
+            btn.disabled = false;
+            btn.textContent = 'Reject';
+            showMsg('error', 'Network error: ' + err.message);
+          });
+      };
+      modal.classList.add('show');
+    });
+  });
+
+  function decrementQueueBadge() {
+    const qBadge = document.getElementById('pt-count-queue');
+    if (!qBadge) return;
+    const cur = parseInt(qBadge.textContent || '0', 10);
+    const next = Math.max(0, cur - 1);
+    qBadge.textContent = next;
+    if (next === 0) qBadge.classList.add('zero');
+  }
+})();
+</script>
+{% endblock %}
