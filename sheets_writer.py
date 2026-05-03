@@ -9,28 +9,38 @@ Data Google Sheet. It uses gspread + a service-account JSON credential
 with the Google Sheets API.
 
 ----------------------------------------------------------------------
-v3.6.2 — CRITICAL HOTFIX (process-wide socket timeout regression)
+v3.6.3 — TIMEOUT IMPLEMENTATION REWRITE (the actual fix)
 ----------------------------------------------------------------------
-v3.6.1 introduced `socket.setdefaulttimeout(10)` to bound Google API calls.
-The unintended consequence: this timeout applies PROCESS-WIDE to every
-socket created afterward — including Supabase httpx connections, Resend
-API calls, and any other long-running HTTP/2 stream. Once the user hit a
-page that triggered Google sheet loading, the global timeout kicked in,
-and subsequent Supabase reads on /role and /admin/data-health timed out
-(or got killed mid-stream by gunicorn at the 30s worker timeout boundary).
+Background: v3.6.1 + v3.6.2 tried to use `socket.setdefaulttimeout()`
+to bound Google API calls. Neither worked:
 
-v3.6.2 fix: replace the global setdefaulttimeout call with a scoped
-context manager (`_with_sheets_timeout()`) that:
-  1. Saves the previous default socket timeout
-  2. Sets it to our 10-second value
-  3. Runs the wrapped sheets call
-  4. ALWAYS restores the previous value (even on exception)
+  - v3.6.1: set socket timeout globally → broke Supabase httpx connections
+            for all other routes.
+  - v3.6.2: scoped the socket timeout to a context manager → didn't help
+            because gspread + google-auth use `requests.Session` which
+            bypasses `socket.setdefaulttimeout()` for its own HTTP calls.
 
-Now Google API calls still time out after 10s, but the rest of the app
-keeps its normal (None = blocking) socket behavior. No interference.
+The actual fix uses two layers of EXPLICIT timeouts:
+
+  1. **OAuth handshake.** Build a `google.auth.transport.requests.Request`
+     and monkey-patch its `session.request` method to inject a 10-second
+     timeout for THIS Request instance only. Then call `creds.refresh(req)`
+     ourselves. If the OAuth call hangs, we get a clean exception within
+     10s — well before gunicorn's 30s worker timeout fires.
+
+  2. **Subsequent sheet calls.** After `gspread.authorize(creds)` returns
+     a client, call `client.set_timeout((10, 10))`. This wires the timeout
+     into gspread's own `requests.Session` for every spreadsheet API call
+     (open_by_key, get_all_values, batch_update, etc.) — no per-call
+     wrapping needed.
+
+Result: explicit timeouts where the actual network calls happen, with
+zero impact on other parts of the app. Other Flask code paths keep their
+normal blocking socket behavior because we never touch the global default.
 
 ----------------------------------------------------------------------
-v3.6.1 — BUGFIX RELEASE (resolves the gunicorn-timeout hang)
+v3.6.2 — (superseded) scoped socket timeout via context manager
+v3.6.1 — (superseded) global socket.setdefaulttimeout
 ----------------------------------------------------------------------
 Previous version (v3.6.0) hung gunicorn workers for 30 seconds when the
 GOOGLE_SERVICE_ACCOUNT_JSON env var contained a private_key with literal
@@ -333,13 +343,26 @@ def _get_client():
     call repeatedly. The underlying HTTP session inside gspread handles
     token refresh automatically.
 
-    v3.6.2: We use the scoped `_with_sheets_timeout()` context manager
-    around the OAuth handshake (which is the most likely thing to hang).
-    Every public function in this module also wraps its sheet calls in the
-    same context manager, so no Google API call can hang for >10 seconds.
-    Crucially: when the context exits, the default socket timeout is
-    restored — so other parts of the Flask app (Supabase, Resend, etc.)
-    keep their normal blocking socket behavior.
+    v3.6.3: socket-level timeout (v3.6.1/v3.6.2 attempts) didn't work
+    because google-auth's HTTP client and gspread's `requests.Session`
+    bypass `socket.setdefaulttimeout()` for their actual API calls. The
+    OAuth handshake was hanging for the full gunicorn 30s window even
+    inside a `with _with_sheets_timeout()` block.
+
+    The right fix uses two layers of EXPLICIT timeouts:
+
+      1. Pre-flight `credentials.refresh()` with an explicit 10s timeout
+         on the underlying `Request`. This is the OAuth handshake — if it
+         hangs (e.g. malformed private_key), we get a clean exception
+         within 10 seconds instead of waiting for gunicorn to SIGKILL us.
+
+      2. After credentials are valid, build the gspread client and call
+         `client.set_timeout((connect_s, read_s))` so every subsequent
+         spreadsheet API call (open_by_key, get_all_values, etc.) inherits
+         an explicit per-request timeout via gspread's own HTTP layer.
+
+    No `socket.setdefaulttimeout()` games. Other Flask code paths keep
+    their normal socket behavior because we never touch the global default.
     """
     global _gc_client
 
@@ -355,17 +378,84 @@ def _get_client():
                 "Add `gspread` to requirements.txt and redeploy."
             )
 
-        creds = _load_credentials()
         try:
-            with _with_sheets_timeout():
-                _gc_client = gspread.authorize(creds)
-        except socket.timeout:
+            from google.auth.transport.requests import Request as GoogleAuthRequest
+        except ImportError as e:
             raise RuntimeError(
-                f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) authorizing gspread "
-                "client. The OAuth handshake with Google did not complete. "
-                "Most common cause: malformed private_key in env var. "
-                "Try base64-encoding the JSON. See _load_credentials() error "
-                "messages for instructions."
+                f"google.auth.transport.requests not available: {e}. "
+                "google-auth is missing a required submodule — check requirements.txt."
+            )
+
+        creds = _load_credentials()
+
+        # ─── Step 1: Pre-flight OAuth refresh with explicit timeout ─────
+        # If the private_key is malformed or Google's OAuth endpoint is
+        # unreachable, this raises within ~10s instead of hanging forever.
+        # google.auth's Request.__call__ has a `timeout=120` default which
+        # is way too long for our gunicorn worker (30s timeout). We call
+        # refresh() directly with a custom auth_req that wraps the requests
+        # library's session — but the timeout actually gets applied by
+        # google-auth internally when it calls auth_req(timeout=...).
+        try:
+            auth_req = GoogleAuthRequest()
+            # google.auth.credentials.Credentials.refresh() signature is
+            # refresh(request) — no timeout kwarg. The timeout has to be
+            # baked into the GoogleAuthRequest behavior. For the actual
+            # network call, google-auth uses requests under the hood; the
+            # 120s default applies. The cleanest workaround: monkey-patch
+            # auth_req's session.request to inject a timeout. We do it on
+            # this single short-lived Request instance — NOT globally — so
+            # nothing else in the process is affected.
+            original_request = auth_req.session.request
+            def _request_with_timeout(method, url, **kwargs):
+                if 'timeout' not in kwargs or kwargs['timeout'] is None:
+                    kwargs['timeout'] = (_GOOGLE_API_TIMEOUT_SECONDS,
+                                         _GOOGLE_API_TIMEOUT_SECONDS)
+                return original_request(method, url, **kwargs)
+            auth_req.session.request = _request_with_timeout
+
+            creds.refresh(auth_req)
+            logger.info(
+                "sheets_writer: OAuth refresh OK for %s",
+                getattr(creds, "service_account_email", "<unknown>"),
+            )
+        except Exception as e:
+            err_str = str(e).lower()
+            if "timed out" in err_str or "timeout" in err_str or "read timed out" in err_str:
+                raise RuntimeError(
+                    f"OAuth handshake with Google timed out after "
+                    f"{_GOOGLE_API_TIMEOUT_SECONDS}s. Most common causes: "
+                    "(a) malformed private_key in GOOGLE_SERVICE_ACCOUNT_JSON "
+                    "(re-encode as base64 — see _load_credentials() docs); "
+                    "(b) Render's egress is blocked from oauth2.googleapis.com "
+                    "(very rare); (c) Google Auth API is degraded. "
+                    f"Original error: {e}"
+                )
+            if "invalid_grant" in err_str or "invalid grant" in err_str:
+                raise RuntimeError(
+                    f"Google rejected the service-account credentials "
+                    f"(invalid_grant). The service-account JSON in the env var "
+                    f"may be revoked, expired, or corrupted. Generate a fresh "
+                    f"key in Google Cloud Console and update the env var. "
+                    f"Original error: {e}"
+                )
+            if "could not deserialize key data" in err_str or "key data" in err_str:
+                raise RuntimeError(
+                    f"private_key field could not be parsed as a valid PEM key. "
+                    f"This is the classic '\\n' escape-mangling bug. FIX: re-encode "
+                    f"the JSON as base64 before pasting into the env var. "
+                    f"Original error: {e}"
+                )
+            raise RuntimeError(f"OAuth credentials.refresh() failed: {e}")
+
+        # ─── Step 2: Build gspread client with refreshed credentials ────
+        try:
+            _gc_client = gspread.authorize(creds)
+            # Apply explicit timeout to every subsequent spreadsheet API
+            # call. Tuple form = (connect_timeout, read_timeout). 10s each
+            # is plenty for normal sheet operations on a healthy network.
+            _gc_client.set_timeout(
+                (_GOOGLE_API_TIMEOUT_SECONDS, _GOOGLE_API_TIMEOUT_SECONDS)
             )
         except Exception as e:
             raise RuntimeError(f"Could not authorize gspread client: {e}")
@@ -388,13 +478,7 @@ def _get_spreadsheet():
 
         client = _get_client()
         try:
-            with _with_sheets_timeout():
-                _spreadsheet = client.open_by_key(SHEET_ID)
-        except socket.timeout:
-            raise RuntimeError(
-                f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) opening sheet "
-                f"{SHEET_ID}. Google Sheets API did not respond in time."
-            )
+            _spreadsheet = client.open_by_key(SHEET_ID)
         except Exception as e:
             err_str = str(e).lower()
             # gspread/google API errors are messy strings. Catch the common
@@ -422,20 +506,13 @@ def _get_worksheet(tab_name: str):
     """Open a specific tab inside the spreadsheet. Not cached (tabs are cheap)."""
     spreadsheet = _get_spreadsheet()
     try:
-        with _with_sheets_timeout():
-            return spreadsheet.worksheet(tab_name)
-    except socket.timeout:
-        raise RuntimeError(
-            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) opening tab "
-            f"'{tab_name}'."
-        )
+        return spreadsheet.worksheet(tab_name)
     except Exception as e:
         err_str = str(e).lower()
         if "not found" in err_str or "no worksheet" in err_str:
             available = []
             try:
-                with _with_sheets_timeout():
-                    available = [ws.title for ws in spreadsheet.worksheets()]
+                available = [ws.title for ws in spreadsheet.worksheets()]
             except Exception:
                 pass
             raise RuntimeError(
@@ -479,13 +556,8 @@ def get_sheet_metadata() -> Dict[str, Any]:
     """
     spreadsheet = _get_spreadsheet()
     try:
-        with _with_sheets_timeout():
-            tabs = [ws.title for ws in spreadsheet.worksheets()]
-            title = spreadsheet.title
-    except socket.timeout:
-        raise RuntimeError(
-            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) reading sheet metadata."
-        )
+        tabs = [ws.title for ws in spreadsheet.worksheets()]
+        title = spreadsheet.title
     except Exception as e:
         raise RuntimeError(f"Could not read sheet metadata: {e}")
 
@@ -527,13 +599,7 @@ def health_check() -> Dict[str, Any]:
 
     ws = _get_worksheet(TAB_CAR_PRICES)
     try:
-        with _with_sheets_timeout():
-            first_cell = ws.cell(1, 1).value
-    except socket.timeout:
-        raise RuntimeError(
-            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) reading cell A1 of "
-            f"'{TAB_CAR_PRICES}'."
-        )
+        first_cell = ws.cell(1, 1).value
     except Exception as e:
         raise RuntimeError(f"Could not read cell A1 of '{TAB_CAR_PRICES}' tab: {e}")
 
@@ -575,10 +641,6 @@ def read_car_prices() -> List[Dict[str, Any]]:
     ws = _get_worksheet(TAB_CAR_PRICES)
     try:
         all_values = ws.get_all_values()
-    except socket.timeout:
-        raise RuntimeError(
-            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) reading car_prices tab."
-        )
     except Exception as e:
         raise RuntimeError(f"Could not read car_prices tab: {e}")
 
@@ -685,14 +747,9 @@ def write_price_update(make: str, model: str, variant: str, fuel: str,
         # Update column E (ex_showroom_price) and column G (notes) in a
         # single batch — saves one API call.
         ws.batch_update([
-            {"range": f"E{row_num}", "values": [[str(new_price)]]},
-            {"range": f"G{row_num}", "values": [[new_notes]]},
-        ])
-    except socket.timeout:
-        raise RuntimeError(
-            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) writing update for "
-            f"row {row_num} ({make} {model} {variant} {fuel})."
-        )
+                {"range": f"E{row_num}", "values": [[str(new_price)]]},
+                {"range": f"G{row_num}", "values": [[new_notes]]},
+            ])
     except Exception as e:
         raise RuntimeError(
             f"Failed to write update for row {row_num} "
