@@ -1154,6 +1154,25 @@
             </span>
           </span>
         </div>
+        {# v3.7.0: Discontinued badge — shown when status="discontinued" in sheet. #}
+        {% if variant_status and variant_status.is_discontinued %}
+        <div style="
+            margin-top: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 14px;
+            background: rgba(255,140,0,0.15);
+            border: 1px solid rgba(255,140,0,0.5);
+            color: #ffa500;
+            font-size: 0.78rem;
+            font-weight: 600;
+        ">
+          <span>⚠️</span>
+          <span>Discontinued model{% if variant_status.last_known_price_date %} · pricing based on data verified {{ variant_status.last_known_price_date }}{% endif %}</span>
+        </div>
+        {% endif %}
         <div class="phase-badge-wrap">
           <span class="phase-badge-inline p{{ phase_data.phase }}">
             {% if phase_data.phase == 4 %}⭐{% elif phase_data.phase == 3 %}✓{% elif phase_data.phase == 2 %}📈{% else %}📊{% endif %}
