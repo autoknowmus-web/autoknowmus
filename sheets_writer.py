@@ -8,20 +8,52 @@ Data Google Sheet. It uses gspread + a service-account JSON credential
 (stored in the GOOGLE_SERVICE_ACCOUNT_JSON env var on Render) to authenticate
 with the Google Sheets API.
 
-Architecture choice — why gspread:
-  - gspread is a thin, well-maintained wrapper over the raw Google Sheets API.
-  - It handles auth, retries, batching, range parsing, and error mapping for us.
-  - Alternative: raw google-api-python-client. Same end result, ~3x more code.
-  - Locked decision: use gspread.
+----------------------------------------------------------------------
+v3.6.1 — BUGFIX RELEASE (resolves the gunicorn-timeout hang)
+----------------------------------------------------------------------
+Previous version (v3.6.0) hung gunicorn workers for 30 seconds when the
+GOOGLE_SERVICE_ACCOUNT_JSON env var contained a private_key with literal
+"\\n" escape sequences instead of real newlines. This is the #1 known
+issue with Google service account JSON in cloud env vars — Render, Heroku,
+Railway, and others all mangle the embedded newlines differently depending
+on how the value was pasted, edited, or copied.
+
+Two fixes in this release:
+
+1. **Auto-detect base64 OR raw JSON.** The env var can hold either:
+     - Raw JSON (legacy, fragile)        → starts with `{`
+     - Base64-encoded JSON (recommended) → ascii-only, no whitespace
+   We try base64 first; if the decoded bytes don't parse as JSON, we fall
+   back to treating the env var as raw JSON. Either format works.
+
+2. **10-second socket timeout** on every Google API call. If something
+   hangs (DNS, OAuth, sheets RPC), we raise a clean RuntimeError instead
+   of letting gunicorn SIGKILL the worker after 30s. The user gets a
+   clear "timed out" error in the test endpoint instead of a 502.
+
+These changes are 100% backward-compatible. If your env var is already
+working with raw JSON, this version still works. If you re-paste it as
+base64 (recommended), you eliminate the whole class of newline-escaping
+bugs forever.
+
+----------------------------------------------------------------------
+ARCHITECTURE NOTES (unchanged from v3.6.0)
+----------------------------------------------------------------------
+Why gspread:
+  - Thin, well-maintained wrapper over the raw Google Sheets API
+  - Handles auth, retries, batching, range parsing, error mapping
+  - Alternative: raw google-api-python-client. Same end result, ~3x more
+    code. Locked decision: gspread.
 
 Failure-mode design:
-  - The service account credential is loaded once at module import time and
-    cached. If the env var is missing or malformed, ALL functions in this
-    module raise RuntimeError with a clear message. The caller (the test
-    endpoint, the price tools admin pages) is responsible for handling.
+  - The service account credential is loaded once at module import time
+    and cached. If the env var is missing or malformed, ALL functions in
+    this module raise RuntimeError with a clear message. The caller (the
+    test endpoint, the price tools admin pages) is responsible for handling.
   - The actual sheet open is also cached. If the sheet has been un-shared
     with the service account, the first call after that fails with a clear
     permission error.
+  - All HTTP calls have a 10-second timeout. Anything slower errors clean.
 
 Public API (used by app.py):
   - health_check()         → quick connection test (returns dict with details)
@@ -33,8 +65,11 @@ Public API (used by app.py):
 
 import os
 import json
+import socket
 import logging
 import threading
+import base64
+import binascii
 from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple, Any
 
@@ -42,10 +77,9 @@ logger = logging.getLogger(__name__)
 
 # Lazy import — google libraries are heavy. We only import them inside
 # the functions that need them. This means a pure import of this module
-# (e.g. for ``from sheets_writer import health_check`` in app.py at boot time)
-# does NOT crash if google libs aren't installed yet — the failure surfaces
-# only when an actual call is made. That matches the rest of AutoKnowMus's
-# fail-late philosophy (e.g. car_data.py's lazy fetch).
+# (e.g. for ``from sheets_writer import health_check`` in app.py at boot
+# time) does NOT crash if google libs aren't installed yet — the failure
+# surfaces only when an actual call is made.
 
 # ============================================================
 # CONFIGURATION
@@ -86,6 +120,13 @@ CAR_PRICES_COLUMNS = [
     "notes",               # G
 ]
 
+# v3.6.1: hard timeout on any sheet/auth network call. Gunicorn's default
+# worker timeout is 30s; we cap our individual calls at 10s so we always
+# error cleanly before gunicorn kills us. Set on the global socket layer
+# because google-auth's HTTP client doesn't expose a per-request timeout
+# we can pass through gspread.
+_GOOGLE_API_TIMEOUT_SECONDS = 10
+
 
 # ============================================================
 # MODULE-LEVEL CACHES (thread-safe)
@@ -95,6 +136,65 @@ _credentials = None
 _gc_client = None
 _spreadsheet = None
 _lock = threading.Lock()
+
+
+# ============================================================
+# CREDENTIAL LOADING
+# ============================================================
+
+def _decode_env_payload(raw: str) -> Dict:
+    """
+    Accept the GOOGLE_SERVICE_ACCOUNT_JSON env var in either form:
+
+      1. Base64-encoded JSON (recommended, robust to paste mangling).
+         Example: 'ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIs...'
+         Detected by trying base64 decode first.
+      2. Raw JSON (legacy, fragile — multi-line newlines in private_key
+         get mangled by some env-var UIs). Starts with `{`.
+
+    Returns the parsed dict on success.
+    Raises RuntimeError with a clear message on any decoding/parsing failure.
+    """
+    raw = raw.strip()
+    if not raw:
+        raise RuntimeError(
+            "GOOGLE_SERVICE_ACCOUNT_JSON env var is missing or empty. "
+            "Set it in Render → Environment with the service account JSON, "
+            "ideally base64-encoded for robustness."
+        )
+
+    # Heuristic: if the first non-whitespace character is `{`, it's raw JSON.
+    # Otherwise, try base64 first (it's the recommended format).
+    looks_like_json = raw[0] == '{'
+
+    # ---- Try base64 first if it doesn't look like JSON ----
+    if not looks_like_json:
+        try:
+            # Strip any whitespace/newlines that might have crept in during paste.
+            cleaned = ''.join(raw.split())
+            decoded_bytes = base64.b64decode(cleaned, validate=True)
+            decoded_str = decoded_bytes.decode('utf-8')
+            return json.loads(decoded_str)
+        except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError) as e:
+            # Base64 failed — fall through to raw-JSON attempt below
+            logger.info(
+                f"sheets_writer: base64 decode of env var failed ({e}); "
+                f"trying raw JSON fallback"
+            )
+
+    # ---- Try raw JSON ----
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"GOOGLE_SERVICE_ACCOUNT_JSON could not be parsed as either "
+            f"base64-encoded JSON or raw JSON. Last error: {e}. "
+            f"RECOMMENDED FIX: re-encode your service account JSON file "
+            f"as base64 and paste the result. On Mac/Linux: "
+            f"`base64 -i autoknowmus-prod-XXXXXX.json | tr -d '\\n'`. "
+            f"On Windows PowerShell: "
+            f"`[Convert]::ToBase64String([IO.File]::ReadAllBytes('path/to/key.json'))`."
+        )
 
 
 def _load_credentials():
@@ -111,21 +211,9 @@ def _load_credentials():
         return _credentials
 
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
-    if not raw:
-        raise RuntimeError(
-            "GOOGLE_SERVICE_ACCOUNT_JSON env var is missing or empty. "
-            "Set it in Render → Environment with the contents of the service "
-            "account JSON key file."
-        )
 
-    try:
-        info = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(
-            f"GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: {e}. "
-            "Make sure you pasted the entire content of the .json file, "
-            "from the opening { to the closing }."
-        )
+    # Decode (handles both base64 and raw JSON formats).
+    info = _decode_env_payload(raw)
 
     # Sanity-check required fields. The full key file has many more, but
     # these are the four we ABSOLUTELY need to authenticate.
@@ -134,14 +222,34 @@ def _load_credentials():
     if missing:
         raise RuntimeError(
             f"GOOGLE_SERVICE_ACCOUNT_JSON is missing required fields: {missing}. "
-            "Make sure you pasted the COMPLETE service account JSON key, "
+            "Make sure you encoded the COMPLETE service account JSON key, "
             "not a truncated version."
         )
     if info.get("type") != "service_account":
         raise RuntimeError(
             f"GOOGLE_SERVICE_ACCOUNT_JSON has type='{info.get('type')}', "
-            f"expected 'service_account'. You may have pasted an OAuth client "
+            f"expected 'service_account'. You may have used an OAuth client "
             "credential instead of a service account key."
+        )
+
+    # v3.6.1 SAFETY CHECK: detect mangled private_key (literal "\n" instead
+    # of real newlines). A real RSA key starts with "-----BEGIN PRIVATE KEY-----\n"
+    # where that \n is a real newline character (ASCII 10). If the env var was
+    # pasted as raw JSON and Render escaped the newlines, we end up with the
+    # literal two-character string "\\n" inside private_key, which makes
+    # google-auth hang silently during the OAuth handshake.
+    pk = info.get("private_key", "")
+    if "\\n" in pk and "\n" not in pk:
+        raise RuntimeError(
+            "GOOGLE_SERVICE_ACCOUNT_JSON private_key contains literal '\\n' "
+            "escape sequences instead of real newlines. This is the #1 known "
+            "Render env var bug — the OAuth library will hang forever trying "
+            "to parse this. FIX: encode the JSON file as base64 and paste "
+            "that instead. On Mac/Linux: "
+            "`base64 -i autoknowmus-prod-XXXXXX.json | tr -d '\\n'`. "
+            "On Windows PowerShell: "
+            "`[Convert]::ToBase64String([IO.File]::ReadAllBytes('path/to/key.json'))`. "
+            "Then update the Render env var with the base64 string."
         )
 
     # Lazy-import google.oauth2 only when we actually need it.
@@ -170,6 +278,10 @@ def _get_client():
     Build (and cache) a gspread client. Cached at module level — safe to
     call repeatedly. The underlying HTTP session inside gspread handles
     token refresh automatically.
+
+    v3.6.1: We set a global socket timeout BEFORE building the client so
+    every subsequent network call inherits the timeout. This is the safest
+    way to bound all Google API operations.
     """
     global _gc_client
 
@@ -185,9 +297,23 @@ def _get_client():
                 "Add `gspread` to requirements.txt and redeploy."
             )
 
+        # v3.6.1: Apply the timeout before the OAuth handshake fires.
+        # Note: this is process-wide. Other code paths in app.py that
+        # use httpx/requests aren't affected because they pass their own
+        # explicit timeouts. Only legacy socket-based calls inherit this.
+        socket.setdefaulttimeout(_GOOGLE_API_TIMEOUT_SECONDS)
+
         creds = _load_credentials()
         try:
             _gc_client = gspread.authorize(creds)
+        except socket.timeout:
+            raise RuntimeError(
+                f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) authorizing gspread "
+                "client. The OAuth handshake with Google did not complete. "
+                "Most common cause: malformed private_key in env var. "
+                "Try base64-encoding the JSON. See _load_credentials() error "
+                "messages for instructions."
+            )
         except Exception as e:
             raise RuntimeError(f"Could not authorize gspread client: {e}")
 
@@ -210,6 +336,11 @@ def _get_spreadsheet():
         client = _get_client()
         try:
             _spreadsheet = client.open_by_key(SHEET_ID)
+        except socket.timeout:
+            raise RuntimeError(
+                f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) opening sheet "
+                f"{SHEET_ID}. Google Sheets API did not respond in time."
+            )
         except Exception as e:
             err_str = str(e).lower()
             # gspread/google API errors are messy strings. Catch the common
@@ -238,6 +369,11 @@ def _get_worksheet(tab_name: str):
     spreadsheet = _get_spreadsheet()
     try:
         return spreadsheet.worksheet(tab_name)
+    except socket.timeout:
+        raise RuntimeError(
+            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) opening tab "
+            f"'{tab_name}'."
+        )
     except Exception as e:
         err_str = str(e).lower()
         if "not found" in err_str or "no worksheet" in err_str:
@@ -289,6 +425,10 @@ def get_sheet_metadata() -> Dict[str, Any]:
     try:
         tabs = [ws.title for ws in spreadsheet.worksheets()]
         title = spreadsheet.title
+    except socket.timeout:
+        raise RuntimeError(
+            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) reading sheet metadata."
+        )
     except Exception as e:
         raise RuntimeError(f"Could not read sheet metadata: {e}")
 
@@ -331,6 +471,11 @@ def health_check() -> Dict[str, Any]:
     ws = _get_worksheet(TAB_CAR_PRICES)
     try:
         first_cell = ws.cell(1, 1).value
+    except socket.timeout:
+        raise RuntimeError(
+            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) reading cell A1 of "
+            f"'{TAB_CAR_PRICES}'."
+        )
     except Exception as e:
         raise RuntimeError(f"Could not read cell A1 of '{TAB_CAR_PRICES}' tab: {e}")
 
@@ -372,6 +517,10 @@ def read_car_prices() -> List[Dict[str, Any]]:
     ws = _get_worksheet(TAB_CAR_PRICES)
     try:
         all_values = ws.get_all_values()
+    except socket.timeout:
+        raise RuntimeError(
+            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) reading car_prices tab."
+        )
     except Exception as e:
         raise RuntimeError(f"Could not read car_prices tab: {e}")
 
@@ -481,6 +630,11 @@ def write_price_update(make: str, model: str, variant: str, fuel: str,
             {"range": f"E{row_num}", "values": [[str(new_price)]]},
             {"range": f"G{row_num}", "values": [[new_notes]]},
         ])
+    except socket.timeout:
+        raise RuntimeError(
+            f"Timed out (>{_GOOGLE_API_TIMEOUT_SECONDS}s) writing update for "
+            f"row {row_num} ({make} {model} {variant} {fuel})."
+        )
     except Exception as e:
         raise RuntimeError(
             f"Failed to write update for row {row_num} "
