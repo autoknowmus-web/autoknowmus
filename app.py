@@ -4198,11 +4198,11 @@ def admin_flag_user(user_id):
 # Paste this BLOCK immediately below the last line of Part 4.
 # Continue pasting Part 6 immediately below the last line of this block.
 #
-# NOTE: This part contains the NEW endpoint for the Google Cloud
-# setup verification — /admin/test-sheets-connection. After deploy,
-# visit https://autoknowmus.com/admin/test-sheets-connection while
-# logged in as autoknowmus@gmail.com to confirm the sheets writer
-# wiring is working end-to-end.
+# v3.6.4 update to /admin/test-sheets-connection: adds a hard
+# wall-clock timeout via SIGALRM around the health_check() call,
+# plus step-by-step logging so we can see exactly where any future
+# hang is happening — even if google-auth's own internal timeouts
+# fail to fire. Other routes in this Part are unchanged from prior.
 # ============================================================
 
 
@@ -4585,31 +4585,19 @@ def admin_refresh_prices():
 
 
 # ============================================================
-# v3.6: SHEETS WRITER TEST ENDPOINT  ← NEW IN THIS RELEASE
+# v3.6.4: SHEETS WRITER TEST ENDPOINT  ← UPDATED IN THIS RELEASE
 # ------------------------------------------------------------
-# Tiny health-check route to verify the Google Sheets API setup.
-# Once verified once, the actual price-tools UI (coming next) will
-# use sheets_writer.py for real reads/writes. This endpoint exists
-# purely for diagnostics so you can confirm the entire chain works:
+# Runs sheets_writer.health_check() under a wall-clock SIGALRM
+# timeout so the route ALWAYS returns within 15 seconds, no matter
+# what's happening inside google-auth or gspread. Also logs each
+# step so the next failure (if any) is fully traceable from the
+# Render runtime log.
 #
-#   Render env var → service account creds → gspread client →
-#   spreadsheet open → tab open → cell read.
-#
-# After deploy, visit:
-#   https://autoknowmus.com/admin/test-sheets-connection
-# while logged in as autoknowmus@gmail.com.
-#
-# Expected success response:
-#   { "ok": true,
-#     "sheet_id": "1ZGDlq-...",
-#     "sheet_title": "AutoKnowMus Price Data",
-#     "tabs": ["car_prices", "depreciation_curve", ...],
-#     "first_cell": "make",
-#     "service_account_email": "sheets-writer@autoknowmus-prod..." }
-#
-# Any failure returns ok=false with a clear `detail` message AND the
-# service-account email — so even on permission-denied, you know
-# which email to share the sheet with.
+# Why SIGALRM: gspread/google-auth's own timeouts have proven
+# unreliable on Render's network (multiple network layers each
+# with their own buffers). A POSIX signal-based timeout is the
+# nuclear option — it works at the kernel level and CAN'T be
+# silently ignored by an HTTP library.
 # ============================================================
 
 @app.route('/admin/test-sheets-connection')
@@ -4617,50 +4605,104 @@ def admin_refresh_prices():
 @admin_required
 def admin_test_sheets_connection():
     """
-    End-to-end test of the Google Sheets API setup.
+    End-to-end test of the Google Sheets API setup, with hard wall-clock
+    timeout via SIGALRM. Always returns within ~15 seconds.
 
-    Steps performed:
-      1. Load GOOGLE_SERVICE_ACCOUNT_JSON env var
-      2. Build credentials
-      3. Authorize gspread client
-      4. Open the AutoKnowMus Price Data sheet by ID
-      5. Read cell A1 of the car_prices tab (should be "make")
+    Step-by-step logging so any future hang is traceable:
+      [step 1] importing sheets_writer
+      [step 2] reading service-account email
+      [step 3] running health_check()
+      [step 4] returning success JSON
 
-    Returns JSON with full diagnostic details on success, or a clear error
-    message on failure. Exposes the service-account email regardless, so the
-    admin always knows which email to share the sheet with if step 4 fails
-    with a permission error.
+    On hang/failure, the log will tell you which step never finished.
     """
-    # Import inside the route so a missing/broken sheets_writer.py never
-    # prevents app.py from booting. The error surfaces only when admin hits
-    # this endpoint.
-    try:
-        import sheets_writer
-    except ImportError as e:
-        return jsonify({
-            "ok": False,
-            "error": "sheets_writer_module_missing",
-            "detail": str(e),
-            "hint": "sheets_writer.py is not in the repo or has a syntax error.",
-        }), 500
+    import signal
+    app.logger.info("[test-sheets] starting endpoint")
 
-    # Always include the service-account email in the response, even on
-    # failure — that's the email the admin needs to share the sheet with.
+    # ─── Wall-clock timeout via SIGALRM ─────────────────────────
+    # 15 seconds is enough for: cred load (instant) + OAuth handshake
+    # (~2s) + spreadsheet open (~1s) + cell read (~1s) + comfortable
+    # buffer. If any step exceeds this, we raise TimeoutError and
+    # return a clean error JSON. This is BELOW gunicorn's 30s limit.
+    HARD_TIMEOUT_SECONDS = 15
+
+    class _SheetsTimeout(Exception):
+        pass
+
+    def _alarm_handler(signum, frame):
+        raise _SheetsTimeout(
+            f"Health check exceeded {HARD_TIMEOUT_SECONDS}s wall-clock limit "
+            "(SIGALRM fired). Something inside Google's API call is hanging "
+            "and not honoring its own timeouts. See sheets_writer.py logs "
+            "for which step was last entered."
+        )
+
+    # Capture previous handler so we can restore it after — important
+    # in case any other code in the same worker also uses SIGALRM.
+    previous_handler = signal.signal(signal.SIGALRM, _alarm_handler)
+    signal.alarm(HARD_TIMEOUT_SECONDS)
+
     sa_email = "<unknown — credentials not loaded>"
     try:
-        sa_email = sheets_writer.get_service_account_email()
-    except Exception:
-        pass  # already covered by the <unknown> default
+        # ─── Step 1: import the module ──────────────────────────
+        app.logger.info("[test-sheets] step 1: importing sheets_writer")
+        try:
+            import sheets_writer
+        except ImportError as e:
+            signal.alarm(0)  # cancel pending alarm
+            return jsonify({
+                "ok": False,
+                "error": "sheets_writer_module_missing",
+                "detail": str(e),
+                "hint": "sheets_writer.py is not in the repo or has a syntax error.",
+            }), 500
 
-    try:
+        # ─── Step 2: read service-account email ─────────────────
+        # This decodes the env var + parses JSON. Network-free.
+        # Worth a separate step because the email is useful in
+        # error responses even when later steps fail.
+        app.logger.info("[test-sheets] step 2: reading service-account email")
+        try:
+            sa_email = sheets_writer.get_service_account_email()
+            app.logger.info("[test-sheets] step 2 OK: email=%s", sa_email)
+        except Exception as e:
+            app.logger.warning("[test-sheets] step 2 FAILED: %s", e)
+            # not fatal — keep going; health_check() will surface the
+            # underlying credential-load error
+
+        # ─── Step 3: run the real health check ──────────────────
+        app.logger.info("[test-sheets] step 3: running health_check()")
         result = sheets_writer.health_check()
+
+        # ─── Step 4: success ────────────────────────────────────
         app.logger.info(
-            "admin_test_sheets_connection: OK | sheet=%s | tabs=%s | first_cell=%r",
-            result.get("sheet_title"), result.get("tabs"), result.get("first_cell"),
+            "[test-sheets] step 4 OK | sheet=%s | tabs=%s | first_cell=%r",
+            result.get("sheet_title"),
+            result.get("tabs"),
+            result.get("first_cell"),
         )
         return jsonify(result), 200
+
+    except _SheetsTimeout as e:
+        app.logger.error("[test-sheets] HARD TIMEOUT: %s", e)
+        return jsonify({
+            "ok": False,
+            "error": "wall_clock_timeout",
+            "detail": str(e),
+            "service_account_email": sa_email,
+            "hint": (
+                "The Google API call took longer than "
+                f"{HARD_TIMEOUT_SECONDS}s. Most likely cause: malformed "
+                "private_key in env var (the OAuth handshake hangs "
+                "silently). Re-encode the JSON as base64 and ensure "
+                "you pasted the FULL ~3160-char string into the Render "
+                "env var. Check the Render runtime log for the last "
+                "[test-sheets] step entered to confirm where the hang "
+                "occurred."
+            ),
+        }), 500
     except RuntimeError as e:
-        app.logger.warning(f"admin_test_sheets_connection failed: {e}")
+        app.logger.warning("[test-sheets] step 3 FAILED (RuntimeError): %s", e)
         return jsonify({
             "ok": False,
             "error": "health_check_failed",
@@ -4668,13 +4710,19 @@ def admin_test_sheets_connection():
             "service_account_email": sa_email,
         }), 500
     except Exception as e:
-        app.logger.exception("admin_test_sheets_connection unexpected error")
+        app.logger.exception("[test-sheets] step 3 FAILED (unexpected)")
         return jsonify({
             "ok": False,
             "error": "unexpected_error",
             "detail": str(e),
             "service_account_email": sa_email,
         }), 500
+    finally:
+        # ALWAYS cancel the alarm and restore the previous handler.
+        # Otherwise the timer might fire during a later request
+        # handled by the same worker.
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 # ============================================================
