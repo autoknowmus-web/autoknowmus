@@ -408,14 +408,25 @@ def _get_fuel_from_version(v: Dict[str, Any]) -> str:
 def _parse_variants(state: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Pull a clean variant list from the parsed __INITIAL_STATE__ dict.
     Each item: {versionName, displayName, maskingName, fuel,
-                 ex_showroom, on_road}."""
+                 ex_showroom, on_road}.
+
+    v2.6: CarWale's priceOverview now puts the actual ex-showroom price
+    in the field 'price'. The field still named 'exShowRoomPrice' is 0
+    in the JSON we get from server-side scrapers (it appears to only
+    populate in some browser-served variants). 'onRoadPrice' is also
+    0 server-side, so we don't expose on-road in the output anymore —
+    only ex-showroom, which is what AutoKnowMus consumes anyway.
+    Tries 'price' first, falls back to 'exShowRoomPrice' for safety.
+    """
     versions = (state.get("modelPage") or {}).get("versions") or []
     out: List[Dict[str, Any]] = []
     for v in versions:
         po = v.get("priceOverview") or {}
-        ex = po.get("exShowRoomPrice") or 0
+        # v2.6: 'price' is the field with the real number; 'exShowRoomPrice'
+        # is a legacy field that's now 0. Try 'price' first.
+        ex = po.get("price") or po.get("exShowRoomPrice") or 0
         if not isinstance(ex, (int, float)) or ex <= 0:
-            # Skip variants with no usable ex-showroom price
+            # Skip variants with no usable price (e.g. discontinued, "coming soon")
             continue
         out.append({
             "versionName": (v.get("versionName") or "").strip(),
@@ -423,7 +434,7 @@ def _parse_variants(state: Dict[str, Any]) -> List[Dict[str, Any]]:
             "maskingName": (v.get("versionMaskingName") or "").strip(),
             "fuel": _get_fuel_from_version(v),
             "ex_showroom": int(ex),
-            "on_road": int(po.get("price") or 0),
+            "on_road": int(po.get("onRoadPrice") or 0),
         })
     return out
 
