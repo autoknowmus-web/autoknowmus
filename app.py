@@ -4725,6 +4725,98 @@ def admin_diag_egress():
         },
     }), 200
 
+@app.route('/admin/diag-scraper-fetch')
+@login_required
+@admin_required
+def admin_diag_scraper_fetch():
+    """
+    DIAGNOSTIC: Fetch a CarWale URL and dump the actual response so we can
+    see what HTML is being served from Render's IP. Helps debug cases where
+    the page loads (HTTP 200) but __INITIAL_STATE__ isn't in the body.
+
+    Query params:
+      url (optional): full URL to fetch. Defaults to the Maruti Swift page.
+
+    Delete this route once the scraper is proven working.
+    """
+    import requests as _rq
+
+    target_url = (request.args.get('url') or '').strip()
+    if not target_url:
+        target_url = 'https://www.carwale.com/maruti-suzuki-cars/swift/'
+
+    if not target_url.startswith('https://www.carwale.com/'):
+        return jsonify({"ok": False, "error": "url_not_allowed",
+                        "detail": "Only carwale.com URLs allowed."}), 400
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/121.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-IN,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
+
+    try:
+        resp = _rq.get(target_url, headers=headers, timeout=(8, 20), allow_redirects=True)
+    except Exception as e:
+        return jsonify({"ok": False, "error": "fetch_exception",
+                        "detail": f"{type(e).__name__}: {e}"}), 500
+
+    body = resp.text or ""
+    body_len = len(body)
+
+    needles = {
+        "__INITIAL_STATE__":   body.count("__INITIAL_STATE__"),
+        "INITIAL_STATE":       body.count("INITIAL_STATE"),
+        "__NEXT_DATA__":       body.count("__NEXT_DATA__"),
+        "__NUXT__":            body.count("__NUXT__"),
+        "dataLayer":           body.count("dataLayer"),
+        "window.__":           body.count("window.__"),
+        "exShowRoomPrice":     body.count("exShowRoomPrice"),
+        "modelPage":           body.count("modelPage"),
+        "versionName":         body.count("versionName"),
+        "<script":             body.count("<script"),
+        "Just a moment":       body.count("Just a moment"),
+        "Access denied":       body.count("Access denied"),
+        "captcha":             body.lower().count("captcha"),
+        "cf-browser-verify":   body.count("cf-browser-verify"),
+    }
+
+    history_chain = [
+        {"status": h.status_code, "url": h.url} for h in (resp.history or [])
+    ]
+
+    interesting_headers = {
+        k: resp.headers.get(k)
+        for k in (
+            "Server", "Content-Type", "Content-Length", "Content-Encoding",
+            "Set-Cookie", "CF-RAY", "CF-Cache-Status", "X-Cache",
+            "X-Akamai-Transformed", "Via", "Vary",
+        )
+        if resp.headers.get(k) is not None
+    }
+
+    return jsonify({
+        "ok": True,
+        "fetched_url": target_url,
+        "final_url": resp.url,
+        "redirect_chain": history_chain,
+        "http_status": resp.status_code,
+        "body_length_bytes": body_len,
+        "interesting_headers": interesting_headers,
+        "all_headers": dict(resp.headers),
+        "needle_counts": needles,
+        "body_first_2000_chars": body[:2000],
+        "body_last_500_chars": body[-500:] if body_len > 500 else "",
+    }), 200
+
+
 @app.route('/admin/test-sheets-connection')
 @login_required
 @admin_required
