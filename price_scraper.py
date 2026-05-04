@@ -113,7 +113,13 @@ DEFAULT_HEADERS = {
     "User-Agent": USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-IN,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate",
+    # v2.7: Explicitly decline Brotli. CarWale's CDN sends `Content-Encoding: br`
+    # if we don't, and `requests` doesn't auto-decompress Brotli — we'd get
+    # garbage bytes back where __INITIAL_STATE__ should be. Forcing gzip-only
+    # makes the response decompressable by the stdlib path. Verified via
+    # /admin/diag-scraper-fetch which showed `br`-encoded responses producing
+    # zero needle matches for `__INITIAL_STATE__`, `exShowRoomPrice`, etc.
+    "Accept-Encoding": "gzip, deflate, identity;q=0.5, *;q=0",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
 }
