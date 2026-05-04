@@ -1040,13 +1040,14 @@
   // Phase 3.2: Click handler — switch to Review Queue tab
   if (roViewQueueBtn) {
     roViewQueueBtn.addEventListener('click', () => {
-      activateTab('review-queue');
-      // Smooth scroll to top of queue
-      const queuePanel = document.getElementById('panel-review-queue');
-      if (queuePanel) queuePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Phase 3.2 fix: Server-rendered Review Queue is stale (rendered at
+      // page load, before the new reviews existed). Force a full reload so
+      // the server re-fetches pending_reviews from Supabase. Hash ensures
+      // we land on the correct tab via initTab() on page load.
+      window.location.href = window.location.pathname + '#review-queue';
+      window.location.reload();
     });
   }
-
   function inrFmt(n) {
     if (n === null || n === undefined || isNaN(n)) return '—';
     n = Math.round(Number(n));
