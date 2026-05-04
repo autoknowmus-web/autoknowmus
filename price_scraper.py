@@ -2,10 +2,29 @@
 price_scraper.py — CarWale ex-showroom price scraper for AutoKnowMus
 =====================================================================
 
-VERSION: v3.0 (05-May-2026)
+VERSION: v3.0.1 (05-May-2026)
 
 CHANGELOG:
-    v3.0 — Bangalore cookies + trim-page parsing (this version).
+    v3.0.1 — (this version)
+        - Fixed trim-slug over-collection. Bangalore-pinned overview page
+          links to ~10 suburb pages (price-in-nelamangala etc) per model
+          which we naively treated as trims. Added NON_TRIM_PREFIXES
+          ("price-in-", "ex-showroom-price-in-", "on-road-price-in-") and
+          a _looks_like_non_trim() helper that combines exact + prefix
+          matching. Trim count for Ertiga should drop from 15 to 4.
+        - Reduced MAX_RETRIES from 4 to 2 to fit Gunicorn's 30s worker
+          timeout. With v3.0's 4 retries x ~5 trims, single fetch_price()
+          calls were exceeding 30s and getting SIGKILLed.
+        - Added diagnostic to _harvest_versions_from_trim_page() that
+          dumps top-level keys + paths containing "version"/"price" when
+          the expected JSON shape is missing. Needed because v3.0 logs
+          showed "no versions[] found" on every trim page even though
+          __INITIAL_STATE__.exShowRoomPrice was confirmed present
+          (priceOverview/exShowRoomPrice ~44 occurrences each in needles
+          dumps). The JSON path is somewhere else in the structure;
+          this diag will reveal where so v3.0.2 can navigate correctly.
+
+    v3.0 — Bangalore cookies + trim-page parsing.
         Root cause of v2.9.x failures: CarWale stopped serving per-variant
         ex-showroom prices on /{make}-cars/{model}/{variant-slug}/ URLs.
         That URL pattern now redirects to /{make}-cars/{model}/{trim}/,
@@ -112,7 +131,7 @@ CARWALE_BASE = "https://www.carwale.com"
 # Rate-limit knobs
 MIN_REQ_INTERVAL_SECS = 2.0
 JITTER_SECS = 0.5
-MAX_RETRIES = 4
+MAX_RETRIES = 2  # v3.0.1: reduced from 4 to fit gunicorn 30s timeout
 BACKOFF_BASE_SECS = 1.0  # 1, 2, 4, 8
 
 # HTTP timeouts
@@ -168,17 +187,27 @@ VARIANT_MASKING_TOKENS = (
 )
 
 # Path segments that aren't trim slugs at all (sub-pages of the model).
+# Exact-match list for the common ones. Prefix-match logic in
+# _looks_like_non_trim() catches the rest (e.g. price-in-{any-city}/{suburb}).
 NON_TRIM_PATHS = {
-    "photos", "specifications", "specs", "colours", "colors",
-    "user-reviews", "reviews", "news", "videos", "compare",
-    "offers", "ex-showroom-price", "on-road-price", "mileage",
+    "photos", "images", "specifications", "specs", "colours", "colors",
+    "user-reviews", "reviews", "expert-reviews", "news", "videos",
+    "compare", "offers", "ex-showroom-price", "on-road-price", "mileage",
     "interior", "exterior", "features", "variants", "brochure",
-    "service-cost", "service-costs", "price-in-bangalore",
-    "price-in-delhi", "price-in-mumbai", "price-in-pune",
-    "price-in-hyderabad", "price-in-chennai", "price-in-kolkata",
-    "price-in-ahmedabad", "price-in-jaipur", "price-in-lucknow",
-    "price-in-navi-mumbai",
+    "service-cost", "service-costs", "dealer-showrooms", "dealers",
+    "owner-reviews", "ratings", "specs-features", "fuel-types",
+    "transmissions", "comparison", "alternatives", "competitors",
+    "user-rating", "videos-reviews",
 }
+
+# Slug prefixes that always indicate a non-trim sub-page. CarWale uses
+# /price-in-{any-city}/ for hundreds of city/suburb pages — impossible to
+# enumerate exactly. Prefix-match catches them all.
+NON_TRIM_PREFIXES = (
+    "price-in-",
+    "ex-showroom-price-in-",
+    "on-road-price-in-",
+)
 
 logger = logging.getLogger("price_scraper")
 logger.setLevel(logging.INFO)
@@ -506,6 +535,18 @@ def _looks_like_variant_masking(candidate: str) -> bool:
     return False
 
 
+def _looks_like_non_trim(candidate: str) -> bool:
+    """Return True if the slug is a known non-trim sub-page (e.g. photos,
+    specs, price-in-{anywhere}). Combines exact-match + prefix-match so
+    we don't have to enumerate every possible suburb in NON_TRIM_PATHS."""
+    if candidate in NON_TRIM_PATHS:
+        return True
+    for prefix in NON_TRIM_PREFIXES:
+        if candidate.startswith(prefix):
+            return True
+    return False
+
+
 def _extract_trim_slugs(html: str, slug: str) -> List[str]:
     """Extract the list of trim slugs from a model overview page.
 
@@ -533,7 +574,7 @@ def _extract_trim_slugs(html: str, slug: str) -> List[str]:
             continue
         if candidate in seen_set:
             continue
-        if candidate in NON_TRIM_PATHS:
+        if _looks_like_non_trim(candidate):
             continue
         if _looks_like_variant_masking(candidate):
             continue
@@ -593,6 +634,35 @@ def _harvest_versions_from_trim_page(
                 versions = v_list
 
     if not versions:
+        # v3.0.1 DIAG: dump top-level keys + all keys/paths containing
+        # "version" or "price" so we can identify the actual JSON shape.
+        try:
+            top_keys = sorted(list(state.keys())) if isinstance(state, dict) else []
+            interesting_paths: List[str] = []
+            def _walk(node: Any, path: str, depth: int) -> None:
+                if depth > 4:
+                    return
+                if isinstance(node, dict):
+                    for k, v in node.items():
+                        kl = str(k).lower()
+                        new_path = f"{path}.{k}" if path else str(k)
+                        if "version" in kl or "price" in kl:
+                            if isinstance(v, list):
+                                interesting_paths.append(f"{new_path} = list(len={len(v)})")
+                            elif isinstance(v, dict):
+                                interesting_paths.append(f"{new_path} = dict(keys={sorted(list(v.keys()))[:6]})")
+                            else:
+                                interesting_paths.append(f"{new_path} = {type(v).__name__}({str(v)[:40]})")
+                        if isinstance(v, (dict, list)) and len(interesting_paths) < 30:
+                            _walk(v, new_path, depth + 1)
+                elif isinstance(node, list) and node:
+                    if isinstance(node[0], dict):
+                        _walk(node[0], path + "[0]", depth + 1)
+            _walk(state, "", 0)
+            logger.info("[%s] DIAG top_keys=%s, interesting_paths=%s",
+                        trim_url, top_keys[:20], interesting_paths[:30])
+        except Exception as _diag_e:
+            logger.warning("[%s] diag walk failed: %s", trim_url, _diag_e)
         logger.info("[%s] trim_page: no versions[] found in __INITIAL_STATE__", trim_url)
         return out
 
