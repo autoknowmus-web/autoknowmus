@@ -6685,6 +6685,245 @@ def price_tools_reject():
     except Exception as e:
         app.logger.exception('price_tools_reject failed')
         return jsonify({'ok': False, 'error': str(e)}), 500
+# ============================================================
+# Phase 3.1: INCREMENTAL SCRAPING + BULK OPERATIONS
+# ============================================================
+# scrape-init: returns variant list immediately so frontend can drive a
+# per-variant loop (avoids 30s gunicorn timeout that was killing the old
+# monolithic scrape-model route).
+#
+# bulk-approve / bulk-reject: process multiple review IDs sequentially.
+# Each row uses the SAME logic as single-row approve/reject, just wrapped
+# in a loop with per-row error capture so one bad row doesn't poison the
+# whole batch.
+
+@app.route('/admin/price-tools/scrape-init', methods=['POST'])
+def price_tools_scrape_init():
+    """
+    Returns the list of variants to scrape for a given make + model.
+    Frontend then loops over these and calls /scrape-one per variant.
+    Fast (~2s): just reads the sheet, no scraping yet.
+    """
+    user = session.get('user')
+    if not _is_admin(user):
+        return jsonify({'ok': False, 'error': 'admin only'}), 403
+
+    make = (request.form.get('make') or '').strip()
+    model = (request.form.get('model') or '').strip()
+    if not make or not model:
+        return jsonify({'ok': False, 'error': 'make and model required'}), 400
+
+    try:
+        all_rows = sheets_writer.read_car_prices()
+        sheet_rows_for_model = [
+            r for r in all_rows
+            if r.get('make') == make and r.get('model') == model
+        ]
+        if not sheet_rows_for_model:
+            return jsonify({
+                'ok': False,
+                'error': 'no variants found for this make + model in sheet'
+            }), 404
+
+        variants = []
+        for r in sheet_rows_for_model:
+            variants.append({
+                'variant': r.get('variant', ''),
+                'fuel': r.get('fuel', ''),
+                'current_price': r.get('ex_showroom_price', 0),
+            })
+
+        return jsonify({
+            'ok': True,
+            'make': make,
+            'model': model,
+            'variants': variants,
+            'total': len(variants),
+        })
+    except Exception as e:
+        app.logger.exception('price_tools_scrape_init failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/price-tools/bulk-approve', methods=['POST'])
+def price_tools_bulk_approve():
+    """
+    Approves multiple pending reviews sequentially.
+    Body: JSON { "review_ids": [123, 456, 789] }
+    Returns per-row results so frontend can show partial success/failure.
+    Cap: 25 per request (sheet writes ~1s each, stays under 30s timeout).
+    """
+    user = session.get('user')
+    if not _is_admin(user):
+        return jsonify({'ok': False, 'error': 'admin only'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    review_ids = payload.get('review_ids') or []
+    if not isinstance(review_ids, list) or not review_ids:
+        return jsonify({'ok': False, 'error': 'review_ids must be non-empty list'}), 400
+    if len(review_ids) > 25:
+        return jsonify({
+            'ok': False,
+            'error': 'max 25 reviews per bulk request — chunk client-side'
+        }), 400
+
+    results = []
+    approved_count = 0
+    failed_count = 0
+
+    for rid in review_ids:
+        try:
+            rid_int = int(rid)
+        except (ValueError, TypeError):
+            results.append({'id': rid, 'ok': False, 'error': 'invalid id'})
+            failed_count += 1
+            continue
+
+        try:
+            resp = supabase.table('pending_reviews').select('*').eq(
+                'id', rid_int).limit(1).execute()
+            if not resp.data:
+                results.append({'id': rid_int, 'ok': False, 'error': 'review not found'})
+                failed_count += 1
+                continue
+            r = resp.data[0]
+            if r['status'] != 'pending':
+                results.append({
+                    'id': rid_int, 'ok': False,
+                    'error': f"review already {r['status']}"
+                })
+                failed_count += 1
+                continue
+
+            # Dispatch to the right write function — mirrors price_tools_approve()
+            rt = r['review_type']
+            if rt == 'price_update':
+                sheets_writer.write_price_update_v2(
+                    make=r['make'], model=r['model'],
+                    variant=r['variant'], fuel=r['fuel'],
+                    new_price=int(r['proposed_price']),
+                    source='CarWale',
+                )
+            elif rt == 'discontinued':
+                sheets_writer.write_discontinued_flag(
+                    make=r['make'], model=r['model'],
+                    variant=r['variant'], fuel=r['fuel'],
+                )
+            elif rt == 'new_variant':
+                sheets_writer.write_new_variant(
+                    make=r['make'], model=r['model'],
+                    variant=r['variant'], fuel=r['fuel'],
+                    ex_showroom_price=int(r['proposed_price']),
+                    source='CarWale',
+                )
+            else:
+                results.append({
+                    'id': rid_int, 'ok': False,
+                    'error': f'unknown review_type: {rt}'
+                })
+                failed_count += 1
+                continue
+
+            # Mark approved
+            supabase.table('pending_reviews').update({
+                'status': 'approved',
+                'reviewed_at': datetime.utcnow().isoformat(),
+                'reviewed_by': user['email'],
+            }).eq('id', rid_int).execute()
+
+            results.append({'id': rid_int, 'ok': True, 'review_type': rt})
+            approved_count += 1
+
+        except Exception as row_err:
+            app.logger.exception(f'bulk-approve review {rid_int} failed')
+            results.append({'id': rid_int, 'ok': False, 'error': str(row_err)})
+            failed_count += 1
+
+    # Refresh cache once at end (not per-row — wasteful)
+    if approved_count > 0:
+        try:
+            car_data.refresh_prices(force=True)
+        except Exception as e:
+            app.logger.warning(f'car_data.refresh_prices failed after bulk-approve: {e}')
+
+    return jsonify({
+        'ok': True,
+        'approved': approved_count,
+        'failed': failed_count,
+        'results': results,
+    })
+
+
+@app.route('/admin/price-tools/bulk-reject', methods=['POST'])
+def price_tools_bulk_reject():
+    """
+    Rejects multiple pending reviews sequentially.
+    Body: JSON { "review_ids": [123, 456, 789] }
+    No sheet writes — just status updates in Supabase. Fast.
+    """
+    user = session.get('user')
+    if not _is_admin(user):
+        return jsonify({'ok': False, 'error': 'admin only'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    review_ids = payload.get('review_ids') or []
+    if not isinstance(review_ids, list) or not review_ids:
+        return jsonify({'ok': False, 'error': 'review_ids must be non-empty list'}), 400
+    if len(review_ids) > 50:
+        return jsonify({
+            'ok': False,
+            'error': 'max 50 reviews per bulk reject — chunk client-side'
+        }), 400
+
+    results = []
+    rejected_count = 0
+    failed_count = 0
+
+    for rid in review_ids:
+        try:
+            rid_int = int(rid)
+        except (ValueError, TypeError):
+            results.append({'id': rid, 'ok': False, 'error': 'invalid id'})
+            failed_count += 1
+            continue
+
+        try:
+            resp = supabase.table('pending_reviews').select('id, status').eq(
+                'id', rid_int).limit(1).execute()
+            if not resp.data:
+                results.append({'id': rid_int, 'ok': False, 'error': 'review not found'})
+                failed_count += 1
+                continue
+            r = resp.data[0]
+            if r['status'] != 'pending':
+                results.append({
+                    'id': rid_int, 'ok': False,
+                    'error': f"review already {r['status']}"
+                })
+                failed_count += 1
+                continue
+
+            supabase.table('pending_reviews').update({
+                'status': 'rejected',
+                'reviewed_at': datetime.utcnow().isoformat(),
+                'reviewed_by': user['email'],
+            }).eq('id', rid_int).execute()
+
+            results.append({'id': rid_int, 'ok': True})
+            rejected_count += 1
+
+        except Exception as row_err:
+            app.logger.exception(f'bulk-reject review {rid_int} failed')
+            results.append({'id': rid_int, 'ok': False, 'error': str(row_err)})
+            failed_count += 1
+
+    return jsonify({
+        'ok': True,
+        'rejected': rejected_count,
+        'failed': failed_count,
+        'results': results,
+    })
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
 
