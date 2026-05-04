@@ -2,7 +2,7 @@
 price_scraper.py — CarWale ex-showroom price scraper for AutoKnowMus
 =====================================================================
 
-VERSION: v2.9 (04-May-2026)
+VERSION: v2.9.1 (04-May-2026)
 
 CHANGELOG:
     v2.9 — Per-variant URL fetching.
@@ -564,6 +564,33 @@ def _fetch_single_variant_price(variant_url: str) -> Dict[str, Any]:
     except Exception as e:
         out["error"] = f"fetch_exception: {e.__class__.__name__}: {e}"
         return out
+
+    # v2.9.1 diag: count key needles + dump a window around "Ex-Showroom"
+    # so we can see what the variant page actually contains. Once the
+    # extraction is fixed, this block can be removed.
+    try:
+        needles = {
+            "__INITIAL_STATE__": html.count("__INITIAL_STATE__"),
+            "Ex-Showroom": html.count("Ex-Showroom"),
+            "ex-showroom": html.count("ex-showroom"),
+            "exShowRoomPrice": html.count("exShowRoomPrice"),
+            "priceOverview": html.count("priceOverview"),
+            "versionPage": html.count("versionPage"),
+            "modelPage": html.count("modelPage"),
+            "version\":": html.count("version\":"),
+            "Lakh": html.count("Lakh"),
+            "Rs.": html.count("Rs."),
+        }
+        idx = html.find("Ex-Showroom")
+        if idx < 0:
+            idx = html.find("ex-showroom")
+        snippet = ""
+        if idx >= 0:
+            snippet = html[max(0, idx - 50):idx + 250]
+        logger.info("[%s] variant_page needles=%s, snippet=%r",
+                    variant_url, needles, snippet)
+    except Exception as _diag_e:
+        logger.warning("[%s] variant page diag failed: %s", variant_url, _diag_e)
 
     # Strategy 1 — JSON path
     try:
