@@ -2,9 +2,52 @@
 price_scraper.py — CarWale ex-showroom price scraper for AutoKnowMus
 =====================================================================
 
-VERSION: v2.1 (03-May-2026)
+VERSION: v2.9 (04-May-2026)
 
 CHANGELOG:
+    v2.9 — Per-variant URL fetching.
+        CarWale's model overview page (e.g. /maruti-suzuki-cars/ertiga/)
+        used to expose all variant prices in __INITIAL_STATE__. As of
+        04-May-2026 those prices come back as 0 server-side; only the
+        per-variant pages (/maruti-suzuki-cars/ertiga/lxi/) populate the
+        actual price.
+        Diagnosed via /admin/diag-scraper-fetch + needle counts which
+        showed Content-Encoding=gzip, body fully decompressed, but
+        priceOverview.price=0 and exShowRoomPrice=0 across all versions.
+        v2.9 strategy:
+          1. Fetch model overview page → extract variant index
+             (list of {name, url, fuel, masking}) using either JSON
+             (if __INITIAL_STATE__.modelPage.versions populated) or HTML
+             regex over href patterns as fallback.
+          2. Match user's requested variant against that index by
+             normalized name + fuel.
+          3. Fetch the matched variant's specific URL → extract its
+             ex-showroom price using JSON (modelPage.version /
+             versionPage / single-element versions list) or HTML regex
+             over "Ex-Showroom Price ... Rs. X,XX,XXX" as fallback.
+        Cost: 2 HTTP requests per fetch_price() instead of 1. With
+        rate-limit at 2s/request that doubles per-variant scrape time
+        but produces accurate prices for current CarWale layout.
+        Old _parse_variants() and the in-fetch_price() match path are
+        retained as a legacy fallback when the variant index returns
+        non-empty AND each variant in it already has a price (older
+        layout still serving prices in modelPage.versions).
+
+    v2.8.1 — Diagnostic. Log Content-Encoding + body sample on every
+        successful fetch so we can see what CarWale actually sends.
+        This is what surfaced the per-variant-page issue: the model
+        overview page came back as gzip-decoded HTML cleanly, with
+        __INITIAL_STATE__ present, but priceOverview values were 0.
+
+    v2.8 — Brotli decompression on our side. Kept as a safety net even
+        though current edges return gzip, because CarWale's CloudFront
+        decision is per-edge and may switch back. Requires `Brotli` in
+        requirements.txt.
+
+    v2.7 — Decline Brotli via Accept-Encoding. Made some edges fall
+        back to gzip (which `requests` auto-decompresses). Did not
+        cover all edges, so v2.8 added explicit Brotli decode.
+
     v2.1 — URL builder fix.
         Sheet stores slugs as `{make-slug}/{model-slug}` (e.g.
         "maruti-suzuki/swift"). CarWale's actual URL convention is
@@ -26,8 +69,9 @@ WHAT THIS MODULE DOES:
     a dict with the ex-showroom price for a single (make, model, variant,
     fuel) combo, scraped live from carwale.com.
 
-PUBLIC API SHAPE (unchanged from v2.0 — app.py's /admin/test-scraper
-route does NOT need any changes):
+PUBLIC API SHAPE (unchanged across versions — app.py's
+/admin/test-scraper and /admin/price-tools/* routes do NOT need any
+changes):
 
     {
       "ok": True,
@@ -40,30 +84,16 @@ route does NOT need any changes):
       "fuel": str,
       "ex_showroom_inr": int | None,
       "matched_variant": str | None,        # full versionName from CarWale
-      "url": str | None,                     # CarWale URL we hit
+      "url": str | None,                     # CarWale URL we hit (the variant page)
       "scraped_at": ISO timestamp,
       "candidates_considered": int,          # how many variants we matched
       "all_variants": list[str] | None,      # for debug — full list when matching
       "error": str | None,                   # human-readable error
     }
 
-HIGH-LEVEL FLOW:
-    1. Read the model_slugs tab to look up the carwale_slug for
-       (make, model). Cached in-memory for SLUG_CACHE_TTL.
-    2. Build URL via _slug_to_url_path: "maruti-suzuki/swift"
-       -> "https://www.carwale.com/maruti-suzuki-cars/swift/"
-    3. Rate-limited HTTP GET (User-Agent spoofed, retries on 429/503).
-    4. Find `window.__INITIAL_STATE__ = {...};` inside the response.
-    5. Walk balanced braces to extract the JSON, parse with json.loads.
-    6. Pull `modelPage.versions` — list of variant dicts with
-       priceOverview.exShowRoomPrice (clean integer rupees).
-    7. Match user's variant: normalize names (strip fuel/transmission/
-       trim modifiers), filter by fuel, return cheapest match (because
-       a user typing "VXI Petrol" usually means the base VXI Petrol,
-       not VXI (O) or VXI Petrol AMT).
-
 DEPENDENCIES:
-    - requests (already in requirements.txt)
+    - requests (in requirements.txt)
+    - Brotli (in requirements.txt as of v2.8)
     - stdlib: json, re, time, threading, datetime, random, logging
 """
 
@@ -116,9 +146,8 @@ DEFAULT_HEADERS = {
     # v2.7: Explicitly decline Brotli. CarWale's CDN sends `Content-Encoding: br`
     # if we don't, and `requests` doesn't auto-decompress Brotli — we'd get
     # garbage bytes back where __INITIAL_STATE__ should be. Forcing gzip-only
-    # makes the response decompressable by the stdlib path. Verified via
-    # /admin/diag-scraper-fetch which showed `br`-encoded responses producing
-    # zero needle matches for `__INITIAL_STATE__`, `exShowRoomPrice`, etc.
+    # makes the response decompressable by the stdlib path. v2.8 also has a
+    # Brotli decode safety net for edges that ignore this preference.
     "Accept-Encoding": "gzip, deflate, identity;q=0.5, *;q=0",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
@@ -217,28 +246,14 @@ def _slug_to_url_path(slug: str) -> str:
 
     The model_slugs sheet stores slugs in the form '{make-slug}/{model-slug}'
     (e.g. 'maruti-suzuki/swift', 'land-rover/freelander-2'). CarWale's URL
-    convention adds '-cars' to the make portion:
-        'maruti-suzuki/swift'      -> 'maruti-suzuki-cars/swift'
-        'land-rover/freelander-2'  -> 'land-rover-cars/freelander-2'
-        'toyota/landcruiserprado'  -> 'toyota-cars/landcruiserprado'
-
-    Verified universal: land-rover-cars, lexus-cars, mercedes-benz-cars,
-    rolls-royce-cars, bmw-cars all resolve on carwale.com.
-
-    Defensive: if the slug already contains '-cars/' we leave it alone
-    (so a future hand-edit in the sheet won't double-stamp).
-    Defensive: if the slug has no '/' (unexpected shape), fall back to
-    appending '-cars/' so we still produce a syntactically valid URL —
-    this will likely 404 but the error will be visible and traceable.
+    convention adds '-cars' to the make portion.
     """
     s = (slug or "").strip().strip("/")
     if not s:
         return ""
-    # Already has -cars/ — leave alone (caller hand-edited the sheet)
     if "-cars/" in s:
         return s
     if "/" not in s:
-        # Unexpected shape; best-effort fallback
         return f"{s}-cars"
     make_part, _, rest = s.partition("/")
     return f"{make_part}-cars/{rest}"
@@ -275,39 +290,31 @@ def _http_get(url: str) -> str:
             last_err = f"timeout: {e}"
             wait = BACKOFF_BASE_SECS * (2 ** attempt)
             logger.warning("[%s] timeout (attempt %d/%d), backing off %.1fs",
-                          url, attempt + 1, MAX_RETRIES, wait)
+                           url, attempt + 1, MAX_RETRIES, wait)
             time.sleep(wait)
             continue
         except requests.exceptions.RequestException as e:
             last_err = f"request_exception: {e}"
             wait = BACKOFF_BASE_SECS * (2 ** attempt)
             logger.warning("[%s] request error (attempt %d/%d): %s",
-                          url, attempt + 1, MAX_RETRIES, e)
+                           url, attempt + 1, MAX_RETRIES, e)
             time.sleep(wait)
             continue
 
-        # Got a response. Check status.
         if resp.status_code in (429, 503):
             last_err = f"http_{resp.status_code}"
             wait = BACKOFF_BASE_SECS * (2 ** attempt)
             logger.warning("[%s] HTTP %d (attempt %d/%d), backing off %.1fs",
-                          url, resp.status_code, attempt + 1, MAX_RETRIES, wait)
+                           url, resp.status_code, attempt + 1, MAX_RETRIES, wait)
             time.sleep(wait)
             continue
         if resp.status_code == 404:
             raise FetchError(f"HTTP 404 — page not found: {url}")
         if resp.status_code >= 400:
             raise FetchError(f"HTTP {resp.status_code} for {url}")
+
         # 2xx — decompress if needed, then return body.
-        # v2.8: CarWale's CloudFront edge sends `Content-Encoding: br` even
-        # when we ask for gzip-only (v2.7 Accept-Encoding header is ignored).
-        # `requests` doesn't auto-decompress Brotli, so resp.text returned
-        # garbage bytes. Plan B: explicitly decompress Brotli on our side.
-        # The Brotli package is in requirements.txt as of v2.8.
         encoding = (resp.headers.get("Content-Encoding") or "").lower()
-        # v2.8.1 diag: log every response's encoding so we can see what's actually
-        # arriving — this will tell us if Brotli decode is being triggered or if
-        # `requests` is silently transforming the body before we see it.
         logger.info("[%s] HTTP %d, Content-Encoding=%r, body_len=%d, first_bytes=%r",
                     url, resp.status_code, encoding,
                     len(resp.content), resp.content[:50])
@@ -324,6 +331,7 @@ def _http_get(url: str) -> str:
         return resp.text
     raise FetchError(f"max retries exhausted ({MAX_RETRIES}); last_err={last_err}")
 
+
 # ============================================================
 # JSON EXTRACTION FROM CARWALE HTML
 # ============================================================
@@ -334,8 +342,7 @@ INITIAL_STATE_NEEDLE = "__INITIAL_STATE__"
 def _extract_initial_state(html: str) -> Dict[str, Any]:
     """Locate `window.__INITIAL_STATE__ = { ... };` in the HTML and return
     the parsed dict. Walks balanced braces (string-aware) to find the JSON
-    end — safer than regex for nested objects.
-    Raises ValueError on any failure."""
+    end. Raises ValueError on any failure."""
     idx = html.find(INITIAL_STATE_NEEDLE)
     if idx < 0:
         raise ValueError(
@@ -345,15 +352,12 @@ def _extract_initial_state(html: str) -> Dict[str, Any]:
     eq_idx = html.find("=", idx)
     if eq_idx < 0:
         raise ValueError(f"no '=' after {INITIAL_STATE_NEEDLE}")
-    # Skip whitespace after '='
     i = eq_idx + 1
     while i < len(html) and html[i] in " \t\n\r":
         i += 1
     if i >= len(html) or html[i] != "{":
         raise ValueError(f"expected '{{' after = (got {html[i:i+10]!r})")
 
-    # Balanced-brace walk, string-aware so braces inside string literals
-    # don't count toward the depth counter.
     depth = 0
     in_string = False
     escape = False
@@ -385,7 +389,7 @@ def _extract_initial_state(html: str) -> Dict[str, Any]:
 
 
 # ============================================================
-# VARIANT MATCHING
+# VARIANT NAME NORMALIZATION + FUEL EXTRACTION
 # ============================================================
 
 _paren_re = re.compile(r"\([^)]*\)")
@@ -393,38 +397,23 @@ _ws_re = re.compile(r"\s+")
 
 
 def _normalize_variant_name(name: str) -> str:
-    """Strip fuel/transmission/decorative tokens to get just the trim name.
-
-    Examples:
-        "VXi Petrol Manual"             -> "vxi"
-        "VXi (O) Petrol Automatic"      -> "vxi"
-        "ZXi Plus Petrol Manual Dual Tone" -> "zxi plus"
-        "S(O) Diesel AMT"               -> "s"
-
-    The cleaned form is what we compare against the user's input."""
+    """Strip fuel/transmission/decorative tokens to get just the trim name."""
     s = (name or "").lower().strip()
-    # Drop parenthetical groups e.g. "(O)", "(AMT)", "(MT)"
     s = _paren_re.sub(" ", s)
-    # Replace each known noise token with a space (whole-substring replace
-    # is fine here — none of the tokens appear inside trim names like
-    # "ZXi Plus" or "Sportz")
     for tok in VARIANT_NOISE_TOKENS:
         s = s.replace(tok, " ")
-    # Collapse whitespace
     s = _ws_re.sub(" ", s).strip()
-    # Trim hyphens / dashes left over from removals
     s = s.strip("- ")
     return s
 
 
 def _get_fuel_from_version(v: Dict[str, Any]) -> str:
     """Extract human-readable fuel type from a version dict's specsSummary
-    (which is more reliable than fuelTypeId — that field is sometimes 0
-    even when fuel is set, as we observed on the Swift page)."""
+    (more reliable than fuelTypeId — that field is sometimes 0 even when
+    fuel is set, as we observed on the Swift page)."""
     for spec in v.get("specsSummary") or []:
         if spec.get("itemName") == "Fuel Type":
             return (spec.get("value") or "").strip()
-    # Fallback: parse from versionName ("VXi Petrol Manual" -> "Petrol")
     name = (v.get("versionName") or "").lower()
     for fuel in ("petrol", "diesel", "cng", "electric", "hybrid"):
         if fuel in name:
@@ -441,16 +430,15 @@ def _get_fuel_from_version(v: Dict[str, Any]) -> str:
 # (they appear only on per-variant pages like /maruti-suzuki-cars/ertiga/lxi/).
 #
 # v2.9 strategy:
-#   1. Fetch the model overview page → extract list of {name, url} for each variant
-#   2. Match user's requested variant against that list (by name + fuel)
+#   1. Fetch the model overview page → extract list of {name, url, fuel,
+#      masking} for each variant via _extract_variant_index().
+#   2. Match user's requested variant against that list (by name + fuel).
 #   3. Fetch the specific matched variant URL → extract ex-showroom price
+#      via _fetch_single_variant_price().
 #
 # Two HTTP requests per fetch_price() instead of one. Rate-limited as usual.
 # ============================================================
 
-# Variant href pattern: matches `/maruti-suzuki-cars/ertiga/lxi/` etc.
-# We anchor the match against the model slug so it doesn't pick up
-# unrelated cross-links to other models on the page.
 def _build_variant_href_regex(slug: str) -> Optional[re.Pattern]:
     """Compile a regex that matches `href="/{make-cars}/{model}/{variant-slug}/"`
     given a sheet slug like 'maruti-suzuki/ertiga'. Returns None on bad input."""
@@ -459,7 +447,6 @@ def _build_variant_href_regex(slug: str) -> Optional[re.Pattern]:
     make_part, _, model_part = slug.strip("/").partition("/")
     if not make_part or not model_part:
         return None
-    # Escape make/model parts for regex; allow trailing slash optional
     make_re = re.escape(make_part)
     model_re = re.escape(model_part)
     pattern = (
@@ -472,20 +459,18 @@ def _build_variant_href_regex(slug: str) -> Optional[re.Pattern]:
 def _extract_variant_index(html: str, slug: str) -> List[Dict[str, str]]:
     """Extract the list of variants from a model overview page response.
 
-    Returns a list of dicts: [{"name": "LXi", "url": "https://.../lxi/", "fuel": ""}, ...]
+    Returns: [{"name": "LXi", "url": "https://.../lxi/", "fuel": "Petrol",
+               "masking": "lxi"}, ...]
 
-    Tries two strategies in order:
+    Tries two strategies:
       1. JSON: parse __INITIAL_STATE__, look for modelPage.versions with
-         versionMaskingName/versionName/maskingName fields.
-      2. HTML regex fallback: scan for href links matching the variant URL pattern.
-
-    Returns [] if neither strategy finds anything (caller will report error).
-    The caller is responsible for fetching each variant URL to get the price.
+         versionMaskingName / versionName fields.
+      2. HTML regex fallback: scan for href links matching the variant URL
+         pattern.
     """
     out: List[Dict[str, str]] = []
 
-    # Strategy 1 — JSON path. We try this first because if it works it gives
-    # us cleaner names and we can pre-filter by fuel.
+    # Strategy 1 — JSON path.
     try:
         state = _extract_initial_state(html)
         versions = (state.get("modelPage") or {}).get("versions") or []
@@ -494,7 +479,6 @@ def _extract_variant_index(html: str, slug: str) -> List[Dict[str, str]]:
                 continue
             name = (v.get("versionName") or v.get("displayName") or "").strip()
             masking = (v.get("versionMaskingName") or "").strip()
-            # Build URL from masking name (CarWale's URL convention)
             if masking and slug:
                 variant_url = f"{CARWALE_BASE}/{_slug_to_url_path(slug)}/{masking}/"
             else:
@@ -513,28 +497,24 @@ def _extract_variant_index(html: str, slug: str) -> List[Dict[str, str]]:
     except Exception as e:
         logger.info("variant_index: JSON path failed (%s), trying HTML regex", e)
 
-    # Strategy 2 — HTML regex fallback. Scan for href patterns.
+    # Strategy 2 — HTML regex fallback.
     pattern = _build_variant_href_regex(slug)
     if not pattern:
         logger.warning("variant_index: bad slug %r, can't build regex", slug)
         return out
     seen_paths = set()
+    SKIP = {"photos", "specifications", "specs", "colours", "colors",
+            "user-reviews", "reviews", "news", "videos", "compare",
+            "offers", "ex-showroom-price", "on-road-price", "mileage",
+            "interior", "exterior", "features", "variants"}
     for match in pattern.finditer(html):
         path = match.group(1)
         masking = match.group(2)
         if path in seen_paths:
             continue
-        # Filter common non-variant URLs that share the model slug prefix
-        # (e.g. "/photos", "/specifications", "/colours", "/user-reviews", "/news")
-        SKIP = {"photos", "specifications", "specs", "colours", "colors",
-                "user-reviews", "reviews", "news", "videos", "compare",
-                "offers", "ex-showroom-price", "on-road-price", "mileage",
-                "interior", "exterior", "features", "variants"}
         if masking.lower() in SKIP:
             continue
         seen_paths.add(path)
-        # We don't know the human variant name from the URL alone; use masking
-        # capitalized as a best-effort name for matching.
         display_name = masking.replace("-", " ").title()
         out.append({
             "name": display_name,
@@ -546,27 +526,23 @@ def _extract_variant_index(html: str, slug: str) -> List[Dict[str, str]]:
                 len(out), len(seen_paths))
     return out
 
+
 def _fetch_single_variant_price(variant_url: str) -> Dict[str, Any]:
     """Fetch a single variant page and extract its ex-showroom price + canonical name.
 
     Returns a dict:
         {
           "ok": True/False,
-          "price": int | None,        # ex-showroom price in INR
-          "version_name": str | None, # canonical name from CarWale, e.g. "VXi Petrol Manual"
-          "fuel": str | None,         # canonical fuel from CarWale
-          "url": str,                 # echo back the URL we hit
+          "price": int | None,
+          "version_name": str | None,
+          "fuel": str | None,
+          "url": str,
           "error": str | None,
         }
 
-    Tries two strategies in order:
-      1. JSON: parse __INITIAL_STATE__, find priceOverview.price (or
-         exShowRoomPrice fallback), versionName, fuel.
-      2. HTML regex fallback: scan for "Ex-Showroom Price" text near a
-         rupee amount (e.g. "Rs. 8,80,000"). This is more brittle but
-         works as a last resort if JSON shape changes.
-
-    Never raises — every failure mode is encoded in the return dict.
+    Tries JSON first (modelPage.version / versionPage / single-element
+    versions list) then HTML regex over "Ex-Showroom Price ... Rs. X,XX,XXX".
+    Never raises.
     """
     out: Dict[str, Any] = {
         "ok": False,
@@ -580,7 +556,6 @@ def _fetch_single_variant_price(variant_url: str) -> Dict[str, Any]:
         out["error"] = "empty variant_url"
         return out
 
-    # Fetch
     try:
         html = _http_get(variant_url)
     except FetchError as e:
@@ -593,21 +568,14 @@ def _fetch_single_variant_price(variant_url: str) -> Dict[str, Any]:
     # Strategy 1 — JSON path
     try:
         state = _extract_initial_state(html)
-        # On per-variant pages, the structure is typically:
-        #   modelPage.versions[i].priceOverview.{price,exShowRoomPrice}
-        # Or sometimes a single version: modelPage.version.priceOverview...
-        # Or versionPage at the top level. Try a few common shapes.
         version_data = None
         if isinstance(state, dict):
             mp = state.get("modelPage") or {}
-            # Try modelPage.version (singular) — set when we're on a variant page
             v = mp.get("version") if isinstance(mp, dict) else None
             if isinstance(v, dict):
                 version_data = v
-            # Or versionPage at top level
             elif isinstance(state.get("versionPage"), dict):
                 version_data = state["versionPage"]
-            # Or first item in modelPage.versions if there's exactly one
             elif isinstance(mp.get("versions"), list) and len(mp["versions"]) == 1:
                 version_data = mp["versions"][0]
 
@@ -622,17 +590,12 @@ def _fetch_single_variant_price(variant_url: str) -> Dict[str, Any]:
                 out["fuel"] = _get_fuel_from_version(version_data) or None
                 return out
 
-        # If state was extracted but we couldn't find the right shape, fall through to regex
         logger.info("variant_price: JSON path didn't find price, trying regex on %s", variant_url)
     except Exception as e:
         logger.info("variant_price: JSON path failed (%s) on %s, trying regex", e, variant_url)
 
-    # Strategy 2 — HTML regex fallback. CarWale's variant pages display
-    # "Ex-Showroom Price" followed by "Rs. X,XX,XXX" in the visible HTML.
-    # Match patterns like: Ex-Showroom Price ... Rs. 8,80,000
+    # Strategy 2 — HTML regex fallback.
     try:
-        # Match "Ex-Showroom Price" (allowing anything in between, up to 200 chars)
-        # then "Rs." or "₹" then digits with commas.
         pattern = re.compile(
             r'Ex[\s\-]?Showroom\s*Price[^0-9]{0,200}?(?:Rs\.|₹|INR)\s*([0-9][0-9,]*)',
             re.IGNORECASE | re.DOTALL,
@@ -644,8 +607,6 @@ def _fetch_single_variant_price(variant_url: str) -> Dict[str, Any]:
             if price_int > 0:
                 out["ok"] = True
                 out["price"] = price_int
-                # We don't have a clean version name from regex, leave as None
-                # The caller already has the human-readable name from the index
                 return out
         out["error"] = "no_price_found"
     except Exception as e:
@@ -653,28 +614,22 @@ def _fetch_single_variant_price(variant_url: str) -> Dict[str, Any]:
     return out
 
 
-def _parse_variants(state: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Pull a clean variant list from the parsed __INITIAL_STATE__ dict.
-    Each item: {versionName, displayName, maskingName, fuel,
-                 ex_showroom, on_road}.
+# ============================================================
+# LEGACY HELPERS — _parse_variants kept for list_variants() debug helper.
+# Not used by fetch_price() in v2.9 because CarWale no longer populates
+# prices on the model overview page.
+# ============================================================
 
-    v2.6: CarWale's priceOverview now puts the actual ex-showroom price
-    in the field 'price'. The field still named 'exShowRoomPrice' is 0
-    in the JSON we get from server-side scrapers (it appears to only
-    populate in some browser-served variants). 'onRoadPrice' is also
-    0 server-side, so we don't expose on-road in the output anymore —
-    only ex-showroom, which is what AutoKnowMus consumes anyway.
-    Tries 'price' first, falls back to 'exShowRoomPrice' for safety.
-    """
+def _parse_variants(state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Legacy: pull a clean variant list from a parsed __INITIAL_STATE__ dict.
+    Each item: {versionName, displayName, maskingName, fuel, ex_showroom, on_road}.
+    Skips any variant where price is missing or 0."""
     versions = (state.get("modelPage") or {}).get("versions") or []
     out: List[Dict[str, Any]] = []
     for v in versions:
         po = v.get("priceOverview") or {}
-        # v2.6: 'price' is the field with the real number; 'exShowRoomPrice'
-        # is a legacy field that's now 0. Try 'price' first.
         ex = po.get("price") or po.get("exShowRoomPrice") or 0
         if not isinstance(ex, (int, float)) or ex <= 0:
-            # Skip variants with no usable price (e.g. discontinued, "coming soon")
             continue
         out.append({
             "versionName": (v.get("versionName") or "").strip(),
@@ -687,69 +642,85 @@ def _parse_variants(state: Dict[str, Any]) -> List[Dict[str, Any]]:
     return out
 
 
-def _match_variant(
-    variants: List[Dict[str, Any]],
+# ============================================================
+# VARIANT MATCHING (used against the variant-index, not legacy parse)
+# ============================================================
+
+def _match_variant_index(
+    variants: List[Dict[str, str]],
     user_variant: str,
     user_fuel: str,
-) -> Tuple[str, Optional[Dict[str, Any]], List[str]]:
-    """Find the user's variant in the parsed variant list.
+) -> Tuple[str, Optional[Dict[str, str]], List[str]]:
+    """Find the user's variant in the variant-index list.
+
+    Each item in `variants` is from _extract_variant_index() and has
+    keys: name, url, fuel, masking.
 
     Strategy:
-        1. Normalize user_variant ("VXI" -> "vxi", "ZXi Plus" -> "zxi plus").
-        2. Filter variants by fuel match (case-insensitive).
-        3. Find variants with the SAME normalized name. Cheapest wins
-           (the user's "VXI Petrol" is the base VXI Petrol — they didn't
-           ask for the AMT or the Optional pack).
-        4. If no exact match, try prefix match.
-        5. Token-overlap fallback.
-        6. Return (status, best_variant_dict_or_None, candidates_list).
+        1. Filter by fuel if known (JSON path provides fuel; regex path
+           leaves it empty so we skip the filter for those).
+        2. Exact match on normalized name → return cheapest URL alphabetically
+           if multiple match (we don't have prices yet at this stage).
+        3. Prefix fallback.
+        4. Token-overlap fallback.
+        5. Match against masking slug as a last resort (helpful when name
+           was synthesized from URL like "Lxi" vs user typed "LXi").
 
-    Returns:
-        ('found', dict, [name])               — exactly 1 candidate
-        ('found_multiple', dict, [names])     — multiple matches, picked cheapest
-        ('found_fuzzy', dict, [names])        — prefix/token fallback fired
-        ('not_found_fuel', None, [all names]) — fuel filter rejected everything
-        ('not_found', None, [fuel-matched names]) — fuel ok, name didn't match
+    Returns (status, best_variant_dict_or_None, candidates_names_list).
     """
     user_norm = _normalize_variant_name(user_variant)
     if not user_norm:
-        return ("not_found", None, [v["versionName"] for v in variants])
+        return ("not_found", None, [v.get("name", "") for v in variants])
 
-    # 2. Filter by fuel
     fuel_norm = (user_fuel or "").strip().lower()
-    if fuel_norm:
-        fuel_filtered = [v for v in variants if v["fuel"].lower() == fuel_norm]
+    # Only filter by fuel if BOTH user_fuel is provided AND at least one
+    # variant in the index has a non-empty fuel. The HTML-regex path leaves
+    # fuel="" so filtering would empty the list.
+    any_have_fuel = any(v.get("fuel") for v in variants)
+    if fuel_norm and any_have_fuel:
+        fuel_filtered = [v for v in variants if (v.get("fuel") or "").lower() == fuel_norm]
         if not fuel_filtered:
-            return ("not_found_fuel", None, [v["versionName"] for v in variants])
+            return ("not_found_fuel", None, [v.get("name", "") for v in variants])
     else:
         fuel_filtered = list(variants)
 
-    # 3. Exact match on normalized name
-    exact = [v for v in fuel_filtered if _normalize_variant_name(v["versionName"]) == user_norm]
+    # 1. Exact match on normalized name
+    exact = [v for v in fuel_filtered
+             if _normalize_variant_name(v.get("name", "")) == user_norm]
     if exact:
-        best = min(exact, key=lambda v: v["ex_showroom"])
+        # Stable choice when multiple match: alphabetical by masking
+        exact.sort(key=lambda v: v.get("masking", ""))
+        best = exact[0]
         status = "found" if len(exact) == 1 else "found_multiple"
-        return (status, best, [v["versionName"] for v in exact])
+        return (status, best, [v.get("name", "") for v in exact])
 
-    # 4. Prefix fallback
-    starts = [v for v in fuel_filtered if _normalize_variant_name(v["versionName"]).startswith(user_norm)]
+    # 2. Prefix fallback
+    starts = [v for v in fuel_filtered
+              if _normalize_variant_name(v.get("name", "")).startswith(user_norm)]
     if starts:
-        best = min(starts, key=lambda v: v["ex_showroom"])
-        return ("found_fuzzy", best, [v["versionName"] for v in starts])
+        starts.sort(key=lambda v: v.get("masking", ""))
+        return ("found_fuzzy", starts[0], [v.get("name", "") for v in starts])
 
-    # 5. Token-overlap fallback
+    # 3. Token-overlap fallback
     user_tokens = set(user_norm.split())
     if user_tokens:
         token_match = []
         for v in fuel_filtered:
-            v_tokens = set(_normalize_variant_name(v["versionName"]).split())
+            v_tokens = set(_normalize_variant_name(v.get("name", "")).split())
             if user_tokens & v_tokens:
                 token_match.append(v)
         if token_match:
-            best = min(token_match, key=lambda v: v["ex_showroom"])
-            return ("found_fuzzy", best, [v["versionName"] for v in token_match])
+            token_match.sort(key=lambda v: v.get("masking", ""))
+            return ("found_fuzzy", token_match[0], [v.get("name", "") for v in token_match])
 
-    return ("not_found", None, [v["versionName"] for v in fuel_filtered])
+    # 4. Match against masking slug (handles HTML-regex path where name is
+    # synthesized from URL). user "LXi" -> normalized "lxi" -> match masking="lxi".
+    slug_match = [v for v in fuel_filtered
+                  if (v.get("masking") or "").lower() == user_norm.replace(" ", "-")]
+    if slug_match:
+        return ("found_fuzzy", slug_match[0], [v.get("name", "") for v in slug_match])
+
+    return ("not_found", None, [v.get("name", "") for v in fuel_filtered])
 
 
 # ============================================================
@@ -764,17 +735,15 @@ def fetch_price(
 ) -> Dict[str, Any]:
     """Scrape the ex-showroom price for a single variant from CarWale.
 
-    All output statuses (see module docstring) are reported as JSON-safe
-    dicts. Never raises — every failure mode is encoded in the dict.
+    v2.9 flow:
+      1. Slug lookup
+      2. Fetch model overview page
+      3. Extract variant index from overview page (JSON or HTML regex)
+      4. Match user's variant against the index
+      5. Fetch the matched variant's specific URL
+      6. Extract its ex-showroom price (JSON or HTML regex)
 
-    Args:
-        make: e.g. "Maruti Suzuki"
-        model: e.g. "Swift"
-        variant: e.g. "VXI" or "ZXi Plus"
-        fuel: e.g. "Petrol" / "Diesel" / "CNG" / "Electric"
-
-    Returns:
-        Dict matching the public API shape in the module docstring.
+    Never raises — every failure mode is encoded in the return dict.
     """
     started_at = datetime.now(timezone.utc).isoformat()
 
@@ -808,124 +777,92 @@ def fetch_price(
         )
         return result
 
-    # 2. Build URL — v2.1: routed through _slug_to_url_path() so
-    # 'maruti-suzuki/swift' becomes '.../maruti-suzuki-cars/swift/'.
-    url = _build_url(slug)
-    result["url"] = url
-
-    # 3. Fetch HTML
+    # 2. Build model overview URL + fetch
+    overview_url = _build_url(slug)
+    # Note: result["url"] is set later to the per-variant URL we actually
+    # hit for the price. Keep overview_url separate so error messages can
+    # mention either as appropriate.
     try:
-        html = _http_get(url)
+        overview_html = _http_get(overview_url)
     except FetchError as e:
         result["status"] = "error"
-        result["error"] = f"fetch_failed: {e}"
+        result["url"] = overview_url
+        result["error"] = f"overview_fetch_failed: {e}"
         return result
     except Exception as e:
         result["status"] = "error"
-        result["error"] = f"fetch_exception: {e.__class__.__name__}: {e}"
+        result["url"] = overview_url
+        result["error"] = f"overview_fetch_exception: {e.__class__.__name__}: {e}"
         return result
 
-    # 4. Extract __INITIAL_STATE__ JSON
-    try:
-        state = _extract_initial_state(html)
-    except ValueError as e:
+    # 3. Extract variant index from overview page
+    variant_index = _extract_variant_index(overview_html, slug)
+    if not variant_index:
         result["status"] = "error"
+        result["url"] = overview_url
         result["error"] = (
-            f"Could not extract __INITIAL_STATE__ from {url} ({e}). "
-            "CarWale layout may have changed; the parser needs updating."
+            f"No variants discovered on {overview_url}. The page may be a "
+            "redirect, a discontinued-model stub, or CarWale layout may have "
+            "changed (neither __INITIAL_STATE__ nor href regex found anything)."
         )
         return result
 
-    # 5. Parse variant list
-    variants = _parse_variants(state)
-    if not variants:
-        try:
-            top_keys = sorted(state.keys()) if isinstance(state, dict) else []
-            mp = state.get("modelPage") if isinstance(state, dict) else None
-            mp_keys = sorted(mp.keys()) if isinstance(mp, dict) else []
-            mp_versions = mp.get("versions") if isinstance(mp, dict) else None
-            mp_versions_type = type(mp_versions).__name__
-            mp_versions_len = len(mp_versions or []) if isinstance(mp_versions, list) else 0
-            # v2.4 diag: dump first version's keys + sample fields so we can see
-            # the actual schema (price fields might be renamed or differently nested).
-            first_v_keys = []
-            first_v_sample = {}
-            if isinstance(mp_versions, list) and mp_versions:
-                v0 = mp_versions[0]
-                if isinstance(v0, dict):
-                    first_v_keys = sorted(v0.keys())
-                    # Sample a few likely-relevant fields
-                    for k in ("versionName", "displayName", "versionMaskingName",
-                              "priceOverview", "price", "exShowRoomPrice",
-                              "onRoadPrice", "priceData", "fuelType",
-                              "fuelTypeId", "specsSummary"):
-                        if k in v0:
-                            v_val = v0[k]
-                            # v2.5: For priceOverview specifically, dump the FULL
-                            # contents (not just keys) so we can see if exShowRoomPrice
-                            # is actually a number or "Available on request" / 0 / None.
-                            if k == "priceOverview" and isinstance(v_val, dict):
-                                first_v_sample[k] = dict(v_val)  # full copy
-                            elif isinstance(v_val, dict):
-                                first_v_sample[k] = {"_keys": sorted(v_val.keys())[:15]}
-                            elif isinstance(v_val, list):
-                                first_v_sample[k] = {"_listlen": len(v_val),
-                                                     "_first": v_val[0] if v_val else None}
-                            else:
-                                first_v_sample[k] = v_val
-                # Also sample the SECOND variant's priceOverview to confirm the
-                # pattern — first variant might be a "default" with no price set.
-                second_v_priceOverview = None
-                if isinstance(mp_versions, list) and len(mp_versions) >= 2:
-                    v1 = mp_versions[1]
-                    if isinstance(v1, dict):
-                        po1 = v1.get("priceOverview")
-                        if isinstance(po1, dict):
-                            second_v_priceOverview = {
-                                "versionName": v1.get("versionName"),
-                                "priceOverview": dict(po1),
-                            }
-            logger.warning(
-                "[parse-fail] url=%s | top_keys=%s | modelPage.keys=%s | "
-                "versions type=%s len=%d | first_version_keys=%s | "
-                "first_version_sample=%s | second_version_priceOverview=%s",
-                url, top_keys[:30], mp_keys[:30], mp_versions_type,
-                mp_versions_len, first_v_keys, first_v_sample,
-                second_v_priceOverview
-            )
-        except Exception as _diag_e:
-            logger.warning("[parse-fail] diag log failed: %s", _diag_e)
-        result["status"] = "error"
-        result["error"] = (
-            f"Parsed 0 variants from {url}. The page may be a discontinued-model "
-            "stub, a redirect, or CarWale layout may have changed."
-        )
-        return result
+    # 4. Match user's request against the index
+    match_status, matched, candidate_names = _match_variant_index(
+        variant_index, variant, fuel
+    )
+    result["all_variants"] = [v.get("name", "") for v in variant_index]
+    result["candidates_considered"] = len(candidate_names)
 
-    # 6. Match user's request
-    status, best, candidates = _match_variant(variants, variant, fuel)
-    result["all_variants"] = [v["versionName"] for v in variants]
-    result["candidates_considered"] = len(candidates)
-
-    if best is None:
-        result["status"] = status
-        if status == "not_found_fuel":
+    if matched is None:
+        result["status"] = match_status
+        result["url"] = overview_url
+        if match_status == "not_found_fuel":
+            available_fuels = sorted({v.get("fuel", "") for v in variant_index
+                                      if v.get("fuel")})
             result["error"] = (
                 f"Fuel {fuel!r} not available for {make} {model}. "
-                f"Available fuels: {sorted({v['fuel'] for v in variants if v['fuel']})}"
+                f"Available fuels: {available_fuels}"
             )
         else:
             result["error"] = (
                 f"Variant {variant!r} (fuel {fuel!r}) not found among "
-                f"{len(candidates)} fuel-matched variants on {url}."
+                f"{len(variant_index)} variants on {overview_url}."
             )
         return result
 
-    # 7. Found a match
+    # 5. Fetch the matched variant's page → get the actual price
+    variant_url = matched.get("url") or ""
+    if not variant_url:
+        result["status"] = "error"
+        result["url"] = overview_url
+        result["error"] = (
+            f"Matched variant {matched.get('name')!r} has no URL — slug "
+            "construction failed (variant index produced empty url)."
+        )
+        return result
+
+    result["url"] = variant_url
+    price_data = _fetch_single_variant_price(variant_url)
+
+    if not price_data.get("ok"):
+        result["status"] = "error"
+        result["error"] = (
+            f"Matched variant {matched.get('name')!r} but failed to extract "
+            f"price from {variant_url}: {price_data.get('error', 'unknown')}"
+        )
+        return result
+
+    # 6. Success
     result["ok"] = True
-    result["status"] = status
-    result["ex_showroom_inr"] = best["ex_showroom"]
-    result["matched_variant"] = best["versionName"]
+    result["status"] = match_status
+    result["ex_showroom_inr"] = int(price_data["price"])
+    # Prefer the canonical version_name from the variant page (clean, has fuel/
+    # transmission suffix). Fall back to the index name if regex path didn't
+    # give us one.
+    result["matched_variant"] = (price_data.get("version_name")
+                                 or matched.get("name")
+                                 or variant)
     return result
 
 
@@ -936,7 +873,13 @@ def fetch_price(
 def list_variants(make: str, model: str) -> Dict[str, Any]:
     """List all variants of a model from CarWale. Useful for debugging
     when fetch_price returns 'not_found' — caller can see what's actually
-    on the page."""
+    on the page.
+
+    v2.9: uses the variant index (not _parse_variants) so it works even
+    when CarWale doesn't populate prices on the overview page. Note that
+    this means ex_showroom_inr / on_road_inr are NOT included here — fetch
+    each variant URL individually if you need prices.
+    """
     started_at = datetime.now(timezone.utc).isoformat()
     result: Dict[str, Any] = {
         "ok": False,
@@ -951,25 +894,23 @@ def list_variants(make: str, model: str) -> Dict[str, Any]:
     if not slug:
         result["error"] = f"no slug for ({make!r}, {model!r})"
         return result
-    # v2.1: same URL builder as fetch_price so both paths stay in lockstep.
     url = _build_url(slug)
     result["url"] = url
     try:
         html = _http_get(url)
-        state = _extract_initial_state(html)
-        variants = _parse_variants(state)
     except Exception as e:
         result["error"] = f"{e.__class__.__name__}: {e}"
         return result
+    variant_index = _extract_variant_index(html, slug)
     result["ok"] = True
     result["variants"] = [
         {
-            "versionName": v["versionName"],
-            "fuel": v["fuel"],
-            "ex_showroom_inr": v["ex_showroom"],
-            "on_road_inr": v["on_road"],
+            "name": v.get("name"),
+            "fuel": v.get("fuel"),
+            "url": v.get("url"),
+            "masking": v.get("masking"),
         }
-        for v in variants
+        for v in variant_index
     ]
     return result
 
@@ -982,10 +923,9 @@ if __name__ == "__main__":
     import pprint
     logging.basicConfig(level=logging.INFO)
     print("=" * 60)
-    print("price_scraper.py v2.1 smoke test")
+    print("price_scraper.py v2.9 smoke test")
     print("=" * 60)
 
-    # Quick unit-style check on _slug_to_url_path before hitting the network
     print("\n--- _slug_to_url_path unit checks ---")
     cases = [
         ("maruti-suzuki/swift",       "maruti-suzuki-cars/swift"),
@@ -993,11 +933,8 @@ if __name__ == "__main__":
         ("land-rover/freelander-2",    "land-rover-cars/freelander-2"),
         ("toyota/landcruiserprado",    "toyota-cars/landcruiserprado"),
         ("mercedes-benz/c-class",      "mercedes-benz-cars/c-class"),
-        # Already has -cars/ → leave alone
         ("bmw-cars/x1",                "bmw-cars/x1"),
-        # No slash → fallback
         ("audi",                       "audi-cars"),
-        # Empty
         ("",                           ""),
     ]
     for inp, expected in cases:
@@ -1006,9 +943,9 @@ if __name__ == "__main__":
         print(f"  {ok} {inp!r:35s} -> {got!r:40s} (expected {expected!r})")
 
     test_cases = [
+        ("Maruti Suzuki", "Ertiga", "LXi", "Petrol"),
+        ("Maruti Suzuki", "Ertiga", "VXi", "CNG"),
         ("Maruti Suzuki", "Swift", "VXI", "Petrol"),
-        ("Maruti Suzuki", "Swift", "LXI", "Petrol"),
-        ("Maruti Suzuki", "Swift", "VXI", "CNG"),
         ("Hyundai", "Creta", "E", "Petrol"),
     ]
     for make, model, variant, fuel in test_cases:
