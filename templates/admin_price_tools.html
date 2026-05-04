@@ -136,6 +136,78 @@
   }
   .pt-btn-hint { color: #6c757d; font-size: 0.78rem; font-style: italic; }
 
+  /* Phase 3.2: View Queue CTA — green primary callout above results table */
+  .pt-view-queue-cta {
+    background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
+    border: 1px solid #28a745;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    display: none;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    box-shadow: 0 4px 12px rgba(40,167,69,0.15);
+  }
+  .pt-view-queue-cta.show { display: flex; }
+  .pt-view-queue-cta .vq-text {
+    flex: 1;
+    color: #e6e6e6;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    min-width: 200px;
+  }
+  .pt-view-queue-cta .vq-text strong {
+    color: #5bd47b;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .pt-view-queue-cta .vq-btn {
+    background: #28a745;
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 7px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .pt-view-queue-cta .vq-btn:hover {
+    background: #2bb84d;
+    transform: translateY(-1px);
+  }
+
+  /* Phase 3.2: Un-discontinue button — amber outline style */
+  .pt-btn-undisc {
+    background: transparent;
+    color: #ffc870;
+    border: 1px solid rgba(255,165,0,0.5);
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .pt-btn-undisc:hover {
+    background: rgba(255,165,0,0.12);
+    border-color: #ffa500;
+    color: #ffa500;
+  }
+  .pt-btn-undisc:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Row fade-out animation for un-discontinue success */
+  .pt-row-fading {
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
   /* Progress */
   .pt-progress-wrap {
     background: #14171d;
@@ -372,6 +444,31 @@
     margin: 10px 0;
     font-size: 0.82rem;
   }
+  .pt-modal-body .modal-info {
+    color: #8ec5ff;
+    background: rgba(78,176,255,0.1);
+    border: 1px solid rgba(78,176,255,0.3);
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin: 10px 0;
+    font-size: 0.82rem;
+  }
+  .pt-modal-body .car-summary {
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 10px 0;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.84rem;
+    color: #ffc870;
+  }
+  .pt-modal-body .car-summary .car-meta {
+    color: #adb5bd;
+    font-size: 0.76rem;
+    font-family: inherit;
+    margin-top: 4px;
+  }
   .pt-modal-actions {
     display: flex;
     gap: 10px;
@@ -520,6 +617,16 @@
       <div class="pt-progress-status" id="ro-progress-status">Fetching variant list...</div>
     </div>
 
+    <!-- Phase 3.2: View Queue CTA — appears after scrape completes if reviews queued -->
+    <div class="pt-view-queue-cta" id="ro-view-queue-cta">
+      <div class="vq-text">
+        ✅ Scrape complete · <strong id="ro-vq-count">0</strong> added to queue
+      </div>
+      <button type="button" class="vq-btn" id="ro-view-queue-btn">
+        → View <span id="ro-vq-btn-count">0</span> reviews in queue
+      </button>
+    </div>
+
     <!-- Messages -->
     <div class="pt-msg" id="ro-msg"></div>
 
@@ -594,17 +701,18 @@
 
   <!-- ============================================================
        TAB 3: SUSPECTED DISCONTINUED
+       Phase 3.2: Action column added with Un-discontinue button.
        ============================================================ -->
   <div class="pt-panel" id="panel-suspected-discontinued">
     <div class="pt-card">
       <h2>⚠️ Variants flagged as discontinued</h2>
       <p class="pt-card-desc">
-        These variants have <code>status="discontinued"</code> in the sheet. Their last known price is preserved (so existing valuations still work), and the dashboard shows a warning badge to users.
+        These variants have <code>status="discontinued"</code> in the sheet. Their last known price is preserved (so existing valuations still work), and the dashboard shows a warning badge to users. Click <strong>Un-discontinue</strong> to mark a variant as active again.
       </p>
 
       {% if discontinued_rows %}
         <div class="pt-table-wrap">
-          <table class="pt-table">
+          <table class="pt-table" id="disc-table">
             <thead>
               <tr>
                 <th>Make</th>
@@ -613,11 +721,17 @@
                 <th>Fuel</th>
                 <th class="num">Last price</th>
                 <th>Verified</th>
+                <th>Action</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="disc-tbody">
               {% for r in discontinued_rows %}
-                <tr>
+                <tr data-make="{{ r.make }}"
+                    data-model="{{ r.model }}"
+                    data-variant="{{ r.variant }}"
+                    data-fuel="{{ r.fuel }}"
+                    data-verified="{{ r.last_known_price_date or '' }}"
+                    data-price="{{ r.price or '' }}">
                   <td>{{ r.make }}</td>
                   <td>{{ r.model }}</td>
                   <td>{{ r.variant }}</td>
@@ -628,13 +742,18 @@
                   <td class="{{ r.age_class }}">
                     {{ r.last_known_price_date or 'never' }}
                   </td>
+                  <td>
+                    <button type="button" class="pt-btn-undisc disc-undisc-btn">
+                      Un-discontinue
+                    </button>
+                  </td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
       {% else %}
-        <div class="pt-empty">No discontinued variants. (Approve a NOT FOUND review in the Review Queue tab to flag a variant as discontinued.)</div>
+        <div class="pt-empty" id="disc-empty">No discontinued variants. (Approve a NOT FOUND review in the Review Queue tab to flag a variant as discontinued.)</div>
       {% endif %}
     </div>
   </div>
@@ -767,7 +886,7 @@
 </div>
 
 <!-- ============================================================
-     CONFIRMATION MODAL (used for bulk approve/reject)
+     CONFIRMATION MODAL (used for bulk approve/reject + un-discontinue)
      ============================================================ -->
 <div class="pt-modal-backdrop" id="pt-modal-backdrop">
   <div class="pt-modal">
@@ -796,12 +915,16 @@
 
 <script>
   // ============================================================
-  // Phase 3.1 — Admin Price Tools frontend
+  // Phase 3.1 + 3.2 — Admin Price Tools frontend
   //
-  // Three core flows:
+  // Phase 3.1 flows:
   //  1. Tab switching with deep-link via URL hash
   //  2. Refresh One: incremental scrape with progress bar
   //  3. Review Queue: checkbox selection + bulk approve/reject with modal
+  //
+  // Phase 3.2 additions:
+  //  4. View Queue CTA: green callout above results table after scrape
+  //  5. Un-discontinue: per-row button + confirmation modal on Discontinued tab
   // ============================================================
 
   // ---- Data ----
@@ -847,6 +970,12 @@
   const roResultsSummary = document.getElementById('ro-results-summary');
   const roResultsTbody = document.getElementById('ro-results-tbody');
 
+  // Phase 3.2: View Queue CTA elements
+  const roViewQueueCta = document.getElementById('ro-view-queue-cta');
+  const roVqCount = document.getElementById('ro-vq-count');
+  const roVqBtnCount = document.getElementById('ro-vq-btn-count');
+  const roViewQueueBtn = document.getElementById('ro-view-queue-btn');
+
   let roStopRequested = false;
 
   // Make → Model dropdown chain
@@ -891,6 +1020,31 @@
   }
   function hideRoProgress() {
     roProgress.classList.remove('show');
+  }
+
+  // Phase 3.2: Show/hide View Queue CTA
+  function showViewQueueCta(count) {
+    if (!roViewQueueCta) return;
+    if (count > 0) {
+      roVqCount.textContent = count;
+      roVqBtnCount.textContent = count;
+      roViewQueueCta.classList.add('show');
+    } else {
+      roViewQueueCta.classList.remove('show');
+    }
+  }
+  function hideViewQueueCta() {
+    if (roViewQueueCta) roViewQueueCta.classList.remove('show');
+  }
+
+  // Phase 3.2: Click handler — switch to Review Queue tab
+  if (roViewQueueBtn) {
+    roViewQueueBtn.addEventListener('click', () => {
+      activateTab('review-queue');
+      // Smooth scroll to top of queue
+      const queuePanel = document.getElementById('panel-review-queue');
+      if (queuePanel) queuePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   function inrFmt(n) {
@@ -946,6 +1100,7 @@
     if (!make || !model) return;
 
     hideRoMsg();
+    hideViewQueueCta();  // Phase 3.2: hide CTA from any previous run
     roResultsCard.style.display = 'none';
     roResultsTbody.innerHTML = '';
     roBtn.disabled = true;
@@ -1078,8 +1233,11 @@
       queueBadge.textContent = cur + queuedCount;
     }
 
+    // Phase 3.2: Show View Queue CTA at top if reviews were queued
+    showViewQueueCta(queuedCount);
+
     if (queuedCount > 0) {
-      showRoMsg(`✅ ${queuedCount} review${queuedCount === 1 ? '' : 's'} added to the queue. Switch to the Review Queue tab to approve or reject.`, 'success');
+      showRoMsg(`✅ ${queuedCount} review${queuedCount === 1 ? '' : 's'} added to the queue. Click "View ${queuedCount} reviews in queue" above to approve or reject.`, 'success');
     } else {
       showRoMsg('All variants match the sheet. No reviews queued.', 'info');
     }
@@ -1145,6 +1303,173 @@
       btn.disabled = false;
     });
   });
+
+  // ============================================================
+  // TAB 3: SUSPECTED DISCONTINUED — Phase 3.2 Un-discontinue handler
+  // ============================================================
+  function setupUnDiscontinueHandlers() {
+    const buttons = document.querySelectorAll('.disc-undisc-btn');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tr = btn.closest('tr');
+        if (!tr) return;
+        const make = tr.dataset.make;
+        const model = tr.dataset.model;
+        const variant = tr.dataset.variant;
+        const fuel = tr.dataset.fuel;
+        const verifiedDate = tr.dataset.verified || 'never';
+
+        if (!make || !model || !variant || !fuel) {
+          alert('Missing car data on this row. Please refresh the page.');
+          return;
+        }
+
+        // Build modal content
+        const carHtml = `
+          <div class="car-summary">
+            ${make} ${model} ${variant} · ${fuel}
+            <div class="car-meta">Last verified: ${verifiedDate}</div>
+          </div>
+        `;
+        const bodyHtml = `
+          <p>Un-discontinue this variant?</p>
+          ${carHtml}
+          <div class="modal-info">
+            ℹ️ This clears the discontinued flag from column H and refreshes the verified date to today.
+            The variant will appear as <strong>active</strong> in user valuations again.
+          </div>
+          <p style="color:#adb5bd; font-size:0.82rem;">
+            Price (column E) and notes (column G) are preserved unchanged. The cache will refresh
+            automatically so the orange "Discontinued" badge disappears from dashboards within seconds.
+          </p>
+        `;
+
+        showModal({
+          title: 'Un-discontinue variant?',
+          bodyHtml: bodyHtml,
+          confirmLabel: 'Confirm — Un-discontinue',
+          confirmClass: 'pt-btn-success',
+          onConfirm: () => runUnDiscontinue(tr, btn, make, model, variant, fuel),
+        });
+      });
+    });
+  }
+
+  async function runUnDiscontinue(tr, btn, make, model, variant, fuel) {
+    // Disable buttons during request
+    modalConfirm.disabled = true;
+    modalCancel.disabled = true;
+    modalConfirm.textContent = 'Working...';
+    btn.disabled = true;
+
+    try {
+      const resp = await fetch('/admin/price-tools/un-discontinue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          make: make,
+          model: model,
+          variant: variant,
+          fuel: fuel,
+        }),
+      });
+      const data = await resp.json();
+
+      if (data.ok) {
+        // Success — show confirmation in modal, then fade out the row
+        modalBody.innerHTML = `
+          <p style="color:#5bd47b; font-weight:600;">
+            ✅ ${make} ${model} ${variant} (${fuel}) is now active.
+          </p>
+          <div class="car-summary">
+            <div class="car-meta">Row ${data.row_number} · verified date refreshed to ${data.last_known_price_date}</div>
+          </div>
+          <p style="color:#adb5bd; font-size:0.82rem;">
+            The cache has been refreshed. User valuations will no longer show the discontinued badge.
+          </p>
+        `;
+        modalConfirm.disabled = false;
+        modalCancel.disabled = false;
+        modalCancel.style.display = 'none';
+        modalConfirm.textContent = 'Close';
+        modalConfirm.className = 'pt-btn pt-btn-secondary';
+        modalConfirm.onclick = () => {
+          closeModal();
+          modalCancel.style.display = 'inline-block';
+          // Fade out the row, then remove + decrement badge
+          fadeOutDiscRow(tr);
+        };
+      } else {
+        // API returned error
+        modalBody.innerHTML = `
+          <p style="color:#ff8585; font-weight:600;">✗ Could not un-discontinue.</p>
+          <div class="modal-warn">
+            ${data.error || 'unknown error'}<br>
+            <span style="font-size:0.78rem; color:#adb5bd;">${data.detail || ''}</span>
+          </div>
+        `;
+        modalConfirm.disabled = false;
+        modalCancel.disabled = false;
+        modalCancel.style.display = 'none';
+        modalConfirm.textContent = 'Close';
+        modalConfirm.className = 'pt-btn pt-btn-secondary';
+        modalConfirm.onclick = () => {
+          closeModal();
+          modalCancel.style.display = 'inline-block';
+          btn.disabled = false;
+        };
+      }
+    } catch (e) {
+      modalBody.innerHTML = `
+        <p style="color:#ff8585; font-weight:600;">✗ Network error.</p>
+        <div class="modal-warn">${e.message}</div>
+        <p style="color:#adb5bd; font-size:0.82rem;">Please check your connection and try again.</p>
+      `;
+      modalConfirm.disabled = false;
+      modalCancel.disabled = false;
+      modalCancel.style.display = 'none';
+      modalConfirm.textContent = 'Close';
+      modalConfirm.className = 'pt-btn pt-btn-secondary';
+      modalConfirm.onclick = () => {
+        closeModal();
+        modalCancel.style.display = 'inline-block';
+        btn.disabled = false;
+      };
+    }
+  }
+
+  function fadeOutDiscRow(tr) {
+    if (!tr) return;
+    tr.classList.add('pt-row-fading');
+    setTimeout(() => {
+      tr.remove();
+      // Decrement discontinued badge
+      const badge = document.getElementById('discontinued-badge');
+      if (badge) {
+        const cur = parseInt(badge.textContent || '0', 10) || 0;
+        const next = Math.max(0, cur - 1);
+        badge.textContent = next;
+      }
+      // If table is now empty, show empty state
+      const tbody = document.getElementById('disc-tbody');
+      if (tbody && tbody.children.length === 0) {
+        const card = tbody.closest('.pt-card');
+        if (card) {
+          const tableWrap = card.querySelector('.pt-table-wrap');
+          if (tableWrap) tableWrap.style.display = 'none';
+          if (!card.querySelector('.pt-empty')) {
+            const empty = document.createElement('div');
+            empty.className = 'pt-empty';
+            empty.textContent = 'No discontinued variants. (Approve a NOT FOUND review in the Review Queue tab to flag a variant as discontinued.)';
+            card.appendChild(empty);
+          }
+        }
+      }
+    }, 500);
+  }
+
+  // Wire up un-discontinue buttons after DOM ready
+  setupUnDiscontinueHandlers();
 
   // ============================================================
   // TAB 4: REVIEW QUEUE — checkbox selection + bulk approve/reject
