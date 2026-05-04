@@ -298,10 +298,25 @@ def _http_get(url: str) -> str:
             raise FetchError(f"HTTP 404 — page not found: {url}")
         if resp.status_code >= 400:
             raise FetchError(f"HTTP {resp.status_code} for {url}")
-        # 2xx — return body
+        # 2xx — decompress if needed, then return body.
+        # v2.8: CarWale's CloudFront edge sends `Content-Encoding: br` even
+        # when we ask for gzip-only (v2.7 Accept-Encoding header is ignored).
+        # `requests` doesn't auto-decompress Brotli, so resp.text returned
+        # garbage bytes. Plan B: explicitly decompress Brotli on our side.
+        # The Brotli package is in requirements.txt as of v2.8.
+        encoding = (resp.headers.get("Content-Encoding") or "").lower()
+        if encoding == "br":
+            try:
+                import brotli
+                decoded = brotli.decompress(resp.content).decode("utf-8", errors="replace")
+                logger.info("[%s] Brotli decoded: %d compressed bytes -> %d chars",
+                            url, len(resp.content), len(decoded))
+                return decoded
+            except Exception as e:
+                logger.warning("[%s] Brotli decode failed: %s", url, e)
+                # Fall through to resp.text — likely garbage but better than crash
         return resp.text
     raise FetchError(f"max retries exhausted ({MAX_RETRIES}); last_err={last_err}")
-
 
 # ============================================================
 # JSON EXTRACTION FROM CARWALE HTML
