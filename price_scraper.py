@@ -305,6 +305,12 @@ def _http_get(url: str) -> str:
         # garbage bytes. Plan B: explicitly decompress Brotli on our side.
         # The Brotli package is in requirements.txt as of v2.8.
         encoding = (resp.headers.get("Content-Encoding") or "").lower()
+        # v2.8.1 diag: log every response's encoding so we can see what's actually
+        # arriving — this will tell us if Brotli decode is being triggered or if
+        # `requests` is silently transforming the body before we see it.
+        logger.info("[%s] HTTP %d, Content-Encoding=%r, body_len=%d, first_bytes=%r",
+                    url, resp.status_code, encoding,
+                    len(resp.content), resp.content[:50])
         if encoding == "br":
             try:
                 import brotli
