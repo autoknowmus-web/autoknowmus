@@ -6923,6 +6923,95 @@ def price_tools_bulk_reject():
         'failed': failed_count,
         'results': results,
     })
+# ============================================================
+# Phase 3.2: Un-discontinue route
+# ============================================================
+# Admin can reverse a previously-approved "discontinued" flag on a variant.
+# Calls sheets_writer.clear_discontinued_flag() which writes "" to col H
+# and refreshes col I (last_known_price_date) to today. Price (col E) and
+# notes (col G) are preserved.
+#
+# Used by the Suspected Discontinued tab in /admin/price-tools UI when admin
+# clicks "Un-discontinue" on a row. Confirmation modal in the frontend
+# guards against accidental clicks.
+#
+# Returns JSON. The frontend uses the response to remove the row from the
+# table and decrement the badge count.
+# ============================================================
+
+@app.route('/admin/price-tools/un-discontinue', methods=['POST'])
+def price_tools_un_discontinue():
+    """Reverse the discontinued flag on a variant. Admin-only."""
+    user = session.get('user')
+    if not _is_admin(user):
+        return jsonify({'ok': False, 'error': 'admin only'}), 403
+
+    # Accept form-encoded OR JSON for flexibility
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        make    = (data.get('make')    or '').strip()
+        model   = (data.get('model')   or '').strip()
+        variant = (data.get('variant') or '').strip()
+        fuel    = (data.get('fuel')    or '').strip()
+    else:
+        make    = (request.form.get('make')    or '').strip()
+        model   = (request.form.get('model')   or '').strip()
+        variant = (request.form.get('variant') or '').strip()
+        fuel    = (request.form.get('fuel')    or '').strip()
+
+    if not all([make, model, variant, fuel]):
+        return jsonify({
+            'ok': False,
+            'error': 'missing_fields',
+            'detail': 'make, model, variant, fuel are all required',
+        }), 400
+
+    # Call the sheets_writer helper (Phase 3.2 addition)
+    try:
+        result = sheets_writer.clear_discontinued_flag(
+            make=make,
+            model=model,
+            variant=variant,
+            fuel=fuel,
+            note=f"un-discontinued by {user['email']}",
+        )
+    except RuntimeError as e:
+        app.logger.error(
+            "price_tools_un_discontinue: sheets_writer failed for "
+            "(%s, %s, %s, %s): %s",
+            make, model, variant, fuel, e,
+        )
+        return jsonify({
+            'ok': False,
+            'error': 'sheets_write_failed',
+            'detail': str(e),
+        }), 500
+
+    # Refresh the in-memory price cache so the change reflects immediately
+    # in seller/buyer dashboards (no orange "Discontinued" badge anymore).
+    try:
+        car_data.refresh_prices(force=True)
+    except Exception as e:
+        app.logger.warning(
+            "price_tools_un_discontinue: cache refresh failed (non-fatal): %s",
+            e,
+        )
+
+    app.logger.info(
+        "price_tools_un_discontinue: %s un-discontinued %s %s %s %s (row %d)",
+        user['email'], make, model, variant, fuel, result.get('row_number'),
+    )
+
+    return jsonify({
+        'ok': True,
+        'action': 'un_discontinued',
+        'make': make,
+        'model': model,
+        'variant': variant,
+        'fuel': fuel,
+        'row_number': result.get('row_number'),
+        'last_known_price_date': result.get('last_known_price_date'),
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
