@@ -524,3 +524,961 @@
     <div class="pt-msg" id="ro-msg"></div>
 
     <!-- Results table -->
+    <div class="pt-card" id="ro-results-card" style="display:none;">
+      <h2 id="ro-results-title">Scrape results</h2>
+      <p class="pt-card-desc" id="ro-results-summary"></p>
+
+      <div class="pt-table-wrap">
+        <table class="pt-table" id="ro-results-table">
+          <thead>
+            <tr>
+              <th>Variant</th>
+              <th>Fuel</th>
+              <th class="num">Sheet</th>
+              <th class="num">CarWale</th>
+              <th class="num">Δ</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="ro-results-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TAB 2: FIND MISSING
+       ============================================================ -->
+  <div class="pt-panel" id="panel-find-missing">
+    <div class="pt-card">
+      <h2>🔍 Variants in catalog without a price</h2>
+      <p class="pt-card-desc">
+        These variants exist in <code>car_data.py</code> but have no price in the sheet. Click <strong>Scrape this</strong> to fetch CarWale's price and queue a review.
+      </p>
+
+      {% if missing_rows %}
+        <div class="pt-table-wrap">
+          <table class="pt-table">
+            <thead>
+              <tr>
+                <th>Make</th>
+                <th>Model</th>
+                <th>Variant</th>
+                <th>Fuel</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in missing_rows %}
+                <tr data-make="{{ r.make }}" data-model="{{ r.model }}" data-variant="{{ r.variant }}" data-fuel="{{ r.fuel }}">
+                  <td>{{ r.make }}</td>
+                  <td>{{ r.model }}</td>
+                  <td>{{ r.variant }}</td>
+                  <td>{{ r.fuel }}</td>
+                  <td>
+                    <button type="button" class="pt-btn pt-btn-secondary fm-scrape-btn" style="padding: 4px 10px; font-size: 0.78rem;">
+                      Scrape this
+                    </button>
+                    <span class="fm-status" style="margin-left: 8px; font-size: 0.78rem;"></span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="pt-empty">No missing prices. Every variant in the catalog has a sheet entry.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TAB 3: SUSPECTED DISCONTINUED
+       ============================================================ -->
+  <div class="pt-panel" id="panel-suspected-discontinued">
+    <div class="pt-card">
+      <h2>⚠️ Variants flagged as discontinued</h2>
+      <p class="pt-card-desc">
+        These variants have <code>status="discontinued"</code> in the sheet. Their last known price is preserved (so existing valuations still work), and the dashboard shows a warning badge to users.
+      </p>
+
+      {% if discontinued_rows %}
+        <div class="pt-table-wrap">
+          <table class="pt-table">
+            <thead>
+              <tr>
+                <th>Make</th>
+                <th>Model</th>
+                <th>Variant</th>
+                <th>Fuel</th>
+                <th class="num">Last price</th>
+                <th>Verified</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in discontinued_rows %}
+                <tr>
+                  <td>{{ r.make }}</td>
+                  <td>{{ r.model }}</td>
+                  <td>{{ r.variant }}</td>
+                  <td>{{ r.fuel }}</td>
+                  <td class="num">
+                    {% if r.price %}₹ {{ r.price | inr }}{% else %}<span class="pt-em-dash">—</span>{% endif %}
+                  </td>
+                  <td class="{{ r.age_class }}">
+                    {{ r.last_known_price_date or 'never' }}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="pt-empty">No discontinued variants. (Approve a NOT FOUND review in the Review Queue tab to flag a variant as discontinued.)</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TAB 4: REVIEW QUEUE
+       ============================================================ -->
+  <div class="pt-panel" id="panel-review-queue">
+    <div class="pt-card">
+      <h2>🗳️ Review Queue</h2>
+      <p class="pt-card-desc">
+        Pending changes awaiting your review. Approving writes the change to the <code>car_prices</code> sheet immediately. Rejecting marks the review as handled with no change.
+      </p>
+
+      {% if pending_reviews %}
+        <!-- Bulk action bar (hidden until selection made) -->
+        <div class="pt-bulk-bar" id="rq-bulk-bar">
+          <span class="pt-bulk-count" id="rq-bulk-count">0 selected</span>
+          <div class="pt-bulk-actions">
+            <button type="button" class="pt-btn pt-btn-success" id="rq-bulk-approve-btn">
+              Approve selected
+            </button>
+            <button type="button" class="pt-btn pt-btn-danger" id="rq-bulk-reject-btn">
+              Reject selected
+            </button>
+            <button type="button" class="pt-btn pt-btn-secondary" id="rq-bulk-clear-btn">
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <p class="pt-card-desc" style="margin-top: -4px; margin-bottom: 8px;">
+          <strong style="color: #fff;" id="rq-pending-summary">{{ pending_reviews|length }} pending reviews</strong>
+          <span style="color: #6c757d; margin-left: 10px;">Newest first · approving auto-refreshes valuations</span>
+        </p>
+
+        <div class="pt-table-wrap">
+          <table class="pt-table" id="rq-table">
+            <thead>
+              <tr>
+                <th class="pt-checkbox-cell">
+                  <input type="checkbox" id="rq-select-all" title="Select all">
+                </th>
+                <th>Type</th>
+                <th>Car</th>
+                <th>Variant (Ours / CarWale)</th>
+                <th class="num">Current</th>
+                <th class="num">Proposed</th>
+                <th class="num">Δ</th>
+                <th>Status</th>
+                <th>When</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="rq-tbody">
+              {% for r in pending_reviews %}
+                <tr data-review-id="{{ r.id }}"
+                    data-review-type="{{ r.review_type }}">
+                  <td class="pt-checkbox-cell">
+                    <input type="checkbox" class="rq-row-check" data-id="{{ r.id }}" data-type="{{ r.review_type }}">
+                  </td>
+                  <td>
+                    {% if r.review_type == 'discontinued' %}
+                      <span class="pt-pill pt-pill-disc">DISC</span>
+                    {% elif r.review_type == 'price_update' %}
+                      <span class="pt-pill pt-pill-update">UPDATE</span>
+                    {% elif r.review_type == 'new_variant' %}
+                      <span class="pt-pill pt-pill-new">NEW</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ r.make }} {{ r.model }} · {{ r.fuel }}</td>
+                  <td>
+                    <div>{{ r.variant }}</div>
+                    {% if r.matched_variant_name and r.matched_variant_name != r.variant %}
+                      <div style="color: #adb5bd; font-size: 0.74rem; font-style: italic;">CarWale: {{ r.matched_variant_name }}</div>
+                    {% endif %}
+                  </td>
+                  <td class="num">
+                    {% if r.current_price %}₹ {{ r.current_price | inr }}{% else %}<span class="pt-em-dash">—</span>{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if r.proposed_price %}₹ {{ r.proposed_price | inr }}{% else %}<span class="pt-em-dash">—</span>{% endif %}
+                  </td>
+                  <td class="num">
+                    {% if r.diff_pct is not none %}
+                      {% if r.diff_pct > 0.5 %}
+                        <span class="pt-diff-pos">+{{ '%.1f'|format(r.diff_pct) }}%</span>
+                      {% elif r.diff_pct < -0.5 %}
+                        <span class="pt-diff-neg">{{ '%.1f'|format(r.diff_pct) }}%</span>
+                      {% else %}
+                        <span class="pt-diff-zero">{{ '%.1f'|format(r.diff_pct) }}%</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="pt-em-dash">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if r.scraper_status == 'found' %}
+                      <span class="pt-pill pt-pill-found">FOUND</span>
+                    {% elif r.scraper_status == 'ambiguous' %}
+                      <span class="pt-pill pt-pill-found-multi">FOUND MULTIPLE</span>
+                    {% elif r.scraper_status == 'not_found' %}
+                      <span class="pt-pill pt-pill-notfound">NOT FOUND</span>
+                    {% elif r.scraper_status == 'not_found_fuel' %}
+                      <span class="pt-pill pt-pill-notfound pt-pill-notfound-fuel">NOT FOUND FUEL</span>
+                    {% else %}
+                      <span class="pt-pill pt-pill-unchanged">{{ r.scraper_status or '—' }}</span>
+                    {% endif %}
+                  </td>
+                  <td style="color: #adb5bd; font-size: 0.78rem; white-space: nowrap;">{{ r.created_at_display }}</td>
+                  <td>
+                    <button type="button" class="pt-btn pt-btn-success rq-single-approve" data-id="{{ r.id }}" style="padding: 4px 10px; font-size: 0.78rem;">
+                      Approve
+                    </button>
+                    <button type="button" class="pt-btn pt-btn-danger rq-single-reject" data-id="{{ r.id }}" style="padding: 4px 10px; font-size: 0.78rem;">
+                      Reject
+                    </button>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="pt-empty">No pending reviews. Use the Refresh One or Find Missing tabs to scrape new prices.</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     CONFIRMATION MODAL (used for bulk approve/reject)
+     ============================================================ -->
+<div class="pt-modal-backdrop" id="pt-modal-backdrop">
+  <div class="pt-modal">
+    <h3 id="pt-modal-title">Confirm action</h3>
+    <div class="pt-modal-body" id="pt-modal-body"></div>
+
+    <div class="pt-modal-progress" id="pt-modal-progress">
+      <div class="pt-modal-progress-label">
+        <span id="pt-modal-progress-text">Processing...</span>
+        <span id="pt-modal-progress-pct">0 / 0</span>
+      </div>
+      <div class="pt-modal-progress-bar">
+        <div class="pt-modal-progress-fill" id="pt-modal-progress-fill"></div>
+      </div>
+      <div class="pt-modal-progress-current" id="pt-modal-progress-current"></div>
+    </div>
+
+    <div class="pt-modal-results" id="pt-modal-results"></div>
+
+    <div class="pt-modal-actions" id="pt-modal-actions">
+      <button type="button" class="pt-btn pt-btn-secondary" id="pt-modal-cancel">Cancel</button>
+      <button type="button" class="pt-btn" id="pt-modal-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ============================================================
+  // Phase 3.1 — Admin Price Tools frontend
+  //
+  // Three core flows:
+  //  1. Tab switching with deep-link via URL hash
+  //  2. Refresh One: incremental scrape with progress bar
+  //  3. Review Queue: checkbox selection + bulk approve/reject with modal
+  // ============================================================
+
+  // ---- Data ----
+  const CAR_DATA = {{ car_data_json | safe }};
+
+  // ---- Tab switching ----
+  function activateTab(tabName) {
+    document.querySelectorAll('.pt-tab').forEach(t => {
+      t.classList.toggle('is-active', t.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.pt-panel').forEach(p => {
+      p.classList.toggle('is-active', p.id === `panel-${tabName}`);
+    });
+    if (history.replaceState) {
+      history.replaceState(null, '', `#${tabName}`);
+    }
+  }
+  document.querySelectorAll('.pt-tab').forEach(t => {
+    t.addEventListener('click', () => activateTab(t.dataset.tab));
+  });
+  // Deep-link from URL hash on load
+  (function initTab() {
+    const hash = (window.location.hash || '').replace('#', '');
+    const valid = ['refresh-one', 'find-missing', 'suspected-discontinued', 'review-queue'];
+    if (valid.indexOf(hash) >= 0) activateTab(hash);
+  })();
+
+  // ============================================================
+  // TAB 1: REFRESH ONE — Incremental scrape orchestration
+  // ============================================================
+  const roMake = document.getElementById('ro-make');
+  const roModel = document.getElementById('ro-model');
+  const roBtn = document.getElementById('ro-scrape-btn');
+  const roStopBtn = document.getElementById('ro-stop-btn');
+  const roProgress = document.getElementById('ro-progress');
+  const roProgressFill = document.getElementById('ro-progress-fill');
+  const roProgressPct = document.getElementById('ro-progress-pct');
+  const roProgressCurrent = document.getElementById('ro-progress-current');
+  const roProgressStatus = document.getElementById('ro-progress-status');
+  const roMsg = document.getElementById('ro-msg');
+  const roResultsCard = document.getElementById('ro-results-card');
+  const roResultsTitle = document.getElementById('ro-results-title');
+  const roResultsSummary = document.getElementById('ro-results-summary');
+  const roResultsTbody = document.getElementById('ro-results-tbody');
+
+  let roStopRequested = false;
+
+  // Make → Model dropdown chain
+  roMake.addEventListener('change', () => {
+    const make = roMake.value;
+    roModel.innerHTML = '<option value="">— Select model —</option>';
+    if (!make || !CAR_DATA[make]) {
+      roModel.disabled = true;
+      roBtn.disabled = true;
+      return;
+    }
+    const models = Object.keys(CAR_DATA[make]).sort();
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      roModel.appendChild(opt);
+    });
+    roModel.disabled = false;
+    roBtn.disabled = !roModel.value;
+  });
+  roModel.addEventListener('change', () => {
+    roBtn.disabled = !roModel.value;
+  });
+
+  function showRoMsg(text, type) {
+    roMsg.textContent = text;
+    roMsg.className = 'pt-msg show pt-msg-' + (type || 'info');
+  }
+  function hideRoMsg() {
+    roMsg.className = 'pt-msg';
+    roMsg.textContent = '';
+  }
+
+  function setRoProgress(done, total, label, status) {
+    roProgress.classList.add('show');
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    roProgressFill.style.width = pct + '%';
+    roProgressPct.textContent = `${done} / ${total} (${pct}%)`;
+    if (label) roProgressCurrent.textContent = label;
+    if (status) roProgressStatus.textContent = status;
+  }
+  function hideRoProgress() {
+    roProgress.classList.remove('show');
+  }
+
+  function inrFmt(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    n = Math.round(Number(n));
+    return '₹ ' + n.toLocaleString('en-IN');
+  }
+
+  function statusPillHtml(status) {
+    if (status === 'found') return '<span class="pt-pill pt-pill-found">FOUND</span>';
+    if (status === 'ambiguous') return '<span class="pt-pill pt-pill-found-multi">FOUND MULTIPLE</span>';
+    if (status === 'not_found') return '<span class="pt-pill pt-pill-notfound">NOT FOUND</span>';
+    if (status === 'not_found_fuel') return '<span class="pt-pill pt-pill-notfound pt-pill-notfound-fuel">NOT FOUND FUEL</span>';
+    return '<span class="pt-pill pt-pill-unchanged">' + (status || '—') + '</span>';
+  }
+
+  function diffHtml(diffPct) {
+    if (diffPct === null || diffPct === undefined) return '<span class="pt-em-dash">—</span>';
+    const f = Number(diffPct).toFixed(1);
+    if (diffPct > 0.5) return `<span class="pt-diff-pos">+${f}%</span>`;
+    if (diffPct < -0.5) return `<span class="pt-diff-neg">${f}%</span>`;
+    return `<span class="pt-diff-zero">${f}%</span>`;
+  }
+
+  function outcomeHtml(outcome) {
+    if (outcome === 'queued') return '<span class="pt-pill pt-pill-queued">→ needs review</span>';
+    if (outcome === 'unchanged') return '<span style="color:#5bd47b;">✓ matches sheet</span>';
+    if (outcome === 'no_price') return '<span style="color:#6c757d;font-style:italic;">no price returned</span>';
+    if (outcome === 'error') return '<span style="color:#ff8585;">error</span>';
+    return outcome || '—';
+  }
+
+  function appendResultRow(row) {
+    const tr = document.createElement('tr');
+    let variantCell = `<div>${row.variant}</div>`;
+    if (row.matched_variant_name && row.matched_variant_name !== row.variant) {
+      variantCell += `<div style="color:#adb5bd;font-size:0.74rem;font-style:italic;">CW: ${row.matched_variant_name}</div>`;
+    }
+    tr.innerHTML = `
+      <td>${variantCell}</td>
+      <td>${row.fuel}</td>
+      <td class="num">${row.current_price ? inrFmt(row.current_price) : '<span class="pt-em-dash">—</span>'}</td>
+      <td class="num">${row.proposed_price ? inrFmt(row.proposed_price) : '<span class="pt-em-dash">—</span>'}</td>
+      <td class="num">${diffHtml(row.diff_pct)}</td>
+      <td>${statusPillHtml(row.scraper_status)} ${outcomeHtml(row.outcome)}</td>
+    `;
+    roResultsTbody.appendChild(tr);
+  }
+
+  async function runIncrementalScrape() {
+    const make = roMake.value;
+    const model = roModel.value;
+    if (!make || !model) return;
+
+    hideRoMsg();
+    roResultsCard.style.display = 'none';
+    roResultsTbody.innerHTML = '';
+    roBtn.disabled = true;
+    roStopBtn.style.display = 'inline-block';
+    roStopRequested = false;
+
+    setRoProgress(0, 0, `Fetching variants for ${make} ${model}...`, 'Reading sheet...');
+
+    // Step 1: scrape-init — get variant list
+    let variants = [];
+    try {
+      const fd = new FormData();
+      fd.append('make', make);
+      fd.append('model', model);
+      const resp = await fetch('/admin/price-tools/scrape-init', {
+        method: 'POST',
+        body: fd,
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        showRoMsg('Could not load variants: ' + (data.error || 'unknown error'), 'error');
+        hideRoProgress();
+        roBtn.disabled = false;
+        roStopBtn.style.display = 'none';
+        return;
+      }
+      variants = data.variants || [];
+    } catch (e) {
+      showRoMsg('Network error: ' + e.message, 'error');
+      hideRoProgress();
+      roBtn.disabled = false;
+      roStopBtn.style.display = 'none';
+      return;
+    }
+
+    if (variants.length === 0) {
+      showRoMsg('No variants found in sheet for this make + model.', 'error');
+      hideRoProgress();
+      roBtn.disabled = false;
+      roStopBtn.style.display = 'none';
+      return;
+    }
+
+    // Step 2: show results card, scrape per-variant
+    roResultsCard.style.display = 'block';
+    roResultsTitle.textContent = `Scrape results for ${make} ${model}`;
+
+    let queuedCount = 0;
+    let processedCount = 0;
+    const total = variants.length;
+    setRoProgress(0, total, `Scraping 0 of ${total}...`, 'Starting...');
+
+    for (let i = 0; i < variants.length; i++) {
+      if (roStopRequested) {
+        showRoMsg(`Stopped at ${i} of ${total}. ${queuedCount} reviews queued so far.`, 'info');
+        break;
+      }
+      const v = variants[i];
+      setRoProgress(i, total, `Scraping ${i + 1} of ${total} — ${v.variant} (${v.fuel})`, 'Fetching CarWale...');
+
+      try {
+        const fd = new FormData();
+        fd.append('make', make);
+        fd.append('model', model);
+        fd.append('variant', v.variant);
+        fd.append('fuel', v.fuel);
+
+        const resp = await fetch('/admin/price-tools/scrape-one', {
+          method: 'POST',
+          body: fd,
+        });
+        const data = await resp.json();
+
+        // Build a result row from the scrape-one response.
+        // scrape-one returns: {ok, review_id, review_type, message?}
+        // We need to fetch the actual scraped result to display.
+        // For a richer display we re-do a lightweight diff inline here.
+        const rowOut = {
+          variant: v.variant,
+          fuel: v.fuel,
+          current_price: v.current_price,
+          proposed_price: null,
+          diff_pct: null,
+          matched_variant_name: null,
+          scraper_status: null,
+          outcome: 'unchanged',
+        };
+
+        if (data.ok && data.review_id) {
+          // Review was queued. We don't have the full scrape detail here,
+          // but we know the type.
+          rowOut.outcome = 'queued';
+          if (data.review_type === 'discontinued') {
+            rowOut.scraper_status = 'not_found';
+          }
+          queuedCount++;
+        } else if (data.ok && !data.review_id) {
+          // No price returned, no review queued
+          rowOut.outcome = 'no_price';
+        } else {
+          rowOut.outcome = 'error';
+        }
+
+        appendResultRow(rowOut);
+        processedCount++;
+      } catch (e) {
+        appendResultRow({
+          variant: v.variant,
+          fuel: v.fuel,
+          current_price: v.current_price,
+          proposed_price: null,
+          diff_pct: null,
+          matched_variant_name: null,
+          scraper_status: null,
+          outcome: 'error',
+        });
+        processedCount++;
+      }
+      // Brief delay to keep CarWale happy (matches server-side rate-limit window)
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    setRoProgress(total, total, `Done — ${queuedCount} queued, ${processedCount - queuedCount} unchanged/skipped`, 'Complete');
+    roResultsSummary.textContent = `${total} variants · ${queuedCount} added to queue`;
+
+    // Bump queue badge
+    const queueBadge = document.getElementById('queue-badge');
+    if (queueBadge && queuedCount > 0) {
+      const cur = parseInt(queueBadge.textContent || '0', 10) || 0;
+      queueBadge.textContent = cur + queuedCount;
+    }
+
+    if (queuedCount > 0) {
+      showRoMsg(`✅ ${queuedCount} review${queuedCount === 1 ? '' : 's'} added to the queue. Switch to the Review Queue tab to approve or reject.`, 'success');
+    } else {
+      showRoMsg('All variants match the sheet. No reviews queued.', 'info');
+    }
+
+    roBtn.disabled = false;
+    roStopBtn.style.display = 'none';
+  }
+
+  roBtn.addEventListener('click', runIncrementalScrape);
+  roStopBtn.addEventListener('click', () => {
+    roStopRequested = true;
+    roStopBtn.disabled = true;
+    roStopBtn.textContent = 'Stopping...';
+    setTimeout(() => {
+      roStopBtn.disabled = false;
+      roStopBtn.textContent = 'Stop';
+    }, 1500);
+  });
+
+  // ============================================================
+  // TAB 2: FIND MISSING — single scrape per row
+  // ============================================================
+  document.querySelectorAll('.fm-scrape-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const row = e.target.closest('tr');
+      const statusEl = row.querySelector('.fm-status');
+      btn.disabled = true;
+      statusEl.textContent = 'Scraping...';
+      statusEl.style.color = '#adb5bd';
+
+      try {
+        const fd = new FormData();
+        fd.append('make', row.dataset.make);
+        fd.append('model', row.dataset.model);
+        fd.append('variant', row.dataset.variant);
+        fd.append('fuel', row.dataset.fuel);
+
+        const resp = await fetch('/admin/price-tools/scrape-one', {
+          method: 'POST',
+          body: fd,
+        });
+        const data = await resp.json();
+        if (data.ok && data.review_id) {
+          statusEl.textContent = '✓ queued for review';
+          statusEl.style.color = '#5bd47b';
+          // Bump queue badge
+          const queueBadge = document.getElementById('queue-badge');
+          if (queueBadge) {
+            const cur = parseInt(queueBadge.textContent || '0', 10) || 0;
+            queueBadge.textContent = cur + 1;
+          }
+        } else if (data.ok) {
+          statusEl.textContent = data.message || 'No price';
+          statusEl.style.color = '#6c757d';
+        } else {
+          statusEl.textContent = '✗ ' + (data.error || 'failed');
+          statusEl.style.color = '#ff8585';
+        }
+      } catch (e) {
+        statusEl.textContent = '✗ network error';
+        statusEl.style.color = '#ff8585';
+      }
+      btn.disabled = false;
+    });
+  });
+
+  // ============================================================
+  // TAB 4: REVIEW QUEUE — checkbox selection + bulk approve/reject
+  // ============================================================
+  const rqTable = document.getElementById('rq-table');
+  const rqSelectAll = document.getElementById('rq-select-all');
+  const rqBulkBar = document.getElementById('rq-bulk-bar');
+  const rqBulkCount = document.getElementById('rq-bulk-count');
+  const rqBulkApproveBtn = document.getElementById('rq-bulk-approve-btn');
+  const rqBulkRejectBtn = document.getElementById('rq-bulk-reject-btn');
+  const rqBulkClearBtn = document.getElementById('rq-bulk-clear-btn');
+
+  function getSelectedRows() {
+    if (!rqTable) return [];
+    return Array.from(rqTable.querySelectorAll('.rq-row-check:checked'));
+  }
+  function updateBulkBar() {
+    const sel = getSelectedRows();
+    const n = sel.length;
+    if (!rqBulkBar) return;
+    if (n === 0) {
+      rqBulkBar.classList.remove('show');
+    } else {
+      rqBulkBar.classList.add('show');
+      rqBulkCount.textContent = `${n} selected`;
+    }
+    // Update row highlight
+    rqTable.querySelectorAll('tbody tr').forEach(tr => {
+      const cb = tr.querySelector('.rq-row-check');
+      tr.classList.toggle('is-selected', cb && cb.checked);
+    });
+    // Sync select-all state
+    if (rqSelectAll) {
+      const all = rqTable.querySelectorAll('.rq-row-check');
+      const checkedCount = sel.length;
+      if (checkedCount === 0) {
+        rqSelectAll.checked = false;
+        rqSelectAll.indeterminate = false;
+      } else if (checkedCount === all.length) {
+        rqSelectAll.checked = true;
+        rqSelectAll.indeterminate = false;
+      } else {
+        rqSelectAll.checked = false;
+        rqSelectAll.indeterminate = true;
+      }
+    }
+  }
+
+  if (rqSelectAll) {
+    rqSelectAll.addEventListener('change', () => {
+      const checked = rqSelectAll.checked;
+      rqTable.querySelectorAll('.rq-row-check').forEach(cb => { cb.checked = checked; });
+      updateBulkBar();
+    });
+  }
+  if (rqTable) {
+    rqTable.querySelectorAll('.rq-row-check').forEach(cb => {
+      cb.addEventListener('change', updateBulkBar);
+    });
+  }
+  if (rqBulkClearBtn) {
+    rqBulkClearBtn.addEventListener('click', () => {
+      if (rqSelectAll) rqSelectAll.checked = false;
+      rqTable.querySelectorAll('.rq-row-check').forEach(cb => { cb.checked = false; });
+      updateBulkBar();
+    });
+  }
+
+  // ---- Modal helpers ----
+  const modalBackdrop = document.getElementById('pt-modal-backdrop');
+  const modalTitle = document.getElementById('pt-modal-title');
+  const modalBody = document.getElementById('pt-modal-body');
+  const modalProgress = document.getElementById('pt-modal-progress');
+  const modalProgressText = document.getElementById('pt-modal-progress-text');
+  const modalProgressPct = document.getElementById('pt-modal-progress-pct');
+  const modalProgressFill = document.getElementById('pt-modal-progress-fill');
+  const modalProgressCurrent = document.getElementById('pt-modal-progress-current');
+  const modalResults = document.getElementById('pt-modal-results');
+  const modalActions = document.getElementById('pt-modal-actions');
+  const modalCancel = document.getElementById('pt-modal-cancel');
+  const modalConfirm = document.getElementById('pt-modal-confirm');
+
+  function showModal({ title, bodyHtml, confirmLabel, confirmClass, onConfirm }) {
+    modalTitle.textContent = title;
+    modalBody.innerHTML = bodyHtml;
+    modalProgress.classList.remove('show');
+    modalResults.classList.remove('show');
+    modalResults.innerHTML = '';
+    modalProgressFill.style.width = '0%';
+    modalProgressCurrent.textContent = '';
+    modalProgressPct.textContent = '0 / 0';
+    modalConfirm.textContent = confirmLabel;
+    modalConfirm.className = 'pt-btn ' + (confirmClass || '');
+    modalConfirm.disabled = false;
+    modalCancel.disabled = false;
+    modalCancel.textContent = 'Cancel';
+    modalActions.style.display = 'flex';
+
+    modalConfirm.onclick = onConfirm;
+    modalBackdrop.classList.add('show');
+  }
+  function closeModal() {
+    modalBackdrop.classList.remove('show');
+  }
+  modalCancel.addEventListener('click', closeModal);
+
+  // ---- Bulk approve flow ----
+  rqBulkApproveBtn && rqBulkApproveBtn.addEventListener('click', () => {
+    const sel = getSelectedRows();
+    if (sel.length === 0) return;
+
+    // Count by type for breakdown
+    let updateCount = 0, discCount = 0, newCount = 0, otherCount = 0;
+    const ids = [];
+    sel.forEach(cb => {
+      ids.push(cb.dataset.id);
+      const t = cb.dataset.type;
+      if (t === 'price_update') updateCount++;
+      else if (t === 'discontinued') discCount++;
+      else if (t === 'new_variant') newCount++;
+      else otherCount++;
+    });
+
+    const breakdown = [];
+    if (updateCount) breakdown.push(`<li><strong>${updateCount}</strong> price update${updateCount === 1 ? '' : 's'} (UPDATE)</li>`);
+    if (discCount) breakdown.push(`<li><strong>${discCount}</strong> discontinued flag${discCount === 1 ? '' : 's'} (DISC)</li>`);
+    if (newCount) breakdown.push(`<li><strong>${newCount}</strong> new variant${newCount === 1 ? '' : 's'} (NEW)</li>`);
+    if (otherCount) breakdown.push(`<li><strong>${otherCount}</strong> other</li>`);
+
+    const bodyHtml = `
+      <p>You're about to approve <strong>${sel.length}</strong> review${sel.length === 1 ? '' : 's'}:</p>
+      <ul>${breakdown.join('')}</ul>
+      ${updateCount > 0 ? `<div class="modal-warn">⚠️ This will write <strong>${updateCount}</strong> price change${updateCount === 1 ? '' : 's'} to the <code>car_prices</code> Google Sheet immediately.</div>` : ''}
+      <p style="color:#adb5bd;">After completion, the cache will refresh automatically and changes will appear in user valuations within seconds.</p>
+    `;
+
+    showModal({
+      title: `Approve ${sel.length} review${sel.length === 1 ? '' : 's'}?`,
+      bodyHtml: bodyHtml,
+      confirmLabel: `Confirm — Approve ${sel.length}`,
+      confirmClass: 'pt-btn-success',
+      onConfirm: () => runBulkAction('approve', ids),
+    });
+  });
+
+  // ---- Bulk reject flow ----
+  rqBulkRejectBtn && rqBulkRejectBtn.addEventListener('click', () => {
+    const sel = getSelectedRows();
+    if (sel.length === 0) return;
+
+    const ids = sel.map(cb => cb.dataset.id);
+    const bodyHtml = `
+      <p>You're about to reject <strong>${sel.length}</strong> review${sel.length === 1 ? '' : 's'}.</p>
+      <p style="color:#adb5bd;">Rejected reviews are marked as handled with no change to the sheet. They will not reappear in the queue.</p>
+    `;
+
+    showModal({
+      title: `Reject ${sel.length} review${sel.length === 1 ? '' : 's'}?`,
+      bodyHtml: bodyHtml,
+      confirmLabel: `Confirm — Reject ${sel.length}`,
+      confirmClass: 'pt-btn-danger',
+      onConfirm: () => runBulkAction('reject', ids),
+    });
+  });
+
+  // ---- Single-row approve/reject (legacy single-action buttons) ----
+  document.querySelectorAll('.rq-single-approve').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      runBulkAction('approve', [id]);
+    });
+  });
+  document.querySelectorAll('.rq-single-reject').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      runBulkAction('reject', [id]);
+    });
+  });
+
+  async function runBulkAction(action, ids) {
+    // Show modal in progress mode (or transition from confirm to progress)
+    if (!modalBackdrop.classList.contains('show')) {
+      // Single-row action — show a fresh modal
+      const verb = action === 'approve' ? 'Approving' : 'Rejecting';
+      showModal({
+        title: `${verb} ${ids.length} review${ids.length === 1 ? '' : 's'}...`,
+        bodyHtml: '',
+        confirmLabel: 'Working...',
+        confirmClass: 'pt-btn',
+        onConfirm: () => {},
+      });
+    }
+
+    modalProgress.classList.add('show');
+    modalActions.style.display = 'none';
+    modalConfirm.disabled = true;
+    modalCancel.disabled = true;
+
+    const total = ids.length;
+    modalProgressText.textContent = `${action === 'approve' ? 'Approving' : 'Rejecting'} 0 of ${total}...`;
+    modalProgressPct.textContent = `0 / ${total}`;
+    modalProgressFill.style.width = '0%';
+
+    const endpoint = action === 'approve'
+      ? '/admin/price-tools/bulk-approve'
+      : '/admin/price-tools/bulk-reject';
+    const chunkSize = action === 'approve' ? 25 : 50;
+
+    let totalDone = 0, totalOk = 0, totalFailed = 0;
+    const allResults = [];
+
+    // Process in chunks to respect server caps
+    for (let start = 0; start < ids.length; start += chunkSize) {
+      const chunk = ids.slice(start, start + chunkSize);
+      modalProgressCurrent.textContent = `Processing batch of ${chunk.length}...`;
+
+      try {
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ review_ids: chunk.map(s => parseInt(s, 10)) }),
+        });
+        const data = await resp.json();
+
+        if (!data.ok) {
+          allResults.push({ ok: false, error: data.error || 'request failed', batch: chunk });
+          totalFailed += chunk.length;
+        } else {
+          (data.results || []).forEach(r => {
+            allResults.push(r);
+            if (r.ok) totalOk++;
+            else totalFailed++;
+          });
+        }
+      } catch (e) {
+        allResults.push({ ok: false, error: 'network error: ' + e.message, batch: chunk });
+        totalFailed += chunk.length;
+      }
+
+      totalDone += chunk.length;
+      const pct = Math.round((totalDone / total) * 100);
+      modalProgressFill.style.width = pct + '%';
+      modalProgressText.textContent = `${action === 'approve' ? 'Approving' : 'Rejecting'} ${totalDone} of ${total}...`;
+      modalProgressPct.textContent = `${totalDone} / ${total}`;
+    }
+
+    // Done — show summary
+    modalProgressFill.style.width = '100%';
+    modalProgressText.textContent = action === 'approve'
+      ? `✅ ${totalOk} approved · ${totalFailed} failed`
+      : `✅ ${totalOk} rejected · ${totalFailed} failed`;
+    modalProgressCurrent.textContent = totalFailed > 0
+      ? 'Some rows failed — see details below'
+      : 'All done!';
+
+    // Show errors if any
+    const errorRows = allResults.filter(r => !r.ok);
+    if (errorRows.length > 0) {
+      modalResults.classList.add('show');
+      modalResults.innerHTML = '<strong>Failures:</strong><br>' +
+        errorRows.slice(0, 10).map(r =>
+          `<span class="res-err">• id ${r.id || '(batch)'}: ${r.error || 'unknown'}</span>`
+        ).join('<br>');
+      if (errorRows.length > 10) {
+        modalResults.innerHTML += `<br><em>... and ${errorRows.length - 10} more</em>`;
+      }
+    }
+
+    // Restore actions — show only Close button now
+    modalActions.style.display = 'flex';
+    modalCancel.style.display = 'none';
+    modalConfirm.disabled = false;
+    modalConfirm.textContent = 'Close';
+    modalConfirm.className = 'pt-btn pt-btn-secondary';
+    modalConfirm.onclick = () => {
+      closeModal();
+      // Reset cancel button for next time
+      modalCancel.style.display = 'inline-block';
+      // Remove successfully-processed rows from the table
+      removeProcessedRows(allResults.filter(r => r.ok).map(r => r.id));
+      // Update queue badge
+      updateQueueBadgeFromCount();
+    };
+  }
+
+  function removeProcessedRows(processedIds) {
+    if (!rqTable || !processedIds || processedIds.length === 0) return;
+    const idSet = new Set(processedIds.map(i => String(i)));
+    let removed = 0;
+    rqTable.querySelectorAll('tbody tr').forEach(tr => {
+      const id = tr.dataset.reviewId;
+      if (id && idSet.has(id)) {
+        tr.remove();
+        removed++;
+      }
+    });
+    // If table is empty now, show empty state in the panel
+    const tbody = document.getElementById('rq-tbody');
+    if (tbody && tbody.children.length === 0) {
+      const card = tbody.closest('.pt-card');
+      if (card) {
+        const tableWrap = card.querySelector('.pt-table-wrap');
+        const bulkBar = card.querySelector('.pt-bulk-bar');
+        const summary = card.querySelector('#rq-pending-summary');
+        if (tableWrap) tableWrap.style.display = 'none';
+        if (bulkBar) bulkBar.classList.remove('show');
+        if (summary && summary.parentElement) summary.parentElement.style.display = 'none';
+        if (!card.querySelector('.pt-empty')) {
+          const empty = document.createElement('div');
+          empty.className = 'pt-empty';
+          empty.textContent = 'No pending reviews. Use the Refresh One or Find Missing tabs to scrape new prices.';
+          card.appendChild(empty);
+        }
+      }
+    } else {
+      // Update summary count
+      const summary = document.getElementById('rq-pending-summary');
+      if (summary && tbody) {
+        const n = tbody.children.length;
+        summary.textContent = `${n} pending review${n === 1 ? '' : 's'}`;
+      }
+    }
+    updateBulkBar();
+  }
+
+  function updateQueueBadgeFromCount() {
+    const tbody = document.getElementById('rq-tbody');
+    const queueBadge = document.getElementById('queue-badge');
+    if (tbody && queueBadge) {
+      queueBadge.textContent = tbody.children.length;
+    }
+  }
+
+  // Initial state
+  updateBulkBar();
+</script>
+{% endblock %}
