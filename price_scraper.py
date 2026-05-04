@@ -2,10 +2,34 @@
 price_scraper.py — CarWale ex-showroom price scraper for AutoKnowMus
 =====================================================================
 
-VERSION: v3.0.1 (05-May-2026)
+VERSION: v3.0.2 (05-May-2026)
 
 CHANGELOG:
-    v3.0.1 — (this version)
+    v3.0.2 — (this version)
+        - JSON path corrected. The v3.0.1 diagnostic revealed that trim
+          pages use state.trimPage.otherVersions[] + state.trimPage.versionDetail,
+          NOT state.modelPage.versions[] (which is the overview-page shape).
+          Each entry under trimPage.otherVersions[] has a priceOverview
+          dict with exShowRoomPrice in exact rupees (Bangalore-pinned via
+          our city cookies). versionDetail's priceOverview omits
+          exShowRoomPrice (the page that "is for" a variant only renders
+          on-road price for that one variant), but otherVersions[] from
+          ANY trim page covers all the others. So:
+            - Walking just 2 trim pages typically harvests every variant
+              with full ex-showroom data, since each trim's otherVersions[]
+              contains the ~8 sibling variants.
+            - The early-exit memoization in fetch_price() (v3.0)
+              already handles this — once we've matched the user's
+              variant, we stop.
+        - Removed the v3.0.1 diagnostic block (top_keys/interesting_paths
+          dump) since we now know the JSON shape. The function is
+          ~50 lines shorter.
+        - Added _extract_version_record() helper as a single canonical
+          place to convert a CarWale version dict to our priced-variant
+          shape, used by both otherVersions[] and versionDetail paths.
+
+    v3.0.1 — Trim filter prefix matching, retry budget reduction, JSON
+        diagnostic.
         - Fixed trim-slug over-collection. Bangalore-pinned overview page
           links to ~10 suburb pages (price-in-nelamangala etc) per model
           which we naively treated as trims. Added NON_TRIM_PREFIXES
@@ -590,24 +614,64 @@ def _extract_trim_slugs(html: str, slug: str) -> List[str]:
 # v3.0: VERSION HARVESTING FROM TRIM PAGES
 # ============================================================
 
+def _extract_version_record(v: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Extract a single version dict (from either trimPage.otherVersions[] or
+    trimPage.versionDetail) into our canonical priced-variant shape.
+
+    Returns None if the entry is missing required fields or has no
+    usable ex-showroom price.
+
+    The CarWale JSON shape (confirmed via v3.0.1 diagnostics) is:
+      {
+        "versionName": "VXi Petrol Manual",
+        "versionMaskingName": "vxi-petrol-manual",
+        "priceOverview": {
+          "exShowRoomPrice": 985300,   # int rupees, Bangalore-pinned
+          "price": 1189857,            # int rupees, on-road
+          "formattedPrice": "Rs. 11.90 Lakh",
+          ...
+        }
+      }
+    Only otherVersions[] entries reliably have exShowRoomPrice. The
+    versionDetail entry omits exShowRoomPrice (only "price" / on-road
+    is present) — so callers should prefer otherVersions[] data when
+    a variant appears in both lists.
+    """
+    if not isinstance(v, dict):
+        return None
+    name = (v.get("versionName") or v.get("displayName") or "").strip()
+    if not name:
+        return None
+    po = v.get("priceOverview")
+    if not isinstance(po, dict):
+        return None
+    ex = po.get("exShowRoomPrice") or 0
+    if not isinstance(ex, (int, float)) or ex <= 0:
+        return None
+    return {
+        "name": name,
+        "fuel": _get_fuel_from_version(v),
+        "ex_showroom": int(ex),
+        "masking": (v.get("versionMaskingName") or "").strip(),
+    }
+
+
 def _harvest_versions_from_trim_page(
     html: str,
     trim_url: str,
 ) -> List[Dict[str, Any]]:
-    """Parse a trim page's __INITIAL_STATE__ and return all `versions`
-    entries with their ex-showroom prices.
+    """Parse a trim page's __INITIAL_STATE__ and return all priced
+    variants with Bangalore ex-showroom prices.
 
-    Each returned item:
-        {
-          "name": "VXi Petrol Automatic",
-          "fuel": "Petrol",
-          "ex_showroom": 1120300,
-          "masking": "vxi-petrol-automatic",
-        }
+    Reads from state.trimPage.otherVersions[] (the primary source — these
+    entries reliably contain exShowRoomPrice). state.trimPage.versionDetail
+    is checked as a secondary source but its priceOverview omits
+    exShowRoomPrice for the variant that the trim page is "for", so it
+    typically yields nothing useful.
 
-    Variants where price is missing or 0 are skipped — those are typically
-    variants that belong to OTHER trims and the trim page returns them
-    as zero-priced placeholders.
+    Variants where exShowRoomPrice is 0 or missing are skipped silently —
+    those entries are placeholders that this particular trim page can't
+    price. They'll be priced by another trim page in the walk.
     """
     out: List[Dict[str, Any]] = []
     try:
@@ -616,72 +680,30 @@ def _harvest_versions_from_trim_page(
         logger.info("[%s] trim_page __INITIAL_STATE__ unparseable: %s", trim_url, e)
         return out
 
-    # Primary path: state.modelPage.versions
-    versions = []
-    if isinstance(state, dict):
-        mp = state.get("modelPage")
-        if isinstance(mp, dict):
-            v_list = mp.get("versions")
-            if isinstance(v_list, list):
-                versions = v_list
-
-    # Secondary path: some pages put it under state.versionPage.versions
-    if not versions and isinstance(state, dict):
-        vp = state.get("versionPage")
-        if isinstance(vp, dict):
-            v_list = vp.get("versions")
-            if isinstance(v_list, list):
-                versions = v_list
-
-    if not versions:
-        # v3.0.1 DIAG: dump top-level keys + all keys/paths containing
-        # "version" or "price" so we can identify the actual JSON shape.
-        try:
-            top_keys = sorted(list(state.keys())) if isinstance(state, dict) else []
-            interesting_paths: List[str] = []
-            def _walk(node: Any, path: str, depth: int) -> None:
-                if depth > 4:
-                    return
-                if isinstance(node, dict):
-                    for k, v in node.items():
-                        kl = str(k).lower()
-                        new_path = f"{path}.{k}" if path else str(k)
-                        if "version" in kl or "price" in kl:
-                            if isinstance(v, list):
-                                interesting_paths.append(f"{new_path} = list(len={len(v)})")
-                            elif isinstance(v, dict):
-                                interesting_paths.append(f"{new_path} = dict(keys={sorted(list(v.keys()))[:6]})")
-                            else:
-                                interesting_paths.append(f"{new_path} = {type(v).__name__}({str(v)[:40]})")
-                        if isinstance(v, (dict, list)) and len(interesting_paths) < 30:
-                            _walk(v, new_path, depth + 1)
-                elif isinstance(node, list) and node:
-                    if isinstance(node[0], dict):
-                        _walk(node[0], path + "[0]", depth + 1)
-            _walk(state, "", 0)
-            logger.info("[%s] DIAG top_keys=%s, interesting_paths=%s",
-                        trim_url, top_keys[:20], interesting_paths[:30])
-        except Exception as _diag_e:
-            logger.warning("[%s] diag walk failed: %s", trim_url, _diag_e)
-        logger.info("[%s] trim_page: no versions[] found in __INITIAL_STATE__", trim_url)
+    if not isinstance(state, dict):
+        logger.info("[%s] trim_page: __INITIAL_STATE__ is not a dict", trim_url)
         return out
 
-    for v in versions:
-        if not isinstance(v, dict):
-            continue
-        po = v.get("priceOverview") or {}
-        ex = po.get("price") or po.get("exShowRoomPrice") or 0
-        if not isinstance(ex, (int, float)) or ex <= 0:
-            continue
-        name = (v.get("versionName") or v.get("displayName") or "").strip()
-        if not name:
-            continue
-        out.append({
-            "name": name,
-            "fuel": _get_fuel_from_version(v),
-            "ex_showroom": int(ex),
-            "masking": (v.get("versionMaskingName") or "").strip(),
-        })
+    trim_page = state.get("trimPage")
+    if not isinstance(trim_page, dict):
+        logger.info("[%s] trim_page: no trimPage key in __INITIAL_STATE__", trim_url)
+        return out
+
+    # Primary source: trimPage.otherVersions[]
+    other_versions = trim_page.get("otherVersions")
+    if isinstance(other_versions, list):
+        for v in other_versions:
+            rec = _extract_version_record(v)
+            if rec:
+                out.append(rec)
+
+    # Secondary source: trimPage.versionDetail (singular). Usually omits
+    # exShowRoomPrice but check anyway in case CarWale changes shape.
+    version_detail = trim_page.get("versionDetail")
+    if isinstance(version_detail, dict):
+        rec = _extract_version_record(version_detail)
+        if rec:
+            out.append(rec)
 
     logger.info("[%s] trim_page: harvested %d priced variants", trim_url, len(out))
     return out
