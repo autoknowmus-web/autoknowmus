@@ -432,6 +432,227 @@ def _get_fuel_from_version(v: Dict[str, Any]) -> str:
     return ""
 
 
+# ============================================================
+# v2.9: Per-variant URL discovery
+#
+# CarWale's model overview page (e.g. /maruti-suzuki-cars/ertiga/) used to
+# include the full variant list with prices in __INITIAL_STATE__. As of
+# 04-May-2026 the prices on that page are no longer populated server-side
+# (they appear only on per-variant pages like /maruti-suzuki-cars/ertiga/lxi/).
+#
+# v2.9 strategy:
+#   1. Fetch the model overview page → extract list of {name, url} for each variant
+#   2. Match user's requested variant against that list (by name + fuel)
+#   3. Fetch the specific matched variant URL → extract ex-showroom price
+#
+# Two HTTP requests per fetch_price() instead of one. Rate-limited as usual.
+# ============================================================
+
+# Variant href pattern: matches `/maruti-suzuki-cars/ertiga/lxi/` etc.
+# We anchor the match against the model slug so it doesn't pick up
+# unrelated cross-links to other models on the page.
+def _build_variant_href_regex(slug: str) -> Optional[re.Pattern]:
+    """Compile a regex that matches `href="/{make-cars}/{model}/{variant-slug}/"`
+    given a sheet slug like 'maruti-suzuki/ertiga'. Returns None on bad input."""
+    if not slug or "/" not in slug:
+        return None
+    make_part, _, model_part = slug.strip("/").partition("/")
+    if not make_part or not model_part:
+        return None
+    # Escape make/model parts for regex; allow trailing slash optional
+    make_re = re.escape(make_part)
+    model_re = re.escape(model_part)
+    pattern = (
+        r'href="(/' + make_re + r'-cars/' + model_re +
+        r'/([a-z0-9][a-z0-9\-]*)/?)"'
+    )
+    return re.compile(pattern, re.IGNORECASE)
+
+
+def _extract_variant_index(html: str, slug: str) -> List[Dict[str, str]]:
+    """Extract the list of variants from a model overview page response.
+
+    Returns a list of dicts: [{"name": "LXi", "url": "https://.../lxi/", "fuel": ""}, ...]
+
+    Tries two strategies in order:
+      1. JSON: parse __INITIAL_STATE__, look for modelPage.versions with
+         versionMaskingName/versionName/maskingName fields.
+      2. HTML regex fallback: scan for href links matching the variant URL pattern.
+
+    Returns [] if neither strategy finds anything (caller will report error).
+    The caller is responsible for fetching each variant URL to get the price.
+    """
+    out: List[Dict[str, str]] = []
+
+    # Strategy 1 — JSON path. We try this first because if it works it gives
+    # us cleaner names and we can pre-filter by fuel.
+    try:
+        state = _extract_initial_state(html)
+        versions = (state.get("modelPage") or {}).get("versions") or []
+        for v in versions:
+            if not isinstance(v, dict):
+                continue
+            name = (v.get("versionName") or v.get("displayName") or "").strip()
+            masking = (v.get("versionMaskingName") or "").strip()
+            # Build URL from masking name (CarWale's URL convention)
+            if masking and slug:
+                variant_url = f"{CARWALE_BASE}/{_slug_to_url_path(slug)}/{masking}/"
+            else:
+                variant_url = ""
+            fuel = _get_fuel_from_version(v)
+            if name:
+                out.append({
+                    "name": name,
+                    "url": variant_url,
+                    "fuel": fuel,
+                    "masking": masking,
+                })
+        if out:
+            logger.info("variant_index: JSON path found %d variants", len(out))
+            return out
+    except Exception as e:
+        logger.info("variant_index: JSON path failed (%s), trying HTML regex", e)
+
+    # Strategy 2 — HTML regex fallback. Scan for href patterns.
+    pattern = _build_variant_href_regex(slug)
+    if not pattern:
+        logger.warning("variant_index: bad slug %r, can't build regex", slug)
+        return out
+    seen_paths = set()
+    for match in pattern.finditer(html):
+        path = match.group(1)
+        masking = match.group(2)
+        if path in seen_paths:
+            continue
+        # Filter common non-variant URLs that share the model slug prefix
+        # (e.g. "/photos", "/specifications", "/colours", "/user-reviews", "/news")
+        SKIP = {"photos", "specifications", "specs", "colours", "colors",
+                "user-reviews", "reviews", "news", "videos", "compare",
+                "offers", "ex-showroom-price", "on-road-price", "mileage",
+                "interior", "exterior", "features", "variants"}
+        if masking.lower() in SKIP:
+            continue
+        seen_paths.add(path)
+        # We don't know the human variant name from the URL alone; use masking
+        # capitalized as a best-effort name for matching.
+        display_name = masking.replace("-", " ").title()
+        out.append({
+            "name": display_name,
+            "url": f"{CARWALE_BASE}{path}",
+            "fuel": "",   # unknown until we fetch the variant page
+            "masking": masking,
+        })
+    logger.info("variant_index: HTML regex path found %d variants from %d hrefs",
+                len(out), len(seen_paths))
+    return out
+
+def _fetch_single_variant_price(variant_url: str) -> Dict[str, Any]:
+    """Fetch a single variant page and extract its ex-showroom price + canonical name.
+
+    Returns a dict:
+        {
+          "ok": True/False,
+          "price": int | None,        # ex-showroom price in INR
+          "version_name": str | None, # canonical name from CarWale, e.g. "VXi Petrol Manual"
+          "fuel": str | None,         # canonical fuel from CarWale
+          "url": str,                 # echo back the URL we hit
+          "error": str | None,
+        }
+
+    Tries two strategies in order:
+      1. JSON: parse __INITIAL_STATE__, find priceOverview.price (or
+         exShowRoomPrice fallback), versionName, fuel.
+      2. HTML regex fallback: scan for "Ex-Showroom Price" text near a
+         rupee amount (e.g. "Rs. 8,80,000"). This is more brittle but
+         works as a last resort if JSON shape changes.
+
+    Never raises — every failure mode is encoded in the return dict.
+    """
+    out: Dict[str, Any] = {
+        "ok": False,
+        "price": None,
+        "version_name": None,
+        "fuel": None,
+        "url": variant_url,
+        "error": None,
+    }
+    if not variant_url:
+        out["error"] = "empty variant_url"
+        return out
+
+    # Fetch
+    try:
+        html = _http_get(variant_url)
+    except FetchError as e:
+        out["error"] = f"fetch_failed: {e}"
+        return out
+    except Exception as e:
+        out["error"] = f"fetch_exception: {e.__class__.__name__}: {e}"
+        return out
+
+    # Strategy 1 — JSON path
+    try:
+        state = _extract_initial_state(html)
+        # On per-variant pages, the structure is typically:
+        #   modelPage.versions[i].priceOverview.{price,exShowRoomPrice}
+        # Or sometimes a single version: modelPage.version.priceOverview...
+        # Or versionPage at the top level. Try a few common shapes.
+        version_data = None
+        if isinstance(state, dict):
+            mp = state.get("modelPage") or {}
+            # Try modelPage.version (singular) — set when we're on a variant page
+            v = mp.get("version") if isinstance(mp, dict) else None
+            if isinstance(v, dict):
+                version_data = v
+            # Or versionPage at top level
+            elif isinstance(state.get("versionPage"), dict):
+                version_data = state["versionPage"]
+            # Or first item in modelPage.versions if there's exactly one
+            elif isinstance(mp.get("versions"), list) and len(mp["versions"]) == 1:
+                version_data = mp["versions"][0]
+
+        if isinstance(version_data, dict):
+            po = version_data.get("priceOverview") or {}
+            price = po.get("price") or po.get("exShowRoomPrice") or 0
+            if isinstance(price, (int, float)) and price > 0:
+                out["ok"] = True
+                out["price"] = int(price)
+                out["version_name"] = (version_data.get("versionName") or
+                                       version_data.get("displayName") or "").strip() or None
+                out["fuel"] = _get_fuel_from_version(version_data) or None
+                return out
+
+        # If state was extracted but we couldn't find the right shape, fall through to regex
+        logger.info("variant_price: JSON path didn't find price, trying regex on %s", variant_url)
+    except Exception as e:
+        logger.info("variant_price: JSON path failed (%s) on %s, trying regex", e, variant_url)
+
+    # Strategy 2 — HTML regex fallback. CarWale's variant pages display
+    # "Ex-Showroom Price" followed by "Rs. X,XX,XXX" in the visible HTML.
+    # Match patterns like: Ex-Showroom Price ... Rs. 8,80,000
+    try:
+        # Match "Ex-Showroom Price" (allowing anything in between, up to 200 chars)
+        # then "Rs." or "₹" then digits with commas.
+        pattern = re.compile(
+            r'Ex[\s\-]?Showroom\s*Price[^0-9]{0,200}?(?:Rs\.|₹|INR)\s*([0-9][0-9,]*)',
+            re.IGNORECASE | re.DOTALL,
+        )
+        match = pattern.search(html)
+        if match:
+            price_str = match.group(1).replace(",", "").strip()
+            price_int = int(price_str) if price_str.isdigit() else 0
+            if price_int > 0:
+                out["ok"] = True
+                out["price"] = price_int
+                # We don't have a clean version name from regex, leave as None
+                # The caller already has the human-readable name from the index
+                return out
+        out["error"] = "no_price_found"
+    except Exception as e:
+        out["error"] = f"regex_fallback_failed: {e.__class__.__name__}: {e}"
+    return out
+
+
 def _parse_variants(state: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Pull a clean variant list from the parsed __INITIAL_STATE__ dict.
     Each item: {versionName, displayName, maskingName, fuel,
