@@ -903,6 +903,84 @@ def write_discontinued_flag(make: str, model: str, variant: str, fuel: str,
         "last_known_price_date": today_str,
     }
 
+def clear_discontinued_flag(make: str, model: str, variant: str, fuel: str,
+                            note: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Phase 3.2: Reverse a "discontinued" flag on an existing row.
+
+    Clears:
+      col H (status)                  -> "" (empty = active again)
+      col I (last_known_price_date)   -> today's date (refresh the verified date)
+
+    Critical: does NOT touch col E (price) or col G (notes). The price stays
+    as-is — the variant just rejoins the catalog as active. The dashboard
+    will stop showing the orange "Discontinued" badge for this variant.
+
+    Use case: admin previously approved a NOT FOUND review and flagged a
+    variant as discontinued, then realized the variant is actually still in
+    production (e.g. CarWale just renamed it, or the data gap was temporary).
+    Clicking "Un-discontinue" in the admin UI calls this function.
+
+    Args:
+      make, model, variant, fuel: must match an existing row exactly
+      note: optional admin note appended to notes column (col G).
+            If provided, col G is also updated. If None, col G is untouched.
+
+    Raises RuntimeError if the row doesn't exist or the API call fails.
+    """
+    target = find_row(make, model, variant, fuel)
+    if target is None:
+        raise RuntimeError(
+            f"Row not found for ({make}, {model}, {variant}, {fuel}). "
+            f"Cannot un-discontinue."
+        )
+
+    row_num = target["_row_number"]
+    today_str = _today_ddmmmyyyy()
+    old_status = target.get("status", "")
+
+    updates = [
+        {
+            "range": f"{TAB_CAR_PRICES}!H{row_num}",
+            "values": [[""]],
+        },
+        {
+            "range": f"{TAB_CAR_PRICES}!I{row_num}",
+            "values": [[today_str]],
+        },
+    ]
+
+    # Optional: append a note to col G if admin provided one
+    if note:
+        existing_notes = target.get("notes", "")
+        merged_notes = f"{existing_notes} | Un-discontinued {today_str}: {note}".strip(" |")
+        updates.append({
+            "range": f"{TAB_CAR_PRICES}!G{row_num}",
+            "values": [[merged_notes]],
+        })
+
+    try:
+        _write_cells_batch(updates)
+    except RuntimeError as e:
+        raise RuntimeError(
+            f"Failed to clear discontinued flag for row {row_num} "
+            f"({make} {model} {variant} {fuel}): {e}"
+        )
+
+    logger.info(
+        "sheets_writer v3.7.0: clear_discontinued_flag row %d | %s %s %s %s | "
+        "status %r -> '' | date %s",
+        row_num, make, model, variant, fuel, old_status, today_str,
+    )
+
+    return {
+        "ok": True,
+        "action": "un_discontinued",
+        "row_number": row_num,
+        "old_status": old_status,
+        "status": "",
+        "last_known_price_date": today_str,
+    }
 
 def write_new_variant(make: str, model: str, variant: str, fuel: str,
                       ex_showroom_price: int,
