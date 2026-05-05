@@ -6532,6 +6532,10 @@ def price_tools_scrape_one():
     """
     Tab 2 (Find Missing): Scrape a single (make, model, variant, fuel) and
     queue a review. Returns JSON: {ok, review_id, ...}
+
+    v3.7.1: Reads existing sheet price first so pending_reviews.current_price
+    is populated. Without this, the Review Queue UI shows "—" in CURRENT
+    column for all rows queued via this route.
     """
     user = session.get('user')
     if not _is_admin(user):
@@ -6545,6 +6549,20 @@ def price_tools_scrape_one():
     if not all([make, model, variant, fuel]):
         return jsonify({'ok': False, 'error': 'all fields required'}), 400
 
+    # Read existing sheet price so pending_reviews.current_price is populated.
+    # Without this, the Review Queue UI shows "—" in the CURRENT column.
+    current_price = None
+    try:
+        for sheet_row in sheets_writer.read_car_prices():
+            if (sheet_row.get('make') == make and sheet_row.get('model') == model
+                    and sheet_row.get('variant') == variant and sheet_row.get('fuel') == fuel):
+                cur_price_str = (sheet_row.get('ex_showroom_price') or '').replace(',', '').strip()
+                if cur_price_str:
+                    current_price = int(cur_price_str)
+                break
+    except Exception as e:
+        app.logger.warning(f'price_tools_scrape_one: sheet lookup for current_price failed: {e}')
+
     try:
         r = price_scraper.fetch_price(make=make, model=model,
                                        variant=variant, fuel=fuel)
@@ -6553,7 +6571,7 @@ def price_tools_scrape_one():
             if r.get('status') in ('not_found', 'not_found_fuel'):
                 rid = _create_pending_review(
                     supabase, 'discontinued', make, model, variant, fuel,
-                    current_price=None,
+                    current_price=current_price,
                     proposed_price=None,
                     matched_variant_name=None,
                     scraper_status=r.get('status'),
@@ -6571,7 +6589,7 @@ def price_tools_scrape_one():
 
         rid = _create_pending_review(
             supabase, 'price_update', make, model, variant, fuel,
-            current_price=None,
+            current_price=current_price,
             proposed_price=proposed_price,
             matched_variant_name=r.get('matched_variant'),
             scraper_status=r.get('status'),
@@ -6583,8 +6601,6 @@ def price_tools_scrape_one():
     except Exception as e:
         app.logger.exception('price_tools_scrape_one failed')
         return jsonify({'ok': False, 'error': str(e)}), 500
-
-
 @app.route('/admin/price-tools/approve', methods=['POST'])
 def price_tools_approve():
     """
