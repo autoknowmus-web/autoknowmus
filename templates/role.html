@@ -250,8 +250,11 @@
       {% if is_admin %}🛠️ {% endif %}Hello {{ first_name }}!
     </h1>
     {% if is_admin %}
-    <a href="{{ url_for('admin_data_health') }}" class="admin-link">
-      🛠️ Admin Console
+    {# Admin link now points to the new /admin/ landing page (admin_index)
+       which renders the 6-tile admin panel grid with live counts.
+       Previously linked directly to admin_data_health. #}
+    <a href="{{ url_for('admin_index') }}" class="admin-link">
+      🛠️ Admin Panel
     </a>
     {% endif %}
   </div>
