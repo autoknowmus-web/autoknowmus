@@ -4280,6 +4280,218 @@ def admin_flag_user(user_id):
 
 
 # ============================================================
+# ADMIN INDEX — landing page at /admin/ with live tile counts
+# ------------------------------------------------------------
+# New in this Part 4 update. All routes above are byte-identical to the
+# previous version; only this section is new.
+#
+# Design decisions (locked):
+#   - One route: GET /admin/ → admin_index() → renders admin_index.html
+#   - 6 tiles, each with a live count fetched from Supabase / car_data cache
+#   - On any count failure: fall back to 0 (so badge shows "queue clear" /
+#     "healthy" / etc.) and log a WARNING. Page never breaks.
+#   - Counts run on every page load — no caching. They're cheap (<100ms each
+#     for the count='exact' queries) and admin visits this page rarely.
+#   - All 6 existing admin routes (/admin/data-health, /admin/user-activity,
+#     /admin/price-tools, /admin/multipliers, /admin/feedback, /admin/research)
+#     remain unchanged. The new /admin/ is purely additive navigation.
+# ============================================================
+
+def _fetch_admin_index_counts():
+    """
+    Gather all the live counts for the admin landing page tiles.
+
+    Returns a dict with these keys (all int unless noted):
+      guardrail_flags        — Data Health: count of guardrail-flagged models
+      deals_30d              — Data Health subtitle: verified deals in last 30d
+      signups_7d             — User Activity: new users in last 7 days
+      total_users            — User Activity fallback: total registered users
+      pending_reviews        — Price Tools: pending_reviews where status='pending'
+      discontinued_count     — Price Tools subtitle: variants flagged as discontinued
+      missing_count          — Price Tools subtitle: variants missing prices
+      states_count           — State Multipliers: total rows in state_multipliers
+      feedback_new           — Feedback: rows where status='new'
+      feedback_total         — Feedback subtitle: total feedback rows
+      research_suggestions   — Research Log: count of active calibration suggestions
+      research_total         — Research Log fallback: total research_log rows
+      research_included      — Research Log subtitle: rows where include_in_calibration=True
+
+    Robustness: every count is wrapped in its own try/except. A single Supabase
+    blip on one count won't break the page — that tile shows 0 and the others
+    render normally. All failures log a WARNING for later diagnosis.
+    """
+    counts = {
+        'guardrail_flags':      0,
+        'deals_30d':            0,
+        'signups_7d':           0,
+        'total_users':          0,
+        'pending_reviews':      0,
+        'discontinued_count':   0,
+        'missing_count':        0,
+        'states_count':         0,
+        'feedback_new':         0,
+        'feedback_total':       0,
+        'research_suggestions': 0,
+        'research_total':       0,
+        'research_included':    0,
+    }
+
+    # ---- Data Health: guardrail_flags + deals_30d ----
+    # guardrail_flags requires the same heavyweight computation that
+    # admin_data_health does (fetch deals, compute phases, compute flags).
+    # That's expensive — but it's the only honest answer. We cap the cost
+    # by reusing the helpers and only counting, not paginating.
+    try:
+        deals_180d = _fetch_all_deals_180d()
+        model_phases = _compute_phase_distribution(deals_180d)
+        guardrails = _compute_guardrail_flags(deals_180d, model_phases)
+        counts['guardrail_flags'] = len(guardrails)
+    except Exception as e:
+        app.logger.warning(f"admin_index: guardrail_flags count failed: {e}")
+
+    try:
+        counts['deals_30d'] = _fetch_all_deals_30d()
+    except Exception as e:
+        app.logger.warning(f"admin_index: deals_30d count failed: {e}")
+
+    # ---- User Activity: signups_7d + total_users ----
+    try:
+        cutoff_7d = (datetime.utcnow() - timedelta(days=7)).isoformat()
+        r = (supabase.table('users')
+             .select('id', count='exact')
+             .gte('created_at', cutoff_7d)
+             .execute())
+        counts['signups_7d'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: signups_7d count failed: {e}")
+
+    try:
+        r = supabase.table('users').select('id', count='exact').execute()
+        counts['total_users'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: total_users count failed: {e}")
+
+    # ---- Price Tools: pending_reviews + discontinued + missing ----
+    try:
+        r = (supabase.table('pending_reviews')
+             .select('id', count='exact')
+             .eq('status', 'pending')
+             .execute())
+        counts['pending_reviews'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: pending_reviews count failed: {e}")
+
+    try:
+        # Count variants flagged as discontinued in car_data cache.
+        # Mirrors the logic in price_tools() route — read variant_fuel_status
+        # maps and sum 'discontinued' entries.
+        cd_dict = dict(car_data.CAR_DATA) if hasattr(car_data, 'CAR_DATA') else {}
+        disc_count = 0
+        for make, models in cd_dict.items():
+            for model, mdata in models.items():
+                vfs = (mdata or {}).get('variant_fuel_status', {}) or {}
+                for variant, fuel_map in vfs.items():
+                    for fuel, st in fuel_map.items():
+                        if st == 'discontinued':
+                            disc_count += 1
+        counts['discontinued_count'] = disc_count
+    except Exception as e:
+        app.logger.warning(f"admin_index: discontinued_count failed: {e}")
+
+    try:
+        missing = car_data.find_missing_prices()
+        counts['missing_count'] = len(missing) if missing else 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: missing_count failed: {e}")
+
+    # ---- State Multipliers: total states ----
+    try:
+        r = supabase.table('state_multipliers').select('state_code', count='exact').execute()
+        counts['states_count'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: states_count failed: {e}")
+
+    # ---- Feedback: feedback_new + feedback_total ----
+    try:
+        r = (supabase.table('feedback')
+             .select('id', count='exact')
+             .eq('status', 'new')
+             .execute())
+        counts['feedback_new'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: feedback_new count failed: {e}")
+
+    try:
+        r = supabase.table('feedback').select('id', count='exact').execute()
+        counts['feedback_total'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: feedback_total count failed: {e}")
+
+    # ---- Research Log: total + included + suggestions ----
+    try:
+        r = supabase.table('research_log').select('id', count='exact').execute()
+        counts['research_total'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: research_total count failed: {e}")
+
+    try:
+        r = (supabase.table('research_log')
+             .select('id', count='exact')
+             .eq('include_in_calibration', True)
+             .execute())
+        counts['research_included'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: research_included count failed: {e}")
+
+    try:
+        # Calibration suggestions need the actual rows, not just a count,
+        # because the math (median ratio, outlier trim, engine prediction)
+        # runs over the corpus. Grab included rows and pass through the
+        # existing _compute_calibration_suggestions helper.
+        # Cap to 2000 rows so this never gets pathological.
+        r = (supabase.table('research_log')
+             .select('*')
+             .eq('include_in_calibration', True)
+             .order('entry_date', desc=True)
+             .limit(2000)
+             .execute())
+        rows = r.data or []
+        if rows:
+            suggestions = _compute_calibration_suggestions(rows)
+            # Surface only suggestions worth acting on (gap >= 1%, the
+            # threshold already used internally by _compute_calibration_suggestions
+            # to set confidence='in_sync' vs others). We count anything that
+            # isn't 'in_sync' as actionable.
+            counts['research_suggestions'] = sum(
+                1 for s in suggestions if s.get('confidence') != 'in_sync'
+            )
+    except Exception as e:
+        app.logger.warning(f"admin_index: research_suggestions count failed: {e}")
+
+    return counts
+
+
+@app.route('/admin/')
+@login_required
+@admin_required
+def admin_index():
+    """
+    Admin landing page — card grid of all 6 admin tools with live counts.
+    Replaces the old role.html → admin_data_health direct link.
+    """
+    user = current_user()
+    tool_counts = _fetch_admin_index_counts()
+
+    return render_template(
+        'admin_index.html',
+        user=user,
+        first_name=firstname_filter(user.get('name')),
+        tool_counts=tool_counts,
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
+
+
+# ============================================================
 # END app.py — Part 4
 # Continue with Part 5 immediately below.
 # ============================================================
