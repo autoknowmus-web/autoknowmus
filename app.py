@@ -5677,14 +5677,24 @@ def admin_multipliers():
 
 
 # ============================================================
-# END app.py — Part 6
-# Continue with Part 7 immediately below.
-# ============================================================
-# ============================================================
 # app.py — Part 7
 # ------------------------------------------------------------
 # Paste this BLOCK immediately below the last line of Part 6.
 # Continue pasting Part 8 immediately below the last line of this block.
+#
+# v3.5.1-r6 update: Forum Post support added throughout.
+#   • RESEARCH_SOURCES extended to 3 values
+#   • RESEARCH_FORUMS / RESEARCH_BUYER_TYPES / RESEARCH_QUALITY constants
+#   • _validate_research_form() handles 7 new forum-only fields with
+#     conditional requireds (forum_name + forum_url required ONLY when
+#     data_source='Forum Post'). transaction_date validated like entry_date.
+#   • admin_research route exposes new context to the template:
+#       stats.forum_count, stats.quality_high/medium/low,
+#       distinct_forums, active_forum
+#   • Rows decorated with transaction_date_display (DD-MMM-YYYY)
+#   • New 'forum' filter in the filter bar
+#
+# admin_feedback route is unchanged (kept verbatim).
 # ============================================================
 
 
@@ -5827,27 +5837,39 @@ def admin_feedback():
 
 
 # ============================================================
-# ADMIN · RESEARCH LOG (v3.5.1-r4)
+# ADMIN · RESEARCH LOG (v3.5.1-r6)
 # ============================================================
-# Manual-entry research data — mystery shopping observations + friends/family
-# deal references. Used for INITIAL FORMULA CALIBRATION ONLY. Does NOT feed
-# the live valuation engine (that's the verified `deals` table's job).
+# Manual-entry research data — mystery shopping observations, friends/family
+# deal references, AND historical transactions harvested from forums
+# (Team-BHP, Reddit, Facebook, Quora). Used for INITIAL FORMULA CALIBRATION
+# ONLY. Does NOT feed the live valuation engine — that's the verified
+# `deals` table's job.
 #
 # Routes:
 #   GET  /admin/research                 → list + add-form page
 #   POST /admin/research                 → create new entry
 #   POST /admin/research/<id>/edit       → update existing entry
 #   POST /admin/research/<id>/delete     → permanently delete
+#   POST /admin/research/<id>/toggle-calibration  (Part 8)
+#   POST /admin/research/apply-suggestion/<state> (Part 8)
 # ============================================================
 
-# Source values must match the dropdown in admin_research.html
-RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family']
-# v3.5.1-r5.1: Use the canonical OWNERS / CONDITIONS lists from app.py module scope
-# (defined ~line 159-160) so the research form mirrors seller / submit_deal exactly.
-# Before, this was a bespoke 4-value list ('1st'/'2nd'/'3rd'/'4th+') which broke
-# parity with the rest of the app.
+# v3.5.1-r6: 3 sources now (Forum Post added). Must match the dropdown in
+# admin_research.html. Migration 8 added the CHECK constraint enforcing
+# this at the DB layer too.
+RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family', 'Forum Post']
+
+# v3.5.1-r5.1: Use the canonical OWNERS / CONDITIONS lists from app.py
+# module scope so the research form mirrors seller / submit_deal exactly.
 RESEARCH_OWNERS = OWNERS                  # ['1st Owner', '2nd Owner', '3rd Owner or more']
 RESEARCH_CONDITIONS = CONDITIONS          # ['Excellent', 'Good', 'Fair']
+
+# v3.5.1-r6: Forum-Post-specific dropdowns. Migration 8 enforces these at
+# the DB layer via CHECK constraints; this list is the single source of
+# truth at the app layer.
+RESEARCH_FORUMS = ['Team-BHP', 'Reddit', 'Facebook', 'Quora', 'Other']
+RESEARCH_BUYER_TYPES = ['Private', 'Dealer', 'Cars24', 'Spinny', 'CarTrade', 'OLX', 'Other']
+RESEARCH_QUALITY = ['high', 'medium', 'low']
 
 
 def _parse_research_int(raw, field_name, min_val, max_val, allow_none=True):
@@ -5867,10 +5889,45 @@ def _parse_research_int(raw, field_name, min_val, max_val, allow_none=True):
     return n
 
 
+def _parse_research_date(raw, field_name, allow_blank=True):
+    """Parse a date field that may arrive as either ISO yyyy-mm-dd (HTML
+    date input / Flatpickr) or DD-MMM-YYYY (display format). Returns ISO
+    string or None. Range: 2010-01-01 to today inclusive (matches the
+    DB CHECK constraint on transaction_date and is sane for entry_date)."""
+    if not raw or not raw.strip():
+        if allow_blank:
+            return None
+        raise ValueError(f"{field_name} is required.")
+    s = raw.strip()
+    parsed = None
+    for fmt in ('%Y-%m-%d', '%d-%b-%Y'):
+        try:
+            parsed = datetime.strptime(s, fmt).date()
+            break
+        except ValueError:
+            continue
+    if parsed is None:
+        raise ValueError(f"{field_name} format is invalid. Use DD-MMM-YYYY.")
+    today = datetime.utcnow().date()
+    min_date = datetime(2010, 1, 1).date()
+    if parsed < min_date:
+        raise ValueError(f"{field_name} must be on or after 2010-01-01.")
+    if parsed > today:
+        raise ValueError(f"{field_name} cannot be in the future.")
+    return parsed.strftime('%Y-%m-%d')
+
+
 def _validate_research_form(form, is_edit=False):
     """Pull and validate fields from a research-log POST form.
-       Returns (payload_dict, error_message_or_None)."""
-    # Required: car identity
+       Returns (payload_dict, error_message_or_None).
+
+       v3.5.1-r6: Now handles 7 forum-only fields with conditional
+       required-ness. Forum fields are required ONLY when
+       data_source == 'Forum Post'. For Mystery Shopping or Friends &
+       Family, all 7 forum fields are accepted but optional (and the
+       required pair forum_name/forum_url just gets dropped from payload
+       if blank, so they end up as NULL in the DB)."""
+    # ── Required: car identity ──
     make    = (form.get('make') or '').strip()
     model   = (form.get('model') or '').strip()
     variant = (form.get('variant') or '').strip()
@@ -5887,7 +5944,7 @@ def _validate_research_form(form, is_edit=False):
     except (ValueError, TypeError):
         return None, "Year is required."
 
-    # Required: source + entry_date
+    # ── Required: source + entry_date ──
     data_source = (form.get('data_source') or '').strip()
     if data_source not in RESEARCH_SOURCES:
         return None, f"Source must be one of: {', '.join(RESEARCH_SOURCES)}."
@@ -5895,18 +5952,13 @@ def _validate_research_form(form, is_edit=False):
     entry_date_raw = (form.get('entry_date') or '').strip()
     if not entry_date_raw:
         entry_date_raw = datetime.utcnow().strftime('%Y-%m-%d')
-    # Accept either ISO yyyy-mm-dd (HTML date input) or DD-MMM-YYYY
-    entry_date_iso = None
-    for fmt in ('%Y-%m-%d', '%d-%b-%Y'):
-        try:
-            entry_date_iso = datetime.strptime(entry_date_raw, fmt).strftime('%Y-%m-%d')
-            break
-        except ValueError:
-            continue
-    if not entry_date_iso:
-        return None, "Entry date format is invalid. Use DD-MMM-YYYY (e.g. 02-May-2026)."
+    try:
+        entry_date_iso = _parse_research_date(entry_date_raw, 'Entry date',
+                                              allow_blank=False)
+    except ValueError as e:
+        return None, str(e)
 
-    # Optional: car-state fields
+    # ── Optional: car-state fields ──
     try:
         mileage_km = _parse_research_int(form.get('mileage_km'), 'Mileage', 0, 1000000)
     except ValueError as e:
@@ -5920,18 +5972,18 @@ def _validate_research_form(form, is_edit=False):
     if condition and condition not in RESEARCH_CONDITIONS:
         return None, f"Condition must be one of: {', '.join(RESEARCH_CONDITIONS)}."
 
-    # Optional: location
+    # ── Optional: location ──
     state_code = (form.get('state_code') or '').strip().upper() or None
     city = (form.get('city') or '').strip() or None
 
-    # Optional: pricing
+    # ── Optional: pricing ──
     try:
         asking_price = _parse_research_int(form.get('asking_price_inr'), 'Asking price', 1, 100000000)
         negotiated_price = _parse_research_int(form.get('negotiated_price_inr'), 'Negotiated price', 1, 100000000)
     except ValueError as e:
         return None, str(e)
 
-    # Optional: dealer / listing context
+    # ── Optional: dealer / listing context ──
     dealer_name = (form.get('dealer_name') or '').strip() or None
     dealer_phone = (form.get('dealer_phone') or '').strip() or None
     listing_url = (form.get('listing_url') or '').strip() or None
@@ -5939,11 +5991,74 @@ def _validate_research_form(form, is_edit=False):
     if notes and len(notes) > 2000:
         return None, "Notes are limited to 2000 characters."
 
+    # ── v3.5.1-r6: Forum-Post-specific fields ──
+    # Validate ALL forum fields if present, but only enforce required-ness
+    # on (forum_name, forum_url) when data_source == 'Forum Post'.
+    forum_name = (form.get('forum_name') or '').strip() or None
+    forum_url = (form.get('forum_url') or '').strip() or None
+    transaction_date_raw = (form.get('transaction_date') or '').strip()
+    transaction_completed_raw = (form.get('transaction_completed') or '').strip().lower()
+    buyer_type = (form.get('buyer_type') or '').strip() or None
+    data_quality_raw = (form.get('data_quality') or '').strip().lower()
+    harvest_notes = (form.get('harvest_notes') or '').strip() or None
+
+    # Conditional requireds for Forum Post entries
+    if data_source == 'Forum Post':
+        if not forum_name:
+            return None, "Forum is required for Forum Post entries."
+        if not forum_url:
+            return None, "Forum URL is required for Forum Post entries."
+
+    # Validate forum_name against allowed list (when present)
+    if forum_name and forum_name not in RESEARCH_FORUMS:
+        return None, f"Forum must be one of: {', '.join(RESEARCH_FORUMS)}."
+
+    # forum_url length cap (matches Migration 8 CHECK constraint: ≤1000)
+    if forum_url and len(forum_url) > 1000:
+        return None, "Forum URL is limited to 1000 characters."
+
+    # transaction_date — optional, but if provided must be valid
+    transaction_date_iso = None
+    try:
+        if transaction_date_raw:
+            transaction_date_iso = _parse_research_date(transaction_date_raw,
+                                                       'Transaction date',
+                                                       allow_blank=True)
+    except ValueError as e:
+        return None, str(e)
+
+    # transaction_completed: '', 'true', or 'false' from the form.
+    # Maps to bool / None for the DB.
+    transaction_completed = None
+    if transaction_completed_raw == 'true':
+        transaction_completed = True
+    elif transaction_completed_raw == 'false':
+        transaction_completed = False
+    elif transaction_completed_raw and transaction_completed_raw not in ('', 'true', 'false'):
+        return None, "Transaction completed must be Yes or No."
+
+    # buyer_type
+    if buyer_type and buyer_type not in RESEARCH_BUYER_TYPES:
+        return None, f"Buyer type must be one of: {', '.join(RESEARCH_BUYER_TYPES)}."
+
+    # data_quality — defaults to 'high' if blank, matches the DB default
+    if data_quality_raw:
+        if data_quality_raw not in RESEARCH_QUALITY:
+            return None, f"Data quality must be one of: {', '.join(RESEARCH_QUALITY)}."
+        data_quality = data_quality_raw
+    else:
+        data_quality = 'high'
+
+    # harvest_notes length cap (matches Migration 8 CHECK constraint: ≤1000)
+    if harvest_notes and len(harvest_notes) > 1000:
+        return None, "Harvest notes are limited to 1000 characters."
+
+    # ── Inclusion / exclusion ──
     # v3.5.1-r5: include_in_calibration defaults to TRUE for new entries.
     # On edit, the form sends explicit '0' or '1' so we honor it.
     incl_raw = form.get('include_in_calibration')
     if incl_raw is None:
-        include_in_calibration = True  # Default TRUE per user spec
+        include_in_calibration = True
     else:
         include_in_calibration = (str(incl_raw).strip() in ('1', 'on', 'true', 'True', 'yes'))
 
@@ -5975,6 +6090,16 @@ def _validate_research_form(form, is_edit=False):
         'notes': notes,
         'include_in_calibration': include_in_calibration,
         'exclusion_reason': exclusion_reason,
+        # v3.5.1-r6: Forum-Post fields. Always written; NULL for non-forum
+        # entries except data_quality which is backfilled to 'high' by
+        # Migration 8 and defaults to 'high' here when blank.
+        'forum_name': forum_name,
+        'forum_url': forum_url,
+        'transaction_date': transaction_date_iso,
+        'transaction_completed': transaction_completed,
+        'buyer_type': buyer_type,
+        'data_quality': data_quality,
+        'harvest_notes': harvest_notes,
     }
     return payload, None
 
@@ -5983,7 +6108,16 @@ def _validate_research_form(form, is_edit=False):
 @login_required
 @admin_required
 def admin_research():
-    """List + add research log entries. Filters via querystring."""
+    """List + add research log entries. Filters via querystring.
+
+    v3.5.1-r6: Adds Forum Post support. New context vars passed to the
+    template:
+      • stats.forum_count, stats.quality_high, stats.quality_medium,
+        stats.quality_low
+      • distinct_forums (sorted set of forum_name values seen in current rows)
+      • active_forum (current f_forum filter value)
+    Each row gets transaction_date_display populated for the table cell.
+    """
     admin = current_user()
 
     # ── POST: create a new entry ──────────────────────────────
@@ -6009,6 +6143,7 @@ def admin_research():
     f_source = (request.args.get('source') or '').strip()
     f_state = (request.args.get('state') or '').strip().upper()
     f_make = (request.args.get('make') or '').strip()
+    f_forum = (request.args.get('forum') or '').strip()  # v3.5.1-r6
 
     try:
         q = supabase.table('research_log').select('*')
@@ -6018,6 +6153,8 @@ def admin_research():
             q = q.eq('state_code', f_state)
         if f_make:
             q = q.eq('make', f_make)
+        if f_forum and f_forum in RESEARCH_FORUMS:
+            q = q.eq('forum_name', f_forum)
         q = q.order('entry_date', desc=True).order('created_at', desc=True).limit(500)
         r = q.execute()
         rows = r.data or []
@@ -6026,8 +6163,9 @@ def admin_research():
         rows = []
         flash(f"Could not load research log: {e}", 'error')
 
-    # Decorate each row with a display date and gap_pct sign
+    # Decorate each row with display dates and gap_pct sign
     for row in rows:
+        # entry_date_display
         ed = row.get('entry_date')
         if ed:
             try:
@@ -6037,13 +6175,33 @@ def admin_research():
         else:
             row['entry_date_display'] = '—'
 
+        # v3.5.1-r6: transaction_date_display (forum entries only)
+        td = row.get('transaction_date')
+        if td:
+            try:
+                row['transaction_date_display'] = datetime.strptime(td, '%Y-%m-%d').strftime('%d-%b-%Y')
+            except (ValueError, TypeError):
+                row['transaction_date_display'] = td
+        else:
+            row['transaction_date_display'] = None
+
     # Aggregate stats
     total = len(rows)
     by_mystery = sum(1 for r_ in rows if r_.get('data_source') == 'Mystery Shopping')
     by_ff = sum(1 for r_ in rows if r_.get('data_source') == 'Friends & Family')
+    by_forum = sum(1 for r_ in rows if r_.get('data_source') == 'Forum Post')
+
     # v3.5.1-r5: Inclusion split for the calibration corpus
     n_included = sum(1 for r_ in rows if r_.get('include_in_calibration'))
     n_excluded = total - n_included
+
+    # v3.5.1-r6: Quality breakdown across all sources. Backfilled rows from
+    # Migration 8 are 'high' by default, so this is meaningful even for
+    # pre-existing Mystery / F&F entries.
+    quality_high = sum(1 for r_ in rows if (r_.get('data_quality') or 'high') == 'high')
+    quality_medium = sum(1 for r_ in rows if r_.get('data_quality') == 'medium')
+    quality_low = sum(1 for r_ in rows if r_.get('data_quality') == 'low')
+
     # Average gap_pct (mystery-shop entries with both prices)
     gaps = [float(r_['gap_pct']) for r_ in rows
             if r_.get('gap_pct') is not None and r_.get('data_source') == 'Mystery Shopping']
@@ -6053,6 +6211,10 @@ def admin_research():
         'total': total,
         'mystery_count': by_mystery,
         'ff_count': by_ff,
+        'forum_count': by_forum,                      # v3.5.1-r6
+        'quality_high': quality_high,                 # v3.5.1-r6
+        'quality_medium': quality_medium,             # v3.5.1-r6
+        'quality_low': quality_low,                   # v3.5.1-r6
         'avg_mystery_gap_pct': avg_gap,
         'gap_sample_size': len(gaps),
         'included_count': n_included,
@@ -6062,12 +6224,15 @@ def admin_research():
     # Distinct values for filter dropdowns
     distinct_states = sorted({r_.get('state_code') for r_ in rows if r_.get('state_code')})
     distinct_makes = sorted({r_.get('make') for r_ in rows if r_.get('make')})
+    # v3.5.1-r6: Distinct forums seen in the loaded set, for the filter
+    # dropdown. We emit only forums that actually appear so the dropdown
+    # doesn't list options that produce empty results.
+    distinct_forums = sorted({r_.get('forum_name') for r_ in rows if r_.get('forum_name')})
 
     # v3.5.1-r5: Compute calibration suggestions from the FULL row set
     # (don't apply UI filters to calibration math — that would be misleading).
-    # We need to query unfiltered when computing suggestions.
     try:
-        if f_source or f_state or f_make:
+        if f_source or f_state or f_make or f_forum:
             # Filtered view — re-fetch full set just for suggestion math
             r_all = (supabase.table('research_log')
                      .select('*')
@@ -6101,8 +6266,10 @@ def admin_research():
         active_source=f_source,
         active_state=f_state,
         active_make=f_make,
+        active_forum=f_forum,                # v3.5.1-r6
         distinct_states=distinct_states,
         distinct_makes=distinct_makes,
+        distinct_forums=distinct_forums,     # v3.5.1-r6
         calib_min_entries=CALIB_MIN_ENTRIES,
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
         today_iso=datetime.utcnow().strftime('%Y-%m-%d'),
@@ -6118,6 +6285,17 @@ def admin_research():
 # ------------------------------------------------------------
 # Paste this BLOCK immediately below the last line of Part 7.
 # This is the FINAL part — once pasted, your app.py is complete.
+#
+# v3.5.1-r6 update: _compute_calibration_suggestions now
+#   • counts forum entries in the suggestion's source breakdown
+#     (s.forum_count alongside s.mystery_count / s.ff_count),
+#   • weights data_quality='low' entries at 0.5× when computing the
+#     median ratio (low-quality forum harvests still inform calibration
+#     but with reduced influence). Implementation: weighted-median by
+#     duplicating high-weight ratios in the sorted list before the
+#     percentile trim — simple, deterministic, no scipy dependency.
+#
+# All other routes in this Part are unchanged from prior version.
 # ============================================================
 
 
@@ -6156,8 +6334,9 @@ def admin_research_delete(entry_id):
 
 # ============================================================
 # v3.5.1-r5: CALIBRATION SUGGESTIONS — semi-automated multiplier updates
+# v3.5.1-r6: + Forum-entry tracking + low-quality 0.5× weighting
 # ============================================================
-# Three new pieces:
+# Three pieces:
 #   1. _compute_calibration_suggestions(rows)
 #        Given the loaded research_log rows, returns a list of suggestion
 #        objects (one per state) where ≥3 included entries exist.
@@ -6174,6 +6353,18 @@ CALIB_MAX_AGE_DAYS = 90                  # Skip entries older than 90 days
 CALIB_MIN_GAP_PCT_TO_SUGGEST = 1.0       # Don't suggest changes <1%
 CALIB_MAX_REASONABLE_RATIO = 1.30        # Sanity: skip extreme outlier rows
 CALIB_MIN_REASONABLE_RATIO = 0.70
+
+# v3.5.1-r6: Quality-weight map. Used in the calibration math to give
+# 'high' / 'medium' entries full weight and 'low' (e.g. forum posts that
+# only said "around 5L") half weight. We implement this by repeating the
+# entry's ratio N times in the sample (N = round(weight * 2)) so the
+# median naturally weighs heavier-quality data more. high/med both → 2
+# copies; low → 1 copy.
+CALIB_QUALITY_WEIGHT = {
+    'high':   2,
+    'medium': 2,
+    'low':    1,
+}
 
 
 def _percentile_trim(values, trim_pct):
@@ -6206,8 +6397,13 @@ def _compute_calibration_suggestions(rows):
     compute a suggested state multiplier using the simple-ratio method:
 
         ratio_i = research_negotiated_price_i / engine_estimated_price_i
-        median_ratio = median(ratios after outlier trim)
+        median_ratio = median(ratios after outlier trim, weighted by data_quality)
         suggested_mult = current_multiplier × median_ratio
+
+    v3.5.1-r6: Each entry's ratio is repeated N times in the sample
+    according to its data_quality (high/medium = 2x, low = 1x). This
+    gives low-quality forum harvests half the influence of mystery-shop
+    or F&F data without dropping them entirely.
 
     Returns a list of dicts (one per state), sorted with biggest gaps first.
     """
@@ -6222,7 +6418,7 @@ def _compute_calibration_suggestions(rows):
         if not r.get('state_code'):
             continue  # Can't calibrate state without a state code
         if not r.get('negotiated_price_inr'):
-            continue  # Need actual price (F&F entries should have this in negotiated)
+            continue  # Need actual price (F&F + Forum entries should have this in negotiated)
 
         # Age gate
         ed = r.get('entry_date')
@@ -6246,8 +6442,8 @@ def _compute_calibration_suggestions(rows):
         current_mult = current_mults.get(sc, 1.000)
 
         # Compute engine prediction for each entry, then the ratio
-        ratios = []
-        contributing_ids = []
+        ratios_weighted = []   # ratios after quality-weight expansion (for median math)
+        contributing_ids = []  # unique entry ids that contributed
         skipped_count = 0
 
         for r in entries:
@@ -6291,18 +6487,28 @@ def _compute_calibration_suggestions(rows):
                     skipped_count += 1
                     continue
 
-                ratios.append(ratio)
+                # v3.5.1-r6: Quality-weight expansion. high/medium → 2 copies,
+                # low → 1 copy. Median over the expanded list = quality-weighted
+                # median of the original ratios.
+                quality = (r.get('data_quality') or 'high').lower()
+                weight = CALIB_QUALITY_WEIGHT.get(quality, 2)
+                ratios_weighted.extend([ratio] * weight)
                 contributing_ids.append(r['id'])
             except Exception as e:
                 app.logger.warning(f"calib ratio compute failed for entry {r.get('id')}: {e}")
                 skipped_count += 1
 
-        n_used = len(ratios)
+        # n_used = unique entries used (not the expanded weighted count). This
+        # is what the admin sees in "sample size" — they want to know how many
+        # data points contributed, not the internal weighted count.
+        n_used = len(contributing_ids)
         if n_used < CALIB_MIN_ENTRIES:
             continue
 
-        # Outlier trim (top/bottom 10% by ratio value)
-        trimmed_ratios = _percentile_trim(ratios, CALIB_OUTLIER_TRIM_PCT)
+        # Outlier trim on the WEIGHTED list, so heavier-quality data still
+        # dominates after the trim (a low-quality outlier is more likely to
+        # get trimmed since it has only 1 copy in the list).
+        trimmed_ratios = _percentile_trim(ratios_weighted, CALIB_OUTLIER_TRIM_PCT)
         median_ratio = _median(trimmed_ratios)
         if median_ratio is None:
             continue
@@ -6322,9 +6528,10 @@ def _compute_calibration_suggestions(rows):
         else:
             confidence = 'low'
 
-        # Source breakdown for context
+        # Source breakdown for context (v3.5.1-r6: now includes forum count)
         n_mystery = sum(1 for r in entries if r.get('data_source') == 'Mystery Shopping')
         n_ff = sum(1 for r in entries if r.get('data_source') == 'Friends & Family')
+        n_forum = sum(1 for r in entries if r.get('data_source') == 'Forum Post')
 
         # Date range of contributing entries
         dates = [r.get('entry_date') for r in entries if r.get('entry_date')]
@@ -6349,6 +6556,7 @@ def _compute_calibration_suggestions(rows):
             'skipped_count': skipped_count,
             'mystery_count': n_mystery,
             'ff_count': n_ff,
+            'forum_count': n_forum,                  # v3.5.1-r6
             'median_ratio': round(median_ratio, 4),
             'confidence': confidence,  # 'in_sync', 'low', 'medium', 'high'
             'date_range_display': (
@@ -6468,6 +6676,7 @@ def admin_research_apply_suggestion(state_code):
                     'sample_size': matching['sample_size'],
                     'mystery_count': matching['mystery_count'],
                     'ff_count': matching['ff_count'],
+                    'forum_count': matching.get('forum_count', 0),  # v3.5.1-r6
                     'median_ratio': matching['median_ratio'],
                     'date_range': matching['date_range_display'],
                     'contributing_entry_ids': matching['contributing_ids'],
