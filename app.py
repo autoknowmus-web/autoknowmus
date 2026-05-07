@@ -5857,7 +5857,7 @@ def admin_feedback():
 # v3.5.1-r6: 3 sources now (Forum Post added). Must match the dropdown in
 # admin_research.html. Migration 8 added the CHECK constraint enforcing
 # this at the DB layer too.
-RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family', 'Forum Post']
+RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family', 'Forum Post', 'Listing Aggregator']
 
 # v3.5.1-r5.1: Use the canonical OWNERS / CONDITIONS lists from app.py
 # module scope so the research form mirrors seller / submit_deal exactly.
@@ -7449,7 +7449,604 @@ def price_tools_un_discontinue():
         'row_number': result.get('row_number'),
         'last_known_price_date': result.get('last_known_price_date'),
     })
+# ============================================================
+# app.py — Part 9 (Listing Calibration Pipeline)
+# ------------------------------------------------------------
+# PASTE INSTRUCTIONS:
+#   1. First, find this line in your existing Part 7:
+#        RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family', 'Forum Post']
+#      Replace it with:
+#        RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family', 'Forum Post', 'Listing Aggregator']
+#      (One-line change. Adds 'Listing Aggregator' as the 4th allowed source.)
+#
+#   2. Then paste this ENTIRE Part 9 block into app.py IMMEDIATELY BEFORE
+#      the `if __name__ == '__main__':` block at the very end of the file.
+#      Part 9 must come BEFORE that block (which must always be the last
+#      thing in the file).
+#
+# WHAT THIS ADDS:
+#   - 3 admin routes for the Listing Calibration pipeline
+#   - 4 helper functions for parsing, inserting, and reading uploads
+#   - Constants: LISTING_DATA_SOURCE, LISTING_DEFAULT_QUALITY,
+#     LISTING_MAX_ROWS_PER_UPLOAD, LISTING_MAX_FILE_BYTES
+#
+# DEPENDENCIES (already in your repo):
+#   - listing_csv_parser.py    (Step 3, deployed)
+#   - variant_resolver.py      (Step 2, deployed)
+#   - Migration 9 schema       (Step 1, deployed — listing_uploads + research_log.listing_upload_id)
+# ============================================================
 
+
+# ============================================================
+# Listing Calibration constants
+# ============================================================
+
+# Value written to research_log.data_source for every row coming from the
+# listing pipeline. Must match the value added to RESEARCH_SOURCES in Part 7.
+LISTING_DATA_SOURCE = 'Listing Aggregator'
+
+# Listings are aspirational asks (not deals), so we tag them as 'medium'
+# quality. This propagates into _compute_calibration_suggestions's quality
+# weighting (high/medium = 2x, low = 1x).
+LISTING_DEFAULT_QUALITY = 'medium'
+
+# Per-upload caps. If you ever raise these, also bump LISTING_MAX_FILE_BYTES
+# in proportion (roughly 250 bytes per CSV row for CarWale exports).
+LISTING_MAX_ROWS_PER_UPLOAD = 5000
+LISTING_MAX_FILE_BYTES = 8 * 1024 * 1024  # 8 MB — generous headroom for 5K rows
+
+# Late import — listing_csv_parser depends on variant_resolver which depends
+# on rapidfuzz. Keep this import here (not at top of app.py) so any deploy
+# issue with these modules surfaces with a clear traceback rather than
+# breaking the entire app on startup.
+from listing_csv_parser import parse_carwale_csv, summarize_parse_result
+
+
+# ============================================================
+# Helper: Insert parsed listings into research_log + listing_uploads
+# ============================================================
+
+def _insert_listings_to_research_log(parse_result, state_code, city,
+                                     admin_email, source_filename=None):
+    """
+    Persist a ParseResult to the database.
+
+    Workflow:
+      1. INSERT a row into listing_uploads with status='processing'
+      2. For each parsed entry, INSERT into research_log with the upload_id
+         in the listing_upload_id FK column
+      3. UPDATE listing_uploads with final counts + status='completed'
+
+    Params:
+      parse_result: listing_csv_parser.ParseResult
+      state_code:   2-letter state code (e.g. 'KA')
+      city:         city name (e.g. 'Bangalore')
+      admin_email:  email of the admin doing the upload (for created_by)
+      source_filename: original filename (for audit)
+
+    Returns:
+      dict with: upload_id, inserted_count, total_count, parsed_count,
+                 skipped_count, status. On failure, status='failed' and
+                 the dict will include 'error' with the message.
+    """
+    state_code = (state_code or DEFAULT_STATE_CODE).upper()
+    city = city or DEFAULT_CITY
+    admin_email = admin_email or 'unknown'
+
+    # --- Step 1: create the listing_uploads row ---
+    upload_payload = {
+        'uploaded_by':      admin_email,
+        'state_code':       state_code,
+        'city':             city,
+        'source_filename':  (source_filename or '')[:200],
+        'total_rows':       parse_result.total_rows,
+        'parsed_count':     len(parse_result.parsed),
+        'skipped_count':    len(parse_result.skipped),
+        'inserted_count':   0,  # updated after inserts
+        'status':           'processing',
+        'parser_version':   getattr(parse_result, 'parser_version', '1.0'),
+    }
+
+    try:
+        upload_resp = supabase.table('listing_uploads').insert(upload_payload).execute()
+        if not upload_resp.data:
+            return {
+                'upload_id': None,
+                'status': 'failed',
+                'error': 'listing_uploads insert returned no data',
+                'inserted_count': 0,
+                'total_count': parse_result.total_rows,
+                'parsed_count': len(parse_result.parsed),
+                'skipped_count': len(parse_result.skipped),
+            }
+        upload_row = upload_resp.data[0]
+        upload_id = upload_row['id']
+    except Exception as e:
+        app.logger.error(f"_insert_listings_to_research_log: listing_uploads insert failed: {e}")
+        return {
+            'upload_id': None,
+            'status': 'failed',
+            'error': str(e),
+            'inserted_count': 0,
+            'total_count': parse_result.total_rows,
+            'parsed_count': len(parse_result.parsed),
+            'skipped_count': len(parse_result.skipped),
+        }
+
+    # --- Step 2: bulk-insert research_log rows ---
+    today_iso = datetime.utcnow().strftime('%Y-%m-%d')
+    research_rows = []
+    for entry in parse_result.parsed:
+        # Map ParsedListing -> research_log columns.
+        # Listings have: make/model/variant/year/fuel/mileage/asking_price/listing_url.
+        # They DO NOT have: condition, owners, negotiated_price, dealer info.
+        # We tag them with data_source='Listing Aggregator' and data_quality='medium'.
+        research_rows.append({
+            'make':                  entry.make,
+            'model':                 entry.model,
+            'variant':               entry.variant,
+            'year':                  entry.year,
+            'fuel':                  entry.fuel,
+            'data_source':           LISTING_DATA_SOURCE,
+            'entry_date':            today_iso,
+            'mileage_km':            entry.mileage,
+            'owners':                None,
+            'condition':             None,
+            'state_code':            state_code,
+            'city':                  city,
+            'asking_price_inr':      entry.asking_price,
+            'negotiated_price_inr':  None,
+            'dealer_name':           None,
+            'dealer_phone':          None,
+            'listing_url':           entry.listing_url,
+            'notes':                 None,
+            'forum_name':            None,
+            'forum_url':             None,
+            'transaction_date':      None,
+            'transaction_completed': False,  # listings = asks, not deals
+            'buyer_type':            None,
+            'data_quality':          LISTING_DEFAULT_QUALITY,
+            'harvest_notes':         None,
+            'include_in_calibration': True,
+            'exclusion_reason':      None,
+            'created_by':            admin_email,
+            'listing_upload_id':     upload_id,
+        })
+
+    inserted_count = 0
+    insert_errors = []
+    if research_rows:
+        # Batch inserts in chunks of 500 — keeps each Supabase call under
+        # ~1 second and avoids payload-size limits.
+        BATCH_SIZE = 500
+        for batch_start in range(0, len(research_rows), BATCH_SIZE):
+            batch = research_rows[batch_start:batch_start + BATCH_SIZE]
+            try:
+                ins = supabase.table('research_log').insert(batch).execute()
+                inserted_count += len(ins.data) if ins.data else 0
+            except Exception as e:
+                err_msg = f"batch {batch_start}-{batch_start + len(batch)}: {str(e)[:200]}"
+                app.logger.error(f"_insert_listings_to_research_log: {err_msg}")
+                insert_errors.append(err_msg)
+                # Continue to next batch — partial success is better than full failure
+
+    # --- Step 3: update upload row with final status ---
+    final_status = 'completed' if not insert_errors else 'partial_error'
+    try:
+        update_payload = {
+            'inserted_count': inserted_count,
+            'status':         final_status,
+        }
+        if insert_errors:
+            # Truncate to fit notes column if needed
+            update_payload['notes'] = ' | '.join(insert_errors)[:1000]
+        supabase.table('listing_uploads').update(update_payload).eq('id', upload_id).execute()
+    except Exception as e:
+        app.logger.warning(f"_insert_listings_to_research_log: status update failed: {e}")
+
+    app.logger.info(
+        f"Listing upload #{upload_id}: state={state_code} city={city} "
+        f"total={parse_result.total_rows} parsed={len(parse_result.parsed)} "
+        f"skipped={len(parse_result.skipped)} inserted={inserted_count} "
+        f"status={final_status}"
+    )
+
+    return {
+        'upload_id':       upload_id,
+        'status':          final_status,
+        'error':           ' | '.join(insert_errors) if insert_errors else None,
+        'inserted_count':  inserted_count,
+        'total_count':     parse_result.total_rows,
+        'parsed_count':    len(parse_result.parsed),
+        'skipped_count':   len(parse_result.skipped),
+    }
+
+
+# ============================================================
+# Helper: Fetch recent uploads for the dashboard
+# ============================================================
+
+def _get_recent_listing_uploads(limit=50):
+    """
+    Returns the latest N upload rows, decorated with display dates.
+    """
+    try:
+        r = (supabase.table('listing_uploads')
+             .select('*')
+             .order('created_at', desc=True)
+             .limit(limit)
+             .execute())
+        rows = r.data or []
+    except Exception as e:
+        app.logger.error(f"_get_recent_listing_uploads failed: {e}")
+        return []
+
+    for row in rows:
+        # DD-MMM-YYYY HH:MM display for created_at
+        ca = row.get('created_at')
+        if ca:
+            try:
+                dt = datetime.fromisoformat(ca.replace('Z', '+00:00'))
+                row['created_display'] = dt.strftime('%d-%b-%Y %H:%M')
+            except (ValueError, TypeError):
+                row['created_display'] = ca[:16]
+        else:
+            row['created_display'] = '—'
+
+        # Computed parse-success rate
+        total = row.get('total_rows') or 0
+        parsed = row.get('parsed_count') or 0
+        if total > 0:
+            row['parse_success_pct'] = round((parsed / total) * 100, 1)
+        else:
+            row['parse_success_pct'] = 0
+
+    return rows
+
+
+# ============================================================
+# Helper: Aggregate stats for the dashboard cards
+# ============================================================
+
+def _compute_listing_calibration_stats():
+    """
+    Returns dict with top-line counters for the dashboard.
+    All counts are best-effort — any failure returns 0 for that field.
+    """
+    stats = {
+        'total_uploads':       0,
+        'total_listings':      0,
+        'unique_make_models':  0,
+        'last_upload_display': '—',
+        'last_upload_state':   '—',
+    }
+
+    # total_uploads
+    try:
+        r = supabase.table('listing_uploads').select('id', count='exact').execute()
+        stats['total_uploads'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"listing stats: total_uploads count failed: {e}")
+
+    # total_listings (research_log rows where data_source='Listing Aggregator')
+    try:
+        r = (supabase.table('research_log')
+             .select('id', count='exact')
+             .eq('data_source', LISTING_DATA_SOURCE)
+             .execute())
+        stats['total_listings'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"listing stats: total_listings count failed: {e}")
+
+    # unique_make_models — pull all listing rows' (make, model) and de-dupe in Python.
+    # Cheaper than a SQL DISTINCT given Supabase's PostgREST limits.
+    try:
+        r = (supabase.table('research_log')
+             .select('make, model')
+             .eq('data_source', LISTING_DATA_SOURCE)
+             .limit(10000)
+             .execute())
+        seen = set()
+        for row in (r.data or []):
+            mk = row.get('make')
+            md = row.get('model')
+            if mk and md:
+                seen.add((mk, md))
+        stats['unique_make_models'] = len(seen)
+    except Exception as e:
+        app.logger.warning(f"listing stats: unique_make_models failed: {e}")
+
+    # last upload — most recent listing_uploads row
+    try:
+        r = (supabase.table('listing_uploads')
+             .select('created_at, state_code, city')
+             .order('created_at', desc=True)
+             .limit(1)
+             .execute())
+        if r.data:
+            row = r.data[0]
+            ca = row.get('created_at')
+            if ca:
+                try:
+                    dt = datetime.fromisoformat(ca.replace('Z', '+00:00'))
+                    stats['last_upload_display'] = dt.strftime('%d-%b-%Y %H:%M')
+                except (ValueError, TypeError):
+                    stats['last_upload_display'] = ca[:16]
+            stats['last_upload_state'] = (
+                f"{row.get('city', '—')}, {row.get('state_code', '—')}"
+            )
+    except Exception as e:
+        app.logger.warning(f"listing stats: last upload lookup failed: {e}")
+
+    return stats
+
+
+# ============================================================
+# Helper: Fetch one upload + its parsed entries (for drilldown)
+# ============================================================
+
+def _get_listing_upload_with_entries(upload_id):
+    """
+    Returns (upload_row, parsed_entries) tuple for the drilldown page.
+    upload_row is None if the id doesn't exist.
+    parsed_entries is a list of research_log rows joined via listing_upload_id.
+    """
+    try:
+        r = (supabase.table('listing_uploads')
+             .select('*')
+             .eq('id', upload_id)
+             .limit(1)
+             .execute())
+        upload_row = r.data[0] if r.data else None
+    except Exception as e:
+        app.logger.error(f"_get_listing_upload_with_entries: upload fetch failed: {e}")
+        return None, []
+
+    if not upload_row:
+        return None, []
+
+    # Decorate created_at
+    ca = upload_row.get('created_at')
+    if ca:
+        try:
+            dt = datetime.fromisoformat(ca.replace('Z', '+00:00'))
+            upload_row['created_display'] = dt.strftime('%d-%b-%Y %H:%M')
+        except (ValueError, TypeError):
+            upload_row['created_display'] = ca[:16]
+    else:
+        upload_row['created_display'] = '—'
+
+    # Computed parse-success rate
+    total = upload_row.get('total_rows') or 0
+    parsed = upload_row.get('parsed_count') or 0
+    upload_row['parse_success_pct'] = round((parsed / total) * 100, 1) if total > 0 else 0
+
+    # Fetch all parsed entries linked to this upload
+    try:
+        r = (supabase.table('research_log')
+             .select('id, make, model, variant, year, fuel, mileage_km, '
+                     'asking_price_inr, listing_url, state_code, city, '
+                     'data_quality, include_in_calibration, exclusion_reason, '
+                     'entry_date, created_at')
+             .eq('listing_upload_id', upload_id)
+             .order('id', desc=False)
+             .limit(LISTING_MAX_ROWS_PER_UPLOAD + 100)
+             .execute())
+        entries = r.data or []
+    except Exception as e:
+        app.logger.error(f"_get_listing_upload_with_entries: entries fetch failed: {e}")
+        entries = []
+
+    return upload_row, entries
+
+
+# ============================================================
+# ROUTE: Dashboard — GET /admin/listing-calibration
+# ============================================================
+
+@app.route('/admin/listing-calibration')
+@login_required
+@admin_required
+def admin_listing_calibration():
+    """
+    Listing Calibration dashboard.
+    Shows: top-line stats, upload form (state + city dropdowns + file picker),
+    and recent uploads table with links to drilldown pages.
+    """
+    admin = current_user()
+    stats = _compute_listing_calibration_stats()
+    recent_uploads = _get_recent_listing_uploads(limit=50)
+
+    return render_template(
+        'admin_listing_calibration.html',
+        user=admin,
+        first_name=firstname_filter(admin.get('name')),
+        stats=stats,
+        recent_uploads=recent_uploads,
+        rto_states=RTO_STATES,
+        cities_by_state_json=json.dumps(INDIAN_CITIES_BY_STATE),
+        default_state=DEFAULT_STATE_CODE,
+        default_city=DEFAULT_CITY,
+        max_rows=LISTING_MAX_ROWS_PER_UPLOAD,
+        max_file_mb=LISTING_MAX_FILE_BYTES // (1024 * 1024),
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
+
+
+# ============================================================
+# ROUTE: Upload POST — POST /admin/listing-calibration/upload
+# ============================================================
+
+@app.route('/admin/listing-calibration/upload', methods=['POST'])
+@login_required
+@admin_required
+def admin_listing_calibration_upload():
+    """
+    Accepts a multipart CSV upload + state_code + city.
+    Parses the CSV, inserts rows into research_log + listing_uploads,
+    redirects to the drilldown page on success.
+
+    Errors flash and redirect back to the dashboard.
+    """
+    admin = current_user()
+    admin_email = admin.get('email') or 'unknown'
+
+    # ---- 1. Validate state + city from the form ----
+    state_code = (request.form.get('state_code') or '').strip().upper()
+    city = (request.form.get('city') or '').strip()
+
+    if not state_code:
+        flash('State is required.', 'error')
+        return redirect(url_for('admin_listing_calibration'))
+    state_code = normalize_state_code(state_code)
+    city = normalize_city(city, state_code)
+
+    # ---- 2. Validate the uploaded file ----
+    if 'csv_file' not in request.files:
+        flash('No file uploaded. Please choose a CSV file.', 'error')
+        return redirect(url_for('admin_listing_calibration'))
+
+    csv_file = request.files['csv_file']
+    if not csv_file or not csv_file.filename:
+        flash('No file uploaded. Please choose a CSV file.', 'error')
+        return redirect(url_for('admin_listing_calibration'))
+
+    # Filename sanity (must end in .csv — case-insensitive)
+    if not csv_file.filename.lower().endswith('.csv'):
+        flash('File must be a .csv. Got: ' + csv_file.filename, 'error')
+        return redirect(url_for('admin_listing_calibration'))
+
+    # Read into memory + size check
+    try:
+        raw_bytes = csv_file.read()
+    except Exception as e:
+        app.logger.error(f"admin_listing_calibration_upload: file read failed: {e}")
+        flash('Could not read the uploaded file.', 'error')
+        return redirect(url_for('admin_listing_calibration'))
+
+    if len(raw_bytes) > LISTING_MAX_FILE_BYTES:
+        size_mb = len(raw_bytes) / (1024 * 1024)
+        max_mb = LISTING_MAX_FILE_BYTES // (1024 * 1024)
+        flash(
+            f'File too large ({size_mb:.1f} MB). Max allowed: {max_mb} MB. '
+            f'Split your CSV into chunks under {LISTING_MAX_ROWS_PER_UPLOAD} rows each.',
+            'error'
+        )
+        return redirect(url_for('admin_listing_calibration'))
+
+    # Decode bytes → text. CarWale exports are UTF-8 with BOM possible.
+    try:
+        csv_text = raw_bytes.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        try:
+            csv_text = raw_bytes.decode('latin-1')
+        except Exception:
+            flash('Could not decode CSV (try saving as UTF-8 in your CSV editor).', 'error')
+            return redirect(url_for('admin_listing_calibration'))
+
+    # ---- 3. Parse the CSV ----
+    try:
+        parse_result = parse_carwale_csv(csv_text)
+    except Exception as e:
+        app.logger.exception("admin_listing_calibration_upload: parser raised")
+        flash(f'CSV parser failed: {e}', 'error')
+        return redirect(url_for('admin_listing_calibration'))
+
+    # Row count cap — block oversized uploads BEFORE inserting
+    if parse_result.total_rows > LISTING_MAX_ROWS_PER_UPLOAD:
+        flash(
+            f'CSV has {parse_result.total_rows:,} rows but max per upload is '
+            f'{LISTING_MAX_ROWS_PER_UPLOAD:,}. Split into smaller files.',
+            'error'
+        )
+        return redirect(url_for('admin_listing_calibration'))
+
+    # If literally nothing parsed, surface a clear error
+    if parse_result.total_rows == 0:
+        flash('CSV appears empty. Check that the file has data rows.', 'error')
+        return redirect(url_for('admin_listing_calibration'))
+
+    if not parse_result.parsed and parse_result.skipped:
+        # Every row got skipped — let the admin see why on the drilldown page
+        # (we still insert the upload record so they can review skip reasons)
+        pass  # fall through to insertion
+
+    # ---- 4. Insert into DB ----
+    insert_result = _insert_listings_to_research_log(
+        parse_result=parse_result,
+        state_code=state_code,
+        city=city,
+        admin_email=admin_email,
+        source_filename=csv_file.filename,
+    )
+
+    if insert_result.get('status') == 'failed' or not insert_result.get('upload_id'):
+        flash(
+            f"Upload failed: {insert_result.get('error', 'unknown error')}",
+            'error'
+        )
+        return redirect(url_for('admin_listing_calibration'))
+
+    # ---- 5. Flash summary + redirect to drilldown ----
+    inserted = insert_result['inserted_count']
+    parsed = insert_result['parsed_count']
+    skipped = insert_result['skipped_count']
+    total = insert_result['total_count']
+
+    if insert_result.get('status') == 'partial_error':
+        flash(
+            f"⚠️ Upload partially succeeded — inserted {inserted} of {parsed} parsed rows "
+            f"({skipped} skipped from {total}). Some batches failed; see notes on the upload detail page.",
+            'error'
+        )
+    else:
+        flash(
+            f"✅ Upload complete — {inserted} listings ingested for {city}, {state_code} "
+            f"({parsed} parsed / {skipped} skipped from {total} total rows).",
+            'success'
+        )
+
+    return redirect(url_for(
+        'admin_listing_calibration_upload_detail',
+        upload_id=insert_result['upload_id']
+    ))
+
+
+# ============================================================
+# ROUTE: Drilldown — GET /admin/listing-calibration/uploads/<id>
+# ============================================================
+
+@app.route('/admin/listing-calibration/uploads/<int:upload_id>')
+@login_required
+@admin_required
+def admin_listing_calibration_upload_detail(upload_id):
+    """
+    Per-upload drilldown page.
+    Shows: upload metadata, all inserted research_log rows, and the original
+    skip reasons (re-parsed if we still have the source — but typically we
+    don't, so the skip section just shows the count from listing_uploads).
+    """
+    admin = current_user()
+    upload_row, entries = _get_listing_upload_with_entries(upload_id)
+
+    if not upload_row:
+        flash(f'Upload #{upload_id} not found.', 'error')
+        return redirect(url_for('admin_listing_calibration'))
+
+    return render_template(
+        'admin_listing_upload_detail.html',
+        user=admin,
+        first_name=firstname_filter(admin.get('name')),
+        upload=upload_row,
+        entries=entries,
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
+
+
+# ============================================================
+# END app.py — Part 9
+# Continue with the existing `if __name__ == '__main__':` block AFTER this.
+# ============================================================
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
 
