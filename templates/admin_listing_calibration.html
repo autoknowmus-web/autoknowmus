@@ -33,19 +33,8 @@
     align-items: center;
     gap: 4px 8px;
   }
-  .admin-nav-strip .nav-logo {
-    color: #adb5bd;
-    font-weight: 700;
-    font-size: 0.9rem;
-    margin-right: 10px;
-    letter-spacing: 0.3px;
-  }
-  .admin-nav-strip .nav-logo .nm-auto { color: #ffffff; }
-  .admin-nav-strip .nav-logo .nm-know { color: #28a745; }
-  .admin-nav-strip .nav-logo .nm-mus  { color: #4e54ff; }
-  .admin-nav-strip .nav-logo .nm-admin { color: #6c757d; font-weight: 600; margin-left: 4px; }
-
-  .admin-nav-strip a.nav-tab {
+ 
+  .admin-nav-strip a {
     color: #adb5bd;
     text-decoration: none;
     background: transparent;
@@ -57,12 +46,12 @@
     transition: all 0.15s;
     white-space: nowrap;
   }
-  .admin-nav-strip a.nav-tab:hover {
+  .admin-nav-strip a:hover {
     color: #fff;
     background: #14171d;
     border-color: #2a2d34;
   }
-  .admin-nav-strip a.nav-tab.active {
+  .admin-nav-strip a.active {
     color: #fff;
     background: rgba(40,167,69,0.16);
     border-color: rgba(40,167,69,0.45);
@@ -410,20 +399,16 @@
        Google Analytics. Active state on this tab.
        ============================================================ -->
   <div class="admin-nav-strip">
-    <span class="nav-logo">
-      <span class="nm-auto">Auto</span><span class="nm-know">Know</span><span class="nm-mus">Mus</span>
-      <span class="nm-admin">Admin</span>
-    </span>
-    <a class="nav-tab" href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
-    <a class="nav-tab" href="{{ url_for('admin_user_activity') }}">👥 Users</a>
-    <a class="nav-tab" href="{{ url_for('admin_multipliers') }}">⚙️ Multipliers</a>
-    <a class="nav-tab" href="{{ url_for('admin_feedback') }}">💬 Feedback</a>
-    <a class="nav-tab" href="{{ url_for('admin_research') }}">🔍 Research</a>
-    <a class="nav-tab active" href="{{ url_for('admin_listing_calibration') }}">📥 Listing Calibration</a>
-    <a class="nav-tab" href="{{ url_for('admin_google_analytics') }}">📈 Google Analytics</a>
+    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
+    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
+    <a href="{{ url_for('admin_multipliers') }}">📈 State Multipliers</a>
+    <a href="{{ url_for('admin_feedback') }}">💬 Feedback Calibration</a>
+    <a href="{{ url_for('admin_research') }}">🔬 Research</a>
+    <a href="{{ url_for('admin_listing_calibration') }}" class="active">🚛 Listing Calibration</a>
+    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
   </div>
 
-  <a href="{{ url_for('admin_dashboard') }}" class="btn-back">← Back to Admin</a>
+  <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
 
   <!-- ============================================================
        PAGE HEADER
