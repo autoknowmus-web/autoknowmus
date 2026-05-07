@@ -3,7 +3,17 @@
 {% block title %}Research Log — Admin · AutoKnowMus{% endblock %}
 
 {% block content %}
-{# v3.5.1-r5.1: Flatpickr for the date picker (matches submit_deal.html) #}
+{# v3.5.1-r6: Adds "Forum Post" as a 3rd data source for harvesting historical
+   transaction discussions from Team-BHP, Reddit, Facebook, Quora.
+   - Conditional form fields (only shown when Forum Post selected)
+   - 3 new entries-table columns (Forum, Buyer, Quality)
+   - Forum filter in the filter bar
+   - Stats card now shows "📚 Forum Posts" count + adds Quality breakdown
+   - Edit modal mirrors all conditional fields
+   Requires Migration 8 (research_log_forum_support.sql) — applied 07-May-2026.
+#}
+
+{# Flatpickr for both entry_date and transaction_date pickers #}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -129,11 +139,7 @@
   }
   .flash-close:hover { opacity: 1; }
 
-  /* ============================================================
-     v3.5.1-r5.1: Flatpickr altInput dark theme override.
-     Same pattern used in submit_deal.html — the altInput sits OUTSIDE
-     the .form-group wrapper so we target it directly by class.
-     ============================================================ */
+  /* Flatpickr altInput dark theme override */
   input.flatpickr-alt-input,
   input.flatpickr-alt-input:read-only,
   input.flatpickr-alt-input[readonly] {
@@ -159,7 +165,6 @@
   }
   input.flatpickr-alt-input:hover { border-color: #3a3f4a !important; }
   input.flatpickr-alt-input::placeholder { color: #6c757d !important; }
-  /* Dark theme for the calendar popup itself */
   .flatpickr-calendar {
     background: #1a1d24 !important;
     border: 1px solid #2a2f3a !important;
@@ -182,10 +187,13 @@
     background: #1a1d24 !important;
   }
 
-  /* Stats strip */
+  /* ============================================================
+     v3.5.1-r6: Stats strip now has 6 cards (added Forum Posts).
+     Wraps to 3-up on tablet, 2-up on mobile.
+  ============================================================ */
   .stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 10px;
     margin-bottom: 16px;
   }
@@ -205,10 +213,18 @@
   }
   .stat-card-value.mystery   { color: #ffa500; }
   .stat-card-value.ff        { color: #5fd37a; }
+  .stat-card-value.forum     { color: #b48bff; }   /* purple — distinct from existing two */
   .stat-card-value.gap       { color: #ff8585; }
   .stat-card-sub {
     font-size: 11px; color: #6c757d; margin-top: 4px;
   }
+  .stat-card-sub .quality-mini {
+    display: inline-block;
+    margin-right: 6px;
+  }
+  .stat-card-sub .quality-mini.high   { color: #5fd37a; }
+  .stat-card-sub .quality-mini.medium { color: #ffa500; }
+  .stat-card-sub .quality-mini.low    { color: #8b92a5; }
 
   /* Section card */
   .card {
@@ -235,6 +251,7 @@
     gap: 12px;
   }
   .form-grid .col-2 { grid-column: span 2; }
+  .form-grid .col-3 { grid-column: span 3; }
   .form-grid .col-4 { grid-column: span 4; }
 
   .form-group { display: flex; flex-direction: column; }
@@ -288,6 +305,47 @@
   }
   .form-group .help {
     font-size: 10.5px; color: #6c757d; margin-top: 3px; line-height: 1.3;
+  }
+
+  /* ============================================================
+     v3.5.1-r6: Forum-only field group.
+     Hidden by default; revealed only when "Forum Post" is selected
+     as the data source. Wrapped in a subtle purple-bordered box
+     to visually group the 6 forum-specific fields together.
+  ============================================================ */
+  .forum-fields-wrap {
+    display: none;
+    grid-column: span 4;
+    background: rgba(180, 139, 255, 0.05);
+    border: 1px dashed rgba(180, 139, 255, 0.4);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 4px;
+  }
+  .forum-fields-wrap.is-active {
+    display: block;
+  }
+  .forum-fields-wrap .ffw-title {
+    font-size: 11px;
+    color: #b48bff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .forum-fields-wrap .ffw-title .ffw-sub {
+    color: #6c757d;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: auto;
+  }
+  .forum-fields-wrap .form-grid {
+    margin: 0;
   }
 
   .form-actions {
@@ -412,6 +470,11 @@
     color: #5fd37a;
     border: 1px solid rgba(40,167,69,0.4);
   }
+  .entries-table .source-pill.forum {
+    background: rgba(180,139,255,0.18);
+    color: #b48bff;
+    border: 1px solid rgba(180,139,255,0.4);
+  }
   .entries-table .gap-pos { color: #ff8585; font-weight: 600; }
   .entries-table .gap-zero { color: #8b92a5; }
 
@@ -425,11 +488,78 @@
     margin-top: 2px;
   }
 
+  /* v3.5.1-r6: Forum cell — shows forum name + URL link */
+  .entries-table .forum-cell {
+    line-height: 1.35;
+    font-size: 11.5px;
+  }
+  .entries-table .forum-cell .forum-name {
+    color: #b48bff;
+    font-weight: 600;
+  }
+  .entries-table .forum-cell .forum-url-link {
+    display: block;
+    font-size: 10.5px;
+    color: #4eb0ff;
+    text-decoration: none;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+  }
+  .entries-table .forum-cell .forum-url-link:hover { text-decoration: underline; }
+  .entries-table .forum-cell .txn-date {
+    display: block;
+    font-size: 10.5px;
+    color: #8b92a5;
+    margin-top: 2px;
+  }
+
+  /* v3.5.1-r6: Buyer-type pill (calibration channel) */
+  .entries-table .buyer-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    background: #14171d;
+    color: #adb5bd;
+    border: 1px solid #2a2f3a;
+    white-space: nowrap;
+  }
+  .entries-table .buyer-pill.private { color: #5fd37a; border-color: rgba(40,167,69,0.4); }
+  .entries-table .buyer-pill.dealer  { color: #ffa500; border-color: rgba(255,165,0,0.4); }
+  .entries-table .buyer-pill.platform { color: #4eb0ff; border-color: rgba(78,176,255,0.4); }
+
+  /* v3.5.1-r6: Quality pill — color-coded */
+  .entries-table .quality-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .quality-pill.q-high {
+    background: rgba(40,167,69,0.18); color: #5fd37a;
+    border: 1px solid rgba(40,167,69,0.4);
+  }
+  .quality-pill.q-medium {
+    background: rgba(255,165,0,0.16); color: #ffa500;
+    border: 1px solid rgba(255,165,0,0.4);
+  }
+  .quality-pill.q-low {
+    background: rgba(108,117,125,0.20); color: #8b92a5;
+    border: 1px solid rgba(108,117,125,0.4);
+  }
+
   .entries-table .notes-cell {
     color: #b4b8c3;
     font-size: 11.5px;
     line-height: 1.4;
-    max-width: 240px;
+    max-width: 200px;
   }
   .entries-table .notes-cell .truncated {
     display: block;
@@ -511,9 +641,10 @@
     text-align: center;
   }
 
+  /* v3.5.1-r6: data-source-row now has 3 columns (Mystery / F&F / Forum) */
   .data-source-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 10px;
   }
   .data-source-row label {
@@ -542,10 +673,12 @@
     border-color: #28a745;
     background: rgba(40,167,69,0.08);
   }
+  .data-source-row label.is-forum-checked {
+    border-color: #b48bff;
+    background: rgba(180,139,255,0.08);
+  }
 
-  /* ============================================================
-     v3.5.1-r5: CALIBRATION SUGGESTIONS PANEL
-     ============================================================ */
+  /* CALIBRATION SUGGESTIONS PANEL */
   .calib-card {
     background: linear-gradient(135deg, #1c1f28 0%, #1a1d24 100%);
     border: 1px solid #2a2f3a;
@@ -709,11 +842,7 @@
   .conf-pill.conf-medium  { background: rgba(255,165,0,0.16); color: #ffa500; border: 1px solid rgba(255,165,0,0.4); }
   .conf-pill.conf-high    { background: rgba(255,107,107,0.16); color: #ff8585; border: 1px solid rgba(255,107,107,0.4); }
 
-  /* Detail popover for "Show entries" — uses existing .modal-backdrop styles */
-
-  /* ============================================================
-     v3.5.1-r5: TOGGLE column on entries table + dimmed excluded rows
-     ============================================================ */
+  /* TOGGLE column on entries table + dimmed excluded rows */
   .entries-table .calib-toggle-cell {
     width: 60px;
     text-align: center;
@@ -759,10 +888,14 @@
     line-height: 1.3;
   }
 
+  @media (max-width: 1280px) {
+    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  }
   @media (max-width: 1100px) {
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
     .form-grid { grid-template-columns: repeat(2, 1fr); }
-    .form-grid .col-2, .form-grid .col-4 { grid-column: span 2; }
+    .form-grid .col-2, .form-grid .col-3, .form-grid .col-4 { grid-column: span 2; }
+    .data-source-row { grid-template-columns: 1fr; }
     .calib-row {
       grid-template-columns: 60px 1fr auto;
       gap: 10px;
@@ -774,18 +907,18 @@
   }
   @media (max-width: 700px) {
     .form-grid { grid-template-columns: 1fr; }
-    .form-grid .col-2, .form-grid .col-4 { grid-column: span 1; }
-    .data-source-row { grid-template-columns: 1fr; }
-    .entries-table th:nth-child(4),
-    .entries-table td:nth-child(4),
-    .entries-table th:nth-child(8),
-    .entries-table td:nth-child(8) { display: none; }
+    .form-grid .col-2, .form-grid .col-3, .form-grid .col-4 { grid-column: span 1; }
+    /* On mobile, hide less-critical columns to keep table readable */
+    .entries-table th:nth-child(5),
+    .entries-table td:nth-child(5),
+    .entries-table th:nth-child(7),
+    .entries-table td:nth-child(7),
+    .entries-table th:nth-child(11),
+    .entries-table td:nth-child(11) { display: none; }
   }
 </style>
 
-{# v3.5.1-r5.1: Indian comma formatter macro.
-   Converts integer to Indian-grouped string: 825000 → "8,25,000".
-   Western format from {:,} would give "825,000" which is wrong for INR contexts. #}
+{# Indian comma formatter macro #}
 {% macro inr(n) -%}
   {%- if n is none or n == '' -%}—
   {%- else -%}
@@ -811,7 +944,7 @@
 
   <a href="{{ url_for('role') }}" class="btn-back">← Back</a>
 
-  <!-- Admin nav strip — switch between admin pages -->
+  <!-- Admin nav strip -->
   <div class="admin-nav-strip">
     <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
     <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
@@ -843,12 +976,12 @@
   <!-- Helper strip -->
   <div class="helper-strip">
     <strong>What is this?</strong>
-    Research data — your <strong>mystery shopping observations</strong> and <strong>real deal references from friends &amp; family</strong> — used for <strong>initial formula calibration</strong>.
+    Research data — your <strong>mystery shopping observations</strong>, <strong>real deal references from friends &amp; family</strong>, and <strong>historical transactions harvested from forums (Team-BHP, Reddit, etc.)</strong> — used for <strong>initial formula calibration</strong>.
     This log is <strong>separate from the live <code>deals</code> table</strong>: research entries do <strong>NOT</strong> feed the valuation engine. They're for your eyes only, to help you tune state multipliers and pricing parameters.
     User-submitted verified deals continue to drive organic calibration over time.
   </div>
 
-  <!-- Stats strip -->
+  <!-- Stats strip — 6 cards in v3.5.1-r6 (added Forum + reorganized) -->
   <div class="stats-grid">
     <div class="stat-card">
       <div class="stat-card-label">Total Entries</div>
@@ -866,19 +999,24 @@
       <div class="stat-card-sub">real deal references</div>
     </div>
     <div class="stat-card">
-      <div class="stat-card-label">📈 Avg Asking Markup</div>
-      <div class="stat-card-value gap">
-        {% if stats.avg_mystery_gap_pct is not none %}
-          +{{ stats.avg_mystery_gap_pct }}%
-        {% else %}—{% endif %}
-      </div>
+      <div class="stat-card-label">📚 Forum Posts</div>
+      <div class="stat-card-value forum">{{ stats.forum_count|default(0) }}</div>
       <div class="stat-card-sub">
-        {% if stats.gap_sample_size %}
-          mystery shop · n={{ stats.gap_sample_size }}
+        {% if stats.forum_count and stats.forum_count > 0 %}
+          Team-BHP / Reddit / etc.
         {% else %}
-          mystery shop · need data
+          start harvesting today
         {% endif %}
       </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-label">🎖️ Quality Mix</div>
+      <div class="stat-card-value" style="font-size: 14px; line-height: 1.3;">
+        <span class="quality-mini high">{{ stats.quality_high|default(0) }}H</span>
+        <span class="quality-mini medium">{{ stats.quality_medium|default(0) }}M</span>
+        <span class="quality-mini low">{{ stats.quality_low|default(0) }}L</span>
+      </div>
+      <div class="stat-card-sub">high / med / low</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-label">✅ In Calibration</div>
@@ -893,7 +1031,7 @@
     </div>
   </div>
 
-  <!-- v3.5.1-r5: CALIBRATION SUGGESTIONS PANEL -->
+  <!-- CALIBRATION SUGGESTIONS PANEL -->
   <div class="calib-card">
     <h2>
       📐 Calibration Suggestions
@@ -924,7 +1062,7 @@
             <span class="conf-pill conf-{{ s.confidence }}">{{ s.confidence|replace('_', '-') }}</span>
             <span class="info-row">
               <span class="lbl">Mix:</span>
-              {{ s.mystery_count }} mystery · {{ s.ff_count }} F&amp;F
+              {{ s.mystery_count }} mystery · {{ s.ff_count }} F&amp;F{% if s.forum_count is defined %} · {{ s.forum_count }} forum{% endif %}
               {% if s.skipped_count %}<span style="color:#ff8585;"> · {{ s.skipped_count }} skipped</span>{% endif %}
             </span>
             <span class="info-row">
@@ -961,7 +1099,6 @@
                 <button type="submit" class="btn-apply">Apply</button>
               </form>
             {% endif %}
-            {# Toggle visibility of the contributing entries (anchored below) #}
             <a href="#calib-{{ s.state_code }}" class="btn-show-entries" onclick="filterTo('{{ s.state_code }}', 'state'); return false;">Show entries</a>
           </div>
         </div>
@@ -971,7 +1108,7 @@
         <strong>No suggestions yet.</strong><br>
         Suggestions appear once you have <strong>≥{{ calib_min_entries }} included entries</strong>
         for any state (within last 90 days, with negotiated price filled).
-        Log mystery shop visits and friends/family deal prices to start building this up.
+        Log mystery shop visits, friends/family deal prices, or harvest forum posts to start building this up.
       </div>
     {% endif %}
   </div>
@@ -985,7 +1122,7 @@
 
     <form id="research-form" method="POST" action="{{ url_for('admin_research') }}">
 
-      <!-- Source toggle (radio buttons styled as cards) -->
+      <!-- v3.5.1-r6: Source toggle now has 3 options (Mystery / F&F / Forum) -->
       <div class="form-group" style="margin-bottom: 14px;">
         <label>Data source <span class="req">*</span></label>
         <div class="data-source-row">
@@ -997,25 +1134,99 @@
             <input type="radio" name="data_source" value="Friends &amp; Family" onchange="updateSourceUI()">
             <span>👥 <strong>Friends &amp; Family</strong> — real deal reference</span>
           </label>
+          <label id="lbl-forum">
+            <input type="radio" name="data_source" value="Forum Post" onchange="updateSourceUI()">
+            <span>📚 <strong>Forum Post</strong> — harvested historical txn</span>
+          </label>
         </div>
       </div>
 
-      {# v3.5.1-r5.1: Field order matches submit_deal.html / seller.html.
-         state → city → make → fuel → model → variant → year → owner → mileage → condition → prices → date → dealer → notes
-         (Fuel-first cascade is a standing UI rule for vehicle forms.) #}
       <div class="form-grid">
+
+        <!-- v3.5.1-r6: Forum-only fields (hidden until "Forum Post" selected).
+             Wrapped in a single .col-4 wrapper that contains its own sub-grid
+             so the visual grouping is preserved when revealed. -->
+        <div class="forum-fields-wrap" id="forum-fields-wrap">
+          <div class="ffw-title">
+            📚 Forum-specific fields
+            <span class="ffw-sub">all required when source = Forum Post</span>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Forum <span class="req">*</span></label>
+              <select id="f-forum_name" name="forum_name">
+                <option value="">— Select —</option>
+                <option value="Team-BHP">Team-BHP</option>
+                <option value="Reddit">Reddit</option>
+                <option value="Facebook">Facebook</option>
+                <option value="Quora">Quora</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group col-3">
+              <label>Forum URL <span class="req">*</span></label>
+              <input type="url" id="f-forum_url" name="forum_url" maxlength="1000"
+                     placeholder="https://www.team-bhp.com/forum/...">
+              <div class="help">Direct link to the post you're harvesting from. Lets you re-verify or update later.</div>
+            </div>
+            <div class="form-group">
+              <label>Transaction date</label>
+              <input type="text" id="f-transaction_date" name="transaction_date" readonly
+                     placeholder="When did the deal happen?">
+              <div class="help">Often older than today — that's expected.</div>
+            </div>
+            <div class="form-group">
+              <label>Deal completed?</label>
+              <select id="f-transaction_completed" name="transaction_completed">
+                <option value="">—</option>
+                <option value="true">✅ Yes — sale closed</option>
+                <option value="false">❌ No — asking price only</option>
+              </select>
+              <div class="help">Mark "No" for posts that only quote asking price.</div>
+            </div>
+            <div class="form-group">
+              <label>Buyer / Channel</label>
+              <select id="f-buyer_type" name="buyer_type">
+                <option value="">—</option>
+                <option value="Private">Private buyer</option>
+                <option value="Dealer">Local dealer</option>
+                <option value="Cars24">Cars24</option>
+                <option value="Spinny">Spinny</option>
+                <option value="CarTrade">CarTrade</option>
+                <option value="OLX">OLX</option>
+                <option value="Other">Other</option>
+              </select>
+              <div class="help">Cars24/Spinny etc. typically pay ~10% less than private.</div>
+            </div>
+            <div class="form-group">
+              <label>Data quality</label>
+              <select id="f-data_quality" name="data_quality">
+                <option value="high">🟢 High — exact numbers, full detail</option>
+                <option value="medium" selected>🟡 Medium — approximate (e.g. "around 5L")</option>
+                <option value="low">⚪ Low — partial / unclear</option>
+              </select>
+              <div class="help">Calibration weights low-quality at 0.5×.</div>
+            </div>
+            <div class="form-group col-4">
+              <label>Harvest notes</label>
+              <input type="text" id="f-harvest_notes" name="harvest_notes" maxlength="1000"
+                     placeholder="e.g. 'Post says approx 6.2L, no exact figure given' or 'Owner relocated to Mumbai, urgent sale'">
+              <div class="help">Anything specific to the forum post — quotes, ambiguities, context.</div>
+            </div>
+          </div>
+        </div>
 
         <!-- Row 1: location -->
         <div class="form-group col-2">
           <label>State <span class="req">*</span></label>
           <select id="f-state" name="state_code" required>
-            {# Options injected by JS in alphabetical order by full state name. #}
+            {# Options injected by JS #}
           </select>
         </div>
         <div class="form-group col-2">
           <label>City <span class="req">*</span></label>
           <select id="f-city" name="city" required>
-            {# Options injected by JS based on selected state. #}
+            {# Options injected by JS #}
           </select>
         </div>
 
@@ -1069,7 +1280,6 @@
         </div>
         <div class="form-group">
           <label>Mileage (km)</label>
-          {# Visible field formats with Indian commas; hidden raw field carries the integer for POST. #}
           <input type="text" id="f-mileage-display" inputmode="numeric" autocomplete="off" placeholder="e.g. 45,000">
           <input type="hidden" id="f-mileage-raw" name="mileage_km">
         </div>
@@ -1152,6 +1362,17 @@
            class="{% if active_source == s %}active{% endif %}">{{ s }}</a>
       {% endfor %}
 
+      {# v3.5.1-r6: Forum filter dropdown #}
+      {% if distinct_forums %}
+        <span class="filter-label" style="margin-left: 14px;">Forum:</span>
+        <select onchange="filterTo(this.value, 'forum')">
+          <option value="">All</option>
+          {% for fn in distinct_forums %}
+            <option value="{{ fn }}" {% if active_forum == fn %}selected{% endif %}>{{ fn }}</option>
+          {% endfor %}
+        </select>
+      {% endif %}
+
       {% if distinct_states %}
         <span class="filter-label" style="margin-left: 14px;">State:</span>
         <select onchange="filterTo(this.value, 'state')">
@@ -1172,7 +1393,7 @@
         </select>
       {% endif %}
 
-      {% if active_source or active_state or active_make %}
+      {% if active_source or active_state or active_make or active_forum %}
         <a href="{{ url_for('admin_research') }}"
            class="btn-secondary"
            style="margin-left: 14px;">Clear filters</a>
@@ -1193,15 +1414,23 @@
             <th class="num">Asking</th>
             <th class="num">Negotiated</th>
             <th class="num">Gap %</th>
-            <th>Dealer</th>
+            <th>Forum / Buyer</th>
+            <th>Quality</th>
             <th>Notes</th>
             <th class="actions"></th>
           </tr>
         </thead>
         <tbody>
           {% for r in rows %}
-          {% set src_class = 'mystery' if r.data_source == 'Mystery Shopping' else 'ff' %}
+          {%- if r.data_source == 'Mystery Shopping' -%}{% set src_class = 'mystery' %}{% set src_icon = '🕵️' %}
+          {%- elif r.data_source == 'Forum Post' -%}{% set src_class = 'forum' %}{% set src_icon = '📚' %}
+          {%- else -%}{% set src_class = 'ff' %}{% set src_icon = '👥' %}{% endif %}
           {% set is_excluded = not r.include_in_calibration %}
+          {%- set buyer_class = 'private' if r.buyer_type == 'Private'
+                          else 'dealer'  if r.buyer_type == 'Dealer'
+                          else 'platform' if r.buyer_type in ('Cars24','Spinny','CarTrade','OLX')
+                          else '' -%}
+          {%- set q = r.data_quality or 'high' -%}
           <tr {% if is_excluded %}class="row-excluded"{% endif %}>
             <td class="calib-toggle-cell">
               <form method="POST" action="{{ url_for('admin_research_toggle_calibration', entry_id=r.id) }}" style="display:inline;">
@@ -1216,16 +1445,14 @@
             </td>
             <td>{{ r.entry_date_display }}</td>
             <td>
-              <span class="source-pill {{ src_class }}">
-                {% if r.data_source == 'Mystery Shopping' %}🕵️{% else %}👥{% endif %}
-              </span>
+              <span class="source-pill {{ src_class }}" title="{{ r.data_source }}">{{ src_icon }}</span>
             </td>
             <td class="car-cell">
               <strong>{{ r.year }} {{ r.make }} {{ r.model }}</strong>
               <span class="car-meta">{{ r.variant }} · {{ r.fuel }}{% if r.mileage_km %} · {{ inr(r.mileage_km) }} km{% endif %}</span>
             </td>
             <td>
-              {% if r.owners %}{{ r.owners }} owner{% else %}—{% endif %}
+              {% if r.owners %}{{ r.owners }}{% else %}—{% endif %}
               {% if r.condition %}<br><span style="color:#8b92a5; font-size:11px;">{{ r.condition }}</span>{% endif %}
             </td>
             <td>
@@ -1247,19 +1474,41 @@
                 </span>
               {% else %}—{% endif %}
             </td>
-            <td>
-              {% if r.dealer_name %}
-                <strong style="font-size:11.5px;">{{ r.dealer_name }}</strong>
-                {% if r.dealer_phone %}<br><span style="color:#8b92a5; font-size:10.5px;">{{ r.dealer_phone }}</span>{% endif %}
-              {% else %}—{% endif %}
-              {% if r.listing_url %}
-                <br><a href="{{ r.listing_url }}" target="_blank" rel="noopener" style="font-size:10.5px; color:#4eb0ff;">↗ listing</a>
+            {# v3.5.1-r6: Forum / Buyer column — context-aware. #}
+            <td class="forum-cell">
+              {% if r.data_source == 'Forum Post' %}
+                {% if r.forum_name %}<span class="forum-name">{{ r.forum_name }}</span>{% endif %}
+                {% if r.forum_url %}
+                  <a href="{{ r.forum_url }}" target="_blank" rel="noopener"
+                     class="forum-url-link" title="{{ r.forum_url }}">↗ post</a>
+                {% endif %}
+                {% if r.buyer_type %}
+                  <span class="buyer-pill {{ buyer_class }}" style="margin-top:3px;">{{ r.buyer_type }}</span>
+                {% endif %}
+                {% if r.transaction_date %}
+                  <span class="txn-date">txn: {{ r.transaction_date_display or r.transaction_date }}</span>
+                {% endif %}
+              {% else %}
+                {% if r.dealer_name %}
+                  <strong style="font-size:11.5px;">{{ r.dealer_name }}</strong>
+                  {% if r.dealer_phone %}<br><span style="color:#8b92a5; font-size:10.5px;">{{ r.dealer_phone }}</span>{% endif %}
+                {% else %}—{% endif %}
+                {% if r.listing_url %}
+                  <br><a href="{{ r.listing_url }}" target="_blank" rel="noopener" style="font-size:10.5px; color:#4eb0ff;">↗ listing</a>
+                {% endif %}
               {% endif %}
+            </td>
+            {# v3.5.1-r6: Quality pill column #}
+            <td>
+              <span class="quality-pill q-{{ q }}" title="Data quality">{{ q }}</span>
             </td>
             <td class="notes-cell">
               {% if r.notes %}
                 <span class="truncated" title="{{ r.notes }}">{{ r.notes }}</span>
               {% else %}—{% endif %}
+              {% if r.harvest_notes %}
+                <span class="truncated" style="color:#b48bff; margin-top:3px;" title="Harvest notes: {{ r.harvest_notes }}">📝 {{ r.harvest_notes }}</span>
+              {% endif %}
               {% if is_excluded and r.exclusion_reason %}
                 <span class="exclusion-reason-text" title="{{ r.exclusion_reason }}">⊘ {{ r.exclusion_reason }}</span>
               {% endif %}
@@ -1279,7 +1528,8 @@
     {% else %}
       <div class="empty-state">
         No research entries yet. Add your first one using the form above —
-        could be a mystery shop observation or a deal price shared by a friend.
+        could be a mystery shop observation, a friend's recent deal,
+        or a transaction harvested from a Team-BHP / Reddit post.
       </div>
     {% endif %}
   </div>
@@ -1294,13 +1544,12 @@
       <button type="button" class="modal-close" onclick="closeEditModal()">×</button>
     </div>
     <form id="edit-form" method="POST">
-      {# action set client-side via JS, includes entry_id #}
       <div class="form-grid">
 
         <!-- Source + Entry date -->
         <div class="form-group col-2">
           <label>Data source <span class="req">*</span></label>
-          <select name="data_source" id="e-data_source" required>
+          <select name="data_source" id="e-data_source" required onchange="updateEditSourceUI()">
             {% for s in sources %}
               <option value="{{ s }}">{{ s }}</option>
             {% endfor %}
@@ -1308,22 +1557,79 @@
         </div>
         <div class="form-group col-2">
           <label>Entry date <span class="req">*</span></label>
-          {# v3.5.1-r5.1: Flatpickr will be initialized lazily when modal opens #}
           <input type="text" name="entry_date" id="e-entry_date" required readonly>
+        </div>
+
+        <!-- v3.5.1-r6: Forum-only fields in edit modal (mirrors add form) -->
+        <div class="forum-fields-wrap" id="e-forum-fields-wrap">
+          <div class="ffw-title">
+            📚 Forum-specific fields
+            <span class="ffw-sub">all required when source = Forum Post</span>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Forum <span class="req">*</span></label>
+              <select id="e-forum_name" name="forum_name">
+                <option value="">— Select —</option>
+                <option value="Team-BHP">Team-BHP</option>
+                <option value="Reddit">Reddit</option>
+                <option value="Facebook">Facebook</option>
+                <option value="Quora">Quora</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group col-3">
+              <label>Forum URL <span class="req">*</span></label>
+              <input type="url" id="e-forum_url" name="forum_url" maxlength="1000">
+            </div>
+            <div class="form-group">
+              <label>Transaction date</label>
+              <input type="text" id="e-transaction_date" name="transaction_date" readonly>
+            </div>
+            <div class="form-group">
+              <label>Deal completed?</label>
+              <select id="e-transaction_completed" name="transaction_completed">
+                <option value="">—</option>
+                <option value="true">✅ Yes — sale closed</option>
+                <option value="false">❌ No — asking price only</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Buyer / Channel</label>
+              <select id="e-buyer_type" name="buyer_type">
+                <option value="">—</option>
+                <option value="Private">Private buyer</option>
+                <option value="Dealer">Local dealer</option>
+                <option value="Cars24">Cars24</option>
+                <option value="Spinny">Spinny</option>
+                <option value="CarTrade">CarTrade</option>
+                <option value="OLX">OLX</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Data quality</label>
+              <select id="e-data_quality" name="data_quality">
+                <option value="high">🟢 High</option>
+                <option value="medium">🟡 Medium</option>
+                <option value="low">⚪ Low</option>
+              </select>
+            </div>
+            <div class="form-group col-4">
+              <label>Harvest notes</label>
+              <input type="text" id="e-harvest_notes" name="harvest_notes" maxlength="1000">
+            </div>
+          </div>
         </div>
 
         <!-- Location: state → city -->
         <div class="form-group col-2">
           <label>State</label>
-          <select name="state_code" id="e-state_code">
-            {# Options injected by JS in alphabetical order by full state name. #}
-          </select>
+          <select name="state_code" id="e-state_code"></select>
         </div>
         <div class="form-group col-2">
           <label>City</label>
-          <select name="city" id="e-city">
-            {# Options injected by JS based on selected state. #}
-          </select>
+          <select name="city" id="e-city"></select>
         </div>
 
         <!-- Car identity: fuel-first cascade -->
@@ -1408,7 +1714,6 @@
           <textarea name="notes" id="e-notes" maxlength="2000"></textarea>
         </div>
 
-        {# v3.5.1-r5: Calibration toggle inside edit modal #}
         <div class="form-group col-4" style="background: #14171d; border: 1px solid #2a2f3a; border-radius: 6px; padding: 12px 14px;">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom: 4px;">
             <input type="checkbox" name="include_in_calibration" id="e-include_in_calibration" value="1"
@@ -1422,7 +1727,6 @@
             Uncheck to exclude this entry from the multiplier suggestion math. The entry stays in the log for reference but is ignored when calibrating.
           </div>
 
-          {# Exclusion reason — only visible when checkbox is unchecked #}
           <div id="e-exclusion-reason-wrap" style="display: none; margin-top: 10px;">
             <label style="font-size: 11px; color: #ff8585; margin-bottom: 4px;">
               Why exclude this entry?
@@ -1448,7 +1752,7 @@
 
 <script>
   // ────────────────────────────────────────────────────────────
-  // Server-side data (CAR_DATA + geography)
+  // Server-side data
   // ────────────────────────────────────────────────────────────
   const CAR_DATA = {{ car_data|tojson }};
   const CITIES_BY_STATE = {{ cities_by_state|tojson }};
@@ -1457,7 +1761,6 @@
   const DEFAULT_CITY = {{ default_city|tojson }};
   const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
 
-  // 36-entry state name map — matches submit_deal.html / seller.html / buyer.html
   const STATE_NAMES = {
     'AN': 'Andaman & Nicobar Islands','AP': 'Andhra Pradesh','AR': 'Arunachal Pradesh',
     'AS': 'Assam','BR': 'Bihar','CG': 'Chhattisgarh','CH': 'Chandigarh',
@@ -1472,7 +1775,7 @@
   };
 
   // ────────────────────────────────────────────────────────────
-  // Indian comma formatter (matches submit_deal.html / dashboard)
+  // Indian comma formatter
   // ────────────────────────────────────────────────────────────
   function inrGroup(n) {
     const s = String(Math.abs(n));
@@ -1497,16 +1800,16 @@
   const fFuelEl     = document.getElementById('f-fuel');
   const fModelEl    = document.getElementById('f-model');
   const fVariantEl  = document.getElementById('f-variant');
+  const fForumWrap  = document.getElementById('forum-fields-wrap');
 
   function resetSelect(sel, placeholder) {
     sel.innerHTML = '<option value="">' + placeholder + '</option>';
     sel.disabled = true;
   }
 
-  // ── State → City cascade (state dropdown built with full names) ──
+  // ── State → City cascade ──
   function buildStateOptions() {
     fStateEl.innerHTML = '';
-    // Required — no blank option, default to KA
     const sortedCodes = RTO_STATES.slice().sort(function(a, b) {
       return (STATE_NAMES[a] || a).localeCompare(STATE_NAMES[b] || b);
     });
@@ -1522,7 +1825,6 @@
   function buildCityOptions(stateCode, preselectCity) {
     fCityEl.innerHTML = '';
     const cities = (CITIES_BY_STATE[stateCode] || []).slice();
-    // Pin "Other" last; sort the rest alphabetically
     const hasOther = cities.includes('Other');
     const others = cities.filter(function(c) { return c !== 'Other'; }).sort();
     if (hasOther) others.push('Other');
@@ -1539,7 +1841,7 @@
     buildCityOptions(this.value, null);
   });
 
-  // ── Make → Fuel → Model → Variant cascade (fuel-first) ──
+  // ── Make → Fuel → Model → Variant cascade ──
   function populateFuels(make, preselect) {
     resetSelect(fFuelEl, 'Select Fuel');
     if (!make || !CAR_DATA[make]) return;
@@ -1575,10 +1877,6 @@
   function populateVariants(make, model, preselect) {
     resetSelect(fVariantEl, 'Select Variant');
     if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
-    // v3.5.1-r5.1 BUGFIX: variants in CAR_DATA is a DICT (variant_name → meta),
-    // not a list. Earlier code did `.slice().sort()` which silently fails on a
-    // dict (returns undefined). Use Object.keys() to get the list of variant names.
-    // PRESERVE TRIM ORDER (base → top) — do NOT sort alphabetically.
     const variantsObj = CAR_DATA[make][model].variants || {};
     const variants = Array.isArray(variantsObj) ? variantsObj : Object.keys(variantsObj);
     variants.forEach(function(v) {
@@ -1604,7 +1902,7 @@
   });
 
   // ────────────────────────────────────────────────────────────
-  // Mileage + Price formatters (Indian commas)
+  // Mileage + Price formatters
   // ────────────────────────────────────────────────────────────
   function bindNumberFormatter(displayId, rawId, maxVal) {
     const disp = document.getElementById(displayId);
@@ -1630,38 +1928,81 @@
   bindNumberFormatter('f-negotiated-display', 'f-negotiated-raw', 100000000);
 
   // ────────────────────────────────────────────────────────────
-  // Flatpickr — entry_date (DD-MMM-YYYY display, ISO for backend)
+  // Flatpickr — entry_date + transaction_date (add form)
   // ────────────────────────────────────────────────────────────
   flatpickr("#f-entry_date", {
-    dateFormat: "Y-m-d",          // value POSTed to backend
-    altInput: true,                // styled display field
-    altFormat: "d-M-Y",            // user-visible format: 02-May-2026
-    maxDate: "today",              // can't log future observations
+    dateFormat: "Y-m-d",
+    altInput: true,
+    altFormat: "d-M-Y",
+    maxDate: "today",
     minDate: "2010-01-01",
-    allowInput: false,             // calendar only
+    allowInput: false,
     disableMobile: false,
     defaultDate: "{{ today_iso }}"
   });
 
+  // v3.5.1-r6: Transaction date Flatpickr (forum entries)
+  flatpickr("#f-transaction_date", {
+    dateFormat: "Y-m-d",
+    altInput: true,
+    altFormat: "d-M-Y",
+    maxDate: "today",
+    minDate: "2010-01-01",
+    allowInput: false,
+    disableMobile: false,
+  });
+
   // ────────────────────────────────────────────────────────────
-  // Source-toggle visual highlight
+  // v3.5.1-r6: Source-toggle visual highlight + show/hide forum fields
   // ────────────────────────────────────────────────────────────
   function updateSourceUI() {
     const lblM = document.getElementById('lbl-mystery');
     const lblF = document.getElementById('lbl-ff');
-    lblM.classList.remove('is-mystery-checked');
-    lblF.classList.remove('is-ff-checked');
+    const lblForum = document.getElementById('lbl-forum');
+    [lblM, lblF, lblForum].forEach(function(el) {
+      if (!el) return;
+      el.classList.remove('is-mystery-checked', 'is-ff-checked', 'is-forum-checked');
+    });
     const checked = document.querySelector('input[name="data_source"]:checked');
-    if (!checked) return;
+    if (!checked) {
+      fForumWrap.classList.remove('is-active');
+      setForumFieldsRequired(false);
+      return;
+    }
     if (checked.value === 'Mystery Shopping') {
       lblM.classList.add('is-mystery-checked');
+      fForumWrap.classList.remove('is-active');
+      setForumFieldsRequired(false);
+    } else if (checked.value === 'Forum Post') {
+      lblForum.classList.add('is-forum-checked');
+      fForumWrap.classList.add('is-active');
+      setForumFieldsRequired(true);
     } else {
+      // F&F (note: HTML decodes "Friends &amp; Family" → "Friends & Family")
       lblF.classList.add('is-ff-checked');
+      fForumWrap.classList.remove('is-active');
+      setForumFieldsRequired(false);
+    }
+  }
+
+  // v3.5.1-r6: Toggle required attribute on forum-only fields. Without this,
+  // the browser would block submission of Mystery/F&F entries demanding
+  // forum_name + forum_url.
+  function setForumFieldsRequired(isRequired) {
+    const forumName = document.getElementById('f-forum_name');
+    const forumUrl  = document.getElementById('f-forum_url');
+    if (forumName) {
+      if (isRequired) forumName.setAttribute('required', 'required');
+      else forumName.removeAttribute('required');
+    }
+    if (forumUrl) {
+      if (isRequired) forumUrl.setAttribute('required', 'required');
+      else forumUrl.removeAttribute('required');
     }
   }
 
   // ────────────────────────────────────────────────────────────
-  // Reset button — re-init cascades and source styling
+  // Reset button
   // ────────────────────────────────────────────────────────────
   function resetFormUI() {
     buildStateOptions();
@@ -1672,9 +2013,6 @@
     updateSourceUI();
   }
 
-  // ────────────────────────────────────────────────────────────
-  // Filter dropdowns (state / make) — navigate with current filter preserved
-  // ────────────────────────────────────────────────────────────
   function filterTo(value, key) {
     const url = new URL(window.location.href);
     if (value) {
@@ -1688,43 +2026,44 @@
   // ── Initialize on page load ──
   buildStateOptions();
   buildCityOptions(DEFAULT_STATE, DEFAULT_CITY);
+  setForumFieldsRequired(false);  // forum fields not required until source picked
 
   // ────────────────────────────────────────────────────────────
-  // EDIT MODAL — open / close / populate
+  // EDIT MODAL
   // ────────────────────────────────────────────────────────────
-  // ────────────────────────────────────────────────────────────
-  // EDIT MODAL — Flatpickr instance, cached after first init
-  // ────────────────────────────────────────────────────────────
-  let editFlatpickr = null;
+  let editEntryFlatpickr = null;
+  let editTxnFlatpickr = null;
 
-  function initEditFlatpickr() {
-    if (editFlatpickr) return;
-    editFlatpickr = flatpickr("#e-entry_date", {
-      dateFormat: "Y-m-d",
-      altInput: true,
-      altFormat: "d-M-Y",
-      maxDate: "today",
-      minDate: "2010-01-01",
-      allowInput: false,
-      disableMobile: false,
-    });
+  function initEditFlatpickrs() {
+    if (!editEntryFlatpickr) {
+      editEntryFlatpickr = flatpickr("#e-entry_date", {
+        dateFormat: "Y-m-d", altInput: true, altFormat: "d-M-Y",
+        maxDate: "today", minDate: "2010-01-01",
+        allowInput: false, disableMobile: false,
+      });
+    }
+    if (!editTxnFlatpickr) {
+      editTxnFlatpickr = flatpickr("#e-transaction_date", {
+        dateFormat: "Y-m-d", altInput: true, altFormat: "d-M-Y",
+        maxDate: "today", minDate: "2010-01-01",
+        allowInput: false, disableMobile: false,
+      });
+    }
   }
 
-  // Element refs for edit modal
-  const eStateEl   = document.getElementById('e-state_code');
-  const eCityEl    = document.getElementById('e-city');
-  const eMakeEl    = document.getElementById('e-make');
-  const eFuelEl    = document.getElementById('e-fuel');
-  const eModelEl   = document.getElementById('e-model');
-  const eVariantEl = document.getElementById('e-variant');
+  const eStateEl       = document.getElementById('e-state_code');
+  const eCityEl        = document.getElementById('e-city');
+  const eMakeEl        = document.getElementById('e-make');
+  const eFuelEl        = document.getElementById('e-fuel');
+  const eModelEl       = document.getElementById('e-model');
+  const eVariantEl     = document.getElementById('e-variant');
+  const eForumWrap     = document.getElementById('e-forum-fields-wrap');
 
-  // ── Edit-modal cascades (mirror add-form logic) ──
   function buildEditStateOptions(preselect) {
     eStateEl.innerHTML = '';
     const sorted = RTO_STATES.slice().sort(function(a, b) {
       return (STATE_NAMES[a] || a).localeCompare(STATE_NAMES[b] || b);
     });
-    // Allow blank — state is optional on edit
     const blank = document.createElement('option');
     blank.value = ''; blank.textContent = '—';
     eStateEl.appendChild(blank);
@@ -1800,7 +2139,6 @@
   function buildEditVariantOptions(make, model, preselect) {
     eVariantEl.innerHTML = '';
     if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
-    // v3.5.1-r5.1 BUGFIX: variants is a DICT — use Object.keys()
     const variantsObj = CAR_DATA[make][model].variants || {};
     const variants = Array.isArray(variantsObj) ? variantsObj : Object.keys(variantsObj);
     variants.forEach(function(v) {
@@ -1811,7 +2149,6 @@
     });
   }
 
-  // Wire cascade events
   eMakeEl.addEventListener('change', function() {
     buildEditFuelOptions(this.value, null);
     eModelEl.innerHTML = '';
@@ -1825,44 +2162,67 @@
     buildEditVariantOptions(eMakeEl.value, this.value, null);
   });
 
-  // Bind Indian formatters for edit modal mileage + prices
   bindNumberFormatter('e-mileage-display',    'e-mileage-raw',    1000000);
   bindNumberFormatter('e-asking-display',     'e-asking-raw',     100000000);
   bindNumberFormatter('e-negotiated-display', 'e-negotiated-raw', 100000000);
 
-  // ────────────────────────────────────────────────────────────
-  // openEditModal: populate form from row JSON
-  // ────────────────────────────────────────────────────────────
+  // v3.5.1-r6: Edit modal source toggle — show/hide forum fields
+  function updateEditSourceUI() {
+    const sourceEl = document.getElementById('e-data_source');
+    if (!sourceEl) return;
+    if (sourceEl.value === 'Forum Post') {
+      eForumWrap.classList.add('is-active');
+    } else {
+      eForumWrap.classList.remove('is-active');
+    }
+  }
+
   function openEditModal(row) {
     const modal = document.getElementById('edit-modal');
     const form = document.getElementById('edit-form');
     form.action = '/admin/research/' + row.id + '/edit';
 
-    // Init Flatpickr lazily on first open
-    initEditFlatpickr();
+    initEditFlatpickrs();
 
-    // Source + date
+    // Source + entry date
     document.getElementById('e-data_source').value = row.data_source || '';
-    if (editFlatpickr) {
-      editFlatpickr.setDate(row.entry_date || null, true);
+    if (editEntryFlatpickr) {
+      editEntryFlatpickr.setDate(row.entry_date || null, true);
     }
+
+    // v3.5.1-r6: Forum fields
+    document.getElementById('e-forum_name').value = row.forum_name || '';
+    document.getElementById('e-forum_url').value = row.forum_url || '';
+    if (editTxnFlatpickr) {
+      editTxnFlatpickr.setDate(row.transaction_date || null, true);
+    }
+    // transaction_completed: row.transaction_completed is true/false/null from JSON
+    let tcVal = '';
+    if (row.transaction_completed === true)  tcVal = 'true';
+    if (row.transaction_completed === false) tcVal = 'false';
+    document.getElementById('e-transaction_completed').value = tcVal;
+    document.getElementById('e-buyer_type').value = row.buyer_type || '';
+    document.getElementById('e-data_quality').value = row.data_quality || 'high';
+    document.getElementById('e-harvest_notes').value = row.harvest_notes || '';
+
+    // Trigger source UI update so forum-fields-wrap shows/hides correctly
+    updateEditSourceUI();
 
     // State → City
     buildEditStateOptions(row.state_code || '');
     buildEditCityOptions(row.state_code || '', row.city || '');
 
-    // Make → Fuel → Model → Variant cascade
+    // Make → Fuel → Model → Variant
     buildEditMakeOptions(row.make || '');
     buildEditFuelOptions(row.make || '', row.fuel || '');
     buildEditModelOptions(row.make || '', row.fuel || '', row.model || '');
     buildEditVariantOptions(row.make || '', row.model || '', row.variant || '');
 
-    // Year + Owner + Condition (regular selects with options pre-rendered)
     document.getElementById('e-year').value = row.year || '';
     document.getElementById('e-owners').value = row.owners || '';
     document.getElementById('e-condition').value = row.condition || '';
 
-    // Mileage (raw + display)
+    // Mileage
     const mDisp = document.getElementById('e-mileage-display');
     const mRaw  = document.getElementById('e-mileage-raw');
     if (row.mileage_km != null && row.mileage_km !== '') {
@@ -1872,7 +2232,7 @@
       mRaw.value = ''; mDisp.value = '';
     }
 
-    // Asking price (raw + display)
+    // Asking price
     const aDisp = document.getElementById('e-asking-display');
     const aRaw  = document.getElementById('e-asking-raw');
     if (row.asking_price_inr != null && row.asking_price_inr !== '') {
@@ -1882,7 +2242,7 @@
       aRaw.value = ''; aDisp.value = '';
     }
 
-    // Negotiated price (raw + display)
+    // Negotiated price
     const nDisp = document.getElementById('e-negotiated-display');
     const nRaw  = document.getElementById('e-negotiated-raw');
     if (row.negotiated_price_inr != null && row.negotiated_price_inr !== '') {
@@ -1898,7 +2258,7 @@
     document.getElementById('e-listing_url').value  = row.listing_url  || '';
     document.getElementById('e-notes').value        = row.notes        || '';
 
-    // Calibration toggle + reason
+    // Calibration toggle
     const includeCb = document.getElementById('e-include_in_calibration');
     includeCb.checked = (row.include_in_calibration !== false);
     document.getElementById('e-exclusion_reason').value = row.exclusion_reason || '';
@@ -1911,7 +2271,6 @@
     document.getElementById('edit-modal').classList.remove('is-open');
   }
 
-  // v3.5.1-r5: Show/hide exclusion-reason field based on calibration checkbox
   function toggleEditExclusionReason() {
     const includeCb = document.getElementById('e-include_in_calibration');
     const wrap = document.getElementById('e-exclusion-reason-wrap');
