@@ -139,7 +139,11 @@
   }
   .flash-close:hover { opacity: 1; }
 
-  /* Flatpickr altInput dark theme override */
+  /* Flatpickr altInput dark theme override.
+     v3.5.1-r6 hardening: readonly inputs look "disabled" by default in some
+     browsers; we explicitly force interactive cues — pointer cursor, a
+     visible calendar icon hint, and a subtle hover lift — so users see the
+     transaction_date field as clickable, not greyed-out. */
   input.flatpickr-alt-input,
   input.flatpickr-alt-input:read-only,
   input.flatpickr-alt-input[readonly] {
@@ -148,23 +152,34 @@
     -webkit-text-fill-color: #e4e6eb !important;
     border: 1px solid #2a2f3a !important;
     cursor: pointer !important;
-    padding: 7px 10px;
+    padding: 7px 32px 7px 10px;
     font-size: 13px;
     line-height: 1.4;
     border-radius: 4px;
     width: 100%;
     opacity: 1 !important;
     font-family: inherit;
+    /* Calendar emoji as a background icon, right-aligned. Pure CSS — no
+       extra DOM, no font-awesome dependency. Tells the user "clickable
+       date picker" without relying on the (often hidden) placeholder. */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffa500' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 9px center !important;
+    background-size: 14px !important;
+    transition: border-color 0.12s, background-color 0.12s;
   }
   input.flatpickr-alt-input:focus {
-    background: #0d0f14 !important;
+    background-color: #0d0f14 !important;
     color: #e4e6eb !important;
     border-color: #ffa500 !important;
     box-shadow: 0 0 0 2px rgba(255,165,0,0.15) !important;
     outline: none !important;
   }
-  input.flatpickr-alt-input:hover { border-color: #3a3f4a !important; }
-  input.flatpickr-alt-input::placeholder { color: #6c757d !important; }
+  input.flatpickr-alt-input:hover {
+    border-color: #ffa500 !important;
+    background-color: #11141b !important;
+  }
+  input.flatpickr-alt-input::placeholder { color: #6c757d !important; opacity: 1 !important; }
   .flatpickr-calendar {
     background: #1a1d24 !important;
     border: 1px solid #2a2f3a !important;
@@ -1201,11 +1216,11 @@
             <div class="form-group">
               <label>Data quality</label>
               <select id="f-data_quality" name="data_quality">
-                <option value="high">🟢 High — exact numbers, full detail</option>
-                <option value="medium" selected>🟡 Medium — approximate (e.g. "around 5L")</option>
+                <option value="high" selected>🟢 High — exact numbers, full detail</option>
+                <option value="medium">🟡 Medium — approximate (e.g. "around 5L")</option>
                 <option value="low">⚪ Low — partial / unclear</option>
               </select>
-              <div class="help">Calibration weights low-quality at 0.5×.</div>
+              <div class="help">Default is High — drop to Medium/Low only if numbers are approximate. Calibration weights low-quality at 0.5×.</div>
             </div>
             <div class="form-group col-4">
               <label>Harvest notes</label>
