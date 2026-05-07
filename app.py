@@ -7534,19 +7534,23 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
     admin_email = admin_email or 'unknown'
 
     # --- Step 1: create the listing_uploads row ---
+    # Schema notes: id auto-generates (gen_random_uuid()), so we don't pass it.
+    # marketplace is NOT NULL — hardcoded to 'CarWale' until we onboard others.
+    # Column names match the deployed schema: parsed_rows / skipped_rows / filename.
+    # 'inserted_count', 'status', 'parser_version' columns DON'T exist — we record
+    # outcome in 'notes' free-text instead.
+    now_iso = datetime.utcnow().isoformat()
     upload_payload = {
-        'uploaded_by':      admin_email,
-        'state_code':       state_code,
-        'city':             city,
-        'source_filename':  (source_filename or '')[:200],
-        'total_rows':       parse_result.total_rows,
-        'parsed_count':     len(parse_result.parsed),
-        'skipped_count':    len(parse_result.skipped),
-        'inserted_count':   0,  # updated after inserts
-        'status':           'processing',
-        'parser_version':   getattr(parse_result, 'parser_version', '1.0'),
+        'uploaded_by':   admin_email,
+        'uploaded_at':   now_iso,
+        'marketplace':   'CarWale',
+        'state_code':    state_code,
+        'city':          city,
+        'filename':      (source_filename or '')[:200],
+        'total_rows':    parse_result.total_rows,
+        'parsed_rows':   len(parse_result.parsed),
+        'skipped_rows':  len(parse_result.skipped),
     }
-
     try:
         upload_resp = supabase.table('listing_uploads').insert(upload_payload).execute()
         if not upload_resp.data:
@@ -7630,19 +7634,23 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
                 insert_errors.append(err_msg)
                 # Continue to next batch — partial success is better than full failure
 
-    # --- Step 3: update upload row with final status ---
+    # --- Step 3: write notes if any batches failed ---
+    # Schema has no 'status' or 'inserted_count' column — we use 'notes'
+    # as the free-text outcome record. On full success we leave notes NULL
+    # so downstream code can use empty notes as a "completed" proxy.
     final_status = 'completed' if not insert_errors else 'partial_error'
-    try:
-        update_payload = {
-            'inserted_count': inserted_count,
-            'status':         final_status,
-        }
-        if insert_errors:
-            # Truncate to fit notes column if needed
-            update_payload['notes'] = ' | '.join(insert_errors)[:1000]
-        supabase.table('listing_uploads').update(update_payload).eq('id', upload_id).execute()
-    except Exception as e:
-        app.logger.warning(f"_insert_listings_to_research_log: status update failed: {e}")
+    if insert_errors:
+        try:
+            note_text = (
+                f"Inserted {inserted_count} of {len(research_rows)} parsed rows. "
+                f"Errors: " + ' | '.join(insert_errors)
+            )[:1000]
+            (supabase.table('listing_uploads')
+             .update({'notes': note_text})
+             .eq('id', upload_id)
+             .execute())
+        except Exception as e:
+            app.logger.warning(f"_insert_listings_to_research_log: notes update failed: {e}")
 
     app.logger.info(
         f"Listing upload #{upload_id}: state={state_code} city={city} "
@@ -7693,9 +7701,20 @@ def _get_recent_listing_uploads(limit=50):
         else:
             row['created_display'] = '—'
 
+       # Map deployed schema column names to keys the template expects.
+        # Schema: parsed_rows / skipped_rows / filename (no _count / status / parser_version)
+        row['parsed_count']    = row.get('parsed_rows') or 0
+        row['skipped_count']   = row.get('skipped_rows') or 0
+        row['source_filename'] = row.get('filename') or ''
+        # 'inserted_count' / 'status' / 'parser_version' don't exist in DB —
+        # synthesize sensible defaults so dashboard table renders cleanly.
+        row['inserted_count']  = row['parsed_count']  # best estimate (no per-batch tracking)
+        row['status']          = 'partial_error' if row.get('notes') else 'completed'
+        row['parser_version']  = '1.0'
+
         # Computed parse-success rate
         total = row.get('total_rows') or 0
-        parsed = row.get('parsed_count') or 0
+        parsed = row['parsed_count']
         if total > 0:
             row['parse_success_pct'] = round((parsed / total) * 100, 1)
         else:
@@ -7816,11 +7835,19 @@ def _get_listing_upload_with_entries(upload_id):
     else:
         upload_row['created_display'] = '—'
 
+    # Map deployed schema column names to keys the template expects.
+    # Schema: parsed_rows / skipped_rows / filename (no _count / status / parser_version)
+    upload_row['parsed_count']    = upload_row.get('parsed_rows') or 0
+    upload_row['skipped_count']   = upload_row.get('skipped_rows') or 0
+    upload_row['source_filename'] = upload_row.get('filename') or ''
+    upload_row['inserted_count']  = upload_row['parsed_count']
+    upload_row['status']          = 'partial_error' if upload_row.get('notes') else 'completed'
+    upload_row['parser_version']  = '1.0'
+
     # Computed parse-success rate
     total = upload_row.get('total_rows') or 0
-    parsed = upload_row.get('parsed_count') or 0
+    parsed = upload_row['parsed_count']
     upload_row['parse_success_pct'] = round((parsed / total) * 100, 1) if total > 0 else 0
-
     # Fetch all parsed entries linked to this upload
     try:
         r = (supabase.table('research_log')
