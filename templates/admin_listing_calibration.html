@@ -487,12 +487,12 @@
     <form action="{{ url_for('admin_listing_calibration_upload') }}" method="POST" enctype="multipart/form-data" id="upload-form">
       <div class="upload-form-grid">
 
-        <!-- State dropdown — alphabetical from RTO_STATES -->
+        <!-- State dropdown — alphabetical from RTO_STATES (list of state codes) -->
         <div class="form-field">
           <label for="state_code">State</label>
           <select name="state_code" id="state_code" required onchange="rebuildCityDropdown()">
-            {% for code, name in rto_states|dictsort(by='value') %}
-              <option value="{{ code }}" {% if code == default_state %}selected{% endif %}>{{ name }} ({{ code }})</option>
+            {% for code in rto_states|sort %}
+              <option value="{{ code }}" {% if code == default_state %}selected{% endif %}>{{ code }}</option>
             {% endfor %}
           </select>
         </div>
