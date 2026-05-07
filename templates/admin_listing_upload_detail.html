@@ -1,0 +1,611 @@
+{% extends "layout.html" %}
+{% block title %}Upload #{{ upload.id }} — Listing Calibration — AutoKnowMus Admin{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ============================================================
+     ADMIN PAGE — LISTING CALIBRATION UPLOAD DRILLDOWN
+     Mirrors design of admin_listing_calibration.html dashboard.
+     ============================================================ */
+
+  .admin-wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 16px 24px 28px;
+  }
+
+  /* ─── Admin nav strip (matches existing admin pages) ──────── */
+  .admin-nav-strip {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+  .admin-nav-strip a {
+    color: #adb5bd;
+    text-decoration: none;
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .admin-nav-strip a:hover {
+    color: #fff;
+    background: #14171d;
+    border-color: #2a2d34;
+  }
+  .admin-nav-strip a.active {
+    color: #fff;
+    background: rgba(40,167,69,0.16);
+    border-color: rgba(40,167,69,0.45);
+  }
+
+  /* ─── Back button ──────────────────────────────────────────── */
+  .btn-back {
+    display: inline-block;
+    background: #6c757d;
+    color: #ffffff !important;
+    text-decoration: none;
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .btn-back:hover { background: #7a838c; color: #ffffff !important; }
+
+  /* ─── Page header ─────────────────────────────────────────── */
+  .page-header {
+    margin-bottom: 14px;
+  }
+  .page-header h1 {
+    color: #ffffff;
+    font-size: 1.45rem;
+    margin: 0 0 4px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .page-header h1 .h1-pre { color: #adb5bd; font-weight: 600; font-size: 1.05rem; }
+  .page-header h1 .h1-id  { color: #ffa500; font-family: ui-monospace, 'SF Mono', monospace; font-size: 1.15rem; }
+  .page-header .page-subtitle {
+    color: #adb5bd;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* ─── Flash alerts (× dismissible) ────────────────────────── */
+  .flash-wrap { margin-bottom: 14px; }
+  .flash {
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.5;
+  }
+  .flash.flash-success {
+    background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
+    border: 1px solid #28a745;
+    color: #e6e6e6;
+  }
+  .flash.flash-error {
+    background: linear-gradient(135deg, #2a2118 0%, #14171d 100%);
+    border: 1px solid #ff8c00;
+    color: #e6e6e6;
+  }
+  .flash .flash-msg { flex: 1; }
+  .flash .flash-close {
+    background: transparent;
+    border: none;
+    color: #adb5bd;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+  .flash .flash-close:hover { color: #ffffff; }
+
+  /* ─── Upload metadata card ────────────────────────────────── */
+  .meta-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .meta-card h2 {
+    color: #ffffff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px 22px;
+  }
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .meta-item .meta-label {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+  }
+  .meta-item .meta-value {
+    color: #e6e6e6;
+    font-size: 0.88rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .meta-item .meta-value.geo { color: #8ec5ff; }
+  .meta-item .meta-value.filename {
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.8rem;
+    color: #adb5bd;
+  }
+
+  /* ─── Status badge (matches dashboard) ────────────────────── */
+  .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .status-badge.completed     { background: rgba(40,167,69,0.18);  color: #5bd47b; border: 1px solid rgba(40,167,69,0.45); }
+  .status-badge.partial_error { background: rgba(255,165,0,0.18);  color: #ffc870; border: 1px solid rgba(255,165,0,0.45); }
+  .status-badge.processing    { background: rgba(78,176,255,0.18); color: #8ec5ff; border: 1px solid rgba(78,176,255,0.45); }
+  .status-badge.failed        { background: rgba(255,107,107,0.18); color: #ff8585; border: 1px solid rgba(255,107,107,0.45); }
+
+  /* ─── Stats cards row ─────────────────────────────────────── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 540px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+
+  .stat-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 11px 12px;
+    text-align: center;
+  }
+  .stat-card .stat-label {
+    color: #adb5bd;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  .stat-card .stat-value {
+    color: #ffffff;
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card.accent-green .stat-value { color: #5bd47b; }
+  .stat-card.accent-orange .stat-value { color: #ffc870; }
+  .stat-card.accent-red .stat-value    { color: #ff8585; }
+  .stat-card.accent-blue .stat-value   { color: #8ec5ff; }
+
+  /* ─── Notes/error section (when partial_error) ────────────── */
+  .notes-card {
+    background: linear-gradient(135deg, #2a2118 0%, #14171d 100%);
+    border: 1px solid #ff8c00;
+    border-radius: 10px;
+    padding: 11px 14px;
+    margin-bottom: 14px;
+    color: #e6e6e6;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .notes-card strong { color: #ffc870; }
+  .notes-card .notes-body {
+    margin-top: 6px;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.76rem;
+    color: #adb5bd;
+    background: rgba(0,0,0,0.25);
+    padding: 7px 10px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* ─── Section card ────────────────────────────────────────── */
+  .section-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .section-card h2 {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-card h2 .h2-sub {
+    color: #adb5bd;
+    font-weight: 400;
+    font-size: 0.8rem;
+    margin-left: 6px;
+  }
+
+  /* ─── Entries table ───────────────────────────────────────── */
+  .entries-table-wrap { overflow-x: auto; }
+  .entries-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .entries-table th {
+    color: #6c757d;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 8px 6px;
+    border-bottom: 1px solid #2a2d34;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    background: #1a1d24;
+  }
+  .entries-table th.num,
+  .entries-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .entries-table td {
+    padding: 7px 8px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    line-height: 1.4;
+    vertical-align: middle;
+  }
+  .entries-table tr:last-child td { border-bottom: none; }
+  .entries-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .entries-table .row-id {
+    color: #6c757d;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.74rem;
+  }
+  .entries-table .car-cell {
+    line-height: 1.3;
+    min-width: 220px;
+  }
+  .entries-table .car-cell .car-line1 { color: #e6e6e6; font-weight: 600; font-size: 0.84rem; }
+  .entries-table .car-cell .car-line2 { color: #adb5bd; font-size: 0.74rem; margin-top: 2px; }
+  .entries-table .price-cell {
+    color: #5bd47b;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .entries-table .fuel-cell { color: #adb5bd; font-size: 0.78rem; }
+  .entries-table .mileage-cell { color: #adb5bd; font-size: 0.78rem; }
+
+  .quality-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .quality-pill.q-high   { background: rgba(40,167,69,0.18); color: #5bd47b; border: 1px solid rgba(40,167,69,0.45); }
+  .quality-pill.q-medium { background: rgba(255,165,0,0.18); color: #ffc870; border: 1px solid rgba(255,165,0,0.45); }
+  .quality-pill.q-low    { background: rgba(108,117,125,0.18); color: #adb5bd; border: 1px solid rgba(108,117,125,0.45); }
+
+  .calib-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.74rem;
+    font-weight: 600;
+  }
+  .calib-status.is-included { color: #5bd47b; }
+  .calib-status.is-excluded { color: #ff8585; }
+
+  .listing-link {
+    color: #8ec5ff;
+    text-decoration: none;
+    font-size: 0.74rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+  }
+  .listing-link:hover { color: #4eb0ff; text-decoration: underline; }
+  .listing-link .ext-icon { font-size: 0.7rem; opacity: 0.7; }
+
+  .empty-state {
+    text-align: center;
+    padding: 36px 16px;
+    color: #6c757d;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .empty-state .empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.5; }
+  .empty-state strong { color: #adb5bd; }
+
+  /* Hide some columns on narrow screens for readability */
+  @media (max-width: 800px) {
+    .entries-table th.col-quality,
+    .entries-table td.col-quality { display: none; }
+  }
+  @media (max-width: 600px) {
+    .entries-table th.col-fuel,
+    .entries-table td.col-fuel,
+    .entries-table th.col-link,
+    .entries-table td.col-link { display: none; }
+  }
+
+  .footer-meta {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #2a2d34;
+    text-align: center;
+    color: #6c757d;
+    font-size: 0.74rem;
+    font-style: italic;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+
+  <!-- ============================================================
+       ADMIN NAV STRIP — same as dashboard, no active tab
+       (this is a drilldown page, not a top-level tab)
+       ============================================================ -->
+  <div class="admin-nav-strip">
+    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
+    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
+    <a href="{{ url_for('admin_multipliers') }}">📈 State Multipliers</a>
+    <a href="{{ url_for('admin_feedback') }}">💬 Feedback Calibration</a>
+    <a href="{{ url_for('admin_research') }}">🔬 Research</a>
+    <a href="{{ url_for('admin_listing_calibration') }}" class="active">🚛 Listing Calibration</a>
+    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
+  </div>
+
+  <a href="{{ url_for('admin_listing_calibration') }}" class="btn-back">← Back to Listing Calibration</a>
+
+  <!-- ============================================================
+       PAGE HEADER
+       ============================================================ -->
+  <div class="page-header">
+    <h1>
+      <span class="h1-pre">📥 Upload</span>
+      <span class="h1-id">#{{ upload.id }}</span>
+      <span class="status-badge {{ upload.status }}">{{ upload.status }}</span>
+    </h1>
+    <p class="page-subtitle">
+      Detailed view of all rows ingested from this CSV upload. Listings flow into
+      <code style="background:#0e1117; color:#ffa500; padding:1px 5px; border-radius:4px; font-size:0.78rem;">research_log</code>
+      tagged as <strong style="color:#e6e6e6;">Listing Aggregator</strong>.
+    </p>
+  </div>
+
+  <!-- ============================================================
+       FLASH MESSAGES
+       ============================================================ -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, msg in messages %}
+          <div class="flash flash-{{ 'success' if category == 'success' else 'error' }}">
+            <span class="flash-msg">{{ msg }}</span>
+            <button type="button" class="flash-close" onclick="this.parentElement.style.display='none'" aria-label="Dismiss">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- ============================================================
+       UPLOAD METADATA
+       ============================================================ -->
+  <div class="meta-card">
+    <h2>📋 Upload Details</h2>
+    <div class="meta-grid">
+      <div class="meta-item">
+        <span class="meta-label">Uploaded At</span>
+        <span class="meta-value">{{ upload.created_display }}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Uploaded By</span>
+        <span class="meta-value" title="{{ upload.uploaded_by }}">{{ upload.uploaded_by }}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Location</span>
+        <span class="meta-value geo">{{ upload.city }}, {{ upload.state_code }}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Source File</span>
+        <span class="meta-value filename" title="{{ upload.source_filename }}">{{ upload.source_filename or '—' }}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Parser Version</span>
+        <span class="meta-value">{{ upload.parser_version or '—' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       NOTES (only shown if partial_error or failed with notes)
+       ============================================================ -->
+  {% if upload.notes %}
+    <div class="notes-card">
+      <strong>⚠️ Processing notes</strong> — some batches reported errors during insert.
+      Counts shown below reflect the rows that did succeed.
+      <div class="notes-body">{{ upload.notes }}</div>
+    </div>
+  {% endif %}
+
+  <!-- ============================================================
+       STATS ROW
+       ============================================================ -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Rows</div>
+      <div class="stat-value">{{ '{:,}'.format(upload.total_rows or 0) }}</div>
+    </div>
+    <div class="stat-card accent-green">
+      <div class="stat-label">Parsed</div>
+      <div class="stat-value">{{ '{:,}'.format(upload.parsed_count or 0) }}</div>
+    </div>
+    <div class="stat-card accent-orange">
+      <div class="stat-label">Skipped</div>
+      <div class="stat-value">{{ '{:,}'.format(upload.skipped_count or 0) }}</div>
+    </div>
+    <div class="stat-card accent-blue">
+      <div class="stat-label">Inserted</div>
+      <div class="stat-value">{{ '{:,}'.format(upload.inserted_count or 0) }}</div>
+    </div>
+    <div class="stat-card
+      {%- if upload.parse_success_pct >= 95 %} accent-green
+      {%- elif upload.parse_success_pct >= 80 %} accent-orange
+      {%- else %} accent-red
+      {%- endif %}">
+      <div class="stat-label">Success %</div>
+      <div class="stat-value">{{ upload.parse_success_pct }}%</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       INSERTED ENTRIES TABLE
+       ============================================================ -->
+  <div class="section-card">
+    <h2>
+      🚗 Inserted Entries
+      <span class="h2-sub">— {{ entries|length }} {{ 'row' if entries|length == 1 else 'rows' }} in research_log linked to this upload</span>
+    </h2>
+
+    {% if entries %}
+      <div class="entries-table-wrap">
+        <table class="entries-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Car</th>
+              <th class="col-fuel">Fuel</th>
+              <th class="num">Mileage</th>
+              <th class="num">Asking Price</th>
+              <th class="col-quality">Quality</th>
+              <th>Calibration</th>
+              <th class="col-link">Listing</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in entries %}
+              {% set q = (e.data_quality or 'medium')|lower %}
+              <tr>
+                <td class="row-id">#{{ e.id }}</td>
+                <td class="car-cell">
+                  <div class="car-line1">{{ e.year }} {{ e.make }} {{ e.model }}</div>
+                  <div class="car-line2">{{ e.variant }}</div>
+                </td>
+                <td class="col-fuel fuel-cell">{{ e.fuel or '—' }}</td>
+                <td class="num mileage-cell">
+                  {%- if e.mileage_km -%}
+                    {{ '{:,}'.format(e.mileage_km) }} km
+                  {%- else -%}—{%- endif -%}
+                </td>
+                <td class="num price-cell">
+                  {%- if e.asking_price_inr -%}
+                    ₹ {{ '{:,}'.format(e.asking_price_inr) }}
+                  {%- else -%}—{%- endif -%}
+                </td>
+                <td class="col-quality">
+                  <span class="quality-pill q-{{ q }}">{{ q }}</span>
+                </td>
+                <td>
+                  {% if e.include_in_calibration %}
+                    <span class="calib-status is-included" title="This entry feeds into engine calibration">✓ Included</span>
+                  {% else %}
+                    <span class="calib-status is-excluded" title="{{ e.exclusion_reason or 'Excluded from calibration' }}">✗ Excluded</span>
+                  {% endif %}
+                </td>
+                <td class="col-link">
+                  {% if e.listing_url %}
+                    <a href="{{ e.listing_url }}" target="_blank" rel="noopener" class="listing-link" title="{{ e.listing_url }}">
+                      View <span class="ext-icon">↗</span>
+                    </a>
+                  {% else %}
+                    <span style="color:#6c757d;">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <strong>No entries linked to this upload.</strong><br>
+        {% if upload.parsed_count and upload.parsed_count > 0 %}
+          The parser succeeded but no rows were committed to <code>research_log</code>.
+          Check the processing notes above and the Render logs for details.
+        {% else %}
+          The CSV either had no parseable rows, or every row was skipped during parsing.
+          Check the upload counts above for the breakdown.
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="footer-meta">
+    Page rendered {{ now_display }} · Listings tagged
+    <code style="background:#0e1117; color:#ffa500; padding:1px 5px; border-radius:4px; font-size:0.74rem;">data_source = 'Listing Aggregator'</code>
+  </div>
+
+</div>
+{% endblock %}
