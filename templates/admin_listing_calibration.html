@@ -1,0 +1,656 @@
+{% extends "layout.html" %}
+{% block title %}Listing Calibration — AutoKnowMus Admin{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ============================================================
+     ADMIN PAGE — LISTING CALIBRATION DASHBOARD
+     Mirrors the design of admin_research.html and admin_data_health.html.
+     UI rules locked:
+       - .btn-back grey #6c757d, top-left of content area
+       - Dropdowns alphabetical (state from RTO_STATES, city cascading)
+       - Disabled fields: dark bg #1a1d24 / grey text #6c757d
+       - Flash alerts always have × dismiss
+       - DD-MMM-YYYY date format
+       - Indian comma formatting on big numbers
+     ============================================================ */
+
+  .admin-wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 16px 24px 28px;
+  }
+
+  /* ─── Admin nav strip ──────────────────────────────────────── */
+  .admin-nav-strip {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+  .admin-nav-strip .nav-logo {
+    color: #adb5bd;
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-right: 10px;
+    letter-spacing: 0.3px;
+  }
+  .admin-nav-strip .nav-logo .nm-auto { color: #ffffff; }
+  .admin-nav-strip .nav-logo .nm-know { color: #28a745; }
+  .admin-nav-strip .nav-logo .nm-mus  { color: #4e54ff; }
+  .admin-nav-strip .nav-logo .nm-admin { color: #6c757d; font-weight: 600; margin-left: 4px; }
+
+  .admin-nav-strip a.nav-tab {
+    color: #adb5bd;
+    text-decoration: none;
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .admin-nav-strip a.nav-tab:hover {
+    color: #fff;
+    background: #14171d;
+    border-color: #2a2d34;
+  }
+  .admin-nav-strip a.nav-tab.active {
+    color: #fff;
+    background: rgba(40,167,69,0.16);
+    border-color: rgba(40,167,69,0.45);
+  }
+
+  /* ─── Back button ──────────────────────────────────────────── */
+  .btn-back {
+    display: inline-block;
+    background: #6c757d;
+    color: #ffffff !important;
+    text-decoration: none;
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .btn-back:hover { background: #7a838c; color: #ffffff !important; }
+
+  /* ─── Page header ─────────────────────────────────────────── */
+  .page-header {
+    margin-bottom: 16px;
+  }
+  .page-header h1 {
+    color: #ffffff;
+    font-size: 1.45rem;
+    margin: 0 0 6px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .page-header .page-subtitle {
+    color: #adb5bd;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* ─── Helper strip ────────────────────────────────────────── */
+  .helper-strip {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-left: 3px solid #4e54ff;
+    border-radius: 8px;
+    padding: 11px 14px;
+    margin-bottom: 16px;
+    color: #adb5bd;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .helper-strip strong { color: #e6e6e6; }
+  .helper-strip code {
+    background: #0e1117;
+    color: #ffa500;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-family: ui-monospace, 'SF Mono', monospace;
+  }
+
+  /* ─── Flash alerts (× dismissible) ────────────────────────── */
+  .flash-wrap { margin-bottom: 14px; }
+  .flash {
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.5;
+  }
+  .flash.flash-success {
+    background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
+    border: 1px solid #28a745;
+    color: #e6e6e6;
+  }
+  .flash.flash-error {
+    background: linear-gradient(135deg, #2a2118 0%, #14171d 100%);
+    border: 1px solid #ff8c00;
+    color: #e6e6e6;
+  }
+  .flash .flash-msg { flex: 1; }
+  .flash .flash-close {
+    background: transparent;
+    border: none;
+    color: #adb5bd;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+  .flash .flash-close:hover { color: #ffffff; }
+
+  /* ─── Stats cards row ─────────────────────────────────────── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 540px) { .stats-row { grid-template-columns: 1fr; } }
+
+  .stat-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .stat-card .stat-label {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+    font-weight: 600;
+  }
+  .stat-card .stat-value {
+    color: #ffffff;
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card .stat-sub {
+    color: #6c757d;
+    font-size: 0.74rem;
+    margin-top: 3px;
+    line-height: 1.3;
+  }
+  .stat-card.accent-green .stat-value { color: #5bd47b; }
+  .stat-card.accent-blue  .stat-value { color: #8ec5ff; }
+
+  /* ─── Section card ────────────────────────────────────────── */
+  .section-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .section-card h2 {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-card h2 .h2-sub {
+    color: #adb5bd;
+    font-weight: 400;
+    font-size: 0.8rem;
+    margin-left: 6px;
+  }
+
+  /* ─── Upload form ─────────────────────────────────────────── */
+  .upload-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 2fr auto;
+    gap: 12px;
+    align-items: end;
+  }
+  @media (max-width: 900px) {
+    .upload-form-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+    .upload-form-grid .grid-file,
+    .upload-form-grid .grid-submit {
+      grid-column: 1 / -1;
+    }
+  }
+  .form-field { display: flex; flex-direction: column; }
+  .form-field label {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .form-field select,
+  .form-field input[type="file"] {
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    border-radius: 7px;
+    padding: 9px 11px;
+    font-size: 0.86rem;
+    font-family: inherit;
+  }
+  .form-field select:focus,
+  .form-field input[type="file"]:focus {
+    outline: none;
+    border-color: #4e54ff;
+  }
+  .form-field input[type="file"]::file-selector-button {
+    background: #2a2d34;
+    border: none;
+    color: #e6e6e6;
+    padding: 5px 11px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-right: 9px;
+  }
+  .form-field input[type="file"]::file-selector-button:hover {
+    background: #3d4250;
+  }
+  .form-submit {
+    background: #28a745;
+    border: none;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 7px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+    height: fit-content;
+  }
+  .form-submit:hover { background: #2bb84d; }
+  .form-submit:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
+
+  .upload-meta {
+    margin-top: 10px;
+    color: #6c757d;
+    font-size: 0.74rem;
+    line-height: 1.5;
+    font-style: italic;
+  }
+  .upload-meta strong { color: #adb5bd; font-style: normal; }
+
+  /* ─── Recent uploads table ───────────────────────────────── */
+  .uploads-table-wrap { overflow-x: auto; }
+  .uploads-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.83rem;
+  }
+  .uploads-table th {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 10px 6px;
+    border-bottom: 1px solid #2a2d34;
+    white-space: nowrap;
+  }
+  .uploads-table th.num,
+  .uploads-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .uploads-table td {
+    padding: 9px 10px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    line-height: 1.4;
+  }
+  .uploads-table tr:last-child td { border-bottom: none; }
+  .uploads-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .uploads-table .upload-id {
+    color: #6c757d;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.78rem;
+  }
+  .uploads-table .uploader {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .uploads-table .geo {
+    color: #8ec5ff;
+    font-size: 0.78rem;
+  }
+  .uploads-table .pct-good { color: #5bd47b; font-weight: 600; }
+  .uploads-table .pct-mid  { color: #ffc870; font-weight: 600; }
+  .uploads-table .pct-bad  { color: #ff8585; font-weight: 600; }
+
+  .status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .status-badge.completed     { background: rgba(40,167,69,0.18);  color: #5bd47b; border: 1px solid rgba(40,167,69,0.45); }
+  .status-badge.partial_error { background: rgba(255,165,0,0.18);  color: #ffc870; border: 1px solid rgba(255,165,0,0.45); }
+  .status-badge.processing    { background: rgba(78,176,255,0.18); color: #8ec5ff; border: 1px solid rgba(78,176,255,0.45); }
+  .status-badge.failed        { background: rgba(255,107,107,0.18); color: #ff8585; border: 1px solid rgba(255,107,107,0.45); }
+
+  .uploads-table .view-btn {
+    display: inline-block;
+    background: #2a2d34;
+    color: #e6e6e6;
+    text-decoration: none;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid #3d4250;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .uploads-table .view-btn:hover {
+    background: #3d4250;
+    border-color: #4e54ff;
+    color: #ffffff;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 36px 16px;
+    color: #6c757d;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .empty-state .empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.5; }
+  .empty-state strong { color: #adb5bd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+
+  <!-- ============================================================
+       ADMIN NAV STRIP
+       New tab "📥 Listing Calibration" sits between Research and
+       Google Analytics. Active state on this tab.
+       ============================================================ -->
+  <div class="admin-nav-strip">
+    <span class="nav-logo">
+      <span class="nm-auto">Auto</span><span class="nm-know">Know</span><span class="nm-mus">Mus</span>
+      <span class="nm-admin">Admin</span>
+    </span>
+    <a class="nav-tab" href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
+    <a class="nav-tab" href="{{ url_for('admin_user_activity') }}">👥 Users</a>
+    <a class="nav-tab" href="{{ url_for('admin_multipliers') }}">⚙️ Multipliers</a>
+    <a class="nav-tab" href="{{ url_for('admin_feedback') }}">💬 Feedback</a>
+    <a class="nav-tab" href="{{ url_for('admin_research') }}">🔍 Research</a>
+    <a class="nav-tab active" href="{{ url_for('admin_listing_calibration') }}">📥 Listing Calibration</a>
+    <a class="nav-tab" href="{{ url_for('admin_google_analytics') }}">📈 Google Analytics</a>
+  </div>
+
+  <a href="{{ url_for('admin_dashboard') }}" class="btn-back">← Back to Admin</a>
+
+  <!-- ============================================================
+       PAGE HEADER
+       ============================================================ -->
+  <div class="page-header">
+    <h1>📥 Listing Calibration</h1>
+    <p class="page-subtitle">
+      Upload listing CSVs (CarWale exports) to populate market data.
+      Each row becomes a research_log entry tagged as <code>Listing Aggregator</code>,
+      flowing into the engine's calibration data alongside verified deals.
+    </p>
+  </div>
+
+  <!-- ============================================================
+       HELPER STRIP — quick explainer
+       ============================================================ -->
+  <div class="helper-strip">
+    <strong>How it works:</strong> Pick the state &amp; city the listings were scraped from,
+    then upload a CarWale CSV exported via Instant Data Scraper.
+    The parser auto-resolves variants via fuzzy match, drops malformed rows
+    with structured reasons, and inserts the rest into <code>research_log</code>.
+    Listings show up as data quality <strong>medium</strong> and contribute to
+    engine calibration but not to state-multiplier suggestions
+    (since they are asks, not negotiated deals).
+  </div>
+
+  <!-- ============================================================
+       FLASH MESSAGES (× dismissible)
+       ============================================================ -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, msg in messages %}
+          <div class="flash flash-{{ 'success' if category == 'success' else 'error' }}">
+            <span class="flash-msg">{{ msg }}</span>
+            <button type="button" class="flash-close" onclick="this.parentElement.style.display='none'" aria-label="Dismiss">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- ============================================================
+       STATS CARDS
+       ============================================================ -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Uploads</div>
+      <div class="stat-value">{{ '{:,}'.format(stats.total_uploads) }}</div>
+      <div class="stat-sub">CSV uploads processed</div>
+    </div>
+    <div class="stat-card accent-green">
+      <div class="stat-label">Listings in DB</div>
+      <div class="stat-value">{{ '{:,}'.format(stats.total_listings) }}</div>
+      <div class="stat-sub">research_log entries</div>
+    </div>
+    <div class="stat-card accent-blue">
+      <div class="stat-label">Unique Make + Models</div>
+      <div class="stat-value">{{ '{:,}'.format(stats.unique_make_models) }}</div>
+      <div class="stat-sub">distinct car combinations</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last Upload</div>
+      <div class="stat-value" style="font-size: 0.95rem; line-height: 1.3;">{{ stats.last_upload_display }}</div>
+      <div class="stat-sub">{{ stats.last_upload_state }}</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       UPLOAD FORM
+       state dropdown → city dropdown (cascade) → file picker
+       ============================================================ -->
+  <div class="section-card">
+    <h2>📤 Upload New CSV <span class="h2-sub">— pick state &amp; city, then choose your file</span></h2>
+
+    <form action="{{ url_for('admin_listing_calibration_upload') }}" method="POST" enctype="multipart/form-data" id="upload-form">
+      <div class="upload-form-grid">
+
+        <!-- State dropdown — alphabetical from RTO_STATES -->
+        <div class="form-field">
+          <label for="state_code">State</label>
+          <select name="state_code" id="state_code" required onchange="rebuildCityDropdown()">
+            {% for code, name in rto_states|dictsort(by='value') %}
+              <option value="{{ code }}" {% if code == default_state %}selected{% endif %}>{{ name }} ({{ code }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- City dropdown — populated by rebuildCityDropdown() based on state_code -->
+        <div class="form-field">
+          <label for="city">City</label>
+          <select name="city" id="city" required>
+            <!-- populated by JS -->
+          </select>
+        </div>
+
+        <!-- CSV file picker -->
+        <div class="form-field grid-file">
+          <label for="csv_file">CSV file <span style="color:#6c757d; font-weight:400;">(CarWale Instant Data Scraper export)</span></label>
+          <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" required>
+        </div>
+
+        <!-- Submit -->
+        <div class="form-field grid-submit">
+          <button type="submit" class="form-submit" id="upload-btn">Upload &amp; Parse</button>
+        </div>
+      </div>
+
+      <div class="upload-meta">
+        Limits per upload: <strong>{{ '{:,}'.format(max_rows) }} rows</strong> max ·
+        <strong>{{ max_file_mb }} MB</strong> max file size ·
+        Server time now: <strong>{{ now_display }}</strong>
+      </div>
+    </form>
+  </div>
+
+  <!-- ============================================================
+       RECENT UPLOADS TABLE
+       ============================================================ -->
+  <div class="section-card">
+    <h2>📜 Recent Uploads <span class="h2-sub">— latest {{ recent_uploads|length }} of last 50</span></h2>
+
+    {% if recent_uploads %}
+      <div class="uploads-table-wrap">
+        <table class="uploads-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>When</th>
+              <th>Uploader</th>
+              <th>City / State</th>
+              <th class="num">Total</th>
+              <th class="num">Parsed</th>
+              <th class="num">Skipped</th>
+              <th class="num">Inserted</th>
+              <th class="num">Success %</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in recent_uploads %}
+              {% set pct = u.parse_success_pct %}
+              <tr>
+                <td class="upload-id">#{{ u.id }}</td>
+                <td>{{ u.created_display }}</td>
+                <td class="uploader" title="{{ u.uploaded_by }}">{{ u.uploaded_by }}</td>
+                <td class="geo">{{ u.city }}, {{ u.state_code }}</td>
+                <td class="num">{{ '{:,}'.format(u.total_rows or 0) }}</td>
+                <td class="num">{{ '{:,}'.format(u.parsed_count or 0) }}</td>
+                <td class="num">{{ '{:,}'.format(u.skipped_count or 0) }}</td>
+                <td class="num">{{ '{:,}'.format(u.inserted_count or 0) }}</td>
+                <td class="num
+                  {%- if pct >= 95 %} pct-good
+                  {%- elif pct >= 80 %} pct-mid
+                  {%- else %} pct-bad
+                  {%- endif %}">{{ pct }}%</td>
+                <td><span class="status-badge {{ u.status }}">{{ u.status }}</span></td>
+                <td>
+                  <a href="{{ url_for('admin_listing_calibration_upload_detail', upload_id=u.id) }}" class="view-btn">View →</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <strong>No uploads yet.</strong><br>
+        Upload your first CarWale CSV using the form above to get started.
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  // ============================================================
+  // City dropdown cascade
+  // Rebuilds the city <select> based on the selected state.
+  // Cities are sorted alphabetically with "Other" pinned last
+  // (per the locked UI rule).
+  // ============================================================
+  const CITIES_BY_STATE = {{ cities_by_state_json | safe }};
+  const DEFAULT_CITY = {{ default_city | tojson }};
+
+  function rebuildCityDropdown() {
+    const stateSel = document.getElementById('state_code');
+    const citySel = document.getElementById('city');
+    const stateCode = stateSel.value;
+    const cities = (CITIES_BY_STATE[stateCode] || []).slice();
+
+    // Sort alphabetically, but pin "Other" to the end
+    const others = cities.filter(c => c.toLowerCase() === 'other');
+    const named = cities.filter(c => c.toLowerCase() !== 'other').sort((a, b) => a.localeCompare(b));
+    const sorted = named.concat(others);
+
+    citySel.innerHTML = '';
+    sorted.forEach(city => {
+      const opt = document.createElement('option');
+      opt.value = city;
+      opt.textContent = city;
+      if (city === DEFAULT_CITY) opt.selected = true;
+      citySel.appendChild(opt);
+    });
+
+    // If no city matched DEFAULT_CITY (e.g. user picked a different state),
+    // first city in the sorted list is automatically selected by the browser.
+  }
+
+  // Initial population on page load
+  rebuildCityDropdown();
+
+  // ============================================================
+  // Disable submit while upload is in flight (prevents double-post).
+  // The parse step can take 5-10 seconds for a 5K-row CSV, so
+  // we want the user to see clear feedback that something is happening.
+  // ============================================================
+  (function() {
+    const form = document.getElementById('upload-form');
+    const btn = document.getElementById('upload-btn');
+    if (!form || !btn) return;
+    form.addEventListener('submit', function() {
+      btn.disabled = true;
+      btn.textContent = 'Uploading… please wait';
+    });
+  })();
+</script>
+{% endblock %}
