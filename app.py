@@ -6349,7 +6349,7 @@ def admin_research_delete(entry_id):
 # Tunable thresholds — change here to adjust suggestion sensitivity
 CALIB_MIN_ENTRIES = 3                    # Need ≥3 entries before suggesting
 CALIB_OUTLIER_TRIM_PCT = 10              # Drop top/bottom 10% of ratios
-CALIB_MAX_AGE_DAYS = 90                  # Skip entries older than 90 days
+CALIB_MAX_AGE_DAYS = 180                 # v3.5.1-r6.1: Bumped 90→180 to fit forum data realities (forum posts are typically older than mystery shop visits)                  # Skip entries older than 90 days
 CALIB_MIN_GAP_PCT_TO_SUGGEST = 1.0       # Don't suggest changes <1%
 CALIB_MAX_REASONABLE_RATIO = 1.30        # Sanity: skip extreme outlier rows
 CALIB_MIN_REASONABLE_RATIO = 0.70
