@@ -67,7 +67,7 @@ PHASE_2_MIN = 3   # 3-9   listings -> phase 2 (Calibrated)
 PHASE_3_MIN = 10  # 10-19 listings -> phase 3 (Market-verified)
 PHASE_4_MIN = 20  # 20+   listings -> phase 4 (Real-Market)
 
-# Multiplier safety bounds
+# Multiplier safety bounds (final effective multiplier after gap × raw)
 MULTIPLIER_MIN = 0.50
 MULTIPLIER_MAX = 1.50
 
@@ -78,6 +78,38 @@ TRIM_MIN_SAMPLES = 5  # skip trimming when n < 5 (every point counts)
 # What we read from research_log
 LISTING_DATA_SOURCE = "Listing Aggregator"
 
+# ============================================================
+# v3.5.2 Step C: NEGOTIATION GAP CONFIG (moved from app.py)
+# ============================================================
+# The gap is a market-wide haircut applied to the calibrated multiplier
+# to convert "asking price calibration" into "expected sale price". A
+# value of 0.85 means: take the calibrated multiplier and shave off 15%
+# to account for the gap between listed asking price and actual close.
+# Bounds, defaults, and cache TTL match what app.py was using before.
+
+NEGOTIATION_GAP_DEFAULT  = 0.85
+NEGOTIATION_GAP_HARD_MIN = 0.50
+NEGOTIATION_GAP_HARD_MAX = 1.00
+NEGOTIATION_GAP_SOFT_MIN = 0.75
+NEGOTIATION_GAP_SOFT_MAX = 0.95
+
+# In-memory cache for the negotiation gap value. Avoids round-tripping
+# Supabase on every valuation. TTL = 300 seconds.
+_NEGOTIATION_GAP_CACHE = {
+    "value":      None,
+    "fetched_at": 0.0,
+}
+_NEGOTIATION_GAP_TTL = 300  # 5 minutes
+_NEGOTIATION_GAP_LOCK = None  # lazy threading.Lock() init
+
+# ============================================================
+# v3.5.2 Step C: CALIBRATION LOOKUP CACHE
+# ============================================================
+# Per-(make, model, fuel) calibration row cache, used by car_data.py
+# at valuation time. Same 5-minute TTL as the negotiation gap.
+
+_CALIBRATION_CACHE = {}     # key: (make, model, fuel) -> {"row": dict|None, "fetched_at": float}
+_CALIBRATION_TTL = 300       # 5 minutes
 
 # ============================================================
 # SUPABASE CLIENT
@@ -139,6 +171,141 @@ def _median(sorted_prices: List[int]) -> Optional[int]:
 def _clamp_multiplier(raw: float) -> float:
     """Clamp multiplier to [MULTIPLIER_MIN, MULTIPLIER_MAX]."""
     return max(MULTIPLIER_MIN, min(MULTIPLIER_MAX, raw))
+
+
+# ============================================================
+# v3.5.2 Step C: NEGOTIATION GAP HELPERS (moved from app.py)
+# ============================================================
+
+def _get_gap_lock():
+    """Lazy-init threading.Lock() to avoid import-time threading dep."""
+    global _NEGOTIATION_GAP_LOCK
+    if _NEGOTIATION_GAP_LOCK is None:
+        import threading
+        _NEGOTIATION_GAP_LOCK = threading.Lock()
+    return _NEGOTIATION_GAP_LOCK
+
+
+def load_negotiation_gap(force_refresh: bool = False) -> float:
+    """
+    Load the negotiation_gap value from app_config in Supabase.
+
+    - First call (or after TTL expiry): fetch from Supabase, cache, return.
+    - Subsequent calls within TTL: return cached value (no DB hit).
+    - On any failure (DB unreachable, row missing, value out of bounds):
+      return NEGOTIATION_GAP_DEFAULT and log a warning.
+    - force_refresh=True bypasses the cache (used by admin save handler
+      to immediately reflect a write).
+
+    Thread-safe via _NEGOTIATION_GAP_LOCK.
+    Returns: float in [NEGOTIATION_GAP_HARD_MIN, NEGOTIATION_GAP_HARD_MAX].
+    """
+    import time as _time
+    lock = _get_gap_lock()
+    now = _time.time()
+
+    with lock:
+        cached_val = _NEGOTIATION_GAP_CACHE.get("value")
+        cached_at  = _NEGOTIATION_GAP_CACHE.get("fetched_at", 0.0)
+        age = now - cached_at
+        if (not force_refresh) and (cached_val is not None) and (age < _NEGOTIATION_GAP_TTL):
+            return float(cached_val)
+
+    # Fetch outside the lock — Supabase calls take ~50-200ms.
+    try:
+        sb = _get_supabase()
+        result = (
+            sb.table("app_config")
+            .select("value")
+            .eq("key", "negotiation_gap")
+            .limit(1)
+            .execute()
+        )
+        if result.data and result.data[0].get("value") is not None:
+            raw = float(result.data[0]["value"])
+            # Defensive: clamp to hard bounds in case admin or migration
+            # somehow wrote an out-of-range value despite the CHECK constraint.
+            if raw < NEGOTIATION_GAP_HARD_MIN or raw > NEGOTIATION_GAP_HARD_MAX:
+                final_val = NEGOTIATION_GAP_DEFAULT
+            else:
+                final_val = raw
+        else:
+            final_val = NEGOTIATION_GAP_DEFAULT
+    except Exception:
+        final_val = NEGOTIATION_GAP_DEFAULT
+
+    with lock:
+        _NEGOTIATION_GAP_CACHE["value"]      = final_val
+        _NEGOTIATION_GAP_CACHE["fetched_at"] = now
+    return final_val
+
+
+def get_negotiation_gap() -> float:
+    """
+    Convenience accessor — same as load_negotiation_gap() but always
+    uses cache. This is the function callers should use unless they
+    explicitly need to force a refresh (which only the admin save
+    handler does).
+    """
+    return load_negotiation_gap(force_refresh=False)
+
+
+# ============================================================
+# v3.5.2 Step C: CALIBRATION LOOKUP (with TTL cache)
+# ============================================================
+
+def get_calibration_for_cell_cached(
+    make: str, model: str, fuel: str,
+) -> Optional[Dict]:
+    """
+    Cached version of get_calibration_for_cell() for valuation-time use.
+
+    - First call (or after TTL): fetch from Supabase, cache, return.
+    - Within TTL: return cached row (or None if previously not found).
+    - On DB failure: returns None (caller falls back to formula-only).
+
+    The cache stores BOTH hits and misses so we don't hammer Supabase
+    looking up the same uncalibrated cell on every valuation.
+
+    NOTE: Not thread-safe with a lock — last-write-wins is fine here
+    because the data is read-only at valuation time and a duplicate
+    fetch within the race window costs nothing.
+    """
+    import time as _time
+    key = (make, model, fuel)
+    now = _time.time()
+
+    cached = _CALIBRATION_CACHE.get(key)
+    if cached and (now - cached["fetched_at"] < _CALIBRATION_TTL):
+        return cached["row"]
+
+    try:
+        row = get_calibration_for_cell(make, model, fuel)
+    except Exception:
+        row = None
+
+    _CALIBRATION_CACHE[key] = {"row": row, "fetched_at": now}
+    return row
+
+
+def invalidate_calibration_cache(
+    make: Optional[str] = None,
+    model: Optional[str] = None,
+    fuel: Optional[str] = None,
+) -> None:
+    """
+    Clear cached calibration entries. Called after the calibration engine
+    finishes a run — otherwise valuations would still see old multipliers
+    until TTL expiry.
+
+    - No args: clear everything.
+    - With (make, model, fuel): clear just that cell.
+    """
+    if make is None:
+        _CALIBRATION_CACHE.clear()
+        return
+    key = (make, model, fuel)
+    _CALIBRATION_CACHE.pop(key, None)
 
 
 def _phase_for_sample_count(n: int) -> int:
