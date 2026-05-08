@@ -8068,49 +8068,9 @@ def admin_listing_calibration_upload_detail(upload_id):
         entries=entries,
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
     )
-
 # ============================================================
 # END app.py — Part 9
 # Continue with the existing `if __name__ == '__main__':` block AFTER this.
 # ============================================================
-# END app.py — Part 9
-# Continue with the existing `if __name__ == '__main__':` block AFTER this.
-# ============================================================
-
-
-# ============================================================
-# DIAGNOSTIC: Formula probe (Step 4.5 Session 2 — Step A)
-# Throwaway route. Remove after data forensics is complete.
-# ============================================================
-@app.route("/admin/formula-probe")
-@login_required
-@admin_required
-def admin_formula_probe():
-    test_cases = [
-        ("Hyundai", "Creta", "EX", "Petrol", 2023, 32000),
-        ("Hyundai", "Creta", "SX", "Petrol", 2020, 27709),
-        ("Hyundai", "Creta", "SX", "Petrol", 2018, 68000),
-        ("Mahindra", "Thar", "LX", "Diesel", 2024, 14000),
-        ("Mahindra", "Thar", "LX", "Diesel", 2022, 40786),
-    ]
-
-    rows = []
-    for make, model, variant, fuel, year, mileage in test_cases:
-        try:
-            price = compute_base_valuation(
-                make=make, model=model, variant=variant, fuel=fuel,
-                year=year, mileage=mileage,
-                condition="Good", owner="1st Owner",
-            )
-            if price is None:
-                rows.append(f"{year} {make} {model} {variant} {fuel} ({mileage:,}km) → NULL (formula returned None)")
-            else:
-                rows.append(f"{year} {make} {model} {variant} {fuel} ({mileage:,}km) → ₹{price:,}")
-        except Exception as e:
-            rows.append(f"{year} {make} {model} {variant} {fuel} ({mileage:,}km) → ERROR: {type(e).__name__}: {e}")
-
-    return "<pre style='font-family:monospace;font-size:14px;padding:20px;'>" + "\n".join(rows) + "</pre>"
-
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
