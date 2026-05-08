@@ -8070,23 +8070,6 @@ def admin_listing_calibration_upload_detail(upload_id):
     )
 
 # ============================================================
-# TEMPORARY — Step 4.5 Session 1 calibration engine smoke test.
-# DELETE THIS ROUTE after verification passes.
-# Hits the calibration engine and returns the raw run summary as JSON.
-# ============================================================
-@app.route('/admin/test-calibration')
-@login_required
-@admin_required
-def admin_test_calibration():
-    """One-off test endpoint — runs full calibration sweep, returns JSON."""
-    from calibration_engine import run_calibration
-    user = current_user()
-    admin_email = (user or {}).get('email') if user else 'admin_test'
-    result = run_calibration(run_by=admin_email, run_type='manual')
-    return jsonify(result)
-
-
-# ============================================================
 # END app.py — Part 9
 # Continue with the existing `if __name__ == '__main__':` block AFTER this.
 # ============================================================
