@@ -410,4 +410,119 @@
       </div>
 
       <div class="cc-form-row">
-        <label for="not
+        <label for="note">Note <span style="color:#6c757d; font-weight:400;">(optional, max 500 chars)</span></label>
+        <textarea
+          name="note"
+          id="note"
+          rows="2"
+          maxlength="500"
+          placeholder="Why are you changing this? (e.g. 'Calibrated against 27 listings showing avg 12% closing gap')"
+        ></textarea>
+        <div class="help">
+          Notes appear in the audit log below and help future-you remember why each change was made.
+        </div>
+      </div>
+
+      <div class="cc-form-actions">
+        <button type="submit" class="cc-btn-save">Save</button>
+        <span class="hint">Saving will force-refresh the in-memory cache immediately.</span>
+      </div>
+    </form>
+  </div>
+
+  <!-- Audit history -->
+  <div class="cc-audit-card">
+    <h2 class="cc-audit-title">
+      📋 Change History
+      <span class="sub">last {{ audit_rows | length }} change{{ '' if audit_rows | length == 1 else 's' }}</span>
+    </h2>
+
+    {% if audit_rows %}
+      <table class="cc-audit-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th class="num">From</th>
+            <th></th>
+            <th class="num">To</th>
+            <th class="num">% Change</th>
+            <th>Changed by</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ar in audit_rows %}
+            <tr>
+              <td class="when">{{ ar.changed_at_display or '—' }}</td>
+              <td class="num">
+                {% if ar.old_value is not none %}{{ '%.4f' | format(ar.old_value | float) }}{% else %}—{% endif %}
+              </td>
+              <td class="arrow">→</td>
+              <td class="num">
+                {% if ar.new_value is not none %}{{ '%.4f' | format(ar.new_value | float) }}{% else %}—{% endif %}
+              </td>
+              <td class="num">
+                {% if ar.pct_change is not none %}
+                  {% if ar.pct_change > 0 %}
+                    <span class="pct-up">+{{ ar.pct_change }}%</span>
+                  {% elif ar.pct_change < 0 %}
+                    <span class="pct-down">{{ ar.pct_change }}%</span>
+                  {% else %}
+                    <span class="pct-zero">0%</span>
+                  {% endif %}
+                {% else %}
+                  <span class="pct-zero">—</span>
+                {% endif %}
+              </td>
+              <td class="who">{{ ar.changed_by or 'unknown' }}</td>
+              <td>
+                {% if ar.note %}
+                  <span class="note">{{ ar.note }}</span>
+                {% else %}
+                  <span class="note note-empty">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="cc-audit-empty">
+        No changes yet. Once you update the negotiation gap, every change is logged here.
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  // Live soft-warning hint as the user types
+  (function() {
+    const input = document.getElementById('negotiation_gap');
+    const warn  = document.getElementById('cc-soft-warn');
+    if (!input || !warn) return;
+
+    const SOFT_MIN = {{ soft_min }};
+    const SOFT_MAX = {{ soft_max }};
+    const HARD_MIN = {{ hard_min }};
+    const HARD_MAX = {{ hard_max }};
+
+    function check() {
+      const v = parseFloat(input.value);
+      if (isNaN(v)) {
+        warn.classList.remove('show');
+        return;
+      }
+      // Only show soft-warn if within hard bounds but outside soft bounds
+      if (v >= HARD_MIN && v <= HARD_MAX && (v < SOFT_MIN || v > SOFT_MAX)) {
+        warn.classList.add('show');
+      } else {
+        warn.classList.remove('show');
+      }
+    }
+    input.addEventListener('input', check);
+    input.addEventListener('blur',  check);
+    check();  // run once on load
+  })();
+</script>
+{% endblock %}
