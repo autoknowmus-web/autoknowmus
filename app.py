@@ -8043,7 +8043,7 @@ def admin_listing_calibration_upload():
 # ROUTE: Drilldown — GET /admin/listing-calibration/uploads/<id>
 # ============================================================
 
-@app.route('/admin/listing-calibration/uploads/<int:upload_id>')
+@app.route('/admin/listing-calibration/uploads/<upload_id>')
 @login_required
 @admin_required
 def admin_listing_calibration_upload_detail(upload_id):
