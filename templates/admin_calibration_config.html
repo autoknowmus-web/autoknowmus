@@ -1,0 +1,413 @@
+{% extends "layout.html" %}
+{% block title %}Calibration Config — Admin — AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cc-wrap { padding: 14px 30px 30px; max-width: 1100px; margin: 0 auto; }
+
+  /* Header */
+  .cc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+  .cc-title { color: #fff; font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: 10px; margin: 0; }
+  .cc-title .cc-pill {
+    background: rgba(255,165,0,0.16);
+    color: #ffa500;
+    border: 1px solid rgba(255,165,0,0.45);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .cc-meta { color: #adb5bd; font-size: 0.82rem; font-style: italic; }
+
+  /* Flash messages — orange success, red error, both with × close */
+  .cc-flash {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 11px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+  .cc-flash.success {
+    background: linear-gradient(135deg, #2a2118 0%, #14171d 100%);
+    border: 1px solid #ffa500;
+    color: #ffd9a0;
+  }
+  .cc-flash.error {
+    background: linear-gradient(135deg, #2a1818 0%, #14171d 100%);
+    border: 1px solid #ff6b6b;
+    color: #ffb8b8;
+  }
+  .cc-flash .cc-flash-msg { flex: 1; }
+  .cc-flash .cc-flash-close {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    opacity: 0.8;
+  }
+  .cc-flash .cc-flash-close:hover { opacity: 1; }
+
+  /* Current value card */
+  .cc-current {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+  .cc-current-label {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+  }
+  .cc-current-value {
+    color: #5bd47b;
+    font-size: 2.4rem;
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 8px;
+  }
+  .cc-current-haircut {
+    color: #ffa500;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .cc-current-meta {
+    color: #6c757d;
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+  .cc-current-meta strong { color: #adb5bd; font-weight: 600; }
+
+  /* Bounds summary strip */
+  .cc-bounds {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 700px) { .cc-bounds { grid-template-columns: repeat(2, 1fr); } }
+  .cc-bounds-cell {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 8px;
+    padding: 9px 12px;
+    text-align: center;
+  }
+  .cc-bounds-cell .lbl {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .cc-bounds-cell .val {
+    color: #e6e6e6;
+    font-size: 0.95rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .cc-bounds-cell.hard .val { color: #ff8585; }
+  .cc-bounds-cell.soft .val { color: #ffc870; }
+  .cc-bounds-cell.default .val { color: #5bd47b; }
+  .cc-bounds-cell.cache .val { color: #8ec5ff; }
+
+  /* Edit form card */
+  .cc-form-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+  }
+  .cc-form-title {
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cc-form-row { margin-bottom: 14px; }
+  .cc-form-row label {
+    display: block;
+    color: #adb5bd;
+    font-size: 0.82rem;
+    margin-bottom: 5px;
+    font-weight: 600;
+  }
+  .cc-form-row label .req { color: #ff6b6b; }
+  .cc-form-row .help {
+    color: #6c757d;
+    font-size: 0.74rem;
+    font-style: italic;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .cc-form-row input[type="text"],
+  .cc-form-row input[type="number"],
+  .cc-form-row textarea {
+    width: 100%;
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    border-radius: 7px;
+    padding: 9px 12px;
+    font-size: 0.92rem;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+  .cc-form-row input[type="text"]:focus,
+  .cc-form-row input[type="number"]:focus,
+  .cc-form-row textarea:focus {
+    outline: none;
+    border-color: #28a745;
+  }
+  .cc-form-row textarea { resize: vertical; min-height: 60px; }
+
+  /* Soft warning band shown when value is outside [soft_min, soft_max] */
+  .cc-soft-warn {
+    display: none;
+    background: rgba(255,165,0,0.08);
+    border: 1px solid rgba(255,165,0,0.35);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 8px;
+    color: #ffc870;
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+  .cc-soft-warn.show { display: block; }
+
+  .cc-form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 4px;
+  }
+  .cc-btn-save {
+    background: #28a745;
+    color: #fff;
+    border: none;
+    padding: 9px 20px;
+    border-radius: 7px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .cc-btn-save:hover { background: #2bb84d; }
+  .cc-form-actions .hint {
+    color: #6c757d;
+    font-size: 0.76rem;
+    font-style: italic;
+  }
+
+  /* Audit table */
+  .cc-audit-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 18px 22px;
+  }
+  .cc-audit-title {
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cc-audit-title .sub {
+    color: #6c757d;
+    font-size: 0.78rem;
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  .cc-audit-empty {
+    color: #6c757d;
+    font-size: 0.85rem;
+    font-style: italic;
+    text-align: center;
+    padding: 20px 0;
+  }
+  .cc-audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+  }
+  .cc-audit-table th {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    text-align: left;
+    padding: 8px 10px 6px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .cc-audit-table th.num,
+  .cc-audit-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .cc-audit-table td {
+    padding: 9px 10px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: top;
+  }
+  .cc-audit-table tr:last-child td { border-bottom: none; }
+  .cc-audit-table .arrow { color: #6c757d; padding: 0 4px; }
+  .cc-audit-table .pct-up { color: #5bd47b; font-weight: 600; }
+  .cc-audit-table .pct-down { color: #ff8585; font-weight: 600; }
+  .cc-audit-table .pct-zero { color: #6c757d; }
+  .cc-audit-table .who {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    word-break: break-all;
+  }
+  .cc-audit-table .when {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+  .cc-audit-table .note {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    font-style: italic;
+    line-height: 1.4;
+  }
+  .cc-audit-table .note-empty { color: #6c757d; }
+
+  @media (max-width: 700px) {
+    .cc-audit-table th:nth-child(4),
+    .cc-audit-table td:nth-child(4),
+    .cc-audit-table th:nth-child(6),
+    .cc-audit-table td:nth-child(6) { display: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cc-wrap">
+
+  {# Back button — standardized .btn-back class per locked UI rules #}
+  <a href="{{ url_for('admin_index') }}" class="btn-back">← Back to Admin</a>
+
+  <!-- Page header -->
+  <div class="cc-header">
+    <h1 class="cc-title">
+      ⚙️ Calibration Config
+      <span class="cc-pill">Admin</span>
+    </h1>
+    <div class="cc-meta">Generated {{ now_display }}</div>
+  </div>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+        <div class="cc-flash {{ 'error' if category == 'error' else 'success' }}">
+          <span class="cc-flash-msg">{{ msg }}</span>
+          <button type="button" class="cc-flash-close" onclick="this.parentElement.style.display='none'" aria-label="Close">×</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <!-- Current value card -->
+  <div class="cc-current">
+    <div class="cc-current-label">Current Negotiation Gap</div>
+    {% if current_row and current_row.value is not none %}
+      {% set cur_val = current_row.value | float %}
+      <div class="cc-current-value">{{ '%.4f' | format(cur_val) }}</div>
+      <div class="cc-current-haircut">
+        ≈ {{ '%.1f' | format((1 - cur_val) * 100) }}% haircut applied to calibrated multipliers
+      </div>
+      <div class="cc-current-meta">
+        <strong>Last updated:</strong>
+        {{ current_row.updated_at_display or '—' }}
+        {% if current_row.updated_by %}
+          by <strong>{{ current_row.updated_by }}</strong>
+        {% endif %}
+        {% if current_row.description %}
+          <br><br>{{ current_row.description }}
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="cc-current-value" style="color:#ff8585;">— missing —</div>
+      <div class="cc-current-meta">
+        No <code>negotiation_gap</code> row found in <code>app_config</code>.
+        Re-run the migration to seed the row.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Bounds summary strip -->
+  <div class="cc-bounds">
+    <div class="cc-bounds-cell hard">
+      <div class="lbl">Hard Range</div>
+      <div class="val">{{ '%.2f' | format(hard_min) }} – {{ '%.2f' | format(hard_max) }}</div>
+    </div>
+    <div class="cc-bounds-cell soft">
+      <div class="lbl">Typical Range</div>
+      <div class="val">{{ '%.2f' | format(soft_min) }} – {{ '%.2f' | format(soft_max) }}</div>
+    </div>
+    <div class="cc-bounds-cell default">
+      <div class="lbl">Default</div>
+      <div class="val">{{ '%.2f' | format(default_value) }}</div>
+    </div>
+    <div class="cc-bounds-cell cache">
+      <div class="lbl">Cache (live)</div>
+      <div class="val">{{ '%.4f' | format(cache_value) }}</div>
+    </div>
+  </div>
+
+  <!-- Edit form -->
+  <div class="cc-form-card">
+    <h2 class="cc-form-title">✏️ Update Negotiation Gap</h2>
+
+    <form method="POST" action="{{ url_for('admin_calibration_config') }}" id="cc-form">
+      <div class="cc-form-row">
+        <label for="negotiation_gap">
+          New value <span class="req">*</span>
+        </label>
+        <input
+          type="number"
+          step="0.0001"
+          min="{{ hard_min }}"
+          max="{{ hard_max }}"
+          name="negotiation_gap"
+          id="negotiation_gap"
+          placeholder="e.g. 0.85"
+          required
+          value="{% if current_row and current_row.value is not none %}{{ '%.4f' | format(current_row.value | float) }}{% else %}{{ '%.2f' | format(default_value) }}{% endif %}"
+        >
+        <div class="help">
+          Hard bounds [{{ '%.2f' | format(hard_min) }}, {{ '%.2f' | format(hard_max) }}] are enforced — values outside this range are rejected.
+          Values outside the typical range [{{ '%.2f' | format(soft_min) }}, {{ '%.2f' | format(soft_max) }}] will save with a warning.
+          Stored to 4 decimals (NUMERIC(5,4)).
+        </div>
+        <div class="cc-soft-warn" id="cc-soft-warn">
+          ⚠️ This value is outside the typical range. Save will succeed but it will flag the change for review.
+        </div>
+      </div>
+
+      <div class="cc-form-row">
+        <label for="not
