@@ -4422,6 +4422,8 @@ def _fetch_admin_index_counts():
         'research_suggestions': 0,
         'research_total':       0,
         'research_included':    0,
+        # v3.5.2 Step B: negotiation gap value (read from cache)
+        'negotiation_gap':      None,
     }
 
     # ---- Data Health: guardrail_flags + deals_30d ----
@@ -4555,6 +4557,12 @@ def _fetch_admin_index_counts():
             )
     except Exception as e:
         app.logger.warning(f"admin_index: research_suggestions count failed: {e}")
+
+    # ---- v3.5.2 Step B: Calibration Config tile — current negotiation gap ----
+    try:
+        counts['negotiation_gap'] = load_negotiation_gap()
+    except Exception as e:
+        app.logger.warning(f"admin_index: negotiation_gap fetch failed: {e}")
 
     return counts
 
