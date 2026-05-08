@@ -344,6 +344,28 @@
       <div class="tool-arrow">Open →</div>
     </a>
 
+    <!-- 7. Calibration Config (v3.5.2 Step B) -->
+    <a href="{{ url_for('admin_calibration_config') }}" class="tool-card accent-orange">
+      <div class="tool-card-head">
+        <span class="tool-icon">⚙️</span>
+        {% if tool_counts.negotiation_gap is not none %}
+          <span class="tool-count">gap {{ '%.2f' | format(tool_counts.negotiation_gap) }}</span>
+        {% else %}
+          <span class="tool-count has-flagged">unset</span>
+        {% endif %}
+      </div>
+      <h2 class="tool-name">Calibration Config</h2>
+      <p class="tool-desc">Negotiation gap haircut applied to calibrated multipliers; bounds &amp; audit history.</p>
+      <div class="tool-meta">
+        {% if tool_counts.negotiation_gap is not none %}
+          ≈ {{ '%.1f' | format((1 - tool_counts.negotiation_gap) * 100) }}% market haircut
+        {% else %}
+          not configured
+        {% endif %}
+      </div>
+      <div class="tool-arrow">Open →</div>
+    </a>
+
   </div>
 
   <div class="admin-footer">
