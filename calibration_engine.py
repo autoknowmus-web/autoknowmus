@@ -87,15 +87,18 @@ _supabase_client: Optional[Client] = None
 
 
 def _get_supabase() -> Client:
-    """Lazy-init Supabase client. Reads from env vars (same as app.py)."""
+    """
+    Lazy-init Supabase client. Uses the SAME env var names as app.py:
+      SUPABASE_URL, SUPABASE_SECRET_KEY
+    """
     global _supabase_client
     if _supabase_client is None:
         url = os.environ.get("SUPABASE_URL")
-        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+        key = os.environ.get("SUPABASE_SECRET_KEY")
         if not url or not key:
             raise RuntimeError(
                 "Supabase credentials missing. Set SUPABASE_URL and "
-                "SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_KEY) environment vars."
+                "SUPABASE_SECRET_KEY environment vars (same as app.py)."
             )
         _supabase_client = create_client(url, key)
     return _supabase_client
