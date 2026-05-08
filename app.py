@@ -4703,7 +4703,7 @@ def _compute_user_activity_rows():
 
     try:
         r = (supabase.table('alert_subscriptions')
-             .select('user_id')xx`
+             .select('user_id')
              .eq('active', True)
              .gt('expires_at', now.isoformat())
              .execute())
