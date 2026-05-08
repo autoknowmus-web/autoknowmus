@@ -34,6 +34,18 @@ from car_data import (
     get_listings_for_car,  # v3.0: listings cache for market engine routing
 )
 import car_data as _car_data_module
+# v3.5.2 Step C: negotiation gap config + helpers (moved out of app.py)
+# These names used to live in app.py Part 1. They now live in calibration_engine.py
+# so car_data.py can import them without a circular dependency on app.py.
+from calibration_engine import (
+    NEGOTIATION_GAP_DEFAULT,
+    NEGOTIATION_GAP_HARD_MIN,
+    NEGOTIATION_GAP_HARD_MAX,
+    NEGOTIATION_GAP_SOFT_MIN,
+    NEGOTIATION_GAP_SOFT_MAX,
+    load_negotiation_gap,
+    get_negotiation_gap,
+)
 
 # v3.0: Market pricing engine — invoked by router when N>=5 listings available.
 # Falls back to depreciation engine (compute_base_valuation) otherwise.
@@ -394,27 +406,14 @@ _STATE_MULTIPLIER_CACHE = {
 STATE_MULTIPLIER_CACHE_TTL = 300  # seconds (5 min)
 
 # ============================================================
-# v3.5.2 Step B: NEGOTIATION GAP — applied to calibrated multipliers.
-# Step A finding: 27 of 27 listings in our calibration corpus had
-# negotiated_price_inr = NULL. Every multiplier is built on asking
-# prices, not closes. Default 0.85 = 15% haircut to bring multipliers
-# in line with actual transaction prices.
-#
-# Read from app_config table. Cached in-memory for 5 min (same pattern
-# as state multipliers). Editable via /admin/calibration-config.
+# v3.5.2 Step C: NEGOTIATION GAP CONFIG (moved to calibration_engine.py)
 # ============================================================
-NEGOTIATION_GAP_DEFAULT = 0.85
-NEGOTIATION_GAP_HARD_MIN = 0.50  # DB CHECK constraint also enforces this
-NEGOTIATION_GAP_HARD_MAX = 1.00  # DB CHECK constraint also enforces this
-NEGOTIATION_GAP_SOFT_MIN = 0.75  # Outside [SOFT_MIN, SOFT_MAX] = warn admin
-NEGOTIATION_GAP_SOFT_MAX = 0.95
-
-_NEGOTIATION_GAP_CACHE = {
-    'value': None,        # float | None
-    'last_loaded': None,  # datetime
-    'lock': threading.Lock(),
-}
-NEGOTIATION_GAP_CACHE_TTL = 300  # seconds (5 min)
+# The constants and helpers (NEGOTIATION_GAP_DEFAULT, NEGOTIATION_GAP_HARD_MIN,
+# NEGOTIATION_GAP_HARD_MAX, NEGOTIATION_GAP_SOFT_MIN, NEGOTIATION_GAP_SOFT_MAX,
+# load_negotiation_gap, get_negotiation_gap) now live in calibration_engine.py
+# so car_data.py can import them without circular dependency on app.py.
+# Imported at the top of this file. Original implementation history is in the
+# Step B commits. See calibration_engine.py for the live code.
 
 def _format_txn_date(iso_str):
     if not iso_str:
@@ -561,71 +560,15 @@ def normalize_city(city, state_code):
 
 
 # ============================================================
-# v3.5.2 Step B: NEGOTIATION GAP HELPERS
+# v3.5.2 Step C: NEGOTIATION GAP HELPERS (moved to calibration_engine.py)
 # ============================================================
-
-def load_negotiation_gap(force_refresh=False):
-    """
-    Load negotiation_gap from app_config into in-memory cache.
-    Refreshes every NEGOTIATION_GAP_CACHE_TTL seconds.
-    Thread-safe.
-
-    Returns float. On any failure (DB down, missing row, invalid value),
-    returns NEGOTIATION_GAP_DEFAULT (0.85) so the engine never breaks
-    just because the config table has an issue.
-    """
-    cache = _NEGOTIATION_GAP_CACHE
-    with cache['lock']:
-        now = datetime.utcnow()
-        last = cache.get('last_loaded')
-        if (not force_refresh
-                and last
-                and cache['value'] is not None
-                and (now - last).total_seconds() < NEGOTIATION_GAP_CACHE_TTL):
-            return cache['value']
-
-        try:
-            r = (supabase.table('app_config')
-                 .select('value')
-                 .eq('key', 'negotiation_gap')
-                 .limit(1)
-                 .execute())
-            if r.data and r.data[0].get('value') is not None:
-                v = float(r.data[0]['value'])
-                # Defensive bounds check — DB CHECK constraint should
-                # have already rejected anything out of range, but if
-                # it somehow wasn't, clamp to safe range.
-                v = max(NEGOTIATION_GAP_HARD_MIN,
-                        min(NEGOTIATION_GAP_HARD_MAX, v))
-                cache['value'] = v
-                cache['last_loaded'] = now
-                return v
-            else:
-                app.logger.warning(
-                    "load_negotiation_gap: no row found in app_config, "
-                    "using default %s", NEGOTIATION_GAP_DEFAULT
-                )
-                cache['value'] = NEGOTIATION_GAP_DEFAULT
-                cache['last_loaded'] = now
-                return NEGOTIATION_GAP_DEFAULT
-        except Exception as e:
-            app.logger.error(f"load_negotiation_gap failed: {e}")
-            # Don't update last_loaded on failure — let next request retry.
-            # Return cached value if we have one, else default.
-            if cache.get('value') is not None:
-                return cache['value']
-            return NEGOTIATION_GAP_DEFAULT
-
-
-def get_negotiation_gap():
-    """Convenience wrapper — same call shape as get_state_multiplier()."""
-    return load_negotiation_gap()
-
+# load_negotiation_gap() and get_negotiation_gap() now live in
+# calibration_engine.py — imported at the top of this file. Same behavior,
+# same cache, same TTL. App.py callers (admin_calibration_config save handler,
+# admin_index counts) continue to work unchanged.
 
 # ============================================================
 # v3.5 GEO-AWARE DEAL/LISTING FETCHING
-
-
 # ============================================================
 # v3.5 GEO-AWARE DEAL/LISTING FETCHING
 # State derived from rto_code (first 2 chars). City stored separately.
@@ -4760,7 +4703,7 @@ def _compute_user_activity_rows():
 
     try:
         r = (supabase.table('alert_subscriptions')
-             .select('user_id')
+             .select('user_id')xx`
              .eq('active', True)
              .gt('expires_at', now.isoformat())
              .execute())
