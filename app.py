@@ -393,6 +393,28 @@ _STATE_MULTIPLIER_CACHE = {
 }
 STATE_MULTIPLIER_CACHE_TTL = 300  # seconds (5 min)
 
+# ============================================================
+# v3.5.2 Step B: NEGOTIATION GAP — applied to calibrated multipliers.
+# Step A finding: 27 of 27 listings in our calibration corpus had
+# negotiated_price_inr = NULL. Every multiplier is built on asking
+# prices, not closes. Default 0.85 = 15% haircut to bring multipliers
+# in line with actual transaction prices.
+#
+# Read from app_config table. Cached in-memory for 5 min (same pattern
+# as state multipliers). Editable via /admin/calibration-config.
+# ============================================================
+NEGOTIATION_GAP_DEFAULT = 0.85
+NEGOTIATION_GAP_HARD_MIN = 0.50  # DB CHECK constraint also enforces this
+NEGOTIATION_GAP_HARD_MAX = 1.00  # DB CHECK constraint also enforces this
+NEGOTIATION_GAP_SOFT_MIN = 0.75  # Outside [SOFT_MIN, SOFT_MAX] = warn admin
+NEGOTIATION_GAP_SOFT_MAX = 0.95
+
+_NEGOTIATION_GAP_CACHE = {
+    'value': None,        # float | None
+    'last_loaded': None,  # datetime
+    'lock': threading.Lock(),
+}
+NEGOTIATION_GAP_CACHE_TTL = 300  # seconds (5 min)
 
 def _format_txn_date(iso_str):
     if not iso_str:
@@ -536,6 +558,72 @@ def normalize_city(city, state_code):
         cities = INDIAN_CITIES_BY_STATE.get(state_code, [DEFAULT_CITY])
         return cities[0] if cities else DEFAULT_CITY
     return c[:100]  # cap to schema limit
+
+
+# ============================================================
+# v3.5.2 Step B: NEGOTIATION GAP HELPERS
+# ============================================================
+
+def load_negotiation_gap(force_refresh=False):
+    """
+    Load negotiation_gap from app_config into in-memory cache.
+    Refreshes every NEGOTIATION_GAP_CACHE_TTL seconds.
+    Thread-safe.
+
+    Returns float. On any failure (DB down, missing row, invalid value),
+    returns NEGOTIATION_GAP_DEFAULT (0.85) so the engine never breaks
+    just because the config table has an issue.
+    """
+    cache = _NEGOTIATION_GAP_CACHE
+    with cache['lock']:
+        now = datetime.utcnow()
+        last = cache.get('last_loaded')
+        if (not force_refresh
+                and last
+                and cache['value'] is not None
+                and (now - last).total_seconds() < NEGOTIATION_GAP_CACHE_TTL):
+            return cache['value']
+
+        try:
+            r = (supabase.table('app_config')
+                 .select('value')
+                 .eq('key', 'negotiation_gap')
+                 .limit(1)
+                 .execute())
+            if r.data and r.data[0].get('value') is not None:
+                v = float(r.data[0]['value'])
+                # Defensive bounds check — DB CHECK constraint should
+                # have already rejected anything out of range, but if
+                # it somehow wasn't, clamp to safe range.
+                v = max(NEGOTIATION_GAP_HARD_MIN,
+                        min(NEGOTIATION_GAP_HARD_MAX, v))
+                cache['value'] = v
+                cache['last_loaded'] = now
+                return v
+            else:
+                app.logger.warning(
+                    "load_negotiation_gap: no row found in app_config, "
+                    "using default %s", NEGOTIATION_GAP_DEFAULT
+                )
+                cache['value'] = NEGOTIATION_GAP_DEFAULT
+                cache['last_loaded'] = now
+                return NEGOTIATION_GAP_DEFAULT
+        except Exception as e:
+            app.logger.error(f"load_negotiation_gap failed: {e}")
+            # Don't update last_loaded on failure — let next request retry.
+            # Return cached value if we have one, else default.
+            if cache.get('value') is not None:
+                return cache['value']
+            return NEGOTIATION_GAP_DEFAULT
+
+
+def get_negotiation_gap():
+    """Convenience wrapper — same call shape as get_state_multiplier()."""
+    return load_negotiation_gap()
+
+
+# ============================================================
+# v3.5 GEO-AWARE DEAL/LISTING FETCHING
 
 
 # ============================================================
@@ -5672,6 +5760,186 @@ def admin_multipliers():
         first_name=firstname_filter(admin.get('name')),
         rows=rows,
         audit_rows=audit_rows,
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
+
+
+# ============================================================
+# v3.5.2 Step B: ADMIN — CALIBRATION CONFIG (negotiation gap editor)
+# ============================================================
+
+@app.route('/admin/calibration-config', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_calibration_config():
+    """
+    View + edit the negotiation_gap in app_config.
+
+    GET: shows current value, hard/soft bounds, and recent audit history.
+    POST: validates new value, writes to app_config, logs to audit table,
+          force-refreshes the in-memory cache.
+    """
+    admin = current_user()
+
+    if request.method == 'POST':
+        new_value_raw = (request.form.get('negotiation_gap') or '').strip()
+        note = (request.form.get('note') or '').strip()[:500] or None
+
+        # --- Validate input ---
+        if not new_value_raw:
+            flash('Negotiation gap value is required.', 'error')
+            return redirect(url_for('admin_calibration_config'))
+
+        try:
+            new_value = float(new_value_raw)
+        except (ValueError, TypeError):
+            flash('Negotiation gap must be a number (e.g. 0.85).', 'error')
+            return redirect(url_for('admin_calibration_config'))
+
+        # Hard bounds (rejected outright)
+        if (new_value < NEGOTIATION_GAP_HARD_MIN
+                or new_value > NEGOTIATION_GAP_HARD_MAX):
+            flash(
+                f'Value {new_value} is outside the allowed range '
+                f'[{NEGOTIATION_GAP_HARD_MIN}, {NEGOTIATION_GAP_HARD_MAX}]. '
+                f'Not updated.',
+                'error'
+            )
+            return redirect(url_for('admin_calibration_config'))
+
+        # Round to 4 decimals to match NUMERIC(5,4) column precision
+        new_value = round(new_value, 4)
+
+        # --- Read current value (for audit) ---
+        try:
+            r = (supabase.table('app_config')
+                 .select('id, value')
+                 .eq('key', 'negotiation_gap')
+                 .limit(1)
+                 .execute())
+            if not r.data:
+                flash('app_config row missing — re-run the migration.', 'error')
+                return redirect(url_for('admin_calibration_config'))
+            row_id = r.data[0]['id']
+            old_value = float(r.data[0]['value']) if r.data[0].get('value') is not None else None
+        except Exception as e:
+            app.logger.error(f"admin_calibration_config read-current failed: {e}")
+            flash(f'Could not read current value: {e}', 'error')
+            return redirect(url_for('admin_calibration_config'))
+
+        # No-op short circuit
+        if old_value is not None and abs(old_value - new_value) < 1e-9:
+            flash('No change — value is already set to that.', 'success')
+            return redirect(url_for('admin_calibration_config'))
+
+        # --- Update app_config ---
+        try:
+            (supabase.table('app_config')
+             .update({
+                 'value': new_value,
+                 'updated_at': datetime.utcnow().isoformat(),
+                 'updated_by': admin.get('email'),
+             })
+             .eq('id', row_id)
+             .execute())
+        except Exception as e:
+            app.logger.error(f"admin_calibration_config update failed: {e}")
+            flash(f'Update failed: {e}', 'error')
+            return redirect(url_for('admin_calibration_config'))
+
+        # --- Write audit row (non-fatal if it fails) ---
+        try:
+            (supabase.table('app_config_audit')
+             .insert({
+                 'key': 'negotiation_gap',
+                 'old_value': old_value,
+                 'new_value': new_value,
+                 'changed_by': admin.get('email') or 'unknown',
+                 'changed_at': datetime.utcnow().isoformat(),
+                 'note': note,
+             })
+             .execute())
+        except Exception as e:
+            app.logger.warning(f"admin_calibration_config audit insert failed: {e}")
+
+        # --- Force-refresh in-memory cache ---
+        load_negotiation_gap(force_refresh=True)
+
+        # --- Soft-warning flash (within hard range, but unusual) ---
+        soft_warn = (new_value < NEGOTIATION_GAP_SOFT_MIN
+                     or new_value > NEGOTIATION_GAP_SOFT_MAX)
+        if soft_warn:
+            flash(
+                f'⚠️ Saved: negotiation_gap = {new_value:.4f} '
+                f'(was {old_value:.4f} if old_value is not None else "—"). '
+                f'Note: this is OUTSIDE the typical range '
+                f'[{NEGOTIATION_GAP_SOFT_MIN}, {NEGOTIATION_GAP_SOFT_MAX}]. '
+                f'Confirm this is intentional.',
+                'success'
+            )
+        else:
+            old_disp = f'{old_value:.4f}' if old_value is not None else '—'
+            flash(
+                f'✅ Saved: negotiation_gap updated from {old_disp} '
+                f'to {new_value:.4f}.',
+                'success'
+            )
+
+        return redirect(url_for('admin_calibration_config'))
+
+    # ============ GET ============
+
+    # Read current value
+    current_row = None
+    try:
+        r = (supabase.table('app_config')
+             .select('*')
+             .eq('key', 'negotiation_gap')
+             .limit(1)
+             .execute())
+        if r.data:
+            current_row = r.data[0]
+            current_row['updated_at_display'] = _format_txn_date(
+                current_row.get('updated_at')
+            )
+    except Exception as e:
+        app.logger.error(f"admin_calibration_config GET read failed: {e}")
+        flash(f'Could not load current config: {e}', 'error')
+
+    # Read audit history (last 50)
+    audit_rows = []
+    try:
+        r = (supabase.table('app_config_audit')
+             .select('*')
+             .eq('key', 'negotiation_gap')
+             .order('changed_at', desc=True)
+             .limit(50)
+             .execute())
+        audit_rows = r.data or []
+        for ar in audit_rows:
+            ar['changed_at_display'] = _format_txn_date(ar.get('changed_at'))
+            # Compute pct change for display
+            old_v = ar.get('old_value')
+            new_v = ar.get('new_value')
+            if old_v is not None and new_v is not None and old_v != 0:
+                ar['pct_change'] = round(((new_v - old_v) / old_v) * 100, 2)
+            else:
+                ar['pct_change'] = None
+    except Exception as e:
+        app.logger.warning(f"admin_calibration_config audit read failed: {e}")
+
+    return render_template(
+        'admin_calibration_config.html',
+        user=admin,
+        first_name=firstname_filter(admin.get('name')),
+        current_row=current_row,
+        audit_rows=audit_rows,
+        hard_min=NEGOTIATION_GAP_HARD_MIN,
+        hard_max=NEGOTIATION_GAP_HARD_MAX,
+        soft_min=NEGOTIATION_GAP_SOFT_MIN,
+        soft_max=NEGOTIATION_GAP_SOFT_MAX,
+        default_value=NEGOTIATION_GAP_DEFAULT,
+        cache_value=load_negotiation_gap(),
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
     )
 
