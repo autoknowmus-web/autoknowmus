@@ -1105,33 +1105,79 @@ def get_listings_freshness_status() -> Dict:
 # ============================================================
 
 def compute_base_valuation(make, model, variant, fuel, year, mileage, condition, owner):
-    """Pure formula-based valuation. Returns int rupees or None."""
-    base = get_variant_base_price(make, model, variant, fuel)
-    if base is None:
-        return None
+  """
+  Hybrid formula + calibration valuation. Returns int rupees or None.
 
-    age = max(0, CURRENT_YEAR - int(year))
-    age = min(age, 15)
+  v3.5.2 Step C: When a calibrated multiplier exists for (make, model, fuel),
+  apply it (with the negotiation gap haircut) to the formula price. When no
+  calibration exists, behavior is bit-for-bit identical to the pre-Step-C
+  formula.
 
-    retention = get_retention_for_age(age)
-    price = base * retention
+  Math:
+    formula_price = base * retention * mileage_penalty * condition * owner * fuel
+    if calibration exists:
+      gap = get_negotiation_gap()                          # e.g. 0.85
+      raw_multiplier = calibration.calibration_multiplier  # e.g. 1.33
+      effective = clamp(raw_multiplier * gap, 0.50, 1.50)  # e.g. 1.13
+      final_price = formula_price * effective
+    else:
+      final_price = formula_price
+  """
+  base = get_variant_base_price(make, model, variant, fuel)
+  if base is None:
+    return None
 
-    try:
-        mileage = int(mileage or 0)
-    except (TypeError, ValueError):
-        mileage = 0
-    expected_km = age * EXPECTED_KM_PER_YEAR
-    excess_km = max(0, mileage - expected_km)
-    mileage_penalty = (excess_km / 10000) * 0.02
-    mileage_penalty = min(mileage_penalty, 0.25)
-    price *= (1 - mileage_penalty)
+  age = max(0, CURRENT_YEAR - int(year))
+  age = min(age, 15)
 
-    price *= get_multiplier("condition", condition or "Good")
-    price *= get_multiplier("owner", owner or "1st Owner")
-    price *= get_multiplier("fuel_premium", fuel or "Petrol")
+  retention = get_retention_for_age(age)
+  price = base * retention
 
-    return int(round(price))
+  try:
+    mileage = int(mileage or 0)
+  except (TypeError, ValueError):
+    mileage = 0
+  expected_km = age * EXPECTED_KM_PER_YEAR
+  excess_km = max(0, mileage - expected_km)
+  mileage_penalty = (excess_km / 10000) * 0.02
+  mileage_penalty = min(mileage_penalty, 0.25)
+  price *= (1 - mileage_penalty)
 
+  price *= get_multiplier("condition", condition or "Good")
+  price *= get_multiplier("owner", owner or "1st Owner")
+  price *= get_multiplier("fuel_premium", fuel or "Petrol")
+
+  # ============================================================
+  # v3.5.2 Step C: Apply calibration (if exists for this cell)
+  # ============================================================
+  # Lazy import to avoid circular dependency:
+  #   calibration_engine imports car_data.compute_base_valuation
+  #   so car_data.py CANNOT import calibration_engine at module-load time.
+  # By importing inside the function, Python caches the module after the
+  # first call and subsequent calls have zero overhead.
+  try:
+    from calibration_engine import (
+      get_calibration_for_cell_cached,
+      get_negotiation_gap,
+    )
+    calibration_row = get_calibration_for_cell_cached(make, model, fuel)
+    if calibration_row:
+      raw_multiplier = float(calibration_row.get("calibration_multiplier") or 1.0)
+      gap = get_negotiation_gap()
+      effective_multiplier = raw_multiplier * gap
+      # Safety clamp — same bounds as raw multiplier ([0.50, 1.50])
+      if effective_multiplier < 0.50:
+        effective_multiplier = 0.50
+      elif effective_multiplier > 1.50:
+        effective_multiplier = 1.50
+      price *= effective_multiplier
+  except Exception:
+    # Defensive: any failure in calibration lookup falls back silently
+    # to formula-only pricing. Never break a valuation because of a
+    # calibration cache hiccup.
+    pass
+
+  return int(round(price))
 
 def compute_price_range(estimated_price: Optional[int], phase: int = 1) -> Tuple:
     if estimated_price is None:
