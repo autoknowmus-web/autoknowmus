@@ -7730,11 +7730,22 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
     """
     Persist a ParseResult to the database.
 
+    v3.5.3 Step D — DEDUP LOGIC ADDED.
+    Listings are now deduped against existing research_log rows by listing_url
+    BEFORE insert. Rules (locked):
+      - URL not seen before                       → INSERT (new)
+      - Same URL + same price + last seen <90d    → SKIP silently (true dupe)
+      - Same URL + different price + last seen <90d → INSERT (price change)
+      - Same URL + last seen >=90d                → INSERT (relisting)
+      - No URL on parsed row                      → INSERT (can't dedup)
+      - URL appears more than once in THIS upload → keep first only (intra-file dedup)
+
     Workflow:
       1. INSERT a row into listing_uploads with status='processing'
-      2. For each parsed entry, INSERT into research_log with the upload_id
-         in the listing_upload_id FK column
-      3. UPDATE listing_uploads with final counts + status='completed'
+      2. Pre-fetch existing (url, price, entry_date) tuples for URLs in this batch
+      3. Classify each parsed entry: keep, skip-as-dupe, or price-change/relisting
+      4. Bulk-insert the keep-list into research_log with the upload_id FK
+      5. UPDATE listing_uploads.notes with final dedup stats
 
     Params:
       parse_result: listing_csv_parser.ParseResult
@@ -7744,20 +7755,16 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
       source_filename: original filename (for audit)
 
     Returns:
-      dict with: upload_id, inserted_count, total_count, parsed_count,
-                 skipped_count, status. On failure, status='failed' and
-                 the dict will include 'error' with the message.
+      dict with: upload_id, status, error, inserted_count, total_count,
+                 parsed_count, skipped_count,
+                 dedup_skipped_count, price_change_count, relisting_count,
+                 no_url_count, intra_file_dupe_count.
     """
     state_code = (state_code or DEFAULT_STATE_CODE).upper()
     city = city or DEFAULT_CITY
     admin_email = admin_email or 'unknown'
 
     # --- Step 1: create the listing_uploads row ---
-    # Schema notes: id auto-generates (gen_random_uuid()), so we don't pass it.
-    # marketplace is NOT NULL — hardcoded to 'CarWale' until we onboard others.
-    # Column names match the deployed schema: parsed_rows / skipped_rows / filename.
-    # 'inserted_count', 'status', 'parser_version' columns DON'T exist — we record
-    # outcome in 'notes' free-text instead.
     now_iso = datetime.utcnow().isoformat()
     upload_payload = {
         'uploaded_by':   admin_email,
@@ -7781,6 +7788,11 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
                 'total_count': parse_result.total_rows,
                 'parsed_count': len(parse_result.parsed),
                 'skipped_count': len(parse_result.skipped),
+                'dedup_skipped_count': 0,
+                'price_change_count': 0,
+                'relisting_count': 0,
+                'no_url_count': 0,
+                'intra_file_dupe_count': 0,
             }
         upload_row = upload_resp.data[0]
         upload_id = upload_row['id']
@@ -7794,16 +7806,146 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
             'total_count': parse_result.total_rows,
             'parsed_count': len(parse_result.parsed),
             'skipped_count': len(parse_result.skipped),
+            'dedup_skipped_count': 0,
+            'price_change_count': 0,
+            'relisting_count': 0,
+            'no_url_count': 0,
+            'intra_file_dupe_count': 0,
         }
 
-    # --- Step 2: bulk-insert research_log rows ---
-    today_iso = datetime.utcnow().strftime('%Y-%m-%d')
-    research_rows = []
+    # ============================================================
+    # v3.5.3 Step D: DEDUP STAGE
+    # ------------------------------------------------------------
+    # Pre-fetch existing listings keyed by listing_url. Build an in-memory
+    # lookup so the per-row classification loop is O(N) without further
+    # Supabase calls.
+    # ============================================================
+
+    # Threshold: listings older than 90d ago count as "stale" — same URL
+    # showing up after 90d is treated as a relisting, not a dupe.
+    DEDUP_WINDOW_DAYS = 90
+    today = datetime.utcnow().date()
+    stale_cutoff = today - timedelta(days=DEDUP_WINDOW_DAYS)
+
+    # Collect all listing_urls from this upload that are non-empty.
+    # We only fetch existing rows for URLs we're about to consider —
+    # no point pulling the whole research_log table.
+    parsed_urls_set = set()
     for entry in parse_result.parsed:
-        # Map ParsedListing -> research_log columns.
-        # Listings have: make/model/variant/year/fuel/mileage/asking_price/listing_url.
-        # They DO NOT have: condition, owners, negotiated_price, dealer info.
-        # We tag them with data_source='Listing Aggregator' and data_quality='medium'.
+        u = (entry.listing_url or '').strip()
+        if u:
+            parsed_urls_set.add(u)
+
+    # existing_by_url: {url: [(asking_price_inr, entry_date_str), ...]}
+    # A single URL can have multiple historical rows (relistings, price changes).
+    # We need them all to decide whether the *most recent* falls in the dedup
+    # window or out of it.
+    existing_by_url = defaultdict(list)
+
+    if parsed_urls_set:
+        # Postgres `IN` clause is fine up to ~1000 args; chunk to be safe.
+        url_list = list(parsed_urls_set)
+        IN_CHUNK = 500
+        for i in range(0, len(url_list), IN_CHUNK):
+            chunk = url_list[i:i + IN_CHUNK]
+            try:
+                r = (supabase.table('research_log')
+                     .select('listing_url, asking_price_inr, entry_date')
+                     .eq('data_source', LISTING_DATA_SOURCE)
+                     .in_('listing_url', chunk)
+                     .execute())
+                for row in (r.data or []):
+                    u = row.get('listing_url')
+                    if u:
+                        existing_by_url[u].append({
+                            'price': row.get('asking_price_inr'),
+                            'date_str': row.get('entry_date'),
+                        })
+            except Exception as e:
+                # Best-effort: if dedup query fails, fall through to insert-all.
+                # Better to over-insert than fail the whole upload.
+                app.logger.warning(
+                    f"_insert_listings_to_research_log: dedup pre-fetch chunk "
+                    f"{i}-{i + len(chunk)} failed: {e}"
+                )
+
+    # ============================================================
+    # Step 2: Classify each parsed entry
+    # ============================================================
+
+    today_iso = today.strftime('%Y-%m-%d')
+    research_rows = []                    # rows to insert
+    seen_urls_this_upload = set()         # for intra-file dedup
+
+    dedup_skipped_count = 0       # exact dupes (same URL+price+<90d) — skipped
+    price_change_count = 0        # same URL, different price, <90d — INSERTED
+    relisting_count = 0           # same URL, >=90d old — INSERTED
+    no_url_count = 0              # row had no listing_url — INSERTED (can't dedup)
+    intra_file_dupe_count = 0     # same URL appeared 2+ times in THIS upload
+
+    def _parse_date(date_str):
+        """Convert YYYY-MM-DD string to date, or None on parse failure."""
+        if not date_str:
+            return None
+        try:
+            return datetime.strptime(date_str[:10], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return None
+
+    for entry in parse_result.parsed:
+        url = (entry.listing_url or '').strip()
+        new_price = entry.asking_price
+
+        # ---- Intra-file dedup: same URL twice in this upload? ----
+        if url and url in seen_urls_this_upload:
+            intra_file_dupe_count += 1
+            continue
+        if url:
+            seen_urls_this_upload.add(url)
+
+        # ---- Cross-file dedup against existing research_log ----
+        if not url:
+            # No URL = can't dedup. Insert and move on.
+            no_url_count += 1
+            decision = 'insert_no_url'
+        else:
+            history = existing_by_url.get(url, [])
+            if not history:
+                # URL not seen before → fresh insert.
+                decision = 'insert_new'
+            else:
+                # Find the most recent existing row for this URL.
+                latest = None
+                latest_date = None
+                for h in history:
+                    d = _parse_date(h['date_str'])
+                    if d and (latest_date is None or d > latest_date):
+                        latest = h
+                        latest_date = d
+
+                if latest is None or latest_date is None:
+                    # Existing rows had unparseable dates — treat as fresh insert
+                    # rather than over-eagerly skipping. Safer default.
+                    decision = 'insert_new'
+                elif latest_date < stale_cutoff:
+                    # Last seen >=90d ago → relisting.
+                    relisting_count += 1
+                    decision = 'insert_relisting'
+                else:
+                    # Within 90d window. Check price.
+                    existing_price = latest.get('price')
+                    if (existing_price is not None
+                            and new_price is not None
+                            and int(existing_price) == int(new_price)):
+                        # Same URL + same price + <90d → true duplicate. SKIP.
+                        dedup_skipped_count += 1
+                        continue
+                    else:
+                        # Same URL + different price + <90d → price change. INSERT.
+                        price_change_count += 1
+                        decision = 'insert_price_change'
+
+        # Build the research_log row (same shape as before Step D)
         research_rows.append({
             'make':                  entry.make,
             'model':                 entry.model,
@@ -7826,7 +7968,7 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
             'forum_name':            None,
             'forum_url':             None,
             'transaction_date':      None,
-            'transaction_completed': False,  # listings = asks, not deals
+            'transaction_completed': False,
             'buyer_type':            None,
             'data_quality':          LISTING_DEFAULT_QUALITY,
             'harvest_notes':         None,
@@ -7836,11 +7978,12 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
             'listing_upload_id':     upload_id,
         })
 
+    # ============================================================
+    # Step 3: Bulk insert the keep-list
+    # ============================================================
     inserted_count = 0
     insert_errors = []
     if research_rows:
-        # Batch inserts in chunks of 500 — keeps each Supabase call under
-        # ~1 second and avoids payload-size limits.
         BATCH_SIZE = 500
         for batch_start in range(0, len(research_rows), BATCH_SIZE):
             batch = research_rows[batch_start:batch_start + BATCH_SIZE]
@@ -7851,43 +7994,66 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
                 err_msg = f"batch {batch_start}-{batch_start + len(batch)}: {str(e)[:200]}"
                 app.logger.error(f"_insert_listings_to_research_log: {err_msg}")
                 insert_errors.append(err_msg)
-                # Continue to next batch — partial success is better than full failure
 
-    # --- Step 3: write notes if any batches failed ---
-    # Schema has no 'status' or 'inserted_count' column — we use 'notes'
-    # as the free-text outcome record. On full success we leave notes NULL
-    # so downstream code can use empty notes as a "completed" proxy.
+    # ============================================================
+    # Step 4: Update notes with dedup summary + any insert errors
+    # ============================================================
     final_status = 'completed' if not insert_errors else 'partial_error'
+
+    note_parts = []
+    note_parts.append(
+        f"Inserted {inserted_count} of {len(research_rows)} kept rows."
+    )
+    if dedup_skipped_count > 0 or price_change_count > 0 or relisting_count > 0 \
+            or no_url_count > 0 or intra_file_dupe_count > 0:
+        dedup_summary_parts = []
+        if dedup_skipped_count > 0:
+            dedup_summary_parts.append(f"{dedup_skipped_count} exact dupes skipped")
+        if price_change_count > 0:
+            dedup_summary_parts.append(f"{price_change_count} price changes tracked")
+        if relisting_count > 0:
+            dedup_summary_parts.append(f"{relisting_count} relistings (>90d)")
+        if intra_file_dupe_count > 0:
+            dedup_summary_parts.append(f"{intra_file_dupe_count} intra-file dupes skipped")
+        if no_url_count > 0:
+            dedup_summary_parts.append(f"{no_url_count} rows without URL")
+        note_parts.append("Dedup: " + ", ".join(dedup_summary_parts) + ".")
     if insert_errors:
-        try:
-            note_text = (
-                f"Inserted {inserted_count} of {len(research_rows)} parsed rows. "
-                f"Errors: " + ' | '.join(insert_errors)
-            )[:1000]
-            (supabase.table('listing_uploads')
-             .update({'notes': note_text})
-             .eq('id', upload_id)
-             .execute())
-        except Exception as e:
-            app.logger.warning(f"_insert_listings_to_research_log: notes update failed: {e}")
+        note_parts.append("Errors: " + ' | '.join(insert_errors))
+
+    note_text = ' '.join(note_parts)[:1000]
+    try:
+        (supabase.table('listing_uploads')
+         .update({'notes': note_text})
+         .eq('id', upload_id)
+         .execute())
+    except Exception as e:
+        app.logger.warning(f"_insert_listings_to_research_log: notes update failed: {e}")
 
     app.logger.info(
         f"Listing upload #{upload_id}: state={state_code} city={city} "
         f"total={parse_result.total_rows} parsed={len(parse_result.parsed)} "
         f"skipped={len(parse_result.skipped)} inserted={inserted_count} "
-        f"status={final_status}"
+        f"dedup_skipped={dedup_skipped_count} price_change={price_change_count} "
+        f"relisting={relisting_count} no_url={no_url_count} "
+        f"intra_file_dupe={intra_file_dupe_count} status={final_status}"
     )
 
     return {
-        'upload_id':       upload_id,
-        'status':          final_status,
-        'error':           ' | '.join(insert_errors) if insert_errors else None,
-        'inserted_count':  inserted_count,
-        'total_count':     parse_result.total_rows,
-        'parsed_count':    len(parse_result.parsed),
-        'skipped_count':   len(parse_result.skipped),
+        'upload_id':              upload_id,
+        'status':                 final_status,
+        'error':                  ' | '.join(insert_errors) if insert_errors else None,
+        'inserted_count':         inserted_count,
+        'total_count':            parse_result.total_rows,
+        'parsed_count':           len(parse_result.parsed),
+        'skipped_count':          len(parse_result.skipped),
+        # Step D additions:
+        'dedup_skipped_count':    dedup_skipped_count,
+        'price_change_count':     price_change_count,
+        'relisting_count':        relisting_count,
+        'no_url_count':           no_url_count,
+        'intra_file_dupe_count':  intra_file_dupe_count,
     }
-
 
 # ============================================================
 # Helper: Fetch recent uploads for the dashboard
