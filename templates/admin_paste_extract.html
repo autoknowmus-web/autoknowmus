@@ -1,6 +1,26 @@
 {% extends "layout.html" %}
 {% block title %}Paste Extractor — AutoKnowMus Admin{% endblock %}
 
+{# ============================================================
+   📁 File: admin_paste_extract.html
+   📍 Location: templates/admin_paste_extract.html
+   ✏️ Status: EXISTING — full file replacement (v3.5.5.1)
+
+   v3.5.5.1 changes from v3.5.5:
+     - Match column tooltip now uses raw_title (full listing title) as
+       primary "CarWale wrote" content, NOT raw_variant (which is often
+       just a 2-3 char code like "N4" with no context).
+     - Adds a separate "Variant text extracted" line ONLY when raw_variant
+       differs from raw_title — gives admin full context to judge the match.
+     - Section labels use .match-tip-section-label CSS class for clearer
+       hierarchy in the tooltip.
+
+   Per delivery rules:
+     - Default UI rules locked (.btn-back grey, alphabetical dropdowns,
+       × dismissible flashes, Indian comma formatting via | inr filter)
+     - DD-MMM-YYYY date format, "(N Credits)" in brackets, etc.
+   ============================================================ #}
+
 {% block extra_head %}
 <style>
   /* ============================================================
@@ -14,7 +34,7 @@
        - Disabled fields: dark bg #1a1d24 / grey text #6c757d
        - Flash alerts always have × dismiss
        - DD-MMM-YYYY date format
-       - Indian comma formatting on big numbers
+       - Indian comma formatting on big numbers via | inr filter
      ============================================================ */
 
   .admin-wrap {
@@ -481,7 +501,13 @@
     font-size: 0.72rem;
     font-variant-numeric: tabular-nums;
   }
-  /* v3.5.5: Match column tooltip — explains why a row was flagged for review */
+
+  /* ============================================================
+     v3.5.5.1: Match column tooltip — explains why a row was flagged
+     for review. Shows the FULL CarWale title (raw_title), the variant
+     text our parser extracted (raw_variant) when different, and the
+     canonical variant we matched to.
+     ============================================================ */
   .preview-table .match-cell-wrap {
     display: inline-flex;
     align-items: center;
@@ -521,7 +547,7 @@
     font-size: 0.74rem;
     font-weight: 400;
     line-height: 1.5;
-    width: 260px;
+    width: 300px;
     text-align: left;
     z-index: 50;
     transition: opacity 0.15s;
@@ -535,6 +561,20 @@
     font-style: italic;
     font-family: ui-monospace, 'SF Mono', monospace;
     font-size: 0.72rem;
+    word-break: break-word;
+  }
+  /* v3.5.5.1: Section labels inside tooltip — uppercase muted hierarchy */
+  .preview-table .match-tip-section-label {
+    color: #adb5bd;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: block;
+    margin-top: 4px;
+  }
+  .preview-table .match-tip-section-label:first-of-type {
+    margin-top: 0;
   }
   .preview-table .match-tip-action {
     color: #adb5bd;
@@ -543,7 +583,7 @@
     display: block;
     border-top: 1px solid rgba(255,255,255,0.15);
     padding-top: 5px;
-    margin-top: 5px;
+    margin-top: 8px;
   }
   .preview-table .match-tooltip::after {
     content: '';
@@ -848,17 +888,25 @@
                     <td style="color: #adb5bd;">{{ row.locality or '—' }}</td>
                     <td>
                       {% if row.needs_review %}
+                        {# v3.5.5.1: Tooltip uses raw_title (full listing title) for "CarWale wrote",
+                           shows raw_variant only when it differs (gives context to judge match). #}
                         <span class="match-cell-wrap">
                           <span class="review-badge">Review</span>
                           <span class="conf-pill">{{ row.variant_confidence }}%</span>
                           <span class="match-info-icon" tabindex="0">i</span>
                           <span class="match-tooltip">
-                            <strong>Why review?</strong><br>
-                            CarWale wrote:<br>
-                            <em>"{{ row.raw_variant or row.raw_title or '—' }}"</em><br><br>
-                            We matched it to:<br>
-                            <em>{{ row.variant or '—' }}</em><br>
-                            (confidence: <strong>{{ row.variant_confidence }}%</strong>)<br><br>
+                            <strong>Why review?</strong><br><br>
+                            <span class="match-tip-section-label">CarWale title:</span>
+                            <em>"{{ row.raw_title or '—' }}"</em>
+                            {% if row.raw_variant and row.raw_variant != row.raw_title %}
+                              <span class="match-tip-section-label">Variant text extracted:</span>
+                              <em>"{{ row.raw_variant }}"</em>
+                            {% endif %}
+                            <span class="match-tip-section-label">Matched to (in our catalog):</span>
+                            <em>{{ row.variant or '—' }}</em>
+                            <span style="color:#adb5bd; font-size:0.7rem;">
+                              (confidence: <strong>{{ row.variant_confidence }}%</strong>)
+                            </span>
                             <span class="match-tip-action">
                               If this looks wrong, untick the row above to drop it.
                             </span>
