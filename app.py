@@ -6925,6 +6925,17 @@ def admin_research_apply_suggestion(state_code):
 # MISC ROUTES (preserved from current)
 # ============================================================
 
+@app.route('/about')
+def about():
+    """
+    Public About page — reveals the full AUTOM + KNOWUS architecture.
+    No login required. Reachable from:
+      (a) the brand footer letter strip on every logged-in/guest page
+      (b) the "Return to AutoKnowMus" link returns user to /
+    """
+    return render_template('about.html')
+
+
 @app.route('/logout')
 def logout():
     session.clear()
