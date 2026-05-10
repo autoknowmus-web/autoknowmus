@@ -128,15 +128,65 @@ LISTING_DATA_SOURCE = "Listing Aggregator"
 
 NEGOTIATION_HAIRCUT_DEFAULT = 0.85
 
+# ============================================================
+# Backward-compatible v1 surface area
 # ------------------------------------------------------------
-# Backward-compatible alias.
-# app.py and possibly other modules import `NEGOTIATION_GAP_DEFAULT`
-# (the v1 name) directly. Keep the alias so v1 callers don't break
-# when this engine is upgraded. New code should reference
-# NEGOTIATION_HAIRCUT_DEFAULT — the alias may be removed in a future
-# cleanup once all call sites are migrated.
-# ------------------------------------------------------------
-NEGOTIATION_GAP_DEFAULT = NEGOTIATION_HAIRCUT_DEFAULT
+# app.py imports the following names from calibration_engine:
+#   NEGOTIATION_GAP_DEFAULT
+#   NEGOTIATION_GAP_HARD_MIN
+#   NEGOTIATION_GAP_HARD_MAX
+#   NEGOTIATION_GAP_SOFT_MIN
+#   NEGOTIATION_GAP_SOFT_MAX
+#   load_negotiation_gap
+#   get_negotiation_gap
+#
+# These were the v1 names for the negotiation gap (a.k.a. the
+# haircut between asking and selling price). The v2 engine renamed
+# the canonical constant to NEGOTIATION_HAIRCUT_DEFAULT for clarity,
+# but ALL v1 names are aliased back here so existing callers in
+# app.py and any other module keep working without modification.
+#
+# Sanity bounds:
+#   HARD_MIN  = 0.70  → 30% haircut (anything below is implausible)
+#   HARD_MAX  = 1.00  → no haircut (anything above is implausible)
+#   SOFT_MIN  = 0.80  → 20% haircut (below this is unusual)
+#   SOFT_MAX  = 0.92  → 8%  haircut (above this is unusual)
+#
+# Admin UI can warn (not block) when an effective gap falls outside
+# the soft band; absolute clamping happens at the hard bounds.
+# ============================================================
+
+NEGOTIATION_GAP_DEFAULT   = NEGOTIATION_HAIRCUT_DEFAULT
+NEGOTIATION_GAP_HARD_MIN  = 0.70
+NEGOTIATION_GAP_HARD_MAX  = 1.00
+NEGOTIATION_GAP_SOFT_MIN  = 0.80
+NEGOTIATION_GAP_SOFT_MAX  = 0.92
+
+
+def load_negotiation_gap() -> float:
+    """
+    Returns the current global negotiation gap (haircut) value.
+
+    Defensive v2 implementation: returns NEGOTIATION_GAP_DEFAULT.
+
+    Forward path: when an admin-settings table is wired up, this can
+    read the live override from Supabase and fall back to the default
+    on any error. The function signature stays the same, so call sites
+    don't change.
+    """
+    return NEGOTIATION_GAP_DEFAULT
+
+
+def get_negotiation_gap(make: str = None, model: str = None, fuel: str = None) -> float:
+    """
+    Returns the negotiation gap (haircut) for a given (make, model, fuel)
+    cell. Today this is the global default for every cell — see
+    _get_haircut_for_cell() for the upgrade hook.
+
+    All args are optional to stay compatible with any v1 caller that
+    invoked this with zero, one, or all three arguments.
+    """
+    return _get_haircut_for_cell(make or "", model or "", fuel or "")
 
 
 def _get_haircut_for_cell(make: str, model: str, fuel: str) -> float:
