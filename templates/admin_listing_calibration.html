@@ -387,6 +387,76 @@
   }
   .empty-state .empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.5; }
   .empty-state strong { color: #adb5bd; }
+
+  /* ============================================================
+     v3.5.5: Paste Extractor promo section
+     Sits above the legacy CSV upload form. Visual treatment makes
+     it clear this is the recommended workflow (green border +
+     "RECOMMENDED" pill) without overwhelming the page.
+     ============================================================ */
+  .paste-extractor-promo {
+    border-color: rgba(40,167,69,0.55);
+    background: linear-gradient(135deg, #1a2a22 0%, #1a1d24 100%);
+  }
+  .paste-extractor-promo .ppromo-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .paste-extractor-promo .ppromo-text {
+    flex: 1;
+    min-width: 260px;
+  }
+  .paste-extractor-promo .ppromo-headline {
+    color: #ffffff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .paste-extractor-promo .ppromo-pill {
+    display: inline-block;
+    background: rgba(255,215,0,0.18);
+    color: #ffd700;
+    border: 1px solid rgba(255,215,0,0.55);
+    padding: 2px 9px;
+    border-radius: 10px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .paste-extractor-promo .ppromo-sub {
+    color: #adb5bd;
+    font-size: 0.84rem;
+    line-height: 1.5;
+  }
+  .paste-extractor-promo .ppromo-btn {
+    background: #28a745;
+    color: #ffffff !important;
+    text-decoration: none;
+    padding: 10px 18px;
+    border-radius: 7px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    border: 1px solid rgba(40,167,69,0.55);
+    white-space: nowrap;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .paste-extractor-promo .ppromo-btn:hover {
+    background: #2bb84d;
+    border-color: #2bb84d;
+    transform: translateY(-1px);
+  }
 </style>
 {% endblock %}
 
@@ -453,21 +523,22 @@
 
   <!-- ============================================================
        STATS CARDS
+       v3.5.5: Switched to | inr filter for Indian comma format.
        ============================================================ -->
   <div class="stats-row">
     <div class="stat-card">
       <div class="stat-label">Total Uploads</div>
-      <div class="stat-value">{{ '{:,}'.format(stats.total_uploads) }}</div>
+      <div class="stat-value">{{ stats.total_uploads | inr }}</div>
       <div class="stat-sub">CSV uploads processed</div>
     </div>
     <div class="stat-card accent-green">
       <div class="stat-label">Listings in DB</div>
-      <div class="stat-value">{{ '{:,}'.format(stats.total_listings) }}</div>
+      <div class="stat-value">{{ stats.total_listings | inr }}</div>
       <div class="stat-sub">research_log entries</div>
     </div>
     <div class="stat-card accent-blue">
       <div class="stat-label">Unique Make + Models</div>
-      <div class="stat-value">{{ '{:,}'.format(stats.unique_make_models) }}</div>
+      <div class="stat-value">{{ stats.unique_make_models | inr }}</div>
       <div class="stat-sub">distinct car combinations</div>
     </div>
     <div class="stat-card">
@@ -477,12 +548,36 @@
     </div>
   </div>
 
+ <!-- ============================================================
+       v3.5.5: PASTE EXTRACTOR ENTRY POINT
+       Promotes the higher-fidelity paste workflow above the legacy
+       CSV upload form. Paste flow has preview + match tooltip + dedup
+       + Indian formatting; CSV upload remains as a fallback path.
+       ============================================================ -->
+  <div class="section-card paste-extractor-promo">
+    <div class="ppromo-row">
+      <div class="ppromo-text">
+        <div class="ppromo-headline">
+          📋 Paste Extractor
+          <span class="ppromo-pill">RECOMMENDED</span>
+        </div>
+        <div class="ppromo-sub">
+          Paste a CarWale results page directly from your browser — no scraping setup required.
+          Preview each row, see fuzzy-match confidence, drop bad rows before ingest.
+          This is the preferred path for adding new listings.
+        </div>
+      </div>
+      <a href="{{ url_for('admin_paste_and_extract') }}" class="ppromo-btn">📋 Open Paste Extractor →</a>
+    </div>
+  </div>
+
   <!-- ============================================================
-       UPLOAD FORM
+       LEGACY CSV UPLOAD FORM
+       Kept as fallback for batch CSV imports from Instant Data Scraper.
        state dropdown → city dropdown (cascade) → file picker
        ============================================================ -->
   <div class="section-card">
-    <h2>📤 Upload New CSV <span class="h2-sub">— pick state &amp; city, then choose your file</span></h2>
+    <h2>📤 Upload CSV <span class="h2-sub">— legacy fallback path · pick state &amp; city, then choose your file</span></h2>
 
     <form action="{{ url_for('admin_listing_calibration_upload') }}" method="POST" enctype="multipart/form-data" id="upload-form">
       <div class="upload-form-grid">
@@ -518,7 +613,7 @@
       </div>
 
       <div class="upload-meta">
-        Limits per upload: <strong>{{ '{:,}'.format(max_rows) }} rows</strong> max ·
+        Limits per upload: <strong>{{ max_rows | inr }} rows</strong> max ·
         <strong>{{ max_file_mb }} MB</strong> max file size ·
         Server time now: <strong>{{ now_display }}</strong>
       </div>
@@ -557,10 +652,10 @@
                 <td>{{ u.created_display }}</td>
                 <td class="uploader" title="{{ u.uploaded_by }}">{{ u.uploaded_by }}</td>
                 <td class="geo">{{ u.city }}, {{ u.state_code }}</td>
-                <td class="num">{{ '{:,}'.format(u.total_rows or 0) }}</td>
-                <td class="num">{{ '{:,}'.format(u.parsed_count or 0) }}</td>
-                <td class="num">{{ '{:,}'.format(u.skipped_count or 0) }}</td>
-                <td class="num">{{ '{:,}'.format(u.inserted_count or 0) }}</td>
+                <td class="num">{{ (u.total_rows or 0) | inr }}</td>
+                <td class="num">{{ (u.parsed_count or 0) | inr }}</td>
+                <td class="num">{{ (u.skipped_count or 0) | inr }}</td>
+                <td class="num">{{ (u.inserted_count or 0) | inr }}</td>
                 <td class="num
                   {%- if pct >= 95 %} pct-good
                   {%- elif pct >= 80 %} pct-mid
