@@ -10,14 +10,6 @@
   {# ============================================================
      v3.5.1-r3: GOOGLE ANALYTICS 4 (GA4) tracking
      Property: AutoKnowMus Production · Measurement ID: G-7JPP8M32JV
-
-     Two safety checks before sending any data to Google:
-       1. ADMIN OPT-OUT — if logged in as the admin email, do NOT track.
-          Prevents your own browsing from polluting visitor stats.
-       2. DOMAIN GATE — only fires on autoknowmus.com (and www.).
-          Localhost, *.onrender.com preview URLs, and any other host
-          do NOT track, so dev/staging traffic stays out of production
-          analytics.
      ============================================================ #}
   {% set ga_admin_email = 'autoknowmus@gmail.com' %}
   {% set is_admin_user = session.user and (session.user.email | lower) == ga_admin_email %}
@@ -25,24 +17,17 @@
   <script>
     (function() {
       var host = (window.location.hostname || '').toLowerCase();
-      // Only fire on the production domain — autoknowmus.com or www.autoknowmus.com
       var isProduction = (host === 'autoknowmus.com' || host === 'www.autoknowmus.com');
       if (!isProduction) return;
-
-      // Inject GA4 gtag.js
       var s = document.createElement('script');
       s.async = true;
       s.src = 'https://www.googletagmanager.com/gtag/js?id=G-7JPP8M32JV';
       document.head.appendChild(s);
-
       window.dataLayer = window.dataLayer || [];
       function gtag(){ dataLayer.push(arguments); }
       window.gtag = gtag;
       gtag('js', new Date());
-      gtag('config', 'G-7JPP8M32JV', {
-        // Anonymize IP (privacy hygiene; GA4 does this by default but explicit is good)
-        anonymize_ip: true
-      });
+      gtag('config', 'G-7JPP8M32JV', { anonymize_ip: true });
     })();
   </script>
   {% endif %}
@@ -161,11 +146,11 @@
        Casing: A K M capitals; u t o n o w u s lowercase.
        Brand colors (matching .brand-auto/.brand-know/.brand-mus):
          AUTOM letters (A,u,t,o,M) → full opacity, brand colors
-            A,u,t,o = white (Auto group)
-            M       = blue/purple (Mus group)
          KNOWUS letters (K,n,o,w,u,s) → 0.4 opacity, brand colors
-            K,n,o,w = green (Know group)
-            u,s     = blue/purple (Mus group)
+
+       v3 update: the strip is now wrapped in an <a> linking to /about.
+       Hover shows an italic muted-grey hint reading "Discover what each
+       letter stands for →".
        ============================================================ */
     .autom-footer-strip {
       width: 100%;
@@ -189,20 +174,37 @@
       display: inline-block;
       transition: opacity 0.2s, transform 0.2s;
     }
-    /* Brightness — AUTOM letters at full opacity */
     .autom-letter.autom-bright { opacity: 1; }
-    /* KNOWUS letters faded but still in their brand color */
     .autom-letter.autom-faded  { opacity: 0.4; }
-    /* Brand colors (mirroring .brand-auto/.brand-know/.brand-mus) */
     .autom-letter.autom-color-auto { color: #ffffff; }
     .autom-letter.autom-color-know { color: #28a745; }
     .autom-letter.autom-color-mus  { color: #4e54ff; }
-    /* Subtle hover hint (curiosity nudge — letters lift slightly).
-       No actual click handler — purely visual feedback. */
     .autom-letter:hover { transform: translateY(-2px); }
+
+    /* Anchor wrapper — clicking any letter opens /about */
+    .autom-footer-link {
+      text-decoration: none;
+      display: block;
+      color: inherit;
+    }
+    .autom-footer-hint {
+      text-align: center;
+      color: #6c757d;
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      margin-top: 8px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      font-style: italic;
+    }
+    .autom-footer-link:hover .autom-footer-hint { opacity: 0.85; }
+    .autom-footer-link:hover .autom-letter { transform: translateY(-2px); }
+
     @media (max-width: 480px) {
       .autom-letters { font-size: 1.15rem; }
       .autom-footer-strip { padding: 14px 8px 18px; margin-top: 30px; }
+      /* Always-visible hint on mobile (no hover state) */
+      .autom-footer-hint { opacity: 0.8; font-size: 0.68rem; }
     }
 
     @media (max-width: 768px) {
