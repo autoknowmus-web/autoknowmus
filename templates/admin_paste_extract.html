@@ -481,6 +481,82 @@
     font-size: 0.72rem;
     font-variant-numeric: tabular-nums;
   }
+  /* v3.5.5: Match column tooltip — explains why a row was flagged for review */
+  .preview-table .match-cell-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    position: relative;
+  }
+  .preview-table .match-info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px; height: 14px;
+    background: #2a2d34;
+    color: #adb5bd;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: help;
+    font-style: italic;
+    font-family: Georgia, serif;
+  }
+  .preview-table .match-info-icon:hover,
+  .preview-table .match-info-icon:focus {
+    background: #ffa500;
+    color: #fff;
+    outline: none;
+  }
+  .preview-table .match-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: -10px;
+    background: #000;
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #ffc870;
+    font-size: 0.74rem;
+    font-weight: 400;
+    line-height: 1.5;
+    width: 260px;
+    text-align: left;
+    z-index: 50;
+    transition: opacity 0.15s;
+    white-space: normal;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  }
+  .preview-table .match-tooltip strong { color: #ffc870; }
+  .preview-table .match-tooltip em {
+    color: #5bd47b;
+    font-style: italic;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.72rem;
+  }
+  .preview-table .match-tip-action {
+    color: #adb5bd;
+    font-size: 0.7rem;
+    font-style: italic;
+    display: block;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    padding-top: 5px;
+    margin-top: 5px;
+  }
+  .preview-table .match-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%; right: 14px;
+    border: 6px solid transparent;
+    border-top-color: #000;
+  }
+  .preview-table .match-info-icon:hover + .match-tooltip,
+  .preview-table .match-info-icon:focus + .match-tooltip,
+  .preview-table .match-cell-wrap:hover .match-tooltip {
+    visibility: visible; opacity: 1;
+  }
 
   /* ─── Confirm bar (sticky footer) ─────────────────────────── */
   .confirm-bar {
@@ -767,16 +843,31 @@
                     <td>{{ row.model }}</td>
                     <td>{{ row.variant }}</td>
                     <td>{{ row.fuel }}</td>
-                    <td class="num">{{ '{:,}'.format(row.mileage_km) }} km</td>
-                    <td class="num price-cell">{{ '{:,}'.format(row.asking_price) }}</td>
+                    <td class="num">{{ row.mileage_km | inr }} km</td>
+                    <td class="num price-cell">{{ row.asking_price | inr }}</td>
                     <td style="color: #adb5bd;">{{ row.locality or '—' }}</td>
                     <td>
                       {% if row.needs_review %}
-                        <span class="review-badge">Review</span>
+                        <span class="match-cell-wrap">
+                          <span class="review-badge">Review</span>
+                          <span class="conf-pill">{{ row.variant_confidence }}%</span>
+                          <span class="match-info-icon" tabindex="0">i</span>
+                          <span class="match-tooltip">
+                            <strong>Why review?</strong><br>
+                            CarWale wrote:<br>
+                            <em>"{{ row.raw_variant or row.raw_title or '—' }}"</em><br><br>
+                            We matched it to:<br>
+                            <em>{{ row.variant or '—' }}</em><br>
+                            (confidence: <strong>{{ row.variant_confidence }}%</strong>)<br><br>
+                            <span class="match-tip-action">
+                              If this looks wrong, untick the row above to drop it.
+                            </span>
+                          </span>
+                        </span>
                       {% else %}
                         <span class="auto-badge">Auto</span>
+                        <span class="conf-pill">{{ row.variant_confidence }}%</span>
                       {% endif %}
-                      <span class="conf-pill">{{ row.variant_confidence }}%</span>
                     </td>
                   </tr>
                 {% endfor %}
