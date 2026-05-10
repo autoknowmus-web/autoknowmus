@@ -1773,12 +1773,16 @@
     &nbsp;·&nbsp;<span class="lakhs-hint">L = Lakhs (₹1L = ₹1,00,000) · K = Thousands</span>
   </div>
 
-  {# v3.1: Listings table — shows actual listings the market engine used #}
+  {# v3.5.5: Listings table — shows actual listings the market engine used.
+     Wording revised to be honest about what this is:
+       - NOT a live marketplace inventory
+       - Sample listings used for calibration (asking prices, not deals done)
+       - No counts or marketplace names exposed (per user feedback) #}
   {% if listings_data %}
     <div class="listings-card">
       <div class="listings-title">
-        🚗 Similar cars currently for sale
-        <span class="sub">based on {{ listings_data.total_count }} active listing{{ '' if listings_data.total_count == 1 else 's' }} we tracked</span>
+        🚗 What similar cars are listed at
+        <span class="sub">asking prices from recent listings — not final sale prices</span>
       </div>
       <table class="listings-table">
         <thead>
@@ -1802,9 +1806,11 @@
           {% endfor %}
         </tbody>
       </table>
-      {% if listings_data.extra_count > 0 %}
-        <div class="listings-extra">+ {{ listings_data.extra_count }} more verified listing{{ '' if listings_data.extra_count == 1 else 's' }} factored into your estimate</div>
-      {% endif %}
+      <div class="listings-extra">
+        Sample of recent listings used to calibrate our pricing model — not a live
+        marketplace inventory. For sale availability, check listing aggregator
+        websites directly.
+      </div>
     </div>
   {% endif %}
 
