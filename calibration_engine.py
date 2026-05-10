@@ -128,6 +128,16 @@ LISTING_DATA_SOURCE = "Listing Aggregator"
 
 NEGOTIATION_HAIRCUT_DEFAULT = 0.85
 
+# ------------------------------------------------------------
+# Backward-compatible alias.
+# app.py and possibly other modules import `NEGOTIATION_GAP_DEFAULT`
+# (the v1 name) directly. Keep the alias so v1 callers don't break
+# when this engine is upgraded. New code should reference
+# NEGOTIATION_HAIRCUT_DEFAULT — the alias may be removed in a future
+# cleanup once all call sites are migrated.
+# ------------------------------------------------------------
+NEGOTIATION_GAP_DEFAULT = NEGOTIATION_HAIRCUT_DEFAULT
+
 
 def _get_haircut_for_cell(make: str, model: str, fuel: str) -> float:
     """
