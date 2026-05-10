@@ -4,6 +4,11 @@
    AUTOKNOWMUS brand footer strip — appears at bottom of every
    page (except landing page) via inclusion in layout.html.
 
+   v2 update: the strip is now wrapped in an <a> linking to
+   /about, so clicking any letter takes the user to the About
+   page (where the full AUTOM + KNOWUS letter architecture is
+   revealed).
+
    LOCKED DESIGN (memory entry #29):
    - Casing matches the navbar logo exactly:
        Capitals: A, K, M (start of each brand-color group)
@@ -16,26 +21,25 @@
    - KNOWUS letters (positions 5-8 + 10-11) at 0.4 opacity in brand colors
        K, n, o, w → green #28a745 (matches brand "Know" word color)
        u, s       → blue/purple #4e54ff (matches brand "Mus" word color)
-   - NO descriptions / NO meanings — letters only
-   - NO interactive behavior — pure visual signature
 
-   This file is a STATIC partial. Zero performance impact:
-     - No JS, no API calls, no images
-     - ~50 lines of HTML/CSS, renders inline
+   This file is a STATIC partial. Zero performance impact.
    ============================================================ #}
 
-<div class="autom-footer-strip">
-  <div class="autom-letters">
-    <span class="autom-letter autom-bright autom-color-auto">A</span>
-    <span class="autom-letter autom-bright autom-color-auto">u</span>
-    <span class="autom-letter autom-bright autom-color-auto">t</span>
-    <span class="autom-letter autom-bright autom-color-auto">o</span>
-    <span class="autom-letter autom-faded autom-color-know">K</span>
-    <span class="autom-letter autom-faded autom-color-know">n</span>
-    <span class="autom-letter autom-faded autom-color-know">o</span>
-    <span class="autom-letter autom-faded autom-color-know">w</span>
-    <span class="autom-letter autom-bright autom-color-mus">M</span>
-    <span class="autom-letter autom-faded autom-color-mus">u</span>
-    <span class="autom-letter autom-faded autom-color-mus">s</span>
+<a href="{{ url_for('about') }}" class="autom-footer-link" aria-label="About AutoKnowMus — what each letter stands for">
+  <div class="autom-footer-strip">
+    <div class="autom-letters">
+      <span class="autom-letter autom-bright autom-color-auto">A</span>
+      <span class="autom-letter autom-bright autom-color-auto">u</span>
+      <span class="autom-letter autom-bright autom-color-auto">t</span>
+      <span class="autom-letter autom-bright autom-color-auto">o</span>
+      <span class="autom-letter autom-faded autom-color-know">K</span>
+      <span class="autom-letter autom-faded autom-color-know">n</span>
+      <span class="autom-letter autom-faded autom-color-know">o</span>
+      <span class="autom-letter autom-faded autom-color-know">w</span>
+      <span class="autom-letter autom-bright autom-color-mus">M</span>
+      <span class="autom-letter autom-faded autom-color-mus">u</span>
+      <span class="autom-letter autom-faded autom-color-mus">s</span>
+    </div>
+    <div class="autom-footer-hint">discover what each letter stands for →</div>
   </div>
-</div>
+</a>
