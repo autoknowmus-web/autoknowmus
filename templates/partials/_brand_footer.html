@@ -1,0 +1,37 @@
+{# ============================================================
+   templates/partials/_brand_footer.html
+   ------------------------------------------------------------
+   AUTOKNOWMUS brand footer strip — appears at bottom of every
+   page (except landing page) via inclusion in layout.html.
+
+   LOCKED DESIGN (memory entry #29):
+   - Horizontal A·U·T·O·K·N·O·W·M·U·S in EXACT brand-name order
+   - AUTOM letters (1-4 + row 9) at FULL opacity in brand colors
+       A, U, T, O → white  (matches brand "Auto" word color)
+       M          → blue/purple #4e54ff (matches brand "Mus" word color)
+   - KNOWUS letters (5-8 + 10-11) at 0.4 opacity in brand colors
+       K, N, O, W → green #28a745 (matches brand "Know" word color)
+       U, S       → blue/purple #4e54ff (matches brand "Mus" word color)
+   - NO descriptions / NO meanings — letters only
+   - NO interactive behavior — pure visual signature
+
+   This file is a STATIC partial. Zero performance impact:
+     - No JS, no API calls, no images
+     - ~50 lines of HTML/CSS, renders inline
+   ============================================================ #}
+
+<div class="autom-footer-strip">
+  <div class="autom-letters">
+    <span class="autom-letter autom-bright autom-color-auto">A</span>
+    <span class="autom-letter autom-bright autom-color-auto">U</span>
+    <span class="autom-letter autom-bright autom-color-auto">T</span>
+    <span class="autom-letter autom-bright autom-color-auto">O</span>
+    <span class="autom-letter autom-faded autom-color-know">K</span>
+    <span class="autom-letter autom-faded autom-color-know">N</span>
+    <span class="autom-letter autom-faded autom-color-know">O</span>
+    <span class="autom-letter autom-faded autom-color-know">W</span>
+    <span class="autom-letter autom-bright autom-color-mus">M</span>
+    <span class="autom-letter autom-faded autom-color-mus">U</span>
+    <span class="autom-letter autom-faded autom-color-mus">S</span>
+  </div>
+</div>
