@@ -1,28 +1,20 @@
 {# ============================================================
    templates/partials/_brand_footer.html
    ------------------------------------------------------------
-   AUTOKNOWMUS brand footer strip — appears at bottom of every
-   page (except landing page) via inclusion in layout.html.
-
-   v2 update: the strip is now wrapped in an <a> linking to
-   /about, so clicking any letter takes the user to the About
-   page (where the full AUTOM + KNOWUS letter architecture is
-   revealed).
+   AUTOKNOWMUS brand footer strip — wraps an anchor pointing to
+   /about so any click opens the About page.
 
    LOCKED DESIGN (memory entry #29):
-   - Casing matches the navbar logo exactly:
-       Capitals: A, K, M (start of each brand-color group)
-       Lowercase: u, t, o, n, o, w, u, s
-   - Font weight and size match the navbar .brand-text logo
-     (700 weight, 1.5rem, -0.5px letter-spacing)
-   - AUTOM letters (positions 1-4 + 9) at FULL opacity in brand colors
-       A, u, t, o → white  (matches brand "Auto" word color)
-       M          → blue/purple #4e54ff (matches brand "Mus" word color)
-   - KNOWUS letters (positions 5-8 + 10-11) at 0.4 opacity in brand colors
-       K, n, o, w → green #28a745 (matches brand "Know" word color)
-       u, s       → blue/purple #4e54ff (matches brand "Mus" word color)
-
-   This file is a STATIC partial. Zero performance impact.
+   - Casing matches the navbar logo: A K M capitals; rest lowercase
+   - Font: 700 weight, 1.5rem, -0.5px letter-spacing
+   - AUTOM letters at full opacity in brand colors
+       A, u, t, o → white  (Auto group)
+       M          → blue/purple (Mus group)
+   - KNOWUS letters at 0.4 opacity in brand colors
+       K, n, o, w → green (Know group)
+       u, s       → blue/purple (Mus group)
+   - Hover hint: "Discover what each letter stands for →"
+     (italic, muted grey, capital D, fades in on hover)
    ============================================================ #}
 
 <a href="{{ url_for('about') }}" class="autom-footer-link" aria-label="About AutoKnowMus — what each letter stands for">
@@ -40,6 +32,6 @@
       <span class="autom-letter autom-faded autom-color-mus">u</span>
       <span class="autom-letter autom-faded autom-color-mus">s</span>
     </div>
-    <div class="autom-footer-hint">discover what each letter stands for →</div>
+    <div class="autom-footer-hint">Discover what each letter stands for →</div>
   </div>
 </a>
