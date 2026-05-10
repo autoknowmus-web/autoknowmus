@@ -152,6 +152,57 @@
       cursor: not-allowed;
     }
 
+    /* ============================================================
+       AUTOM brand footer strip (sprint 2, locked memory #29)
+       ------------------------------------------------------------
+       Bottom-of-page brand signature. Static text, zero JS overhead.
+       Brand colors (matching the existing .brand-auto/.brand-know/
+       .brand-mus tokens used by the navbar logo above):
+         AUTOM letters (A,U,T,O,M) → full opacity, brand colors
+            A,U,T,O = white (Auto group)
+            M       = blue/purple (Mus group)
+         KNOWUS letters (K,N,O,W,U,S) → 0.4 opacity, brand colors
+            K,N,O,W = green (Know group)
+            U,S     = blue/purple (Mus group)
+       ============================================================ */
+    .autom-footer-strip {
+      width: 100%;
+      padding: 18px 16px 22px;
+      background: #000;
+      border-top: 1px solid #1a1d24;
+      margin-top: 40px;
+    }
+    .autom-letters {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.55rem;
+      font-family: 'Segoe UI', sans-serif;
+      font-weight: 700;
+      font-size: 1.4rem;
+      letter-spacing: 0.05em;
+      user-select: none;
+    }
+    .autom-letter {
+      display: inline-block;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    /* Brightness — AUTOM letters at full opacity */
+    .autom-letter.autom-bright { opacity: 1; }
+    /* KNOWUS letters faded but still in their brand color */
+    .autom-letter.autom-faded  { opacity: 0.4; }
+    /* Brand colors (mirroring .brand-auto/.brand-know/.brand-mus) */
+    .autom-letter.autom-color-auto { color: #ffffff; }
+    .autom-letter.autom-color-know { color: #28a745; }
+    .autom-letter.autom-color-mus  { color: #4e54ff; }
+    /* Subtle hover hint (curiosity nudge — letters lift slightly).
+       No actual click handler — purely visual feedback. */
+    .autom-letter:hover { transform: translateY(-2px); }
+    @media (max-width: 480px) {
+      .autom-letters { font-size: 1.05rem; gap: 0.35rem; }
+      .autom-footer-strip { padding: 14px 8px 18px; margin-top: 30px; }
+    }
+
     @media (max-width: 768px) {
       .navbar-custom { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
       .navbar-custom .nav-actions { gap: 6px !important; flex-wrap: wrap; }
@@ -223,5 +274,16 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 {% block scripts %}{% endblock %}
+
+{# ============================================================
+   AUTOM brand footer strip — included only when user is logged in
+   or in guest mode. Matches the navbar's visibility condition so
+   the landing page (per locked rule #13) stays free of brand
+   chrome at the top AND at the bottom.
+   ============================================================ #}
+{% if session.user or session.is_guest %}
+  {% include 'partials/_brand_footer.html' %}
+{% endif %}
+
 </body>
 </html>
