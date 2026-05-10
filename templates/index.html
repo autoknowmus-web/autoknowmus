@@ -42,9 +42,77 @@
       color: #adb5bd;
       font-size: 1.05rem;
       max-width: 780px;
-      margin: 0 auto 2rem;
+      margin: 0 auto 1.5rem;
       padding: 0 1rem;
     }
+
+    /* ============================================================
+       AUTOM/KNOWUS vision panel (new — Sprint 2)
+       ------------------------------------------------------------
+       Bridges the locked price-transparency tagline (above) and
+       the 3-column login/testimonial section (below). Tells the
+       fuller story: we exist for price transparency, but the
+       vision is end-to-end ownership companionship.
+
+       Per memory rule #29: this is the LANDING-page treatment.
+       Full prose. NO per-letter naming. NO letter strip.
+       Per-letter detail lives only on the About Us page.
+       ============================================================ */
+    .vision-panel {
+      max-width: 880px;
+      margin: 0 auto 2rem;
+      padding: 1.4rem 1.5rem 1.5rem;
+      background: linear-gradient(135deg, #14171d 0%, #1a1d24 100%);
+      border: 1px solid #2a2e38;
+      border-radius: 14px;
+      position: relative;
+    }
+    .vision-panel::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 60px;
+      height: 3px;
+      background: linear-gradient(90deg, #ffffff 0%, var(--brand-green) 50%, var(--brand-blue) 100%);
+      border-radius: 0 0 3px 3px;
+    }
+    .vision-eyebrow {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 0.85rem;
+    }
+    .vision-body {
+      color: #c8cdd5;
+      font-size: 0.96rem;
+      line-height: 1.65;
+      max-width: 760px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .vision-body p {
+      margin-bottom: 0.7rem;
+    }
+    .vision-body p:last-child { margin-bottom: 0; }
+    .vision-body .v-emph {
+      color: #e9ecef;
+      font-weight: 600;
+    }
+    .vision-body .v-bigger {
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 1.04rem;
+      letter-spacing: -0.005em;
+    }
+    @media (max-width: 768px) {
+      .vision-panel { padding: 1.1rem 1rem 1.2rem; margin-bottom: 1.5rem; }
+      .vision-body { font-size: 0.9rem; line-height: 1.6; }
+    }
+
     .col-wrap {
       border-radius: 14px;
       padding: 1.5rem;
@@ -189,9 +257,30 @@
       </div>
     </div>
 
+    <!-- LOCKED TAGLINE (memory rule #22 — do not modify) -->
     <p class="tagline">
       AutoKnowMus cuts through market opacity with real price transparency—helping you avoid overpaying and ensuring you sell at the right price, at the right time
     </p>
+
+    <!-- ============================================================
+         AUTOM / KNOWUS vision panel (Sprint 2 addition)
+         Full prose only — no per-letter naming on landing page.
+         Per-letter detail lives on the About Us page.
+         ============================================================ -->
+    <section class="vision-panel" aria-label="Our vision">
+      <div class="vision-eyebrow">Our vision</div>
+      <div class="vision-body">
+        <p>
+          AutoKnowMus exists to cut through price opacity — replacing guesswork with prices car buyers and sellers can trust.
+        </p>
+        <p>
+          But our <span class="v-emph">vision is bigger.</span>
+        </p>
+        <p>
+          Every letter in our name is a phase of what we're building — <span class="v-bigger">your end-to-end car ownership companion</span>, from the price you pay, to the price you get, and everything in between.
+        </p>
+      </div>
+    </section>
 
     <div class="row g-4">
 
