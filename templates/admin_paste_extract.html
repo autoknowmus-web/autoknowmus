@@ -1,0 +1,956 @@
+{% extends "layout.html" %}
+{% block title %}Paste Extractor — AutoKnowMus Admin{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ============================================================
+     ADMIN PAGE — PASTE EXTRACTOR
+     Mirrors admin_listing_calibration.html styling exactly so the
+     two pages feel like siblings.
+
+     UI rules locked:
+       - .btn-back grey #6c757d, top-left of content area
+       - Dropdowns alphabetical (state from RTO_STATES, city cascading)
+       - Disabled fields: dark bg #1a1d24 / grey text #6c757d
+       - Flash alerts always have × dismiss
+       - DD-MMM-YYYY date format
+       - Indian comma formatting on big numbers
+     ============================================================ */
+
+  .admin-wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 16px 24px 28px;
+  }
+
+  /* ─── Admin nav strip ──────────────────────────────────────── */
+  .admin-nav-strip {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+  .admin-nav-strip a {
+    color: #adb5bd;
+    text-decoration: none;
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .admin-nav-strip a:hover {
+    color: #fff;
+    background: #14171d;
+    border-color: #2a2d34;
+  }
+  .admin-nav-strip a.active {
+    color: #fff;
+    background: rgba(40,167,69,0.16);
+    border-color: rgba(40,167,69,0.45);
+  }
+
+  /* ─── Back button ──────────────────────────────────────────── */
+  .btn-back {
+    display: inline-block;
+    background: #6c757d;
+    color: #ffffff !important;
+    text-decoration: none;
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .btn-back:hover { background: #7a838c; color: #ffffff !important; }
+
+  /* ─── Page header ─────────────────────────────────────────── */
+  .page-header {
+    margin-bottom: 16px;
+  }
+  .page-header h1 {
+    color: #ffffff;
+    font-size: 1.45rem;
+    margin: 0 0 6px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .page-header .page-subtitle {
+    color: #adb5bd;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* ─── Helper strip ────────────────────────────────────────── */
+  .helper-strip {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-left: 3px solid #4e54ff;
+    border-radius: 8px;
+    padding: 11px 14px;
+    margin-bottom: 16px;
+    color: #adb5bd;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .helper-strip strong { color: #e6e6e6; }
+  .helper-strip code {
+    background: #0e1117;
+    color: #ffa500;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-family: ui-monospace, 'SF Mono', monospace;
+  }
+  .helper-strip ol {
+    margin: 8px 0 4px 18px;
+    padding: 0;
+  }
+  .helper-strip ol li {
+    margin-bottom: 4px;
+    color: #adb5bd;
+  }
+
+  /* ─── Flash alerts (× dismissible) ────────────────────────── */
+  .flash-wrap { margin-bottom: 14px; }
+  .flash {
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.5;
+  }
+  .flash.flash-success {
+    background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
+    border: 1px solid #28a745;
+    color: #e6e6e6;
+  }
+  .flash.flash-error {
+    background: linear-gradient(135deg, #2a2118 0%, #14171d 100%);
+    border: 1px solid #ff8c00;
+    color: #e6e6e6;
+  }
+  .flash .flash-msg { flex: 1; }
+  .flash .flash-close {
+    background: transparent;
+    border: none;
+    color: #adb5bd;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+  .flash .flash-close:hover { color: #ffffff; }
+
+  /* ─── Section card ────────────────────────────────────────── */
+  .section-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .section-card h2 {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-card h2 .h2-sub {
+    color: #adb5bd;
+    font-weight: 400;
+    font-size: 0.8rem;
+    margin-left: 6px;
+  }
+
+  /* ─── Form (Screen 1) ─────────────────────────────────────── */
+  .paste-form-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 900px) {
+    .paste-form-grid { grid-template-columns: 1fr; }
+  }
+  .form-field { display: flex; flex-direction: column; }
+  .form-field label {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .form-field select {
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    border-radius: 7px;
+    padding: 9px 11px;
+    font-size: 0.86rem;
+    font-family: inherit;
+  }
+  .form-field select:focus {
+    outline: none;
+    border-color: #4e54ff;
+  }
+
+  .paste-textarea-wrap {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 14px;
+  }
+  .paste-textarea-wrap label {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .paste-textarea-wrap label .char-counter {
+    color: #6c757d;
+    font-size: 0.72rem;
+    font-weight: 400;
+  }
+  .paste-textarea-wrap label .char-counter.over-limit {
+    color: #ff8c00;
+    font-weight: 600;
+  }
+  .paste-textarea-wrap textarea {
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    border-radius: 7px;
+    padding: 10px 12px;
+    font-size: 0.84rem;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    min-height: 220px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+  .paste-textarea-wrap textarea:focus {
+    outline: none;
+    border-color: #4e54ff;
+  }
+  .paste-textarea-wrap textarea::placeholder {
+    color: #6c757d;
+    font-family: inherit;
+  }
+
+  .form-submit {
+    background: #28a745;
+    border: none;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 7px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .form-submit:hover { background: #2bb84d; }
+  .form-submit:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
+
+  .form-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .upload-meta {
+    margin-top: 10px;
+    color: #6c757d;
+    font-size: 0.74rem;
+    line-height: 1.5;
+    font-style: italic;
+  }
+  .upload-meta strong { color: #adb5bd; font-style: normal; }
+
+  /* ─── Preview (Screen 2) ──────────────────────────────────── */
+  .preview-stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 700px) {
+    .preview-stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .stat-card {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .stat-card .stat-label {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+    font-weight: 600;
+  }
+  .stat-card .stat-value {
+    color: #ffffff;
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card .stat-sub {
+    color: #6c757d;
+    font-size: 0.74rem;
+    margin-top: 3px;
+    line-height: 1.3;
+  }
+  .stat-card.accent-green .stat-value { color: #5bd47b; }
+  .stat-card.accent-amber .stat-value { color: #ffc870; }
+  .stat-card.accent-blue  .stat-value { color: #8ec5ff; }
+
+  /* ─── Skip log panel ───────────────────────────────────────── */
+  .skip-log {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  .skip-log h3 {
+    color: #ffc870;
+    font-size: 0.86rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .skip-log .skip-row {
+    display: grid;
+    grid-template-columns: 220px 1fr auto;
+    gap: 12px;
+    align-items: start;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+  .skip-log .skip-row:last-child { border-bottom: none; }
+  .skip-log .skip-reason {
+    color: #ffc870;
+    font-weight: 600;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.74rem;
+  }
+  .skip-log .skip-detail {
+    color: #adb5bd;
+  }
+  .skip-log .skip-detail .skip-example {
+    color: #6c757d;
+    font-style: italic;
+    display: block;
+    margin-top: 2px;
+  }
+  .skip-log .skip-count {
+    color: #ffc870;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255,140,0,0.12);
+    padding: 2px 9px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+  }
+  @media (max-width: 700px) {
+    .skip-log .skip-row { grid-template-columns: 1fr; }
+    .skip-log .skip-count { justify-self: start; }
+  }
+
+  /* ─── Preview table ───────────────────────────────────────── */
+  .preview-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    background: #14171d;
+  }
+  .preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .preview-table th {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    text-align: left;
+    padding: 9px 10px 7px;
+    border-bottom: 1px solid #2a2d34;
+    white-space: nowrap;
+    background: #1a1d24;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .preview-table th.num,
+  .preview-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .preview-table td {
+    padding: 8px 10px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    line-height: 1.4;
+  }
+  .preview-table tr:last-child td { border-bottom: none; }
+  .preview-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .preview-table tr.row-needs-review td {
+    background: rgba(255,165,0,0.06);
+  }
+  .preview-table tr.row-needs-review:hover td {
+    background: rgba(255,165,0,0.1);
+  }
+  .preview-table tr.row-unchecked td {
+    opacity: 0.4;
+  }
+  .preview-table .keep-cb {
+    width: 16px;
+    height: 16px;
+    accent-color: #28a745;
+    cursor: pointer;
+  }
+  .preview-table .price-cell {
+    color: #5bd47b;
+    font-weight: 600;
+  }
+  .preview-table .review-badge {
+    display: inline-block;
+    background: rgba(255,165,0,0.18);
+    color: #ffc870;
+    border: 1px solid rgba(255,165,0,0.45);
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .preview-table .auto-badge {
+    display: inline-block;
+    background: rgba(40,167,69,0.16);
+    color: #5bd47b;
+    border: 1px solid rgba(40,167,69,0.45);
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .preview-table .conf-pill {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Confirm bar (sticky footer) ─────────────────────────── */
+  .confirm-bar {
+    background: #1a1d24;
+    border: 1px solid #28a745;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .confirm-bar .confirm-summary {
+    color: #e6e6e6;
+    font-size: 0.86rem;
+    line-height: 1.4;
+  }
+  .confirm-bar .confirm-summary strong {
+    color: #5bd47b;
+  }
+  .confirm-bar .confirm-summary .confirm-sub {
+    color: #adb5bd;
+    font-size: 0.76rem;
+    display: block;
+    margin-top: 2px;
+  }
+  .confirm-bar .confirm-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .strip-btn-secondary {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2d34;
+    padding: 8px 14px;
+    border-radius: 7px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.15s;
+  }
+  .strip-btn-secondary:hover {
+    border-color: #6c757d;
+    color: #fff;
+  }
+  .empty-state {
+    text-align: center;
+    padding: 36px 16px;
+    color: #6c757d;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .empty-state .empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.5; }
+  .empty-state strong { color: #adb5bd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+
+  <!-- ============================================================
+       ADMIN NAV STRIP
+       Mirrors admin_listing_calibration.html. The "Listing Calibration"
+       tab stays active here too since this is a sub-tool of it.
+       ============================================================ -->
+  <div class="admin-nav-strip">
+    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
+    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
+    <a href="{{ url_for('admin_multipliers') }}">📈 State Multipliers</a>
+    <a href="{{ url_for('admin_feedback') }}">💬 Feedback Calibration</a>
+    <a href="{{ url_for('admin_research') }}">🔬 Research</a>
+    <a href="{{ url_for('admin_listing_calibration') }}" class="active">🚛 Listing Calibration</a>
+    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
+  </div>
+
+  <a href="{{ url_for('admin_listing_calibration') }}" class="btn-back">← Back</a>
+
+  <!-- ============================================================
+       PAGE HEADER
+       ============================================================ -->
+  <div class="page-header">
+    <h1>📋 Paste Extractor</h1>
+    <p class="page-subtitle">
+      Paste a CarWale results page directly from your browser.
+      The server extracts listings via regex anchors — no scraping, no bot defenses.
+      Each row gets ingested into <code>research_log</code> with full Step D dedup
+      and the new tier tags (<code>aggregator_paste_listings</code>).
+    </p>
+  </div>
+
+  <!-- ============================================================
+       FLASH MESSAGES (× dismissible)
+       ============================================================ -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, msg in messages %}
+          <div class="flash flash-{{ 'success' if category == 'success' else 'error' }}">
+            <span class="flash-msg">{{ msg }}</span>
+            <button type="button" class="flash-close" onclick="this.parentElement.style.display='none'" aria-label="Dismiss">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% if preview is none %}
+    <!-- ============================================================
+         SCREEN 1 — TEXTAREA FORM
+         Source dropdown + state + city + raw_text textarea.
+         POSTs to /admin/paste-and-extract → server parses → renders Screen 2.
+         ============================================================ -->
+    <div class="helper-strip">
+      <strong>How to use:</strong>
+      <ol>
+        <li>Open a CarWale "Used Cars in {City}" results page in your browser
+            (e.g. <code>carwale.com/used/cars-for-sale-in-bangalore/</code>)</li>
+        <li>Scroll to the listings section, click before the first listing,
+            shift-click after the last one on the page</li>
+        <li>Press <code>Ctrl+C</code>, then paste into the textarea below</li>
+        <li>Pick the source, state, and city, then click <strong>Extract preview</strong></li>
+        <li>Review the extracted rows and confirm to ingest</li>
+      </ol>
+    </div>
+
+    <div class="section-card">
+      <h2>📋 Paste &amp; Extract <span class="h2-sub">— pick source, state &amp; city, then paste the page</span></h2>
+
+      <form action="{{ url_for('admin_paste_and_extract') }}" method="POST" id="paste-form">
+        <div class="paste-form-grid">
+
+          <!-- Source dropdown — alphabetical from PASTE_SOURCE_MAPPING keys -->
+          <div class="form-field">
+            <label for="source_label">Source</label>
+            <select name="source_label" id="source_label" required>
+              {% for src in source_options|sort %}
+                <option value="{{ src }}" {% if src == default_source %}selected{% endif %}>{{ src }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- State dropdown — alphabetical from RTO_STATES -->
+          <div class="form-field">
+            <label for="state_code">State</label>
+            <select name="state_code" id="state_code" required onchange="rebuildCityDropdown()">
+              {% for code in rto_states|sort %}
+                <option value="{{ code }}" {% if code == default_state %}selected{% endif %}>{{ code }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- City dropdown — populated by JS -->
+          <div class="form-field">
+            <label for="city">City</label>
+            <select name="city" id="city" required>
+              <!-- populated by rebuildCityDropdown() -->
+            </select>
+          </div>
+        </div>
+
+        <div class="paste-textarea-wrap">
+          <label for="raw_text">
+            <span>Paste the page here</span>
+            <span class="char-counter" id="char-counter">0 chars · 0 KB</span>
+          </label>
+          <textarea name="raw_text" id="raw_text" required
+                    placeholder="Paste your CarWale page here. The extractor handles ads, widgets, EMI lines, and feature chips automatically — just select the listings region and paste."></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="form-submit" id="extract-btn">Extract preview</button>
+          <span class="upload-meta" style="margin: 0;">
+            Limits: <strong>{{ paste_max_blocks }} listings</strong> per paste ·
+            <strong>{{ paste_max_bytes // 1024 // 1024 }} MB</strong> max paste size ·
+            Server time now: <strong>{{ now_display }}</strong>
+          </span>
+        </div>
+      </form>
+    </div>
+
+  {% else %}
+    <!-- ============================================================
+         SCREEN 2 — PREVIEW TABLE
+         Shows extracted rows. Admin can uncheck rows to drop them.
+         "Confirm & ingest" POSTs to /admin/paste-confirm-ingest.
+         ============================================================ -->
+    <div class="helper-strip">
+      <strong>Preview ready.</strong> {{ preview.parsed_count }} of {{ preview.total_rows }} listing
+      block{{ '' if preview.total_rows == 1 else 's' }} successfully parsed for
+      <strong>{{ preview.city }}, {{ preview.state_code }}</strong>
+      from <code>{{ preview.source_label }}</code>.
+      Uncheck any rows you want to drop, then click <strong>Confirm &amp; ingest</strong>
+      to write them to the database.
+    </div>
+
+    <!-- Top-line stats -->
+    <div class="preview-stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Found</div>
+        <div class="stat-value">{{ '{:,}'.format(preview.total_rows) }}</div>
+        <div class="stat-sub">listing blocks detected</div>
+      </div>
+      <div class="stat-card accent-green">
+        <div class="stat-label">Parsed OK</div>
+        <div class="stat-value">{{ '{:,}'.format(preview.parsed_count) }}</div>
+        <div class="stat-sub">ready to ingest</div>
+      </div>
+      <div class="stat-card accent-amber">
+        <div class="stat-label">Skipped</div>
+        <div class="stat-value">{{ '{:,}'.format(preview.skipped_count) }}</div>
+        <div class="stat-sub">see breakdown below</div>
+      </div>
+      <div class="stat-card accent-blue">
+        <div class="stat-label">Source</div>
+        <div class="stat-value" style="font-size: 0.95rem; line-height: 1.3;">{{ preview.source_label }}</div>
+        <div class="stat-sub">{{ preview.city }}, {{ preview.state_code }}</div>
+      </div>
+    </div>
+
+    <!-- Skip log (only shown when there ARE skips) -->
+    {% if preview.skipped_count > 0 %}
+      <div class="skip-log">
+        <h3>⚠️ Skipped row breakdown <span style="color:#adb5bd; font-weight:400; font-size:0.78rem; margin-left:6px;">— these did not match the listing block structure or failed validation</span></h3>
+        {% for reason, count in preview.skip_summary.items() %}
+          <div class="skip-row">
+            <div class="skip-reason">{{ reason }}</div>
+            <div class="skip-detail">
+              {% if preview.skip_examples.get(reason) %}
+                {{ preview.skip_examples[reason].detail }}
+                {% if preview.skip_examples[reason].raw_title %}
+                  <span class="skip-example">e.g. "{{ preview.skip_examples[reason].raw_title }}"</span>
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </div>
+            <div class="skip-count">{{ count }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if preview.parsed_count > 0 %}
+      <form action="{{ url_for('admin_paste_confirm_ingest') }}" method="POST" id="confirm-form">
+        <input type="hidden" name="preview_token" value="{{ preview_token }}">
+
+        <div class="section-card" style="padding: 0;">
+          <div class="preview-table-wrap">
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th style="width: 36px;">
+                    <input type="checkbox" id="check-all" class="keep-cb" checked
+                           title="Toggle all rows" onchange="toggleAllKeep(this.checked)">
+                  </th>
+                  <th>#</th>
+                  <th>Year</th>
+                  <th>Make</th>
+                  <th>Model</th>
+                  <th>Variant</th>
+                  <th>Fuel</th>
+                  <th class="num">Mileage</th>
+                  <th class="num">Asking ₹</th>
+                  <th>Locality</th>
+                  <th>Match</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in preview.parsed_rows %}
+                  <tr class="preview-row {% if row.needs_review %}row-needs-review{% endif %}"
+                      data-idx="{{ row.idx }}">
+                    <td>
+                      <input type="checkbox" class="keep-cb" name="keep_idx" value="{{ row.idx }}"
+                             checked onchange="updateRowState(this)">
+                    </td>
+                    <td style="color: #6c757d; font-variant-numeric: tabular-nums;">{{ row.idx + 1 }}</td>
+                    <td>{{ row.year }}</td>
+                    <td>{{ row.make }}</td>
+                    <td>{{ row.model }}</td>
+                    <td>{{ row.variant }}</td>
+                    <td>{{ row.fuel }}</td>
+                    <td class="num">{{ '{:,}'.format(row.mileage_km) }} km</td>
+                    <td class="num price-cell">{{ '{:,}'.format(row.asking_price) }}</td>
+                    <td style="color: #adb5bd;">{{ row.locality or '—' }}</td>
+                    <td>
+                      {% if row.needs_review %}
+                        <span class="review-badge">Review</span>
+                      {% else %}
+                        <span class="auto-badge">Auto</span>
+                      {% endif %}
+                      <span class="conf-pill">{{ row.variant_confidence }}%</span>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Confirm bar -->
+        <div class="confirm-bar">
+          <div class="confirm-summary">
+            <strong id="kept-count">{{ preview.parsed_count }}</strong> of {{ preview.parsed_count }} rows selected to ingest
+            <span class="confirm-sub">
+              Uncheck individual rows to drop them. Step D dedup will apply automatically
+              (same URL + same price within 90 days will be silently skipped).
+            </span>
+          </div>
+          <div class="confirm-actions">
+            <a href="{{ url_for('admin_paste_and_extract') }}" class="strip-btn-secondary">Re-paste</a>
+            <button type="submit" class="form-submit" id="confirm-btn">Confirm &amp; ingest →</button>
+          </div>
+        </div>
+      </form>
+    {% else %}
+      <!-- All rows skipped — no parsed rows to ingest -->
+      <div class="section-card">
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <strong>No rows could be parsed.</strong><br>
+          All {{ preview.total_rows }} block{{ '' if preview.total_rows == 1 else 's' }} the
+          extractor found were skipped — see the breakdown above.
+          <br><br>
+          <a href="{{ url_for('admin_paste_and_extract') }}" class="strip-btn-secondary">← Re-paste</a>
+        </div>
+      </div>
+    {% endif %}
+
+  {% endif %}
+
+</div>
+
+<script>
+  // ============================================================
+  // City dropdown cascade — only used on Screen 1.
+  // Rebuilds the city <select> based on the selected state.
+  // Cities are sorted alphabetically with "Other" pinned last
+  // (per the locked UI rule).
+  // ============================================================
+  const CITIES_BY_STATE = {{ cities_by_state_json | safe }};
+  const DEFAULT_CITY = {{ default_city | tojson }};
+  const PRESELECTED_CITY = {{ (preview.city if preview else '') | tojson }};
+
+  function rebuildCityDropdown() {
+    const stateSel = document.getElementById('state_code');
+    const citySel = document.getElementById('city');
+    if (!stateSel || !citySel) return;
+    const stateCode = stateSel.value;
+    const cities = (CITIES_BY_STATE[stateCode] || []).slice();
+
+    // Sort alphabetically, but pin "Other" to the end
+    const others = cities.filter(c => c.toLowerCase() === 'other');
+    const named = cities.filter(c => c.toLowerCase() !== 'other').sort((a, b) => a.localeCompare(b));
+    const sorted = named.concat(others);
+
+    citySel.innerHTML = '';
+    sorted.forEach(city => {
+      const opt = document.createElement('option');
+      opt.value = city;
+      opt.textContent = city;
+      // Prefer the preview-stashed city if we're editing; else fall back to default
+      if (PRESELECTED_CITY && city === PRESELECTED_CITY) opt.selected = true;
+      else if (!PRESELECTED_CITY && city === DEFAULT_CITY) opt.selected = true;
+      citySel.appendChild(opt);
+    });
+  }
+
+  // Initial population (only matters on Screen 1, but harmless on Screen 2)
+  if (document.getElementById('state_code')) {
+    rebuildCityDropdown();
+  }
+
+  // ============================================================
+  // Char counter for textarea (Screen 1)
+  // ============================================================
+  (function setupCharCounter() {
+    const textarea = document.getElementById('raw_text');
+    const counter = document.getElementById('char-counter');
+    if (!textarea || !counter) return;
+
+    const PASTE_MAX_BYTES = {{ paste_max_bytes }};
+
+    function updateCounter() {
+      const text = textarea.value || '';
+      const chars = text.length;
+      const bytes = new Blob([text]).size;
+      const kb = (bytes / 1024).toFixed(1);
+      counter.textContent = chars.toLocaleString() + ' chars · ' + kb + ' KB';
+      if (bytes > PASTE_MAX_BYTES) {
+        counter.classList.add('over-limit');
+      } else {
+        counter.classList.remove('over-limit');
+      }
+    }
+
+    textarea.addEventListener('input', updateCounter);
+    updateCounter();
+  })();
+
+  // ============================================================
+  // Form submit feedback (Screen 1)
+  // Disable button + show "Extracting..." while POST is in flight.
+  // Server-side parse + extract preview takes 1-3 seconds for typical pastes.
+  // ============================================================
+  (function setupExtractFeedback() {
+    const form = document.getElementById('paste-form');
+    const btn = document.getElementById('extract-btn');
+    if (!form || !btn) return;
+    form.addEventListener('submit', function() {
+      btn.disabled = true;
+      btn.textContent = 'Extracting…';
+    });
+  })();
+
+  // ============================================================
+  // Preview table — keep/drop checkboxes (Screen 2)
+  // ============================================================
+  function updateRowState(checkbox) {
+    const tr = checkbox.closest('tr');
+    if (!tr) return;
+    if (checkbox.checked) {
+      tr.classList.remove('row-unchecked');
+    } else {
+      tr.classList.add('row-unchecked');
+    }
+    updateKeptCount();
+  }
+
+  function toggleAllKeep(checked) {
+    const cbs = document.querySelectorAll('input.keep-cb[name="keep_idx"]');
+    cbs.forEach(function(cb) {
+      cb.checked = checked;
+      updateRowState(cb);
+    });
+  }
+
+  function updateKeptCount() {
+    const total = document.querySelectorAll('input.keep-cb[name="keep_idx"]').length;
+    const kept = document.querySelectorAll('input.keep-cb[name="keep_idx"]:checked').length;
+    const el = document.getElementById('kept-count');
+    if (el) el.textContent = kept.toString();
+    // Also reflect in the master "check all" if everything is consistent
+    const checkAll = document.getElementById('check-all');
+    if (checkAll) {
+      checkAll.checked = (kept === total);
+      checkAll.indeterminate = (kept > 0 && kept < total);
+    }
+    // Disable the confirm button if nothing is kept
+    const confirmBtn = document.getElementById('confirm-btn');
+    if (confirmBtn) {
+      confirmBtn.disabled = (kept === 0);
+    }
+  }
+
+  // ============================================================
+  // Confirm form submit feedback (Screen 2)
+  // ============================================================
+  (function setupConfirmFeedback() {
+    const form = document.getElementById('confirm-form');
+    const btn = document.getElementById('confirm-btn');
+    if (!form || !btn) return;
+    form.addEventListener('submit', function() {
+      btn.disabled = true;
+      btn.textContent = 'Ingesting…';
+    });
+  })();
+</script>
+{% endblock %}
