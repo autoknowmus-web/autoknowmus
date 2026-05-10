@@ -6929,11 +6929,27 @@ def admin_research_apply_suggestion(state_code):
 def about():
     """
     Public About page — reveals the full AUTOM + KNOWUS architecture.
-    No login required. Reachable from:
-      (a) the brand footer letter strip on every logged-in/guest page
-      (b) the "Return to AutoKnowMus" link returns user to /
+    No login required.
+
+    Back-button behavior: if the user arrived via an internal link
+    (request.referrer is set and points to our domain), the back link
+    returns them to that page. Otherwise it falls back to the landing
+    page. This avoids /about acting as an open redirect for inbound
+    traffic from external sites.
     """
-    return render_template('about.html')
+    referrer = request.referrer or ''
+    back_url = None
+    if referrer:
+        try:
+            from urllib.parse import urlparse
+            ref_host = urlparse(referrer).netloc
+            our_host = urlparse(request.url_root).netloc
+            # Only honor referrers that match our own host
+            if ref_host and ref_host == our_host:
+                back_url = referrer
+        except Exception:
+            back_url = None
+    return render_template('about.html', back_url=back_url)
 
 
 @app.route('/logout')
