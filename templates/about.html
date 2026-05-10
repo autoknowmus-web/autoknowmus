@@ -1,0 +1,345 @@
+{# ============================================================
+   templates/about.html  (NEW FILE)
+   ------------------------------------------------------------
+   Public About page — reveals the full AUTOM + KNOWUS architecture.
+   No login required.
+
+   LOCKED LAYOUT (memory #29 — "About" treatment):
+   - Vertical list in EXACT brand-name order A·U·T·O·K·N·O·W·M·U·S
+   - AUTOM letters (rows 1-4 + row 9) full opacity in brand colors
+     with phase word + concrete description on same row
+   - KNOWUS letters (rows 5-8 + rows 10-11) greyed italic with ░
+     prefix, phase word + cryptic tagline on same row
+   - M sits naturally at row 9 (between greyed K-N-O-W and greyed U-S),
+     visually appearing as a "highlighted island" inside the faded zone
+
+   Standalone page (does NOT extend layout.html). Purpose: focus the
+   reader on the architecture without navbar or footer chrome.
+   ============================================================ #}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About AutoKnowMus — What Every Letter Stands For</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --brand-green: #28a745;
+      --brand-blue: #4e54ff;
+      --brand-orange: #ffa500;
+      --brand-purple: #8a90ff;
+      --brand-yellow: #ffd700;
+      --muted: #6c757d;
+    }
+
+    body {
+      background: #0d0f14;
+      color: #e9ecef;
+      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* Top bar — minimal, just a back link */
+    .about-topbar {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 1.2rem 1.25rem 0;
+    }
+    .about-back {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: color 0.15s;
+    }
+    .about-back:hover { color: #e9ecef; }
+
+    /* Hero — the brand name in full color, centered */
+    .about-hero {
+      max-width: 980px;
+      margin: 1.4rem auto 0.6rem;
+      padding: 0 1.25rem;
+      text-align: center;
+    }
+    .about-hero-text {
+      font-family: 'Segoe UI', sans-serif;
+      font-weight: 800;
+      font-size: 2.6rem;
+      letter-spacing: -0.025em;
+      line-height: 1;
+    }
+    .about-hero-text .brand-auto { color: #ffffff; }
+    .about-hero-text .brand-know { color: var(--brand-green); }
+    .about-hero-text .brand-mus  { color: var(--brand-blue); }
+
+    /* Intro prose */
+    .about-intro {
+      max-width: 760px;
+      margin: 1.5rem auto 2.2rem;
+      padding: 0 1.25rem;
+      text-align: center;
+      color: #c8cdd5;
+      font-size: 1.05rem;
+      line-height: 1.6;
+    }
+    .about-intro .lede {
+      color: #e9ecef;
+      font-weight: 600;
+      font-size: 1.15rem;
+      margin-bottom: 0.85rem;
+    }
+
+    /* Eyebrow before the letter list */
+    .about-section-eyebrow {
+      max-width: 720px;
+      margin: 0 auto 0.9rem;
+      padding: 0 1.25rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    /* The vertical letter list */
+    .letter-list {
+      max-width: 720px;
+      margin: 0 auto 2rem;
+      padding: 1.4rem 1.6rem;
+      background: linear-gradient(135deg, #14171d 0%, #1a1d24 100%);
+      border: 1px solid #2a2e38;
+      border-radius: 14px;
+    }
+
+    .letter-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.85rem;
+      padding: 0.55rem 0;
+      font-size: 1.02rem;
+      line-height: 1.5;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .letter-row:last-child { border-bottom: none; }
+
+    /* Letter token — same typography as the navbar logo */
+    .letter-token {
+      font-family: 'Segoe UI', sans-serif;
+      font-weight: 800;
+      font-size: 1.55rem;
+      letter-spacing: -0.5px;
+      flex-shrink: 0;
+      width: 1.6rem;
+      text-align: center;
+      line-height: 1;
+    }
+
+    /* AUTOM rows — full opacity, brand colors */
+    .letter-row.is-bright .letter-token { opacity: 1; }
+    .letter-row.is-bright .letter-word {
+      color: #ffffff;
+      font-weight: 700;
+    }
+    .letter-row.is-bright .letter-desc {
+      color: #c8cdd5;
+    }
+
+    /* KNOWUS rows — faded, italic, with ░ prefix */
+    .letter-row.is-faded .letter-token { opacity: 0.4; }
+    .letter-row.is-faded .letter-word {
+      color: #adb5bd;
+      font-weight: 600;
+      font-style: italic;
+      opacity: 0.65;
+    }
+    .letter-row.is-faded .letter-desc {
+      color: #adb5bd;
+      font-style: italic;
+      opacity: 0.6;
+    }
+    .letter-row.is-faded .letter-token::before {
+      content: "░ ";
+      color: #6c757d;
+      opacity: 0.5;
+      margin-right: 0.15em;
+      font-weight: 400;
+      letter-spacing: 0;
+    }
+
+    /* Per-letter color classes — applied to the .letter-token directly */
+    .letter-color-auto { color: #ffffff; }
+    .letter-color-know { color: var(--brand-green); }
+    .letter-color-mus  { color: var(--brand-blue); }
+
+    .letter-word {
+      font-size: 1rem;
+      flex-shrink: 0;
+      min-width: 7.5rem;
+    }
+    .letter-desc {
+      flex: 1;
+      font-size: 0.96rem;
+    }
+    .letter-sep {
+      color: var(--muted);
+      margin: 0 0.45rem;
+    }
+
+    @media (max-width: 600px) {
+      .about-hero-text { font-size: 2rem; }
+      .letter-row {
+        flex-wrap: wrap;
+        gap: 0.5rem 0.75rem;
+        font-size: 0.94rem;
+      }
+      .letter-token { font-size: 1.35rem; width: 1.4rem; }
+      .letter-word { min-width: 6rem; font-size: 0.92rem; }
+      .letter-desc { width: 100%; font-size: 0.88rem; padding-left: 2.25rem; }
+      .letter-sep { display: none; }
+    }
+
+    /* Footer note */
+    .about-footnote {
+      max-width: 720px;
+      margin: 1.4rem auto 3rem;
+      padding: 0 1.25rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.55;
+      font-style: italic;
+    }
+    .about-footnote a {
+      color: var(--brand-green);
+      text-decoration: none;
+      font-weight: 600;
+      font-style: normal;
+    }
+    .about-footnote a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <div class="about-topbar">
+    <a href="{{ url_for('index') }}" class="about-back">← Back to AutoKnowMus</a>
+  </div>
+
+  <div class="about-hero">
+    <div class="about-hero-text">
+      <span class="brand-auto">Auto</span><span class="brand-know">Know</span><span class="brand-mus">Mus</span>
+    </div>
+  </div>
+
+  <div class="about-intro">
+    <p class="lede">Every letter in our name is a phase of what we're building.</p>
+    <p>
+      AutoKnowMus exists to cut through price opacity — replacing guesswork with prices car buyers and sellers can trust. But our vision is bigger: an end-to-end car ownership companion, from the price you pay, to the price you get, and everything in between.
+    </p>
+  </div>
+
+  <div class="about-section-eyebrow">What every letter stands for</div>
+
+  <section class="letter-list" aria-label="The AUTOKNOWMUS architecture">
+
+    {# ───────── A · Anchor (AUTOM, bright) ───────── #}
+    <div class="letter-row is-bright">
+      <span class="letter-token letter-color-auto">A</span>
+      <span class="letter-word">Anchor</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">the new-car reference for every variant</span>
+    </div>
+
+    {# ───────── u · Usage signal (AUTOM, bright) ───────── #}
+    <div class="letter-row is-bright">
+      <span class="letter-token letter-color-auto">u</span>
+      <span class="letter-word">Usage signal</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">how the market is currently pricing this car</span>
+    </div>
+
+    {# ───────── t · Territory (AUTOM, bright) ───────── #}
+    <div class="letter-row is-bright">
+      <span class="letter-token letter-color-auto">t</span>
+      <span class="letter-word">Territory</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">how your state and city differ from the rest of the country</span>
+    </div>
+
+    {# ───────── o · Observation (AUTOM, bright) ───────── #}
+    <div class="letter-row is-bright">
+      <span class="letter-token letter-color-auto">o</span>
+      <span class="letter-word">Observation</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">what real users tell us when they buy or sell</span>
+    </div>
+
+    {# ───────── K · Knowledge (KNOWUS, faded, cryptic) ───────── #}
+    <div class="letter-row is-faded">
+      <span class="letter-token letter-color-know">K</span>
+      <span class="letter-word">Knowledge</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">See what the eye misses.</span>
+    </div>
+
+    {# ───────── n · Negotiation (KNOWUS, faded, cryptic) ───────── #}
+    <div class="letter-row is-faded">
+      <span class="letter-token letter-color-know">n</span>
+      <span class="letter-word">Negotiation</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">Know the room before you walk in.</span>
+    </div>
+
+    {# ───────── o · Ownership (KNOWUS, faded, cryptic) ───────── #}
+    <div class="letter-row is-faded">
+      <span class="letter-token letter-color-know">o</span>
+      <span class="letter-word">Ownership</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">After the keys change hands.</span>
+    </div>
+
+    {# ───────── w · Warranty (KNOWUS, faded, cryptic) ───────── #}
+    <div class="letter-row is-faded">
+      <span class="letter-token letter-color-know">w</span>
+      <span class="letter-word">Warranty</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">The promise that travels with the car.</span>
+    </div>
+
+    {# ───────── M · Market signal (AUTOM, bright — the island in row 9) ───────── #}
+    <div class="letter-row is-bright">
+      <span class="letter-token letter-color-mus">M</span>
+      <span class="letter-word">Market signal</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">taxes, launches, fuel prices, seasonality</span>
+    </div>
+
+    {# ───────── u · Universal listing (KNOWUS, faded, cryptic) ───────── #}
+    <div class="letter-row is-faded">
+      <span class="letter-token letter-color-mus">u</span>
+      <span class="letter-word">Universal listing</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">No borders. No limits.</span>
+    </div>
+
+    {# ───────── s · Sustainability (KNOWUS, faded, cryptic) ───────── #}
+    <div class="letter-row is-faded">
+      <span class="letter-token letter-color-mus">s</span>
+      <span class="letter-word">Sustainability</span>
+      <span class="letter-sep">—</span>
+      <span class="letter-desc">Every story has a next chapter.</span>
+    </div>
+
+  </section>
+
+  <div class="about-footnote">
+    The bright letters are live today. The faded letters are what comes next — each will reveal as it ships.
+    <br>
+    <a href="{{ url_for('index') }}">← Return to AutoKnowMus</a>
+  </div>
+
+</body>
+</html>
