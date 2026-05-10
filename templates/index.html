@@ -24,7 +24,7 @@
       align-items: center;
       justify-content: center;
       gap: 14px;
-      margin: 2rem 0 0.75rem;
+      margin: 1.25rem 0 0.6rem;
     }
     .hero-shield { width: 52px; height: 52px; flex-shrink: 0; }
     .hero-text {
@@ -37,31 +37,22 @@
     .hero-text .brand-know { color: var(--brand-green); }
     .hero-text .brand-mus  { color: var(--brand-blue); }
 
-    .tagline {
-      text-align: center;
-      color: #adb5bd;
-      font-size: 1.05rem;
-      max-width: 780px;
-      margin: 0 auto 1.5rem;
-      padding: 0 1rem;
-    }
-
     /* ============================================================
-       AUTOM/KNOWUS vision panel (new — Sprint 2)
+       Vision panel — Sprint 2
        ------------------------------------------------------------
-       Bridges the locked price-transparency tagline (above) and
-       the 3-column login/testimonial section (below). Tells the
-       fuller story: we exist for price transparency, but the
-       vision is end-to-end ownership companionship.
+       Wide horizontal layout to minimize vertical scrolling. The
+       3-column login row should be visible above the fold on
+       typical desktops (1366×768 and up).
 
-       Per memory rule #29: this is the LANDING-page treatment.
-       Full prose. NO per-letter naming. NO letter strip.
-       Per-letter detail lives only on the About Us page.
+       Replaces the previous market-opacity tagline (memory #22 has
+       been updated to reflect this). The panel's prose covers the
+       same ground in stronger language and adds the AUTOM/KNOWUS
+       vision context.
        ============================================================ */
     .vision-panel {
-      max-width: 880px;
-      margin: 0 auto 2rem;
-      padding: 1.4rem 1.5rem 1.5rem;
+      max-width: 1180px;
+      margin: 0 auto 1.4rem;
+      padding: 0.9rem 1.6rem 1rem;
       background: linear-gradient(135deg, #14171d 0%, #1a1d24 100%);
       border: 1px solid #2a2e38;
       border-radius: 14px;
@@ -77,27 +68,17 @@
       background: linear-gradient(90deg, #ffffff 0%, var(--brand-green) 50%, var(--brand-blue) 100%);
       border-radius: 0 0 3px 3px;
     }
-    .vision-eyebrow {
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      margin-bottom: 0.85rem;
-    }
     .vision-body {
       color: #c8cdd5;
-      font-size: 0.96rem;
-      line-height: 1.65;
-      max-width: 760px;
+      font-size: 1rem;
+      line-height: 1.55;
+      max-width: 1080px;
       margin: 0 auto;
       text-align: center;
     }
     .vision-body p {
-      margin-bottom: 0.7rem;
+      margin: 0;
     }
-    .vision-body p:last-child { margin-bottom: 0; }
     .vision-body .v-emph {
       color: #e9ecef;
       font-weight: 600;
@@ -105,12 +86,21 @@
     .vision-body .v-bigger {
       color: #ffffff;
       font-weight: 700;
-      font-size: 1.04rem;
       letter-spacing: -0.005em;
     }
+    .vision-body .v-sep {
+      color: var(--muted);
+      margin: 0 0.55rem;
+      font-weight: 300;
+    }
+    @media (max-width: 992px) {
+      .vision-panel { padding: 0.85rem 1.1rem 0.95rem; }
+      .vision-body { font-size: 0.94rem; line-height: 1.55; text-align: center; }
+      .vision-body .v-sep { display: block; height: 0.35rem; margin: 0; visibility: hidden; }
+    }
     @media (max-width: 768px) {
-      .vision-panel { padding: 1.1rem 1rem 1.2rem; margin-bottom: 1.5rem; }
-      .vision-body { font-size: 0.9rem; line-height: 1.6; }
+      .vision-panel { padding: 0.8rem 1rem 0.9rem; margin-bottom: 1rem; }
+      .vision-body { font-size: 0.88rem; }
     }
 
     .col-wrap {
@@ -244,7 +234,7 @@
   </style>
 </head>
 <body>
-  <div class="container py-4">
+  <div class="container py-3">
 
     <!-- HERO LOGO -->
     <div class="hero-logo">
@@ -257,27 +247,20 @@
       </div>
     </div>
 
-    <!-- LOCKED TAGLINE (memory rule #22 — do not modify) -->
-    <p class="tagline">
-      AutoKnowMus cuts through market opacity with real price transparency—helping you avoid overpaying and ensuring you sell at the right price, at the right time
-    </p>
-
     <!-- ============================================================
-         AUTOM / KNOWUS vision panel (Sprint 2 addition)
-         Full prose only — no per-letter naming on landing page.
-         Per-letter detail lives on the About Us page.
+         Vision panel — wide horizontal layout, no eyebrow heading,
+         replaces previous market-opacity tagline (memory #22 updated).
+         The 3 sentences flow on one logical line on desktop (separated
+         by · markers) and stack into 3 lines on mobile (≤992px).
          ============================================================ -->
-    <section class="vision-panel" aria-label="Our vision">
-      <div class="vision-eyebrow">Our vision</div>
+    <section class="vision-panel" aria-label="What AutoKnowMus is building">
       <div class="vision-body">
         <p>
-          AutoKnowMus exists to cut through price opacity — replacing guesswork with prices car buyers and sellers can trust.
-        </p>
-        <p>
-          But our <span class="v-emph">vision is bigger.</span>
-        </p>
-        <p>
-          Every letter in our name is a phase of what we're building — <span class="v-bigger">your end-to-end car ownership companion</span>, from the price you pay, to the price you get, and everything in between.
+          <span>AutoKnowMus exists to cut through price opacity — replacing guesswork with prices car buyers and sellers can trust.</span>
+          <span class="v-sep">·</span>
+          <span>But our <span class="v-emph">vision is bigger.</span></span>
+          <span class="v-sep">·</span>
+          <span>Every letter in our name is a phase of what we're building — <span class="v-bigger">your end-to-end car ownership companion</span>, from the price you pay, to the price you get, and everything in between.</span>
         </p>
       </div>
     </section>
