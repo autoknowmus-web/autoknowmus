@@ -592,6 +592,19 @@
     border: 6px solid transparent;
     border-top-color: #000;
   }
+  /* v3.5.5.2: Flip tooltip below the icon when there isn't room above
+     (e.g. for the topmost row of the preview table). JS adds .flip-down
+     based on viewport position. */
+  .preview-table .match-tooltip.flip-down {
+    bottom: auto;
+    top: calc(100% + 8px);
+  }
+  .preview-table .match-tooltip.flip-down::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: #000;
+  }
   .preview-table .match-info-icon:hover + .match-tooltip,
   .preview-table .match-info-icon:focus + .match-tooltip,
   .preview-table .match-cell-wrap:hover .match-tooltip {
@@ -1089,6 +1102,45 @@
     form.addEventListener('submit', function() {
       btn.disabled = true;
       btn.textContent = 'Ingesting…';
+    });
+  })();
+
+  // ============================================================
+  // v3.5.5.2: Match tooltip flip-down handler.
+  // Tooltips default to position ABOVE the icon. For top rows, there's
+  // no room above — measure on hover and add .flip-down class to position
+  // BELOW the icon instead. Same pattern as dashboard.html.
+  // ============================================================
+  (function setupMatchTooltipFlip() {
+    const wraps = document.querySelectorAll('.preview-table .match-cell-wrap');
+    wraps.forEach(function(wrap) {
+      const tip = wrap.querySelector('.match-tooltip');
+      const icon = wrap.querySelector('.match-info-icon');
+      if (!tip || !icon) return;
+
+      function adjustFlip() {
+        // Reset to default (above) so we measure from a clean state
+        tip.classList.remove('flip-down');
+
+        // Briefly make tooltip measurable without showing it
+        tip.style.visibility = 'hidden';
+        tip.style.opacity = '0';
+        const prevDisplay = tip.style.display;
+        tip.style.display = 'block';
+        const tipHeight = tip.offsetHeight || 200;
+        tip.style.display = prevDisplay;
+        tip.style.visibility = '';
+        tip.style.opacity = '';
+
+        const iconRect = icon.getBoundingClientRect();
+        // Need ~tipHeight + arrow + margin (16px) above the icon
+        if (iconRect.top < tipHeight + 16) {
+          tip.classList.add('flip-down');
+        }
+      }
+
+      wrap.addEventListener('mouseenter', adjustFlip);
+      icon.addEventListener('focus', adjustFlip);
     });
   })();
 </script>
