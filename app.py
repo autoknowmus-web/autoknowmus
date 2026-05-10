@@ -7669,46 +7669,59 @@ def price_tools_un_discontinue():
         'last_known_price_date': result.get('last_known_price_date'),
     })
 # ============================================================
+# 📁 File 1 of 6: app.py — Part 9 (Part 1/2)
+# 📍 Location: app.py (root of repo)
+# ✏️ Status: EXISTING — full replacement of Part 9 Part 1/2 ONLY
+# 
+# This block REPLACES your existing "Part 9 (Part 1/2)" section.
+# Part 9 (Part 2/2) and `if __name__ == '__main__':` are UNCHANGED — keep
+# your currently deployed Part 2/2 exactly as-is.
+#
+# WHAT CHANGED IN v3.5.5:
+#   - _get_recent_listing_uploads() and _get_listing_upload_with_entries()
+#     now derive `status` based on NOTES CONTENT, not notes presence.
+#   - Notes containing only dedup info (e.g. "rows without URL") →
+#     status='completed' (green badge)
+#   - Notes containing real errors ("Errors: ...") →
+#     status='partial_error' (orange badge)
+#   - This fixes the misleading orange PARTIAL_ERROR badge that fired on
+#     every paste upload because the dedup summary always populates notes.
+#   - parse_success_pct math also fixed: now parsed/inserted (NOT parsed/total)
+#     so successful pastes show 100% not 71.4%.
+# ============================================================
 # app.py — Part 9 (Part 1/2)  ·  Listing Calibration Pipeline
 # ------------------------------------------------------------
-# v3.5.4 — Adds paste-extractor support alongside existing CSV upload.
+# v3.5.5 — Status classification fix for paste uploads.
 #
 # PASTE INSTRUCTIONS:
-#   1. Find your existing Part 9 block (starts with "# app.py — Part 9"
-#      and ends just before "if __name__ == '__main__':"). Replace it
-#      ENTIRELY with: this Part 1/2 block FOLLOWED BY the Part 2/2 block.
+#   1. Find your existing Part 9 Part 1/2 block (starts with "# app.py
+#      — Part 9 (Part 1/2)" header). REPLACE it ENTIRELY with this block.
 #
-#   2. Both parts paste IMMEDIATELY BEFORE the `if __name__ == '__main__':`
-#      block at the very end of app.py. Order: Part 1/2 first, then Part
-#      2/2, then the existing __main__ block (which stays unchanged).
+#   2. Part 9 (Part 2/2) stays UNCHANGED — do NOT replace it. Both parts
+#      sit IMMEDIATELY BEFORE the `if __name__ == '__main__':` block
+#      at the end of app.py.
 #
-# WHAT'S NEW IN v3.5.4:
-#   - Constants block expanded with PASTE_SOURCE_MAPPING (source dropdown
-#     values + their auto-derived data_source_type / data_quality_tier /
-#     marketplace tags)
-#   - _insert_listings_to_research_log() now writes 4 new columns:
-#     marketplace, data_source_type, data_quality_tier, locality
-#     (signature is backwards-compatible — existing CSV upload route works
-#      unchanged)
-#   - New helper _serialize_parse_result_for_preview() — flattens a
-#     ParseResult into JSON-safe payload for the paste extractor preview
-#   - New helper _deserialize_preview_to_parse_result() — reverses the
-#     above for the confirm-ingest step
-#   - 2 new routes added in Part 2/2:
-#       GET/POST /admin/paste-and-extract   — textarea + preview screen
-#       POST     /admin/paste-confirm-ingest — DB write after admin review
+# WHAT'S NEW IN v3.5.5:
+#   - _classify_upload_status_from_notes() — new helper that distinguishes
+#     informational dedup notes from actual error notes
+#   - _get_recent_listing_uploads() uses the helper for accurate status
+#   - _get_listing_upload_with_entries() uses the helper for accurate status
+#   - parse_success_pct now uses inserted/parsed (real success rate) instead
+#     of parsed/total (which counts skipped chrome rows as failures)
 #
 # WHAT'S UNCHANGED:
-#   - admin_listing_calibration (dashboard)
+#   - admin_listing_calibration (dashboard route)
 #   - admin_listing_calibration_upload (CSV upload route)
-#   - admin_listing_calibration_upload_detail (drilldown)
+#   - admin_listing_calibration_upload_detail (drilldown route)
+#   - _insert_listings_to_research_log() — write logic unchanged
 #   - All Step D dedup behavior
 #   - All existing constants
+#   - PASTE_SOURCE_MAPPING and related constants
 # ============================================================
 
 
 # ============================================================
-# Listing Calibration constants (v3.5.4)
+# Listing Calibration constants (v3.5.4 — unchanged in v3.5.5)
 # ============================================================
 
 # Value written to research_log.data_source for every row coming from the
@@ -7781,9 +7794,45 @@ from listing_csv_parser import (
 
 
 # ============================================================
+# v3.5.5 NEW HELPER — Classify upload status from notes content
+# ------------------------------------------------------------
+# Previously, the readers used `'partial_error' if notes else 'completed'`
+# which misclassified every successful paste because the dedup summary
+# always populates notes. This helper distinguishes:
+#   - Notes containing real errors → 'partial_error'
+#   - Notes containing only informational content (dedup, counts) → 'completed'
+#   - No notes at all → 'completed'
+# ============================================================
+
+def _classify_upload_status_from_notes(notes_text):
+    """
+    Returns 'completed' or 'partial_error' based on what's actually in
+    the notes string. The insert helper writes notes for every upload
+    (dedup summary is always present), so notes-presence alone is a
+    misleading signal.
+
+    The notes string is structured roughly as:
+      "Inserted 25 of 25 kept rows. Dedup: ... . Errors: ..."
+    Only the "Errors: ..." segment indicates a real problem.
+    """
+    if not notes_text:
+        return 'completed'
+
+    # Real errors are tagged with the literal "Errors:" prefix in
+    # _insert_listings_to_research_log(). If absent, the notes are
+    # purely informational (dedup counts, no-URL summary, etc.)
+    notes_lower = notes_text.lower()
+    if 'errors:' in notes_lower or 'failed' in notes_lower:
+        return 'partial_error'
+
+    return 'completed'
+
+
+# ============================================================
 # Helper: Insert parsed listings into research_log + listing_uploads
 # v3.5.4 — Now writes marketplace, data_source_type, data_quality_tier,
 # locality. Backwards-compatible defaults keep existing CSV route working.
+# v3.5.5 — UNCHANGED (write logic was correct; only readers were buggy)
 # ============================================================
 
 def _insert_listings_to_research_log(parse_result, state_code, city,
@@ -8122,6 +8171,7 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
 
 # ============================================================
 # v3.5.4 — Helper: Serialize ParseResult for the paste preview UI
+# UNCHANGED in v3.5.5
 # ============================================================
 
 def _serialize_parse_result_for_preview(parse_result, source_label,
@@ -8226,11 +8276,25 @@ def _deserialize_preview_to_parse_result(preview_dict):
 
 # ============================================================
 # Helper: Fetch recent uploads for the dashboard
+# v3.5.5 — FIX: status now derived from notes content, not notes presence.
+#               parse_success_pct now uses inserted/parsed (real success rate).
 # ============================================================
 
 def _get_recent_listing_uploads(limit=50):
     """
     Returns the latest N upload rows, decorated with display dates.
+
+    v3.5.5: Status classification fixed.
+    - Previous bug: `status='partial_error' if notes else 'completed'` — this
+      flagged every successful paste as partial_error because the dedup summary
+      always populates notes.
+    - Fix: status now derived from notes CONTENT via
+      _classify_upload_status_from_notes(), which only flags partial_error
+      when notes contain real errors ("Errors:" prefix).
+
+    parse_success_pct also fixed: was parsed/total (which counted skipped
+    chrome rows like ads/widgets as failures). Now inserted/parsed (true
+    success rate of legitimate listings).
     """
     try:
         r = (supabase.table('listing_uploads')
@@ -8260,14 +8324,20 @@ def _get_recent_listing_uploads(limit=50):
         row['skipped_count']   = row.get('skipped_rows') or 0
         row['source_filename'] = row.get('filename') or ''
         row['inserted_count']  = row['parsed_count']
-        row['status']          = 'partial_error' if row.get('notes') else 'completed'
+
+        # v3.5.5 FIX: status from notes content, not notes presence
+        row['status'] = _classify_upload_status_from_notes(row.get('notes'))
+
         row['parser_version']  = '1.0'
 
-        # Computed parse-success rate
-        total = row.get('total_rows') or 0
+        # v3.5.5 FIX: parse_success_pct = inserted/parsed (real success rate).
+        # The old formula (parsed/total) treated chrome skips (ads, widgets,
+        # EMI lines that the parser correctly rejected) as parse failures,
+        # which made even perfect pastes show ~70% success.
         parsed = row['parsed_count']
-        if total > 0:
-            row['parse_success_pct'] = round((parsed / total) * 100, 1)
+        inserted = row['inserted_count']
+        if parsed > 0:
+            row['parse_success_pct'] = round((inserted / parsed) * 100, 1)
         else:
             row['parse_success_pct'] = 0
 
@@ -8276,6 +8346,7 @@ def _get_recent_listing_uploads(limit=50):
 
 # ============================================================
 # Helper: Aggregate stats for the dashboard cards
+# UNCHANGED in v3.5.5
 # ============================================================
 
 def _compute_listing_calibration_stats():
@@ -8348,6 +8419,8 @@ def _compute_listing_calibration_stats():
 
 # ============================================================
 # Helper: Fetch one upload + its parsed entries (for drilldown)
+# v3.5.5 — FIX: Same status + parse_success_pct fixes as
+#               _get_recent_listing_uploads()
 # ============================================================
 
 def _get_listing_upload_with_entries(upload_id):
@@ -8355,6 +8428,9 @@ def _get_listing_upload_with_entries(upload_id):
     Returns (upload_row, parsed_entries) tuple for the drilldown page.
     upload_row is None if the id doesn't exist.
     parsed_entries is a list of research_log rows joined via listing_upload_id.
+
+    v3.5.5: Status classification + parse_success_pct fixes (same as
+    _get_recent_listing_uploads).
     """
     try:
         r = (supabase.table('listing_uploads')
@@ -8385,12 +8461,19 @@ def _get_listing_upload_with_entries(upload_id):
     upload_row['skipped_count']   = upload_row.get('skipped_rows') or 0
     upload_row['source_filename'] = upload_row.get('filename') or ''
     upload_row['inserted_count']  = upload_row['parsed_count']
-    upload_row['status']          = 'partial_error' if upload_row.get('notes') else 'completed'
+
+    # v3.5.5 FIX: status from notes content, not notes presence
+    upload_row['status'] = _classify_upload_status_from_notes(upload_row.get('notes'))
+
     upload_row['parser_version']  = '1.0'
 
-    total = upload_row.get('total_rows') or 0
+    # v3.5.5 FIX: parse_success_pct = inserted/parsed (real success rate)
     parsed = upload_row['parsed_count']
-    upload_row['parse_success_pct'] = round((parsed / total) * 100, 1) if total > 0 else 0
+    inserted = upload_row['inserted_count']
+    if parsed > 0:
+        upload_row['parse_success_pct'] = round((inserted / parsed) * 100, 1)
+    else:
+        upload_row['parse_success_pct'] = 0
 
     try:
         r = (supabase.table('research_log')
@@ -8413,6 +8496,7 @@ def _get_listing_upload_with_entries(upload_id):
 
 # ============================================================
 # ROUTE: Dashboard — GET /admin/listing-calibration
+# UNCHANGED in v3.5.5
 # ============================================================
 
 @app.route('/admin/listing-calibration')
@@ -8446,7 +8530,7 @@ def admin_listing_calibration():
 
 # ============================================================
 # ROUTE: CSV Upload POST — POST /admin/listing-calibration/upload
-# UNCHANGED in v3.5.4 (uses default kwargs on _insert_listings_to_research_log)
+# UNCHANGED in v3.5.5
 # ============================================================
 
 @app.route('/admin/listing-calibration/upload', methods=['POST'])
@@ -8582,7 +8666,7 @@ def admin_listing_calibration_upload():
 
 # ============================================================
 # ROUTE: Drilldown — GET /admin/listing-calibration/uploads/<id>
-# UNCHANGED in v3.5.4
+# UNCHANGED in v3.5.5
 # ============================================================
 
 @app.route('/admin/listing-calibration/uploads/<upload_id>')
@@ -8614,10 +8698,9 @@ def admin_listing_calibration_upload_detail(upload_id):
 
 # ============================================================
 # END app.py — Part 9 (Part 1/2)
-# Continue with Part 9 (Part 2/2) IMMEDIATELY below.
-# Both parts together replace your existing Part 9, then the
-# `if __name__ == '__main__':` block follows as before.
-# ============================================================
+# Continue with your EXISTING Part 9 (Part 2/2) IMMEDIATELY below.
+# (Part 2/2 is UNCHANGED — keep your currently deployed version.)
+# Then the existing `if __name__ == '__main__':` block follows as before.
 # ============================================================
 # app.py — Part 9 (Part 2/2)  ·  Paste Extractor Routes
 # ------------------------------------------------------------
