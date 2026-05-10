@@ -7669,35 +7669,46 @@ def price_tools_un_discontinue():
         'last_known_price_date': result.get('last_known_price_date'),
     })
 # ============================================================
-# app.py — Part 9 (Listing Calibration Pipeline)
+# app.py — Part 9 (Part 1/2)  ·  Listing Calibration Pipeline
 # ------------------------------------------------------------
+# v3.5.4 — Adds paste-extractor support alongside existing CSV upload.
+#
 # PASTE INSTRUCTIONS:
-#   1. First, find this line in your existing Part 7:
-#        RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family', 'Forum Post']
-#      Replace it with:
-#        RESEARCH_SOURCES = ['Mystery Shopping', 'Friends & Family', 'Forum Post', 'Listing Aggregator']
-#      (One-line change. Adds 'Listing Aggregator' as the 4th allowed source.)
+#   1. Find your existing Part 9 block (starts with "# app.py — Part 9"
+#      and ends just before "if __name__ == '__main__':"). Replace it
+#      ENTIRELY with: this Part 1/2 block FOLLOWED BY the Part 2/2 block.
 #
-#   2. Then paste this ENTIRE Part 9 block into app.py IMMEDIATELY BEFORE
-#      the `if __name__ == '__main__':` block at the very end of the file.
-#      Part 9 must come BEFORE that block (which must always be the last
-#      thing in the file).
+#   2. Both parts paste IMMEDIATELY BEFORE the `if __name__ == '__main__':`
+#      block at the very end of app.py. Order: Part 1/2 first, then Part
+#      2/2, then the existing __main__ block (which stays unchanged).
 #
-# WHAT THIS ADDS:
-#   - 3 admin routes for the Listing Calibration pipeline
-#   - 4 helper functions for parsing, inserting, and reading uploads
-#   - Constants: LISTING_DATA_SOURCE, LISTING_DEFAULT_QUALITY,
-#     LISTING_MAX_ROWS_PER_UPLOAD, LISTING_MAX_FILE_BYTES
+# WHAT'S NEW IN v3.5.4:
+#   - Constants block expanded with PASTE_SOURCE_MAPPING (source dropdown
+#     values + their auto-derived data_source_type / data_quality_tier /
+#     marketplace tags)
+#   - _insert_listings_to_research_log() now writes 4 new columns:
+#     marketplace, data_source_type, data_quality_tier, locality
+#     (signature is backwards-compatible — existing CSV upload route works
+#      unchanged)
+#   - New helper _serialize_parse_result_for_preview() — flattens a
+#     ParseResult into JSON-safe payload for the paste extractor preview
+#   - New helper _deserialize_preview_to_parse_result() — reverses the
+#     above for the confirm-ingest step
+#   - 2 new routes added in Part 2/2:
+#       GET/POST /admin/paste-and-extract   — textarea + preview screen
+#       POST     /admin/paste-confirm-ingest — DB write after admin review
 #
-# DEPENDENCIES (already in your repo):
-#   - listing_csv_parser.py    (Step 3, deployed)
-#   - variant_resolver.py      (Step 2, deployed)
-#   - Migration 9 schema       (Step 1, deployed — listing_uploads + research_log.listing_upload_id)
+# WHAT'S UNCHANGED:
+#   - admin_listing_calibration (dashboard)
+#   - admin_listing_calibration_upload (CSV upload route)
+#   - admin_listing_calibration_upload_detail (drilldown)
+#   - All Step D dedup behavior
+#   - All existing constants
 # ============================================================
 
 
 # ============================================================
-# Listing Calibration constants
+# Listing Calibration constants (v3.5.4)
 # ============================================================
 
 # Value written to research_log.data_source for every row coming from the
@@ -7705,54 +7716,121 @@ def price_tools_un_discontinue():
 LISTING_DATA_SOURCE = 'Listing Aggregator'
 
 # Listings are aspirational asks (not deals), so we tag them as 'medium'
-# quality. This propagates into _compute_calibration_suggestions's quality
-# weighting (high/medium = 2x, low = 1x).
+# quality on the legacy 3-bucket data_quality field (used by
+# _compute_calibration_suggestions's quality weighting).
 LISTING_DEFAULT_QUALITY = 'medium'
+
+# v3.5.4: New per-row tier on the data_quality_tier column. Drives confidence
+# ceilings in the buyer dashboard (65% for aggregator paste/CSV listings).
+# Independent of the legacy data_quality field.
+LISTING_DEFAULT_TIER = 'aggregator_paste_listings'
+
+# v3.5.4: Default data_source_type for both CSV and paste pipelines.
+# Listings are asks (not transactions) → calibration_engine applies the
+# 0.85 haircut. Per Q2 decision in 2026-05-10 strategic session.
+LISTING_DEFAULT_SOURCE_TYPE = 'asking_price'
 
 # Per-upload caps. If you ever raise these, also bump LISTING_MAX_FILE_BYTES
 # in proportion (roughly 250 bytes per CSV row for CarWale exports).
 LISTING_MAX_ROWS_PER_UPLOAD = 5000
 LISTING_MAX_FILE_BYTES = 8 * 1024 * 1024  # 8 MB — generous headroom for 5K rows
 
+# v3.5.4: Paste extractor caps. Browsers happily paste megabytes of text;
+# we cap server-side to prevent memory blowups from a runaway paste.
+PASTE_MAX_BYTES = 10 * 1024 * 1024     # 10 MB raw text
+PASTE_MAX_BLOCKS = 1000                # max listings extractable per paste
+
+# v3.5.4: How long a paste-extract preview lives in the user's session
+# before we discard it. 30 minutes is generous — the typical flow
+# (paste → review → confirm) is under 5 minutes.
+PASTE_PREVIEW_TTL_SECONDS = 30 * 60
+
+# v3.5.4: PASTE_SOURCE_MAPPING — the source dropdown values shown in the
+# admin UI, plus the tags each one auto-applies to its rows.
+#
+# Keys: human-readable label shown in the dropdown.
+# Values: dict with the column tags applied to every row from this source.
+#
+# Adding a new source (Cars24 paste, Spinny paste, etc.) is just one entry
+# here PLUS a corresponding parser in listing_csv_parser.py. v2 ships
+# CarWale only — Cars24/Spinny placeholders are intentionally not in the
+# dropdown until parsers exist.
+PASTE_SOURCE_MAPPING = {
+    'CarWale paste': {
+        'data_source':       'Listing Aggregator',
+        'marketplace':       'CarWale',
+        'data_source_type':  'asking_price',
+        'data_quality_tier': 'aggregator_paste_listings',
+        'data_quality':      'medium',
+        'parser':            'parse_carwale_paste',  # function name in listing_csv_parser
+    },
+}
+
 # Late import — listing_csv_parser depends on variant_resolver which depends
-# on rapidfuzz. Keep this import here (not at top of app.py) so any deploy
+# on rapidfuzz. Keep these imports here (not at top of app.py) so any deploy
 # issue with these modules surfaces with a clear traceback rather than
 # breaking the entire app on startup.
-from listing_csv_parser import parse_carwale_csv, summarize_parse_result
+from listing_csv_parser import (
+    parse_carwale_csv,
+    parse_carwale_paste,
+    summarize_parse_result,
+    ParseResult,
+    ParsedListingRow,
+    SkippedRow,
+)
 
 
 # ============================================================
 # Helper: Insert parsed listings into research_log + listing_uploads
+# v3.5.4 — Now writes marketplace, data_source_type, data_quality_tier,
+# locality. Backwards-compatible defaults keep existing CSV route working.
 # ============================================================
 
 def _insert_listings_to_research_log(parse_result, state_code, city,
-                                     admin_email, source_filename=None):
+                                     admin_email, source_filename=None,
+                                     marketplace='CarWale',
+                                     data_source_type='asking_price',
+                                     data_quality_tier='aggregator_paste_listings',
+                                     data_quality_legacy='medium'):
     """
     Persist a ParseResult to the database.
 
-    v3.5.3 Step D — DEDUP LOGIC ADDED.
-    Listings are now deduped against existing research_log rows by listing_url
+    v3.5.4 — Function signature gained 4 new optional kwargs that map to
+    the 4 new columns added in Migrations 10 and 11. Defaults match what
+    the existing CSV upload pipeline always did, so calling without these
+    kwargs is safe and behavior is unchanged.
+
+    v3.5.3 Step D — DEDUP LOGIC.
+    Listings are deduped against existing research_log rows by listing_url
     BEFORE insert. Rules (locked):
       - URL not seen before                       → INSERT (new)
       - Same URL + same price + last seen <90d    → SKIP silently (true dupe)
       - Same URL + different price + last seen <90d → INSERT (price change)
       - Same URL + last seen >=90d                → INSERT (relisting)
       - No URL on parsed row                      → INSERT (can't dedup)
-      - URL appears more than once in THIS upload → keep first only (intra-file dedup)
+        (paste-mode rows have NO URL by design)
+      - URL appears more than once in THIS upload → keep first only
 
     Workflow:
       1. INSERT a row into listing_uploads with status='processing'
       2. Pre-fetch existing (url, price, entry_date) tuples for URLs in this batch
       3. Classify each parsed entry: keep, skip-as-dupe, or price-change/relisting
       4. Bulk-insert the keep-list into research_log with the upload_id FK
+         and the v3.5.4 column tags
       5. UPDATE listing_uploads.notes with final dedup stats
 
     Params:
-      parse_result: listing_csv_parser.ParseResult
-      state_code:   2-letter state code (e.g. 'KA')
-      city:         city name (e.g. 'Bangalore')
-      admin_email:  email of the admin doing the upload (for created_by)
-      source_filename: original filename (for audit)
+      parse_result:        listing_csv_parser.ParseResult
+      state_code:          2-letter state code (e.g. 'KA')
+      city:                city name (e.g. 'Bangalore')
+      admin_email:         email of the admin doing the upload (for created_by)
+      source_filename:     original filename (for audit)
+      marketplace:         v3.5.4 — written to research_log.marketplace
+                           (default 'CarWale' for back-compat with CSV path)
+      data_source_type:    v3.5.4 — 'asking_price' | 'transaction_price'
+      data_quality_tier:   v3.5.4 — see PASTE_SOURCE_MAPPING for valid values
+      data_quality_legacy: v3.5.4 — written to legacy data_quality column
+                           (default 'medium' for back-compat)
 
     Returns:
       dict with: upload_id, status, error, inserted_count, total_count,
@@ -7769,7 +7847,7 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
     upload_payload = {
         'uploaded_by':   admin_email,
         'uploaded_at':   now_iso,
-        'marketplace':   'CarWale',
+        'marketplace':   marketplace,                  # v3.5.4: parameterized
         'state_code':    state_code,
         'city':          city,
         'filename':      (source_filename or '')[:200],
@@ -7821,29 +7899,19 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
     # Supabase calls.
     # ============================================================
 
-    # Threshold: listings older than 90d ago count as "stale" — same URL
-    # showing up after 90d is treated as a relisting, not a dupe.
     DEDUP_WINDOW_DAYS = 90
     today = datetime.utcnow().date()
     stale_cutoff = today - timedelta(days=DEDUP_WINDOW_DAYS)
 
-    # Collect all listing_urls from this upload that are non-empty.
-    # We only fetch existing rows for URLs we're about to consider —
-    # no point pulling the whole research_log table.
     parsed_urls_set = set()
     for entry in parse_result.parsed:
-        u = (entry.listing_url or '').strip()
+        u = (entry.listing_url or '').strip() if entry.listing_url else ''
         if u:
             parsed_urls_set.add(u)
 
-    # existing_by_url: {url: [(asking_price_inr, entry_date_str), ...]}
-    # A single URL can have multiple historical rows (relistings, price changes).
-    # We need them all to decide whether the *most recent* falls in the dedup
-    # window or out of it.
     existing_by_url = defaultdict(list)
 
     if parsed_urls_set:
-        # Postgres `IN` clause is fine up to ~1000 args; chunk to be safe.
         url_list = list(parsed_urls_set)
         IN_CHUNK = 500
         for i in range(0, len(url_list), IN_CHUNK):
@@ -7862,8 +7930,6 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
                             'date_str': row.get('entry_date'),
                         })
             except Exception as e:
-                # Best-effort: if dedup query fails, fall through to insert-all.
-                # Better to over-insert than fail the whole upload.
                 app.logger.warning(
                     f"_insert_listings_to_research_log: dedup pre-fetch chunk "
                     f"{i}-{i + len(chunk)} failed: {e}"
@@ -7874,17 +7940,16 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
     # ============================================================
 
     today_iso = today.strftime('%Y-%m-%d')
-    research_rows = []                    # rows to insert
-    seen_urls_this_upload = set()         # for intra-file dedup
+    research_rows = []
+    seen_urls_this_upload = set()
 
-    dedup_skipped_count = 0       # exact dupes (same URL+price+<90d) — skipped
-    price_change_count = 0        # same URL, different price, <90d — INSERTED
-    relisting_count = 0           # same URL, >=90d old — INSERTED
-    no_url_count = 0              # row had no listing_url — INSERTED (can't dedup)
-    intra_file_dupe_count = 0     # same URL appeared 2+ times in THIS upload
+    dedup_skipped_count = 0
+    price_change_count = 0
+    relisting_count = 0
+    no_url_count = 0
+    intra_file_dupe_count = 0
 
     def _parse_date(date_str):
-        """Convert YYYY-MM-DD string to date, or None on parse failure."""
         if not date_str:
             return None
         try:
@@ -7893,7 +7958,7 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
             return None
 
     for entry in parse_result.parsed:
-        url = (entry.listing_url or '').strip()
+        url = (entry.listing_url or '').strip() if entry.listing_url else ''
         new_price = entry.asking_price
 
         # ---- Intra-file dedup: same URL twice in this upload? ----
@@ -7906,15 +7971,14 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
         # ---- Cross-file dedup against existing research_log ----
         if not url:
             # No URL = can't dedup. Insert and move on.
+            # v3.5.4: paste-mode rows always land here.
             no_url_count += 1
             decision = 'insert_no_url'
         else:
             history = existing_by_url.get(url, [])
             if not history:
-                # URL not seen before → fresh insert.
                 decision = 'insert_new'
             else:
-                # Find the most recent existing row for this URL.
                 latest = None
                 latest_date = None
                 for h in history:
@@ -7924,28 +7988,24 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
                         latest_date = d
 
                 if latest is None or latest_date is None:
-                    # Existing rows had unparseable dates — treat as fresh insert
-                    # rather than over-eagerly skipping. Safer default.
                     decision = 'insert_new'
                 elif latest_date < stale_cutoff:
-                    # Last seen >=90d ago → relisting.
                     relisting_count += 1
                     decision = 'insert_relisting'
                 else:
-                    # Within 90d window. Check price.
                     existing_price = latest.get('price')
                     if (existing_price is not None
                             and new_price is not None
                             and int(existing_price) == int(new_price)):
-                        # Same URL + same price + <90d → true duplicate. SKIP.
                         dedup_skipped_count += 1
                         continue
                     else:
-                        # Same URL + different price + <90d → price change. INSERT.
                         price_change_count += 1
                         decision = 'insert_price_change'
 
-        # Build the research_log row (same shape as before Step D)
+        # v3.5.4: Build the research_log row with the 4 new columns.
+        # locality comes from the parser (paste-mode extracts it; CSV-mode
+        # may also extract it from o-j1 — the parser sets it on the row).
         research_rows.append({
             'make':                  entry.make,
             'model':                 entry.model,
@@ -7970,12 +8030,17 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
             'transaction_date':      None,
             'transaction_completed': False,
             'buyer_type':            None,
-            'data_quality':          LISTING_DEFAULT_QUALITY,
+            'data_quality':          data_quality_legacy,    # v3.5.4: parameterized
             'harvest_notes':         None,
             'include_in_calibration': True,
             'exclusion_reason':      None,
             'created_by':            admin_email,
             'listing_upload_id':     upload_id,
+            # v3.5.4: NEW COLUMNS
+            'marketplace':           marketplace,
+            'data_source_type':      data_source_type,
+            'data_quality_tier':     data_quality_tier,
+            'locality':              entry.locality,         # extracted by parser
         })
 
     # ============================================================
@@ -8031,7 +8096,7 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
         app.logger.warning(f"_insert_listings_to_research_log: notes update failed: {e}")
 
     app.logger.info(
-        f"Listing upload #{upload_id}: state={state_code} city={city} "
+        f"Listing upload #{upload_id}: marketplace={marketplace} state={state_code} city={city} "
         f"total={parse_result.total_rows} parsed={len(parse_result.parsed)} "
         f"skipped={len(parse_result.skipped)} inserted={inserted_count} "
         f"dedup_skipped={dedup_skipped_count} price_change={price_change_count} "
@@ -8047,13 +8112,117 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
         'total_count':            parse_result.total_rows,
         'parsed_count':           len(parse_result.parsed),
         'skipped_count':          len(parse_result.skipped),
-        # Step D additions:
         'dedup_skipped_count':    dedup_skipped_count,
         'price_change_count':     price_change_count,
         'relisting_count':        relisting_count,
         'no_url_count':           no_url_count,
         'intra_file_dupe_count':  intra_file_dupe_count,
     }
+
+
+# ============================================================
+# v3.5.4 — Helper: Serialize ParseResult for the paste preview UI
+# ============================================================
+
+def _serialize_parse_result_for_preview(parse_result, source_label,
+                                        state_code, city):
+    """
+    Convert a ParseResult into a JSON-safe dict suitable for:
+      a) Stashing in the user's Flask session (preview → confirm flow)
+      b) Sending to the preview template for rendering an editable table
+
+    The preview UI shows ONE ROW PER PARSED LISTING with all fields visible.
+    Skipped rows are surfaced as a count + per-reason breakdown.
+
+    The returned dict can be round-tripped through
+    _deserialize_preview_to_parse_result() to rebuild a ParseResult for
+    insertion. We do NOT store SkippedRow objects in the round-trip — those
+    are display-only on the preview page.
+    """
+    parsed_rows = []
+    for idx, entry in enumerate(parse_result.parsed):
+        parsed_rows.append({
+            'idx':                idx,
+            'listing_url':        entry.listing_url,
+            'year':               entry.year,
+            'make':               entry.make,
+            'model':              entry.model,
+            'variant':            entry.variant,
+            'fuel':               entry.fuel,
+            'asking_price':       entry.asking_price,
+            'mileage_km':         entry.mileage_km,
+            'locality':           entry.locality,
+            'city':               entry.city,
+            'state_code':         entry.state_code,
+            'raw_title':          entry.raw_title,
+            'raw_variant':        entry.raw_variant,
+            'variant_confidence': entry.variant_confidence,
+            'needs_review':       entry.needs_review,
+        })
+
+    # Skip summary by reason (for the preview "skip log" panel)
+    skip_summary = {}
+    skip_examples = {}  # one example per reason for the tooltip
+    for s in parse_result.skipped:
+        skip_summary[s.reason] = skip_summary.get(s.reason, 0) + 1
+        if s.reason not in skip_examples:
+            skip_examples[s.reason] = {
+                'detail': s.detail[:150],
+                'raw_title': (s.raw_title or '')[:80],
+            }
+
+    return {
+        'source_label':   source_label,
+        'state_code':     state_code,
+        'city':           city,
+        'total_rows':     parse_result.total_rows,
+        'parsed_count':   len(parse_result.parsed),
+        'skipped_count':  len(parse_result.skipped),
+        'parsed_rows':    parsed_rows,
+        'skip_summary':   skip_summary,
+        'skip_examples':  skip_examples,
+        'created_at':     datetime.utcnow().isoformat(),
+    }
+
+
+def _deserialize_preview_to_parse_result(preview_dict):
+    """
+    Rebuild a ParseResult from a serialized preview dict — for the
+    confirm-ingest step. Only the parsed rows are needed; SkippedRow
+    objects are display-only and don't round-trip.
+
+    Returns a ParseResult with empty skipped[] (since skip records are not
+    re-inserted on confirm). The total_rows count is preserved so the
+    listing_uploads row gets accurate totals.
+    """
+    parsed_list = []
+    for row in preview_dict.get('parsed_rows', []):
+        parsed_list.append(ParsedListingRow(
+            listing_url=row.get('listing_url'),
+            year=row['year'],
+            make=row['make'],
+            model=row['model'],
+            variant=row['variant'],
+            fuel=row['fuel'],
+            asking_price=row['asking_price'],
+            mileage_km=row['mileage_km'],
+            locality=row.get('locality'),
+            city=row['city'],
+            state_code=row['state_code'],
+            raw_title=row.get('raw_title', ''),
+            raw_variant=row.get('raw_variant', ''),
+            variant_confidence=row.get('variant_confidence', 0),
+            needs_review=bool(row.get('needs_review', False)),
+            data_quality=LISTING_DEFAULT_QUALITY,
+            data_source=LISTING_DATA_SOURCE,
+        ))
+
+    return ParseResult(
+        total_rows=preview_dict.get('total_rows', len(parsed_list)),
+        parsed=parsed_list,
+        skipped=[],
+    )
+
 
 # ============================================================
 # Helper: Fetch recent uploads for the dashboard
@@ -8086,14 +8255,11 @@ def _get_recent_listing_uploads(limit=50):
         else:
             row['created_display'] = '—'
 
-       # Map deployed schema column names to keys the template expects.
-        # Schema: parsed_rows / skipped_rows / filename (no _count / status / parser_version)
+        # Map deployed schema column names to keys the template expects.
         row['parsed_count']    = row.get('parsed_rows') or 0
         row['skipped_count']   = row.get('skipped_rows') or 0
         row['source_filename'] = row.get('filename') or ''
-        # 'inserted_count' / 'status' / 'parser_version' don't exist in DB —
-        # synthesize sensible defaults so dashboard table renders cleanly.
-        row['inserted_count']  = row['parsed_count']  # best estimate (no per-batch tracking)
+        row['inserted_count']  = row['parsed_count']
         row['status']          = 'partial_error' if row.get('notes') else 'completed'
         row['parser_version']  = '1.0'
 
@@ -8125,14 +8291,12 @@ def _compute_listing_calibration_stats():
         'last_upload_state':   '—',
     }
 
-    # total_uploads
     try:
         r = supabase.table('listing_uploads').select('id', count='exact').execute()
         stats['total_uploads'] = r.count or 0
     except Exception as e:
         app.logger.warning(f"listing stats: total_uploads count failed: {e}")
 
-    # total_listings (research_log rows where data_source='Listing Aggregator')
     try:
         r = (supabase.table('research_log')
              .select('id', count='exact')
@@ -8142,8 +8306,6 @@ def _compute_listing_calibration_stats():
     except Exception as e:
         app.logger.warning(f"listing stats: total_listings count failed: {e}")
 
-    # unique_make_models — pull all listing rows' (make, model) and de-dupe in Python.
-    # Cheaper than a SQL DISTINCT given Supabase's PostgREST limits.
     try:
         r = (supabase.table('research_log')
              .select('make, model')
@@ -8160,7 +8322,6 @@ def _compute_listing_calibration_stats():
     except Exception as e:
         app.logger.warning(f"listing stats: unique_make_models failed: {e}")
 
-    # last upload — most recent listing_uploads row
     try:
         r = (supabase.table('listing_uploads')
              .select('created_at, state_code, city')
@@ -8220,8 +8381,6 @@ def _get_listing_upload_with_entries(upload_id):
     else:
         upload_row['created_display'] = '—'
 
-    # Map deployed schema column names to keys the template expects.
-    # Schema: parsed_rows / skipped_rows / filename (no _count / status / parser_version)
     upload_row['parsed_count']    = upload_row.get('parsed_rows') or 0
     upload_row['skipped_count']   = upload_row.get('skipped_rows') or 0
     upload_row['source_filename'] = upload_row.get('filename') or ''
@@ -8229,16 +8388,16 @@ def _get_listing_upload_with_entries(upload_id):
     upload_row['status']          = 'partial_error' if upload_row.get('notes') else 'completed'
     upload_row['parser_version']  = '1.0'
 
-    # Computed parse-success rate
     total = upload_row.get('total_rows') or 0
     parsed = upload_row['parsed_count']
     upload_row['parse_success_pct'] = round((parsed / total) * 100, 1) if total > 0 else 0
-    # Fetch all parsed entries linked to this upload
+
     try:
         r = (supabase.table('research_log')
              .select('id, make, model, variant, year, fuel, mileage_km, '
-                     'asking_price_inr, listing_url, state_code, city, '
-                     'data_quality, include_in_calibration, exclusion_reason, '
+                     'asking_price_inr, listing_url, state_code, city, locality, '
+                     'data_quality, data_quality_tier, data_source_type, marketplace, '
+                     'include_in_calibration, exclusion_reason, '
                      'entry_date, created_at')
              .eq('listing_upload_id', upload_id)
              .order('id', desc=False)
@@ -8262,8 +8421,8 @@ def _get_listing_upload_with_entries(upload_id):
 def admin_listing_calibration():
     """
     Listing Calibration dashboard.
-    Shows: top-line stats, upload form (state + city dropdowns + file picker),
-    and recent uploads table with links to drilldown pages.
+    Shows: top-line stats, upload form (CSV), and recent uploads table.
+    v3.5.4: Template now includes a link to the new paste extractor.
     """
     admin = current_user()
     stats = _compute_listing_calibration_stats()
@@ -8286,7 +8445,8 @@ def admin_listing_calibration():
 
 
 # ============================================================
-# ROUTE: Upload POST — POST /admin/listing-calibration/upload
+# ROUTE: CSV Upload POST — POST /admin/listing-calibration/upload
+# UNCHANGED in v3.5.4 (uses default kwargs on _insert_listings_to_research_log)
 # ============================================================
 
 @app.route('/admin/listing-calibration/upload', methods=['POST'])
@@ -8298,12 +8458,13 @@ def admin_listing_calibration_upload():
     Parses the CSV, inserts rows into research_log + listing_uploads,
     redirects to the drilldown page on success.
 
-    Errors flash and redirect back to the dashboard.
+    v3.5.4: Now passes explicit marketplace='CarWale' and the v3.5.4 tier
+    tags to the insert helper. Behavior is identical to v3.5.3 (defaults
+    match) but the tags are now persisted to the DB.
     """
     admin = current_user()
     admin_email = admin.get('email') or 'unknown'
 
-    # ---- 1. Validate state + city from the form ----
     state_code = (request.form.get('state_code') or '').strip().upper()
     city = (request.form.get('city') or '').strip()
 
@@ -8313,7 +8474,6 @@ def admin_listing_calibration_upload():
     state_code = normalize_state_code(state_code)
     city = normalize_city(city, state_code)
 
-    # ---- 2. Validate the uploaded file ----
     if 'csv_file' not in request.files:
         flash('No file uploaded. Please choose a CSV file.', 'error')
         return redirect(url_for('admin_listing_calibration'))
@@ -8323,12 +8483,10 @@ def admin_listing_calibration_upload():
         flash('No file uploaded. Please choose a CSV file.', 'error')
         return redirect(url_for('admin_listing_calibration'))
 
-    # Filename sanity (must end in .csv — case-insensitive)
     if not csv_file.filename.lower().endswith('.csv'):
         flash('File must be a .csv. Got: ' + csv_file.filename, 'error')
         return redirect(url_for('admin_listing_calibration'))
 
-    # Read into memory + size check
     try:
         raw_bytes = csv_file.read()
     except Exception as e:
@@ -8346,7 +8504,6 @@ def admin_listing_calibration_upload():
         )
         return redirect(url_for('admin_listing_calibration'))
 
-    # Decode bytes → text. CarWale exports are UTF-8 with BOM possible.
     try:
         csv_text = raw_bytes.decode('utf-8-sig')
     except UnicodeDecodeError:
@@ -8356,7 +8513,6 @@ def admin_listing_calibration_upload():
             flash('Could not decode CSV (try saving as UTF-8 in your CSV editor).', 'error')
             return redirect(url_for('admin_listing_calibration'))
 
-    # ---- 3. Parse the CSV ----
     try:
         parse_result = parse_carwale_csv(csv_text)
     except Exception as e:
@@ -8364,7 +8520,6 @@ def admin_listing_calibration_upload():
         flash(f'CSV parser failed: {e}', 'error')
         return redirect(url_for('admin_listing_calibration'))
 
-    # Row count cap — block oversized uploads BEFORE inserting
     if parse_result.total_rows > LISTING_MAX_ROWS_PER_UPLOAD:
         flash(
             f'CSV has {parse_result.total_rows:,} rows but max per upload is '
@@ -8373,23 +8528,25 @@ def admin_listing_calibration_upload():
         )
         return redirect(url_for('admin_listing_calibration'))
 
-    # If literally nothing parsed, surface a clear error
     if parse_result.total_rows == 0:
         flash('CSV appears empty. Check that the file has data rows.', 'error')
         return redirect(url_for('admin_listing_calibration'))
 
     if not parse_result.parsed and parse_result.skipped:
-        # Every row got skipped — let the admin see why on the drilldown page
-        # (we still insert the upload record so they can review skip reasons)
-        pass  # fall through to insertion
+        pass
 
-    # ---- 4. Insert into DB ----
+    # v3.5.4: Pass explicit tags. Defaults still match historical behavior,
+    # but now the new columns get populated for every CSV upload too.
     insert_result = _insert_listings_to_research_log(
         parse_result=parse_result,
         state_code=state_code,
         city=city,
         admin_email=admin_email,
         source_filename=csv_file.filename,
+        marketplace='CarWale',
+        data_source_type=LISTING_DEFAULT_SOURCE_TYPE,
+        data_quality_tier=LISTING_DEFAULT_TIER,
+        data_quality_legacy=LISTING_DEFAULT_QUALITY,
     )
 
     if insert_result.get('status') == 'failed' or not insert_result.get('upload_id'):
@@ -8399,7 +8556,6 @@ def admin_listing_calibration_upload():
         )
         return redirect(url_for('admin_listing_calibration'))
 
-    # ---- 5. Flash summary + redirect to drilldown ----
     inserted = insert_result['inserted_count']
     parsed = insert_result['parsed_count']
     skipped = insert_result['skipped_count']
@@ -8426,6 +8582,7 @@ def admin_listing_calibration_upload():
 
 # ============================================================
 # ROUTE: Drilldown — GET /admin/listing-calibration/uploads/<id>
+# UNCHANGED in v3.5.4
 # ============================================================
 
 @app.route('/admin/listing-calibration/uploads/<upload_id>')
@@ -8434,9 +8591,9 @@ def admin_listing_calibration_upload():
 def admin_listing_calibration_upload_detail(upload_id):
     """
     Per-upload drilldown page.
-    Shows: upload metadata, all inserted research_log rows, and the original
-    skip reasons (re-parsed if we still have the source — but typically we
-    don't, so the skip section just shows the count from listing_uploads).
+    Shows: upload metadata, all inserted research_log rows, and the
+    original skip reasons (re-parsed if we still have the source — but
+    typically we don't, so the skip section just shows the count).
     """
     admin = current_user()
     upload_row, entries = _get_listing_upload_with_entries(upload_id)
@@ -8453,8 +8610,409 @@ def admin_listing_calibration_upload_detail(upload_id):
         entries=entries,
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
     )
+
+
 # ============================================================
-# END app.py — Part 9
+# END app.py — Part 9 (Part 1/2)
+# Continue with Part 9 (Part 2/2) IMMEDIATELY below.
+# Both parts together replace your existing Part 9, then the
+# `if __name__ == '__main__':` block follows as before.
+# ============================================================
+# ============================================================
+# app.py — Part 9 (Part 2/2)  ·  Paste Extractor Routes
+# ------------------------------------------------------------
+# v3.5.4 — Continuation of Part 1/2.
+#
+# PASTE INSTRUCTIONS:
+#   This block goes IMMEDIATELY AFTER Part 9 (Part 1/2) — no other code
+#   between them. Both parts together replace the old Part 9.
+#
+#   The `if __name__ == '__main__':` block follows AFTER this Part 2/2.
+#
+# WHAT THIS ADDS:
+#   1. GET  /admin/paste-and-extract       — render the textarea form
+#   2. POST /admin/paste-and-extract       — extract preview, stash in session
+#   3. POST /admin/paste-confirm-ingest    — ingest from stashed preview
+#
+# SESSION-BASED PREVIEW FLOW:
+#   - On extract, we serialize the ParseResult and store it under
+#       session['paste_preview']
+#     keyed by a short-lived UUID token. The template renders an editable
+#     table with the token in a hidden form field.
+#   - On confirm, we look up the preview by token, rebuild a ParseResult,
+#     and call the same _insert_listings_to_research_log() the CSV path
+#     uses. Same dedup, same DB writes, same status reporting.
+#   - Stale previews (>30 min old) are silently rejected — admin re-pastes.
+# ============================================================
+
+import uuid
+from datetime import datetime as _dt_paste  # local alias to avoid shadow
+
+
+# ============================================================
+# Helper: stash + retrieve preview in session
+# ============================================================
+
+def _stash_paste_preview(preview_dict):
+    """
+    Save a serialized preview dict to the user's session under a fresh
+    UUID token. Returns the token.
+
+    We store ONE preview per session (not a dict-of-tokens) — if the admin
+    runs another extract, the previous one is overwritten. This keeps the
+    session small (Flask sessions ride in cookies by default).
+    """
+    token = uuid.uuid4().hex
+    # Tag the preview so we can validate the token on retrieval.
+    preview_dict['_token'] = token
+    session['paste_preview'] = preview_dict
+    session.modified = True
+    return token
+
+
+def _retrieve_paste_preview(token):
+    """
+    Pull the preview from session by token.
+    Returns the preview dict on success, or None if:
+      - no preview in session
+      - token mismatch
+      - preview older than PASTE_PREVIEW_TTL_SECONDS
+    """
+    preview = session.get('paste_preview')
+    if not preview:
+        return None
+    if preview.get('_token') != token:
+        return None
+
+    # TTL check
+    created_at_str = preview.get('created_at')
+    if created_at_str:
+        try:
+            created_at = _dt_paste.fromisoformat(created_at_str)
+            age_seconds = (_dt_paste.utcnow() - created_at).total_seconds()
+            if age_seconds > PASTE_PREVIEW_TTL_SECONDS:
+                return None
+        except (ValueError, TypeError):
+            return None
+    return preview
+
+
+def _clear_paste_preview():
+    """Drop the preview from session — called after successful ingest."""
+    if 'paste_preview' in session:
+        session.pop('paste_preview')
+        session.modified = True
+
+
+# ============================================================
+# ROUTE: Paste Extractor — GET + POST /admin/paste-and-extract
+# ============================================================
+
+@app.route('/admin/paste-and-extract', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_paste_and_extract():
+    """
+    GET:  render the textarea form (Screen 1).
+    POST: parse the pasted text, stash the preview in session, render
+          the preview table (Screen 2).
+
+    Both use the same template (admin_paste_extract.html); the template
+    branches on whether `preview` is None or a dict.
+    """
+    admin = current_user()
+    admin_email = admin.get('email') or 'unknown'
+
+    if request.method == 'GET':
+        # Screen 1: empty form. Clear any stale preview so a fresh visit
+        # always shows the textarea, not someone else's stashed result.
+        _clear_paste_preview()
+        return render_template(
+            'admin_paste_extract.html',
+            user=admin,
+            first_name=firstname_filter(admin.get('name')),
+            preview=None,
+            source_options=list(PASTE_SOURCE_MAPPING.keys()),
+            rto_states=RTO_STATES,
+            cities_by_state_json=json.dumps(INDIAN_CITIES_BY_STATE),
+            default_state=DEFAULT_STATE_CODE,
+            default_city=DEFAULT_CITY,
+            default_source='CarWale paste',
+            paste_max_bytes=PASTE_MAX_BYTES,
+            paste_max_blocks=PASTE_MAX_BLOCKS,
+            now_display=_dt_paste.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+        )
+
+    # ---------- POST: extract preview ----------
+    source_label = (request.form.get('source_label') or '').strip()
+    state_code = (request.form.get('state_code') or '').strip().upper()
+    city = (request.form.get('city') or '').strip()
+    raw_text = request.form.get('raw_text') or ''
+
+    # Validate source
+    if source_label not in PASTE_SOURCE_MAPPING:
+        flash(
+            f'Source must be one of: {", ".join(PASTE_SOURCE_MAPPING.keys())}.',
+            'error'
+        )
+        return redirect(url_for('admin_paste_and_extract'))
+
+    # Validate state + city
+    if not state_code:
+        flash('State is required.', 'error')
+        return redirect(url_for('admin_paste_and_extract'))
+    state_code = normalize_state_code(state_code)
+    city = normalize_city(city, state_code)
+
+    # Validate paste size
+    raw_bytes_len = len(raw_text.encode('utf-8'))
+    if raw_bytes_len == 0:
+        flash('Pasted text is empty.', 'error')
+        return redirect(url_for('admin_paste_and_extract'))
+
+    if raw_bytes_len > PASTE_MAX_BYTES:
+        size_mb = raw_bytes_len / (1024 * 1024)
+        max_mb = PASTE_MAX_BYTES // (1024 * 1024)
+        flash(
+            f'Pasted text too large ({size_mb:.1f} MB). Max allowed: {max_mb} MB. '
+            f'Split your paste into smaller chunks.',
+            'error'
+        )
+        return redirect(url_for('admin_paste_and_extract'))
+
+    # Run the appropriate parser based on source
+    source_config = PASTE_SOURCE_MAPPING[source_label]
+    parser_name = source_config.get('parser')
+
+    try:
+        if parser_name == 'parse_carwale_paste':
+            parse_result = parse_carwale_paste(
+                raw_text,
+                default_state=state_code,
+                default_city=city,
+            )
+        else:
+            # Defensive: someone added a source to PASTE_SOURCE_MAPPING but
+            # didn't wire its parser. Fail loudly rather than silently.
+            flash(
+                f"No parser registered for source '{source_label}'. "
+                "Contact the developer.",
+                'error'
+            )
+            return redirect(url_for('admin_paste_and_extract'))
+    except Exception as e:
+        app.logger.exception("admin_paste_and_extract: parser raised")
+        flash(f'Parser failed: {e}', 'error')
+        return redirect(url_for('admin_paste_and_extract'))
+
+    # Sanity-cap on extracted block count
+    if parse_result.total_rows > PASTE_MAX_BLOCKS:
+        flash(
+            f'Found {parse_result.total_rows:,} listings in this paste, '
+            f'but max per paste is {PASTE_MAX_BLOCKS:,}. Split into smaller pastes.',
+            'error'
+        )
+        return redirect(url_for('admin_paste_and_extract'))
+
+    if parse_result.total_rows == 0:
+        flash(
+            'No listings detected in the pasted text. Make sure you pasted from a '
+            'CarWale results page (with the listing cards visible).',
+            'error'
+        )
+        return redirect(url_for('admin_paste_and_extract'))
+
+    # Serialize and stash the preview
+    preview = _serialize_parse_result_for_preview(
+        parse_result=parse_result,
+        source_label=source_label,
+        state_code=state_code,
+        city=city,
+    )
+    token = _stash_paste_preview(preview)
+
+    app.logger.info(
+        f"Paste extract preview generated: source={source_label} state={state_code} "
+        f"city={city} total={preview['total_rows']} parsed={preview['parsed_count']} "
+        f"skipped={preview['skipped_count']} token={token[:8]}…"
+    )
+
+    # Render Screen 2 (preview table)
+    return render_template(
+        'admin_paste_extract.html',
+        user=admin,
+        first_name=firstname_filter(admin.get('name')),
+        preview=preview,
+        preview_token=token,
+        source_options=list(PASTE_SOURCE_MAPPING.keys()),
+        rto_states=RTO_STATES,
+        cities_by_state_json=json.dumps(INDIAN_CITIES_BY_STATE),
+        default_state=DEFAULT_STATE_CODE,
+        default_city=DEFAULT_CITY,
+        default_source=source_label,
+        paste_max_bytes=PASTE_MAX_BYTES,
+        paste_max_blocks=PASTE_MAX_BLOCKS,
+        now_display=_dt_paste.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
+
+
+# ============================================================
+# ROUTE: Confirm Ingest — POST /admin/paste-confirm-ingest
+# ============================================================
+
+@app.route('/admin/paste-confirm-ingest', methods=['POST'])
+@login_required
+@admin_required
+def admin_paste_confirm_ingest():
+    """
+    Confirm step of the paste extractor flow.
+
+    Reads the preview token from the form, validates it against the
+    session-stashed preview, optionally drops rows the admin un-checked,
+    then calls _insert_listings_to_research_log() with the source's tags
+    from PASTE_SOURCE_MAPPING.
+
+    Form fields:
+      preview_token       — UUID hex from the hidden field on the preview page
+      keep_idx            — repeated form field; only rows whose `idx` is
+                            present in keep_idx are kept. If keep_idx is
+                            absent entirely, ALL preview rows are kept (for
+                            the case where the template forgot to pass them
+                            through; safer default than dropping everything).
+    """
+    admin = current_user()
+    admin_email = admin.get('email') or 'unknown'
+
+    token = (request.form.get('preview_token') or '').strip()
+    if not token:
+        flash('Missing preview token. Please paste again.', 'error')
+        return redirect(url_for('admin_paste_and_extract'))
+
+    preview = _retrieve_paste_preview(token)
+    if preview is None:
+        flash(
+            'Preview expired or invalid. Please paste again. '
+            f'(Previews are valid for {PASTE_PREVIEW_TTL_SECONDS // 60} minutes.)',
+            'error'
+        )
+        return redirect(url_for('admin_paste_and_extract'))
+
+    # ---- Apply per-row keep/drop based on checkboxes ----
+    keep_idx_raw = request.form.getlist('keep_idx')
+    if keep_idx_raw:
+        try:
+            keep_set = {int(x) for x in keep_idx_raw}
+        except ValueError:
+            keep_set = None  # bad input → keep all (safer)
+    else:
+        # If the template didn't render checkboxes (or admin un-checked all),
+        # we still want to ingest unless the count is zero AFTER filtering.
+        # Default: keep all preview rows.
+        keep_set = None
+
+    if keep_set is not None:
+        original_count = len(preview.get('parsed_rows', []))
+        filtered_rows = [
+            r for r in preview.get('parsed_rows', [])
+            if r.get('idx') in keep_set
+        ]
+        preview = dict(preview)  # don't mutate session-stored copy yet
+        preview['parsed_rows'] = filtered_rows
+        preview['parsed_count'] = len(filtered_rows)
+        # total_rows reflects what the parser found, not what admin chose;
+        # leave it as-is so the listing_uploads.total_rows audit value is
+        # honest about what was extracted.
+        if not filtered_rows:
+            flash(
+                f'You unchecked all {original_count} rows. Nothing to ingest.',
+                'error'
+            )
+            return redirect(url_for('admin_paste_and_extract'))
+
+    # ---- Resolve the source's tag set ----
+    source_label = preview.get('source_label')
+    source_config = PASTE_SOURCE_MAPPING.get(source_label)
+    if not source_config:
+        flash(
+            f"Source '{source_label}' is no longer recognized. Please paste again.",
+            'error'
+        )
+        _clear_paste_preview()
+        return redirect(url_for('admin_paste_and_extract'))
+
+    state_code = preview.get('state_code') or DEFAULT_STATE_CODE
+    city = preview.get('city') or DEFAULT_CITY
+
+    # Synthetic filename so the listing_uploads audit row reflects "this
+    # came from a paste, not a CSV". 200-char cap matches the column.
+    paste_filename = (
+        f"{source_label} · paste · "
+        f"{_dt_paste.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
+    )[:200]
+
+    # ---- Rebuild ParseResult and ingest ----
+    parse_result = _deserialize_preview_to_parse_result(preview)
+
+    insert_result = _insert_listings_to_research_log(
+        parse_result=parse_result,
+        state_code=state_code,
+        city=city,
+        admin_email=admin_email,
+        source_filename=paste_filename,
+        marketplace=source_config['marketplace'],
+        data_source_type=source_config['data_source_type'],
+        data_quality_tier=source_config['data_quality_tier'],
+        data_quality_legacy=source_config['data_quality'],
+    )
+
+    # Drop the preview regardless of insert outcome — admin shouldn't be
+    # able to "double-confirm" the same preview into the DB.
+    _clear_paste_preview()
+
+    if insert_result.get('status') == 'failed' or not insert_result.get('upload_id'):
+        flash(
+            f"Ingest failed: {insert_result.get('error', 'unknown error')}",
+            'error'
+        )
+        return redirect(url_for('admin_paste_and_extract'))
+
+    inserted = insert_result['inserted_count']
+    parsed = insert_result['parsed_count']
+    total = insert_result['total_count']
+
+    # Detailed dedup summary in the flash so admin sees what happened
+    dedup_bits = []
+    if insert_result.get('dedup_skipped_count'):
+        dedup_bits.append(f"{insert_result['dedup_skipped_count']} exact dupes skipped")
+    if insert_result.get('price_change_count'):
+        dedup_bits.append(f"{insert_result['price_change_count']} price changes tracked")
+    if insert_result.get('relisting_count'):
+        dedup_bits.append(f"{insert_result['relisting_count']} relistings (>90d)")
+    if insert_result.get('intra_file_dupe_count'):
+        dedup_bits.append(f"{insert_result['intra_file_dupe_count']} intra-paste dupes skipped")
+    dedup_msg = (' · ' + ', '.join(dedup_bits)) if dedup_bits else ''
+
+    if insert_result.get('status') == 'partial_error':
+        flash(
+            f"⚠️ Ingest partially succeeded — {inserted} of {parsed} rows inserted "
+            f"for {city}, {state_code}{dedup_msg}. See notes on the upload detail page.",
+            'error'
+        )
+    else:
+        flash(
+            f"✅ Paste ingested — {inserted} listings added for {city}, {state_code} "
+            f"from {source_label}{dedup_msg}.",
+            'success'
+        )
+
+    return redirect(url_for(
+        'admin_listing_calibration_upload_detail',
+        upload_id=insert_result['upload_id']
+    ))
+
+
+# ============================================================
+# END app.py — Part 9 (Part 2/2)
 # Continue with the existing `if __name__ == '__main__':` block AFTER this.
 # ============================================================
 if __name__ == '__main__':
