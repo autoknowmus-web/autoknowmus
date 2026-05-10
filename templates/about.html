@@ -4,17 +4,19 @@
    Public About page — reveals the full AUTOM + KNOWUS architecture.
    No login required.
 
-   v2 design notes:
-     1. First letter of each phase word visually highlighted in its
-        AUTOM-group color; rest of the word in muted grey
-     2. Faded KNOWUS rows align on the SAME BASELINE as AUTOM rows
-        (no ░ prefix; faded letter token sits inline, just dimmer)
-     3. Faded K/n/o/w → faded green (Know group color)
-        Faded u/s     → faded indigo blue (Mus group color)
-     4. Bottom "← Back to AutoKnowMus" matches top link wording exactly
-     5. Tighter row spacing — minimizes vertical scroll
-     6. Back link uses request.referrer (set by Flask route) — returns
-        user to wherever they came from, falls back to landing page
+   v3 design notes:
+     1. Single back button at top — uses .btn-back styling that
+        matches how the back button is implemented in other
+        screens (grey bg, white text, top-left)
+     2. Bottom back link removed — single back action only
+     3. Tighter vertical spacing — fits on one screen on typical
+        desktop without scrolling
+     4. First letter of each phase word visually highlighted in its
+        AUTOM-group color
+     5. Faded KNOWUS rows align on SAME BASELINE as AUTOM rows
+        (no ░ prefix)
+     6. Faded K/n/o/w → faded green (Know group)
+        Faded u/s     → faded indigo blue (Mus group)
    ============================================================ #}
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
@@ -37,32 +39,39 @@
       min-height: 100vh;
     }
 
+    /* Top bar with the SAME .btn-back styling used on other screens.
+       Inlined here because about.html doesn't extend layout.html. */
     .about-topbar {
-      max-width: 980px;
+      max-width: 720px;
       margin: 0 auto;
-      padding: 1rem 1.25rem 0;
+      padding: 0.85rem 1.25rem 0.4rem;
     }
-    .about-back {
-      color: var(--muted);
-      text-decoration: none;
+    .btn-back {
+      background: #6c757d;
+      color: #fff;
+      border: none;
+      padding: 7px 18px;
+      border-radius: 6px;
       font-size: 0.9rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      transition: color 0.15s;
+      text-decoration: none;
+      display: inline-block;
+      transition: background 0.15s;
     }
-    .about-back:hover { color: #e9ecef; }
+    .btn-back:hover {
+      background: #5a6268;
+      color: #fff;
+    }
 
     .about-hero {
-      max-width: 980px;
-      margin: 1rem auto 0.4rem;
+      max-width: 720px;
+      margin: 0.6rem auto 0.3rem;
       padding: 0 1.25rem;
       text-align: center;
     }
     .about-hero-text {
       font-family: 'Segoe UI', sans-serif;
       font-weight: 800;
-      font-size: 2.4rem;
+      font-size: 2rem;
       letter-spacing: -0.025em;
       line-height: 1;
     }
@@ -71,30 +80,30 @@
     .about-hero-text .brand-mus  { color: var(--brand-blue); }
 
     .about-intro {
-      max-width: 760px;
-      margin: 0.9rem auto 1.4rem;
+      max-width: 720px;
+      margin: 0.65rem auto 0.85rem;
       padding: 0 1.25rem;
       text-align: center;
       color: #c8cdd5;
-      font-size: 1rem;
-      line-height: 1.55;
+      font-size: 0.94rem;
+      line-height: 1.5;
     }
     .about-intro .lede {
       color: #e9ecef;
       font-weight: 600;
-      font-size: 1.08rem;
-      margin-bottom: 0.5rem;
+      font-size: 1rem;
+      margin-bottom: 0.35rem;
     }
     .about-intro p { margin: 0; }
-    .about-intro p + p { margin-top: 0.45rem; }
+    .about-intro p + p { margin-top: 0.3rem; }
 
     .about-section-eyebrow {
       max-width: 720px;
-      margin: 0 auto 0.7rem;
+      margin: 0 auto 0.5rem;
       padding: 0 1.25rem;
       text-align: center;
       color: var(--muted);
-      font-size: 0.76rem;
+      font-size: 0.72rem;
       font-weight: 600;
       letter-spacing: 0.18em;
       text-transform: uppercase;
@@ -102,8 +111,8 @@
 
     .letter-list {
       max-width: 720px;
-      margin: 0 auto 1.2rem;
-      padding: 0.9rem 1.5rem;
+      margin: 0 auto 0.7rem;
+      padding: 0.55rem 1.4rem;
       background: linear-gradient(135deg, #14171d 0%, #1a1d24 100%);
       border: 1px solid #2a2e38;
       border-radius: 12px;
@@ -112,10 +121,10 @@
     .letter-row {
       display: flex;
       align-items: baseline;
-      gap: 0.55rem;
-      padding: 0.32rem 0;
-      font-size: 1rem;
-      line-height: 1.45;
+      gap: 0.5rem;
+      padding: 0.18rem 0;
+      font-size: 0.96rem;
+      line-height: 1.35;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     }
     .letter-row:last-child { border-bottom: none; }
@@ -123,23 +132,23 @@
     .letter-token {
       font-family: 'Segoe UI', sans-serif;
       font-weight: 800;
-      font-size: 1.5rem;
+      font-size: 1.4rem;
       letter-spacing: -0.5px;
       flex-shrink: 0;
-      width: 1.5rem;
+      width: 1.4rem;
       text-align: center;
       line-height: 1;
     }
 
     .letter-word {
-      font-size: 0.98rem;
+      font-size: 0.94rem;
       font-weight: 600;
       flex-shrink: 0;
-      min-width: 8.5rem;
+      min-width: 8.2rem;
     }
     .letter-word .word-first {
       font-weight: 800;
-      font-size: 1.05rem;
+      font-size: 1rem;
     }
     .letter-word .word-rest {
       color: var(--letter-context);
@@ -153,7 +162,7 @@
 
     .letter-desc {
       flex: 1;
-      font-size: 0.94rem;
+      font-size: 0.9rem;
     }
 
     /* AUTOM rows (bright) */
@@ -187,47 +196,37 @@
       opacity: 0.42;
     }
 
-    @media (max-width: 600px) {
-      .about-hero-text { font-size: 1.9rem; }
-      .letter-row {
-        flex-wrap: wrap;
-        gap: 0.4rem 0.55rem;
-        font-size: 0.92rem;
-        padding: 0.3rem 0;
-      }
-      .letter-token { font-size: 1.3rem; width: 1.35rem; }
-      .letter-word { min-width: 7rem; font-size: 0.92rem; }
-      .letter-word .word-first { font-size: 0.98rem; }
-      .letter-desc { width: 100%; font-size: 0.86rem; padding-left: 1.95rem; }
-      .letter-sep { display: none; }
-    }
-
-    .about-footer-back {
-      max-width: 720px;
-      margin: 0 auto 2rem;
-      padding: 0 1.25rem;
-      text-align: left;
-    }
-    .about-footer-back .about-back {
-      font-size: 0.9rem;
-    }
-
     .about-footnote {
       max-width: 720px;
-      margin: 0 auto 0.6rem;
+      margin: 0 auto 1.2rem;
       padding: 0 1.25rem;
       text-align: center;
       color: var(--muted);
-      font-size: 0.84rem;
-      line-height: 1.5;
+      font-size: 0.78rem;
+      line-height: 1.4;
       font-style: italic;
+    }
+
+    @media (max-width: 600px) {
+      .about-hero-text { font-size: 1.7rem; }
+      .letter-row {
+        flex-wrap: wrap;
+        gap: 0.35rem 0.5rem;
+        font-size: 0.9rem;
+        padding: 0.18rem 0;
+      }
+      .letter-token { font-size: 1.25rem; width: 1.3rem; }
+      .letter-word { min-width: 6.8rem; font-size: 0.9rem; }
+      .letter-word .word-first { font-size: 0.96rem; }
+      .letter-desc { width: 100%; font-size: 0.84rem; padding-left: 1.85rem; }
+      .letter-sep { display: none; }
     }
   </style>
 </head>
 <body>
 
   <div class="about-topbar">
-    <a href="{{ back_url or url_for('index') }}" class="about-back">← Back to AutoKnowMus</a>
+    <a href="{{ back_url or url_for('index') }}" class="btn-back">← Back</a>
   </div>
 
   <div class="about-hero">
@@ -328,10 +327,6 @@
 
   <div class="about-footnote">
     The bright letters are live today. The faded letters are what comes next — each will reveal as it ships.
-  </div>
-
-  <div class="about-footer-back">
-    <a href="{{ back_url or url_for('index') }}" class="about-back">← Back to AutoKnowMus</a>
   </div>
 
 </body>
