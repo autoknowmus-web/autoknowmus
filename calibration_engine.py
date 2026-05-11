@@ -1045,6 +1045,7 @@ def diagnose_cell(make: str, model: str, fuel: str) -> Dict:
         "clamped_multiplier": None,
         "was_clamped": False,
         "phase_would_apply": 1,
+        "haircut_used": None,
         "current_row": None,
         "per_listing_rows": [],
         "listings_oldest_date": None,
@@ -1063,35 +1064,63 @@ def diagnose_cell(make: str, model: str, fuel: str) -> Dict:
         if not listings:
             return result
 
-        # Run per-listing math, collecting both detail rows AND aggregate arrays
-        listing_prices: List[int] = []
+        # Run per-listing math, collecting both detail rows AND aggregate arrays.
+        #
+        # v2 (Sprint 2): mirrors _calibrate_one_cell exactly so the diagnostic
+        # shows the SAME number that calibration will store. Key rule:
+        #   - If negotiated_price_inr is set → use it directly (no haircut),
+        #     it's already an actual sale price
+        #   - Otherwise → haircut the asking price by _get_haircut_for_cell()
+        #     to get an estimated effective sale price
+        #
+        # The `ratio` column on each row now shows used_price / formula_price
+        # where used_price is the haircut-adjusted price (apples-to-apples
+        # with formula output), NOT the raw asking. This makes per-listing
+        # ratios match the aggregate multiplier the page reports.
+        haircut = _get_haircut_for_cell(make, model, fuel)
+        listing_prices: List[int] = []   # haircut-adjusted (apples-to-apples)
         formula_prices: List[int] = []
         oldest_date = None
         newest_date = None
 
         for L in listings:
+            negotiated_raw = L.get("negotiated_price_inr")
+            asking_raw     = L.get("asking_price_inr")
+
             row = {
                 "id": L.get("id", ""),
                 "year": L.get("year"),
                 "mileage_km": L.get("mileage_km") or 0,
                 "condition": L.get("condition") or "Good",
                 "owner": L.get("owners") or "1st Owner",
-                "asking_price": L.get("asking_price_inr"),
-                "negotiated_price": L.get("negotiated_price_inr"),
+                "asking_price": asking_raw,
+                "negotiated_price": negotiated_raw,
                 "used_price": None,
                 "formula_price": None,
                 "ratio": None,
                 "entry_date": L.get("entry_date"),
                 "skipped_reason": None,
+                "haircut_applied": False,  # v2 diagnostic flag
             }
 
-            # Price selection: COALESCE(negotiated, asking)
-            price = L.get("negotiated_price_inr") or L.get("asking_price_inr")
-            if not price or price <= 0:
+            # v2 price selection: negotiated wins (no haircut); else asking × haircut
+            if negotiated_raw and negotiated_raw > 0:
+                effective_price = int(negotiated_raw)
+                row["haircut_applied"] = False
+            elif asking_raw and asking_raw > 0:
+                effective_price = int(round(asking_raw * haircut))
+                row["haircut_applied"] = True
+            else:
                 row["skipped_reason"] = "no_price"
                 result["per_listing_rows"].append(row)
                 continue
-            row["used_price"] = int(price)
+
+            if effective_price <= 0:
+                row["skipped_reason"] = "no_price"
+                result["per_listing_rows"].append(row)
+                continue
+
+            row["used_price"] = effective_price
 
             # Run the formula
             try:
@@ -1116,11 +1145,10 @@ def diagnose_cell(make: str, model: str, fuel: str) -> Dict:
                 continue
 
             row["formula_price"] = int(formula_price)
-            row["ratio"] = round(int(price) / int(formula_price), 4)
+            row["ratio"] = round(effective_price / int(formula_price), 4)
 
-            listing_prices.append(int(price))
+            listing_prices.append(effective_price)
             formula_prices.append(int(formula_price))
-
             # Track date range
             ed = L.get("entry_date")
             if ed:
@@ -1159,6 +1187,7 @@ def diagnose_cell(make: str, model: str, fuel: str) -> Dict:
         result["clamped_multiplier"] = round(clamped_mult, 4)
         result["was_clamped"] = (raw_mult != clamped_mult)
         result["phase_would_apply"] = _phase_for_sample_count(result["listings_used"])
+        result["haircut_used"] = haircut  # v2: surface the haircut that was applied
 
         return result
 
