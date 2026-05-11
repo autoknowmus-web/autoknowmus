@@ -163,37 +163,116 @@ NEGOTIATION_GAP_SOFT_MIN  = 0.80
 NEGOTIATION_GAP_SOFT_MAX  = 0.92
 
 
-def load_negotiation_gap() -> float:
+# ============================================================
+# In-memory cache for negotiation_gap
+# ------------------------------------------------------------
+# Stores the value loaded from app_config so we don't re-query
+# Supabase on every calibration run. The admin config page calls
+# load_negotiation_gap(force_refresh=True) after a save, which
+# busts this cache and forces a fresh read on the next call.
+#
+# Cache shape:
+#   None       → never loaded yet, next call will read from DB
+#   float      → currently cached value (used as-is until busted)
+#
+# If a DB read fails for any reason (network, missing row, bad
+# value), the cache is set to NEGOTIATION_GAP_DEFAULT so the
+# engine keeps working with sensible math.
+# ============================================================
+
+_negotiation_gap_cache: Optional[float] = None
+
+
+def load_negotiation_gap(force_refresh: bool = False) -> float:
     """
     Returns the current global negotiation gap (haircut) value.
 
-    Defensive v2 implementation: returns NEGOTIATION_GAP_DEFAULT.
+    Behavior:
+      - On first call OR when force_refresh=True, fetches the value
+        from app_config where key='negotiation_gap' and caches it.
+      - On subsequent calls, returns the cached value without hitting
+        Supabase.
+      - On any error (no row, bad value, network), falls back to
+        NEGOTIATION_GAP_DEFAULT and caches that fallback so we don't
+        thrash the DB.
 
-    Forward path: when an admin-settings table is wired up, this can
-    read the live override from Supabase and fall back to the default
-    on any error. The function signature stays the same, so call sites
-    don't change.
+    Called by:
+      - admin_calibration_config (POST handler, with force_refresh=True
+        after saving a new value)
+      - admin_index page (for the "gap N.NN" badge on the config tile)
+      - _get_haircut_for_cell (used by every calibration run)
+      - Any other code path that needs the live haircut value
     """
-    return NEGOTIATION_GAP_DEFAULT
+    global _negotiation_gap_cache
+
+    # Return cache if it's populated and refresh wasn't requested
+    if _negotiation_gap_cache is not None and not force_refresh:
+        return _negotiation_gap_cache
+
+    # Read from app_config — single row keyed by 'negotiation_gap'
+    try:
+        sb = _get_supabase()
+        result = (
+            sb.table("app_config")
+            .select("value")
+            .eq("key", "negotiation_gap")
+            .limit(1)
+            .execute()
+        )
+        if result.data and result.data[0].get("value") is not None:
+            raw_value = result.data[0]["value"]
+            # app_config.value is NUMERIC(5,4) — comes back as str or Decimal
+            try:
+                value = float(raw_value)
+                # Sanity bound — never trust an out-of-band value
+                if NEGOTIATION_GAP_HARD_MIN <= value <= NEGOTIATION_GAP_HARD_MAX:
+                    _negotiation_gap_cache = value
+                    return _negotiation_gap_cache
+                # Out of bounds → fall through to default
+                print(
+                    f"[calibration_engine] load_negotiation_gap: "
+                    f"value {value} from app_config is outside "
+                    f"[{NEGOTIATION_GAP_HARD_MIN}, {NEGOTIATION_GAP_HARD_MAX}], "
+                    f"falling back to default {NEGOTIATION_GAP_DEFAULT}"
+                )
+            except (TypeError, ValueError) as e:
+                print(
+                    f"[calibration_engine] load_negotiation_gap: "
+                    f"could not parse value '{raw_value}' as float: {e}"
+                )
+        # No row OR null value → use default
+    except Exception as e:
+        print(
+            f"[calibration_engine] load_negotiation_gap: "
+            f"DB read failed ({type(e).__name__}: {e}), "
+            f"using default {NEGOTIATION_GAP_DEFAULT}"
+        )
+
+    # Any error path → cache the default so we don't keep retrying
+    _negotiation_gap_cache = NEGOTIATION_GAP_DEFAULT
+    return _negotiation_gap_cache
 
 
 def get_negotiation_gap(make: str = None, model: str = None, fuel: str = None) -> float:
     """
     Returns the negotiation gap (haircut) for a given (make, model, fuel)
-    cell. Today this is the global default for every cell — see
-    _get_haircut_for_cell() for the upgrade hook.
+    cell. Currently the same value for every cell — the global haircut
+    loaded from app_config. The (make, model, fuel) args are accepted
+    for future per-cell variation but ignored today.
 
     All args are optional to stay compatible with any v1 caller that
     invoked this with zero, one, or all three arguments.
     """
-    return _get_haircut_for_cell(make or "", model or "", fuel or "")
+    return load_negotiation_gap()
 
 
 def _get_haircut_for_cell(make: str, model: str, fuel: str) -> float:
     """
     Returns the haircut multiplier for a given (make, model, fuel) cell.
 
-    v2 (Sprint 2): returns the global default for every cell.
+    v2 (Sprint 2): returns the cached global value from app_config,
+    NOT the hardcoded constant — so admin overrides at
+    /admin/calibration-config are now respected by every calibration run.
 
     Future expansion paths (Phase 2 of U-layer calibration):
       1. Brand-tier segmentation:
@@ -206,8 +285,7 @@ def _get_haircut_for_cell(make: str, model: str, fuel: str) -> float:
 
     All three can be added later without changing _calibrate_one_cell().
     """
-    return NEGOTIATION_HAIRCUT_DEFAULT
-
+    return load_negotiation_gap()
 
 # ============================================================
 # SUPABASE CLIENT
