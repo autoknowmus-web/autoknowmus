@@ -1150,27 +1150,38 @@ def compute_base_valuation(make, model, variant, fuel, year, mileage, condition,
   # ============================================================
   # v3.5.2 Step C: Apply calibration (if exists for this cell)
   # ============================================================
+  # SPRINT 2 FIX (May 2026):
+  #   v2 of calibration_engine.py applies the negotiation_gap haircut
+  #   to asking prices INSIDE _calibrate_one_cell, BEFORE the median is
+  #   taken. The stored calibration_multiplier is therefore already the
+  #   final effective multiplier — it does NOT need another haircut at
+  #   valuation time.
+  #
+  #   The previous version of this block applied the haircut a second
+  #   time here, which silently cancelled most of the calibration signal
+  #   (e.g. stored 1.1994 × gap 0.84 = effective 1.0075, nearly no-op).
+  #   Removed. The stored value is now used directly, which restores
+  #   the calibration uplift v2 was designed to produce (~17% on cells
+  #   that were previously double-haircut).
+  #
   # Lazy import to avoid circular dependency:
   #   calibration_engine imports car_data.compute_base_valuation
   #   so car_data.py CANNOT import calibration_engine at module-load time.
   # By importing inside the function, Python caches the module after the
   # first call and subsequent calls have zero overhead.
   try:
-    from calibration_engine import (
-      get_calibration_for_cell_cached,
-      get_negotiation_gap,
-    )
+    from calibration_engine import get_calibration_for_cell_cached
     calibration_row = get_calibration_for_cell_cached(make, model, fuel)
     if calibration_row:
-      raw_multiplier = float(calibration_row.get("calibration_multiplier") or 1.0)
-      gap = get_negotiation_gap()
-      effective_multiplier = raw_multiplier * gap
-      # Safety clamp — same bounds as raw multiplier ([0.50, 1.50])
-      if effective_multiplier < 0.50:
-        effective_multiplier = 0.50
-      elif effective_multiplier > 1.50:
-        effective_multiplier = 1.50
-      price *= effective_multiplier
+      stored_multiplier = float(calibration_row.get("calibration_multiplier") or 1.0)
+      # Safety clamp — same bounds as calibration_engine ([0.50, 1.50]).
+      # The stored value is already clamped by _calibrate_one_cell, but
+      # we clamp again here as a defence against schema drift / bad data.
+      if stored_multiplier < 0.50:
+        stored_multiplier = 0.50
+      elif stored_multiplier > 1.50:
+        stored_multiplier = 1.50
+      price *= stored_multiplier
   except Exception:
     # Defensive: any failure in calibration lookup falls back silently
     # to formula-only pricing. Never break a valuation because of a
