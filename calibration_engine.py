@@ -915,6 +915,260 @@ def get_recent_runs(limit: int = 10) -> List[Dict]:
 
 
 # ============================================================
+# DIAGNOSTIC API (Sprint 2.1 — read-only admin tooling)
+# ============================================================
+#
+# These functions support the /admin/calibration-diagnostic page. They run
+# the SAME math as run_calibration() but write nothing — pure preview.
+#
+# Why these live in calibration_engine.py (not app.py):
+#   - Same eligibility filters, same trimmed-median logic, same clamp bounds
+#   - Reuses _fetch_eligible_listings + _calibrate_one_cell verbatim
+#   - Co-located with the math it diagnoses, so future changes can't drift
+# ============================================================
+
+
+def list_eligible_cells() -> List[Dict]:
+    """
+    Returns the list of (make, model, fuel) cells with at least 1 eligible
+    listing in the 180-day window. Used to populate the cell-picker dropdowns
+    on /admin/calibration-diagnostic.
+
+    Returns:
+      [
+        {"make": "Maruti Suzuki", "model": "Brezza", "fuel": "Petrol",
+         "listing_count": 7},
+        ...
+      ]
+    Sorted by (make, model, fuel) ascending.
+
+    Cells with <3 listings are STILL included — the admin needs to see them
+    to know they're under-sampled. _calibrate_one_cell will skip them when
+    actually computing, and the diagnostic flags them as "below threshold".
+    """
+    listings = _fetch_eligible_listings()
+    if not listings:
+        return []
+
+    counts: Dict[Tuple[str, str, str], int] = {}
+    for L in listings:
+        make = (L.get("make") or "").strip()
+        model = (L.get("model") or "").strip()
+        fuel = (L.get("fuel") or "").strip()
+        if not (make and model and fuel):
+            continue
+        key = (make, model, fuel)
+        counts[key] = counts.get(key, 0) + 1
+
+    cells = [
+        {"make": m, "model": mod, "fuel": f, "listing_count": n}
+        for (m, mod, f), n in counts.items()
+    ]
+    cells.sort(key=lambda c: (c["make"], c["model"], c["fuel"]))
+    return cells
+
+
+def diagnose_cell(make: str, model: str, fuel: str) -> Dict:
+    """
+    Read-only preview of what calibration WOULD do for a single cell.
+
+    Runs the SAME math as run_calibration_for_cell() but:
+      - Writes NOTHING (no model_calibration upsert, no calibration_runs row,
+        no research_log flag updates)
+      - Returns per-listing breakdown so admin can spot outliers
+      - Returns current model_calibration row (if any) for delta comparison
+
+    Returns dict:
+      {
+        "ok": bool,                          # False only on hard error
+        "make": str, "model": str, "fuel": str,
+        "listings_total": int,               # total eligible in window
+        "listings_used": int,                # passed the per-listing filter
+        "listings_skipped": int,             # had no price or formula failed
+
+        # Math results — None if below MIN_SAMPLES_PER_CELL
+        "qualifies": bool,                   # True if used >= 3
+        "median_listing_price": int | None,  # trimmed median of listing prices
+        "median_formula_price": int | None,  # trimmed median of formula prices
+        "raw_multiplier": float | None,      # median_listing / median_formula
+        "clamped_multiplier": float | None,  # raw clamped to [0.50, 1.50]
+        "was_clamped": bool,
+        "phase_would_apply": int,            # 1/2/3/4 — what _phase_for_sample_count returns
+
+        # Current state (if cell was previously calibrated)
+        "current_row": Dict | None,          # full model_calibration row, or None
+
+        # Per-listing detail rows for the table
+        "per_listing_rows": [
+          {
+            "id": str,
+            "year": int,
+            "mileage_km": int,
+            "condition": str,
+            "owner": str,
+            "asking_price": int | None,
+            "negotiated_price": int | None,
+            "used_price": int,               # negotiated or asking
+            "formula_price": int | None,     # None means skipped
+            "ratio": float | None,           # used_price / formula_price
+            "entry_date": str,
+            "skipped_reason": str | None,    # populated when formula_price is None
+          },
+          ...
+        ],
+
+        # Date range
+        "listings_oldest_date": str | None,
+        "listings_newest_date": str | None,
+
+        # Error (only if ok=False)
+        "error": str | None,
+      }
+
+    NOTE: This duplicates a few lines from _calibrate_one_cell because it
+    needs the per-listing detail that _calibrate_one_cell discards. Kept
+    deliberately small — if _calibrate_one_cell's math ever changes, update
+    here too. Tests should pin both to the same per-cell output.
+    """
+    result = {
+        "ok": True,
+        "make": make,
+        "model": model,
+        "fuel": fuel,
+        "listings_total": 0,
+        "listings_used": 0,
+        "listings_skipped": 0,
+        "qualifies": False,
+        "median_listing_price": None,
+        "median_formula_price": None,
+        "raw_multiplier": None,
+        "clamped_multiplier": None,
+        "was_clamped": False,
+        "phase_would_apply": 1,
+        "current_row": None,
+        "per_listing_rows": [],
+        "listings_oldest_date": None,
+        "listings_newest_date": None,
+        "error": None,
+    }
+
+    try:
+        # Pull eligible listings for this cell
+        listings = _fetch_eligible_listings(cell_filter=(make, model, fuel))
+        result["listings_total"] = len(listings)
+
+        # Pull current model_calibration row (if any)
+        result["current_row"] = get_calibration_for_cell(make, model, fuel)
+
+        if not listings:
+            return result
+
+        # Run per-listing math, collecting both detail rows AND aggregate arrays
+        listing_prices: List[int] = []
+        formula_prices: List[int] = []
+        oldest_date = None
+        newest_date = None
+
+        for L in listings:
+            row = {
+                "id": L.get("id", ""),
+                "year": L.get("year"),
+                "mileage_km": L.get("mileage_km") or 0,
+                "condition": L.get("condition") or "Good",
+                "owner": L.get("owners") or "1st Owner",
+                "asking_price": L.get("asking_price_inr"),
+                "negotiated_price": L.get("negotiated_price_inr"),
+                "used_price": None,
+                "formula_price": None,
+                "ratio": None,
+                "entry_date": L.get("entry_date"),
+                "skipped_reason": None,
+            }
+
+            # Price selection: COALESCE(negotiated, asking)
+            price = L.get("negotiated_price_inr") or L.get("asking_price_inr")
+            if not price or price <= 0:
+                row["skipped_reason"] = "no_price"
+                result["per_listing_rows"].append(row)
+                continue
+            row["used_price"] = int(price)
+
+            # Run the formula
+            try:
+                formula_price = compute_base_valuation(
+                    make=L.get("make"),
+                    model=L.get("model"),
+                    variant=L.get("variant"),
+                    fuel=L.get("fuel"),
+                    year=L.get("year"),
+                    mileage=L.get("mileage_km") or 0,
+                    condition=L.get("condition"),
+                    owner=L.get("owners"),
+                )
+            except Exception as e:
+                row["skipped_reason"] = f"formula_error: {type(e).__name__}"
+                result["per_listing_rows"].append(row)
+                continue
+
+            if formula_price is None or formula_price <= 0:
+                row["skipped_reason"] = "formula_returned_none"
+                result["per_listing_rows"].append(row)
+                continue
+
+            row["formula_price"] = int(formula_price)
+            row["ratio"] = round(int(price) / int(formula_price), 4)
+
+            listing_prices.append(int(price))
+            formula_prices.append(int(formula_price))
+
+            # Track date range
+            ed = L.get("entry_date")
+            if ed:
+                if oldest_date is None or ed < oldest_date:
+                    oldest_date = ed
+                if newest_date is None or ed > newest_date:
+                    newest_date = ed
+
+            result["per_listing_rows"].append(row)
+
+        result["listings_used"] = len(listing_prices)
+        result["listings_skipped"] = result["listings_total"] - result["listings_used"]
+        result["listings_oldest_date"] = oldest_date
+        result["listings_newest_date"] = newest_date
+
+        # Below threshold → return without computing multiplier
+        if result["listings_used"] < MIN_SAMPLES_PER_CELL:
+            result["phase_would_apply"] = _phase_for_sample_count(result["listings_used"])
+            return result
+
+        # Compute trimmed medians
+        median_listing = _trimmed_median(listing_prices)
+        median_formula = _trimmed_median(formula_prices)
+
+        if not median_formula or median_formula <= 0:
+            result["error"] = "median formula price is zero — cannot compute multiplier"
+            return result
+
+        raw_mult = median_listing / median_formula
+        clamped_mult = _clamp_multiplier(raw_mult)
+
+        result["qualifies"] = True
+        result["median_listing_price"] = int(median_listing)
+        result["median_formula_price"] = int(median_formula)
+        result["raw_multiplier"] = round(raw_mult, 4)
+        result["clamped_multiplier"] = round(clamped_mult, 4)
+        result["was_clamped"] = (raw_mult != clamped_mult)
+        result["phase_would_apply"] = _phase_for_sample_count(result["listings_used"])
+
+        return result
+
+    except Exception as e:
+        result["ok"] = False
+        result["error"] = f"{type(e).__name__}: {e}"
+        return result
+
+
+# ============================================================
 # CLI ENTRYPOINT (for ad-hoc testing — not used by Flask)
 # ============================================================
 if __name__ == "__main__":
