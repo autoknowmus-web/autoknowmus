@@ -1,0 +1,817 @@
+{% extends "layout.html" %}
+{% block title %}Update Anchor Price — AutoKnowMus Admin{% endblock %}
+
+{% block extra_head %}
+<style>
+  .au-wrap { padding: 14px 24px 32px; max-width: 1100px; margin: 0 auto; }
+
+  /* Header */
+  .au-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+  .au-title { color: #ffa500; font-size: 1.4rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .au-title .pill {
+    background: rgba(255,165,0,0.16); color: #ffa500;
+    border: 1px solid rgba(255,165,0,0.45);
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .au-subtitle { color: #adb5bd; font-size: 0.86rem; margin: 0 0 18px; }
+
+  /* Flash messages */
+  .au-flash {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; padding: 11px 16px;
+    border-radius: 8px; margin-bottom: 14px;
+    font-size: 0.88rem; line-height: 1.45;
+  }
+  .au-flash.success {
+    background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
+    border: 1px solid #28a745; color: #5bd47b;
+  }
+  .au-flash.error {
+    background: linear-gradient(135deg, #2a1818 0%, #14171d 100%);
+    border: 1px solid #ff6b6b; color: #ffb8b8;
+  }
+  .au-flash .close {
+    background: transparent; border: none; color: inherit;
+    font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 0 4px;
+    opacity: 0.8;
+  }
+  .au-flash .close:hover { opacity: 1; }
+
+  /* Form card */
+  .au-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .au-card h2 {
+    font-size: 1.05rem; color: #fff;
+    margin: 0 0 6px; font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .au-card .desc {
+    color: #adb5bd; font-size: 0.84rem;
+    margin: 0 0 18px; line-height: 1.5;
+  }
+  .au-card .desc strong { color: #ffc870; }
+
+  /* Form grid */
+  .au-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  @media (max-width: 700px) { .au-form-grid { grid-template-columns: 1fr; } }
+  .au-form-grid .span-2 { grid-column: 1 / -1; }
+
+  .au-field { margin-bottom: 4px; }
+  .au-field label {
+    display: block;
+    color: #adb5bd; font-size: 0.78rem; font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .au-field label .req { color: #ff6b6b; }
+  .au-field label .hint {
+    color: #6c757d; font-weight: 400;
+    font-size: 0.72rem; margin-left: 4px;
+  }
+  .au-field select, .au-field input[type="text"], .au-field textarea {
+    width: 100%;
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    padding: 9px 11px;
+    border-radius: 7px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+  .au-field select:focus, .au-field input[type="text"]:focus, .au-field textarea:focus {
+    outline: none; border-color: #ffa500;
+  }
+  .au-field select:disabled, .au-field input:disabled {
+    color: #6c757d; background: #14171d; cursor: not-allowed;
+  }
+  .au-field textarea { resize: vertical; min-height: 56px; }
+
+  /* Price wrap with ₹ prefix */
+  .au-price-wrap { position: relative; }
+  .au-price-wrap .rupee {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: #ffa500; font-weight: 600; pointer-events: none;
+    font-size: 0.95rem;
+  }
+  .au-price-wrap input { padding-left: 28px; }
+
+  /* Live preview panel */
+  .au-preview-card {
+    background: linear-gradient(135deg, #14171d 0%, #1a1d24 100%);
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-top: 14px;
+    display: none;
+  }
+  .au-preview-card.show { display: block; }
+  .au-preview-card h3 {
+    color: #ffa500; font-size: 0.88rem;
+    margin: 0 0 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .au-preview-row {
+    display: flex; justify-content: space-between;
+    padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.84rem;
+  }
+  .au-preview-row:last-child { border-bottom: none; }
+  .au-preview-row .lbl { color: #adb5bd; }
+  .au-preview-row .val { color: #e6e6e6; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .au-preview-row .val.derived { color: #5bd47b; }
+  .au-preview-row .val.delta-pos { color: #5bd47b; }
+  .au-preview-row .val.delta-neg { color: #ff8585; }
+  .au-preview-row .val.delta-zero { color: #adb5bd; }
+  .au-preview-row .val.warn { color: #ffc870; }
+
+  /* Submit button */
+  .au-actions {
+    margin-top: 18px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .au-btn-submit {
+    background: #28a745; color: #fff;
+    border: none; padding: 10px 22px;
+    border-radius: 7px;
+    font-size: 0.92rem; font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .au-btn-submit:hover { background: #2bb84d; }
+  .au-btn-submit:disabled {
+    background: #2a2d34; color: #6c757d; cursor: not-allowed;
+  }
+  .au-btn-secondary {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2d34;
+    padding: 9px 18px;
+    border-radius: 7px;
+    font-size: 0.86rem; font-weight: 600;
+    cursor: pointer;
+  }
+  .au-btn-secondary:hover { color: #fff; border-color: #6c757d; }
+  .au-hint { color: #6c757d; font-size: 0.78rem; font-style: italic; }
+
+  /* Warning panel for >5% delta */
+  .au-warn-panel {
+    background: linear-gradient(135deg, #2a2118 0%, #1a1d24 100%);
+    border: 1px solid #ffa500;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-top: 14px;
+    display: none;
+  }
+  .au-warn-panel.show { display: block; }
+  .au-warn-panel h3 {
+    color: #ffa500; font-size: 0.95rem;
+    margin: 0 0 10px; font-weight: 700;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .au-warn-body {
+    color: #e6e6e6; font-size: 0.86rem; line-height: 1.5;
+  }
+  .au-warn-numbers {
+    background: #0e1117; border: 1px solid #2a2d34;
+    border-radius: 6px; padding: 10px 14px;
+    margin: 12px 0;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.86rem;
+  }
+  .au-warn-numbers .row {
+    display: flex; justify-content: space-between;
+    padding: 3px 0; color: #adb5bd;
+  }
+  .au-warn-numbers .row .v { color: #fff; font-weight: 600; }
+  .au-warn-numbers .row.delta .v { color: #ffa500; font-size: 0.92rem; }
+  .au-warn-causes {
+    color: #adb5bd; font-size: 0.82rem;
+    margin-top: 10px;
+  }
+  .au-warn-causes ul { margin: 6px 0 0; padding-left: 20px; }
+  .au-warn-causes li { margin-bottom: 3px; }
+  .au-warn-actions {
+    margin-top: 14px;
+    display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;
+  }
+
+  /* Recent submissions table */
+  .au-recent-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .au-recent-table th {
+    color: #6c757d; font-size: 0.7rem;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    font-weight: 700; text-align: left;
+    padding: 8px 10px; border-bottom: 1px solid #2a2d34;
+  }
+  .au-recent-table th.num, .au-recent-table td.num {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .au-recent-table td {
+    padding: 9px 10px; color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: top;
+  }
+  .au-recent-table tr:last-child td { border-bottom: none; }
+  .au-recent-table .car { color: #ffc870; font-weight: 600; }
+  .au-recent-table .meta {
+    color: #6c757d; font-size: 0.74rem;
+    margin-top: 2px;
+  }
+  .au-recent-table .delta-pos { color: #5bd47b; font-weight: 600; }
+  .au-recent-table .delta-neg { color: #ff8585; font-weight: 600; }
+  .au-recent-table .delta-zero { color: #adb5bd; }
+  .au-recent-empty {
+    text-align: center; padding: 24px 12px;
+    color: #6c757d; font-size: 0.86rem; font-style: italic;
+  }
+
+  /* Error inline */
+  .au-error-inline {
+    color: #ff8585; font-size: 0.82rem;
+    margin-top: 6px; display: none;
+  }
+  .au-error-inline.show { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="au-wrap">
+
+  {# Back button #}
+  <a href="{{ url_for('price_tools') }}" class="btn-back">← Back to Price Tools</a>
+
+  <div class="au-header">
+    <h1 class="au-title">
+      📍 Update Anchor Price
+      <span class="pill">Admin</span>
+    </h1>
+  </div>
+  <p class="au-subtitle">
+    Spotted a new ex-showroom price somewhere — CarWale, OEM website, news, dealer quote, or a friend's purchase? Paste it here. The system converts it to the Karnataka reference price and propagates to all 28 states automatically via state multipliers.
+  </p>
+
+  {# Flash messages #}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+        <div class="au-flash {{ 'error' if category == 'error' else 'success' }}">
+          <span>{{ msg }}</span>
+          <button type="button" class="close" onclick="this.parentElement.style.display='none'" aria-label="Close">×</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {# ============================================================
+     Submission form
+     ============================================================ #}
+  <div class="au-card">
+    <h2>✏️ New anchor price submission</h2>
+    <p class="desc">
+      Required: source, state where seen, make/model/variant/fuel, and the price.
+      Changes ≤ 5% apply automatically. Changes > 5% require explicit confirmation (typo guard).
+    </p>
+
+    <form id="au-form" autocomplete="off">
+
+      <div class="au-form-grid">
+        {# Row 1: Source + Source URL #}
+        <div class="au-field">
+          <label for="au-source">Source <span class="req">*</span></label>
+          <select id="au-source" name="source" required>
+            <option value="">— Select source —</option>
+            <option value="CarWale">CarWale</option>
+            <option value="CarDekho">CarDekho</option>
+            <option value="ZigWheels">ZigWheels</option>
+            <option value="OEM Official">OEM Official site</option>
+            <option value="News">News / Press release</option>
+            <option value="Forum">Forum (Team-BHP etc.)</option>
+            <option value="Dealer">Dealer quote</option>
+            <option value="Manual">Manual entry (none of the above)</option>
+          </select>
+        </div>
+
+        <div class="au-field">
+          <label for="au-source-url">
+            Source URL <span class="hint">(optional)</span>
+          </label>
+          <input type="text" id="au-source-url" name="source_url"
+                 placeholder="https://..." maxlength="500">
+        </div>
+
+        {# Row 2: State + (spacer) #}
+        <div class="au-field">
+          <label for="au-state">
+            State where you saw this price <span class="req">*</span>
+            <span class="hint">(defaults to Karnataka)</span>
+          </label>
+          <select id="au-state" name="submitted_state" required>
+            {% for s in rto_states %}
+              <option value="{{ s.code }}"
+                {% if s.code == 'KA' %}selected{% endif %}>
+                {{ s.name }} ({{ s.code }})
+                {% if s.code in state_multiplier_map %}
+                  — multiplier {{ '%.4f' | format(state_multiplier_map[s.code]) }}
+                {% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="au-field">
+          <label for="au-fuel">Fuel <span class="req">*</span></label>
+          <select id="au-fuel" name="fuel" required disabled>
+            <option value="">— Select make/model first —</option>
+          </select>
+        </div>
+
+        {# Row 3: Make + Model #}
+        <div class="au-field">
+          <label for="au-make">Make <span class="req">*</span></label>
+          <select id="au-make" name="make" required>
+            <option value="">— Select make —</option>
+            {% for m in makes %}
+              <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="au-field">
+          <label for="au-model">Model <span class="req">*</span></label>
+          <select id="au-model" name="model" required disabled>
+            <option value="">— Select make first —</option>
+          </select>
+        </div>
+
+        {# Row 4: Variant + Price #}
+        <div class="au-field">
+          <label for="au-variant">Variant <span class="req">*</span></label>
+          <select id="au-variant" name="variant" required disabled>
+            <option value="">— Select model/fuel first —</option>
+          </select>
+        </div>
+
+        <div class="au-field">
+          <label for="au-price">
+            Ex-showroom price <span class="req">*</span>
+            <span class="hint">(price you saw in selected state)</span>
+          </label>
+          <div class="au-price-wrap">
+            <span class="rupee">₹</span>
+            <input type="text" id="au-price" name="submitted_price"
+                   placeholder="e.g. 14,55,000" inputmode="numeric" required>
+          </div>
+        </div>
+
+        {# Row 5: Notes — full width #}
+        <div class="au-field span-2">
+          <label for="au-notes">
+            Notes <span class="hint">(optional, max 500 chars)</span>
+          </label>
+          <textarea id="au-notes" name="notes" maxlength="500"
+                    placeholder="e.g. 'OEM press release dated 18-Apr-2026 announcing price hike'"></textarea>
+        </div>
+      </div>
+
+      <div class="au-error-inline" id="au-error-inline"></div>
+
+      {# Live preview panel — appears when enough fields filled #}
+      <div class="au-preview-card" id="au-preview">
+        <h3>📊 Preview before submit</h3>
+        <div class="au-preview-row">
+          <span class="lbl">You saw in <span id="au-prev-state-name">—</span>:</span>
+          <span class="val" id="au-prev-submitted">—</span>
+        </div>
+        <div class="au-preview-row">
+          <span class="lbl">State multiplier applied:</span>
+          <span class="val" id="au-prev-multiplier">—</span>
+        </div>
+        <div class="au-preview-row">
+          <span class="lbl">Derived Karnataka reference:</span>
+          <span class="val derived" id="au-prev-derived">—</span>
+        </div>
+        <div class="au-preview-row">
+          <span class="lbl">Current Karnataka anchor in sheet:</span>
+          <span class="val" id="au-prev-current">—</span>
+        </div>
+        <div class="au-preview-row">
+          <span class="lbl">Change vs current:</span>
+          <span class="val" id="au-prev-delta">—</span>
+        </div>
+      </div>
+
+      <div class="au-actions">
+        <button type="submit" class="au-btn-submit" id="au-submit-btn" disabled>
+          Update Anchor Price
+        </button>
+        <button type="button" class="au-btn-secondary" id="au-reset-btn">Reset</button>
+        <span class="au-hint">Auto-applies if change ≤ 5% · Confirmation required for &gt; 5%</span>
+      </div>
+
+    </form>
+
+    {# Warning panel for >5% delta — hidden until needed #}
+    <div class="au-warn-panel" id="au-warn-panel">
+      <h3>⚠️ Large change detected</h3>
+      <div class="au-warn-body">
+        <p>This is larger than a typical year-on-year price adjustment.</p>
+
+        <div class="au-warn-numbers">
+          <div class="row"><span>Current Karnataka anchor:</span><span class="v" id="au-warn-current">—</span></div>
+          <div class="row"><span>Your submission (derived Karnataka):</span><span class="v" id="au-warn-derived">—</span></div>
+          <div class="row delta"><span>Difference:</span><span class="v" id="au-warn-delta">—</span></div>
+        </div>
+
+        <div class="au-warn-causes">
+          <strong>Common causes:</strong>
+          <ul>
+            <li>Mistyped digit (e.g. ₹16.20L vs ₹14.20L)</li>
+            <li>Wrong variant selected from the dropdown</li>
+            <li>Wrong state of origin (KA submitted as MH etc.)</li>
+            <li>Actual major price hike (rare — verify with source)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="au-warn-actions">
+        <button type="button" class="au-btn-secondary" id="au-warn-recheck">Let me re-check</button>
+        <button type="button" class="au-btn-submit" id="au-warn-confirm">Yes, apply anyway</button>
+      </div>
+    </div>
+  </div>
+
+  {# ============================================================
+     Recent submissions
+     ============================================================ #}
+  <div class="au-card">
+    <h2>🕘 Recent anchor updates</h2>
+    <p class="desc">Last 10 anchor price submissions across all admins.</p>
+
+    {% if recent_anchor_updates %}
+      <table class="au-recent-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Car</th>
+            <th>State</th>
+            <th class="num">Submitted</th>
+            <th class="num">Karnataka</th>
+            <th class="num">Δ</th>
+            <th>Source</th>
+            <th>By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recent_anchor_updates %}
+            <tr>
+              <td style="white-space:nowrap; color:#adb5bd;">{{ r.submitted_at_display }}</td>
+              <td>
+                <div class="car">{{ r.make }} {{ r.model }}</div>
+                <div class="meta">{{ r.variant }} · {{ r.fuel }}</div>
+              </td>
+              <td>{{ r.submitted_state }}</td>
+              <td class="num">₹ {{ r.submitted_price | inr }}</td>
+              <td class="num">₹ {{ r.derived_karnataka_price | inr }}</td>
+              <td class="num">
+                {% if r.delta_pct is not none %}
+                  {% if r.delta_pct > 0.5 %}
+                    <span class="delta-pos">+{{ '%.1f' | format(r.delta_pct) }}%</span>
+                  {% elif r.delta_pct < -0.5 %}
+                    <span class="delta-neg">{{ '%.1f' | format(r.delta_pct) }}%</span>
+                  {% else %}
+                    <span class="delta-zero">{{ '%.1f' | format(r.delta_pct) }}%</span>
+                  {% endif %}
+                {% else %}
+                  <span class="delta-zero">new</span>
+                {% endif %}
+              </td>
+              <td>{{ r.source }}</td>
+              <td style="color:#adb5bd; word-break:break-all;">{{ r.submitted_by }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="au-recent-empty">No anchor updates submitted yet via this form.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  // ============================================================
+  // Update Anchor Price — frontend logic
+  // ============================================================
+  const CAR_DATA = {{ car_data_json | safe }};
+  const STATE_MULTIPLIERS = {{ state_multiplier_map | tojson }};
+  const STATE_NAMES = {{ state_names_map | tojson }};
+  const CURRENT_PRICES = {{ current_prices_map | tojson }};
+  // ^ {make+'|'+model+'|'+variant+'|'+fuel: currentKarnatakaPrice}
+
+  // Elements
+  const elForm = document.getElementById('au-form');
+  const elSource = document.getElementById('au-source');
+  const elState = document.getElementById('au-state');
+  const elMake = document.getElementById('au-make');
+  const elFuel = document.getElementById('au-fuel');
+  const elModel = document.getElementById('au-model');
+  const elVariant = document.getElementById('au-variant');
+  const elPrice = document.getElementById('au-price');
+  const elSubmit = document.getElementById('au-submit-btn');
+  const elReset = document.getElementById('au-reset-btn');
+  const elPreview = document.getElementById('au-preview');
+  const elPrevStateName = document.getElementById('au-prev-state-name');
+  const elPrevSubmitted = document.getElementById('au-prev-submitted');
+  const elPrevMult = document.getElementById('au-prev-multiplier');
+  const elPrevDerived = document.getElementById('au-prev-derived');
+  const elPrevCurrent = document.getElementById('au-prev-current');
+  const elPrevDelta = document.getElementById('au-prev-delta');
+  const elErrorInline = document.getElementById('au-error-inline');
+  const elWarnPanel = document.getElementById('au-warn-panel');
+  const elWarnCurrent = document.getElementById('au-warn-current');
+  const elWarnDerived = document.getElementById('au-warn-derived');
+  const elWarnDelta = document.getElementById('au-warn-delta');
+  const elWarnRecheck = document.getElementById('au-warn-recheck');
+  const elWarnConfirm = document.getElementById('au-warn-confirm');
+
+  // ----- Indian number formatting -----
+  function inrFmt(n) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    n = Math.round(Number(n));
+    return '₹ ' + n.toLocaleString('en-IN');
+  }
+
+  function formatPriceInput() {
+    const digits = (elPrice.value || '').replace(/\D+/g, '');
+    if (!digits) { elPrice.value = ''; updatePreview(); return; }
+    let n = parseInt(digits, 10);
+    if (n > 1000000000) n = 1000000000;  // 100 crore cap
+    elPrice.value = n.toLocaleString('en-IN');
+    updatePreview();
+  }
+  elPrice.addEventListener('input', formatPriceInput);
+  elPrice.addEventListener('blur', formatPriceInput);
+
+  // ----- Cascading dropdowns: Make → Fuel → Model → Variant -----
+  // Order matches seller.html (Make → Fuel → Model → Variant) per locked UI rule
+  function repopulateFuel() {
+    const make = elMake.value;
+    elFuel.innerHTML = '<option value="">— Select fuel —</option>';
+    elModel.innerHTML = '<option value="">— Select fuel first —</option>';
+    elVariant.innerHTML = '<option value="">— Select fuel/model first —</option>';
+
+    if (!make || !CAR_DATA[make]) {
+      elFuel.disabled = true;
+      elModel.disabled = true;
+      elVariant.disabled = true;
+      updateButtons();
+      return;
+    }
+
+    // Collect distinct fuels across all models of this make (preserve fixed order)
+    const fixedOrder = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
+    const fuelsSeen = new Set();
+    Object.values(CAR_DATA[make] || {}).forEach(modelMeta => {
+      (modelMeta.fuels || []).forEach(f => fuelsSeen.add(f));
+    });
+    fixedOrder.forEach(f => {
+      if (fuelsSeen.has(f)) {
+        const opt = document.createElement('option');
+        opt.value = f; opt.textContent = f;
+        elFuel.appendChild(opt);
+      }
+    });
+    elFuel.disabled = false;
+    elModel.disabled = true;
+    elVariant.disabled = true;
+    updateButtons();
+  }
+
+  function repopulateModel() {
+    const make = elMake.value;
+    const fuel = elFuel.value;
+    elModel.innerHTML = '<option value="">— Select model —</option>';
+    elVariant.innerHTML = '<option value="">— Select model first —</option>';
+
+    if (!make || !fuel || !CAR_DATA[make]) {
+      elModel.disabled = true;
+      elVariant.disabled = true;
+      updateButtons();
+      return;
+    }
+
+    // Models of this make that support this fuel — alphabetical
+    const models = Object.entries(CAR_DATA[make])
+      .filter(([_m, meta]) => (meta.fuels || []).includes(fuel))
+      .map(([m, _meta]) => m)
+      .sort();
+
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      elModel.appendChild(opt);
+    });
+    elModel.disabled = models.length === 0;
+    elVariant.disabled = true;
+    updateButtons();
+  }
+
+  function repopulateVariant() {
+    const make = elMake.value;
+    const model = elModel.value;
+    elVariant.innerHTML = '<option value="">— Select variant —</option>';
+
+    if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) {
+      elVariant.disabled = true;
+      updateButtons();
+      return;
+    }
+
+    const variants = [...(CAR_DATA[make][model].variants || [])].sort();
+    variants.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      elVariant.appendChild(opt);
+    });
+    elVariant.disabled = variants.length === 0;
+    updateButtons();
+  }
+
+  elMake.addEventListener('change', () => { repopulateFuel(); updatePreview(); });
+  elFuel.addEventListener('change', () => { repopulateModel(); updatePreview(); });
+  elModel.addEventListener('change', () => { repopulateVariant(); updatePreview(); });
+  elVariant.addEventListener('change', updatePreview);
+  elState.addEventListener('change', updatePreview);
+
+  // ----- Live preview -----
+  function updatePreview() {
+    const state = elState.value;
+    const make = elMake.value;
+    const model = elModel.value;
+    const variant = elVariant.value;
+    const fuel = elFuel.value;
+    const priceDigits = (elPrice.value || '').replace(/\D+/g, '');
+    const priceNum = priceDigits ? parseInt(priceDigits, 10) : 0;
+
+    // Show preview only when state + price + (some car info) are present
+    const ready = state && priceNum > 0 && make && model && variant && fuel;
+    if (!ready) {
+      elPreview.classList.remove('show');
+      updateButtons();
+      return;
+    }
+
+    const mult = STATE_MULTIPLIERS[state] || 1.0;
+    const stateName = STATE_NAMES[state] || state;
+    const derived = Math.round(priceNum / mult);
+    const carKey = `${make}|${model}|${variant}|${fuel}`;
+    const currentKa = CURRENT_PRICES[carKey] || null;
+
+    elPrevStateName.textContent = stateName;
+    elPrevSubmitted.textContent = inrFmt(priceNum);
+    elPrevMult.textContent = mult.toFixed(4);
+    elPrevDerived.textContent = inrFmt(derived);
+
+    if (currentKa) {
+      elPrevCurrent.textContent = inrFmt(currentKa);
+      const deltaPct = ((derived - currentKa) / currentKa) * 100;
+      const dStr = (deltaPct >= 0 ? '+' : '') + deltaPct.toFixed(2) + '%';
+      elPrevDelta.textContent = dStr;
+      elPrevDelta.className = 'val ' +
+        (Math.abs(deltaPct) > 5 ? 'warn' :
+         deltaPct > 0.5 ? 'delta-pos' :
+         deltaPct < -0.5 ? 'delta-neg' : 'delta-zero');
+    } else {
+      elPrevCurrent.textContent = '— (new entry)';
+      elPrevDelta.textContent = 'new';
+      elPrevDelta.className = 'val delta-zero';
+    }
+
+    elPreview.classList.add('show');
+    updateButtons();
+  }
+
+  function updateButtons() {
+    const valid = elSource.value && elState.value && elMake.value
+      && elFuel.value && elModel.value && elVariant.value
+      && (elPrice.value || '').replace(/\D+/g, '').length > 0;
+    elSubmit.disabled = !valid;
+  }
+  elSource.addEventListener('change', updateButtons);
+
+  // ----- Reset -----
+  elReset.addEventListener('click', () => {
+    elForm.reset();
+    elFuel.disabled = true;
+    elModel.disabled = true;
+    elVariant.disabled = true;
+    elFuel.innerHTML = '<option value="">— Select make first —</option>';
+    elModel.innerHTML = '<option value="">— Select make first —</option>';
+    elVariant.innerHTML = '<option value="">— Select model/fuel first —</option>';
+    elPreview.classList.remove('show');
+    elWarnPanel.classList.remove('show');
+    elErrorInline.classList.remove('show');
+    updateButtons();
+  });
+
+  // ----- Submit -----
+  function showError(msg) {
+    elErrorInline.textContent = msg;
+    elErrorInline.classList.add('show');
+  }
+  function hideError() {
+    elErrorInline.classList.remove('show');
+  }
+
+  async function postSubmission(confirmed) {
+    hideError();
+    elSubmit.disabled = true;
+    const originalLabel = elSubmit.textContent;
+    elSubmit.textContent = 'Submitting...';
+
+    const fd = new FormData();
+    fd.append('source', elSource.value);
+    fd.append('source_url', document.getElementById('au-source-url').value);
+    fd.append('submitted_state', elState.value);
+    fd.append('make', elMake.value);
+    fd.append('model', elModel.value);
+    fd.append('variant', elVariant.value);
+    fd.append('fuel', elFuel.value);
+    const priceDigits = (elPrice.value || '').replace(/\D+/g, '');
+    fd.append('submitted_price', priceDigits);
+    fd.append('notes', document.getElementById('au-notes').value);
+    if (confirmed) fd.append('confirmed', 'true');
+
+    try {
+      const resp = await fetch('{{ url_for("anchor_update_submit") }}', {
+        method: 'POST',
+        body: fd,
+      });
+      const data = await resp.json();
+
+      if (data.ok) {
+        // Success — show a quick success flash inline, then reload to refresh recent table
+        elWarnPanel.classList.remove('show');
+        elSubmit.textContent = '✓ Saved — reloading…';
+        elSubmit.style.background = '#28a745';
+        setTimeout(() => { window.location.reload(); }, 800);
+        return;
+      }
+
+      if (data.error === 'confirm_required') {
+        // Show the warning panel
+        elWarnCurrent.textContent = inrFmt(data.current_karnataka_price);
+        elWarnDerived.textContent = inrFmt(data.derived_karnataka_price);
+        const dStr = (data.delta_pct >= 0 ? '+' : '') + data.delta_pct.toFixed(2) + '%';
+        elWarnDelta.textContent = dStr;
+        elWarnPanel.classList.add('show');
+        elWarnPanel.scrollIntoView({behavior: 'smooth', block: 'center'});
+        elSubmit.textContent = originalLabel;
+        elSubmit.disabled = false;
+        return;
+      }
+
+      showError('Could not submit: ' + (data.detail || data.error || 'unknown error'));
+      elSubmit.textContent = originalLabel;
+      elSubmit.disabled = false;
+
+    } catch (err) {
+      showError('Network error — please try again.');
+      elSubmit.textContent = originalLabel;
+      elSubmit.disabled = false;
+    }
+  }
+
+  elForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    postSubmission(false);
+  });
+
+  elWarnConfirm.addEventListener('click', () => {
+    elWarnPanel.classList.remove('show');
+    postSubmission(true);
+  });
+  elWarnRecheck.addEventListener('click', () => {
+    elWarnPanel.classList.remove('show');
+    elPrice.focus();
+    elPrice.select();
+  });
+
+  // ----- Initial state -----
+  updateButtons();
+</script>
+{% endblock %}
