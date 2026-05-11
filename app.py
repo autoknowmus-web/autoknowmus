@@ -7489,22 +7489,75 @@ def anchor_update_page():
         flash('Admin access required.', 'error')
         return redirect(url_for('role'))
 
-    # State multipliers + names
+   # ============================================================
+    # State multipliers + names (Sprint 2 Anchor Update fix)
+    # ------------------------------------------------------------
+    # RTO_STATES is a flat list of 2-letter codes like ['AN','AP',...]
+    # We build a code→name map here so the form dropdown is readable.
+    # If a code isn't in STATE_NAMES_LOOKUP, fall back to showing
+    # the code itself (better than blank).
+    # ============================================================
+    STATE_NAMES_LOOKUP = {
+        'AN': 'Andaman & Nicobar Islands',
+        'AP': 'Andhra Pradesh',
+        'AR': 'Arunachal Pradesh',
+        'AS': 'Assam',
+        'BR': 'Bihar',
+        'CG': 'Chhattisgarh',
+        'CH': 'Chandigarh',
+        'DD': 'Daman & Diu',
+        'DL': 'Delhi',
+        'DN': 'Dadra & Nagar Haveli',
+        'GA': 'Goa',
+        'GJ': 'Gujarat',
+        'HP': 'Himachal Pradesh',
+        'HR': 'Haryana',
+        'JH': 'Jharkhand',
+        'JK': 'Jammu & Kashmir',
+        'KA': 'Karnataka',
+        'KL': 'Kerala',
+        'LA': 'Ladakh',
+        'LD': 'Lakshadweep',
+        'MH': 'Maharashtra',
+        'ML': 'Meghalaya',
+        'MN': 'Manipur',
+        'MP': 'Madhya Pradesh',
+        'MZ': 'Mizoram',
+        'NL': 'Nagaland',
+        'OD': 'Odisha',
+        'PB': 'Punjab',
+        'PY': 'Puducherry',
+        'RJ': 'Rajasthan',
+        'SK': 'Sikkim',
+        'TN': 'Tamil Nadu',
+        'TR': 'Tripura',
+        'TS': 'Telangana',
+        'UK': 'Uttarakhand',
+        'UP': 'Uttar Pradesh',
+        'WB': 'West Bengal',
+    }
+
     state_multiplier_map = {}
     state_names_map = {}
     rto_states = []
     try:
         state_multiplier_map = load_state_multipliers() or {}
-        # RTO_STATES is the canonical list — pull names from there
-        for s in (RTO_STATES if 'RTO_STATES' in globals() else []):
-            code = s.get('code') if isinstance(s, dict) else None
-            name = s.get('name') if isinstance(s, dict) else None
-            if code and name:
-                state_names_map[code] = name
-                rto_states.append({'code': code, 'name': name})
+    except Exception as e:
+        app.logger.warning(f"anchor_update_page: state multiplier load failed: {e}")
+
+    try:
+        for code in (RTO_STATES if 'RTO_STATES' in globals() else []):
+            if not isinstance(code, str):
+                continue
+            code = code.upper().strip()
+            if not code:
+                continue
+            name = STATE_NAMES_LOOKUP.get(code, code)  # fallback to code if name unknown
+            state_names_map[code] = name
+            rto_states.append({'code': code, 'name': name})
         rto_states.sort(key=lambda s: s['name'])
     except Exception as e:
-        app.logger.warning(f"anchor_update_page: state data load failed: {e}")
+        app.logger.warning(f"anchor_update_page: state data build failed: {e}")
 
     # Car data (make → model → {variants, fuels})
     try:
