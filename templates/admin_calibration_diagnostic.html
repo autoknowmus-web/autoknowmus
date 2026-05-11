@@ -1,0 +1,983 @@
+{% extends "layout.html" %}
+{% block title %}Calibration Diagnostic — Admin — AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ============================================================
+     Sprint 2.1 — Calibration Diagnostic (read-only)
+     Visual language matches admin_calibration_config.html so the two
+     pages feel like one tool.
+     ============================================================ */
+
+  .cd-wrap { padding: 14px 30px 30px; max-width: 1200px; margin: 0 auto; }
+
+  /* Header */
+  .cd-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+  .cd-title { color: #fff; font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: 10px; margin: 0; }
+  .cd-title .cd-pill {
+    background: rgba(78,176,255,0.16);
+    color: #8ec5ff;
+    border: 1px solid rgba(78,176,255,0.45);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .cd-title .cd-readonly {
+    background: rgba(108,117,125,0.18);
+    color: #adb5bd;
+    border: 1px solid rgba(108,117,125,0.4);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .cd-meta { color: #adb5bd; font-size: 0.82rem; font-style: italic; }
+
+  /* Cross-link bar */
+  .cd-crosslinks {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .cd-crosslinks a {
+    background: #1a1d24;
+    color: #adb5bd;
+    border: 1px solid #2a2d34;
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .cd-crosslinks a:hover {
+    border-color: #28a745;
+    color: #fff;
+  }
+
+  /* Flash messages */
+  .cd-flash {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 11px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+  .cd-flash.success {
+    background: linear-gradient(135deg, #2a2118 0%, #14171d 100%);
+    border: 1px solid #ffa500;
+    color: #ffd9a0;
+  }
+  .cd-flash.error {
+    background: linear-gradient(135deg, #2a1818 0%, #14171d 100%);
+    border: 1px solid #ff6b6b;
+    color: #ffb8b8;
+  }
+  .cd-flash .cd-flash-msg { flex: 1; }
+  .cd-flash .cd-flash-close {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    opacity: 0.8;
+  }
+  .cd-flash .cd-flash-close:hover { opacity: 1; }
+
+  /* Intro/explainer */
+  .cd-intro {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    color: #adb5bd;
+    font-size: 0.85rem;
+    line-height: 1.55;
+  }
+  .cd-intro strong { color: #5bd47b; }
+  .cd-intro code {
+    background: #0e1117;
+    color: #ffc870;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.82rem;
+  }
+
+  /* Picker card */
+  .cd-picker {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+  .cd-picker-title {
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cd-picker-title .sub {
+    color: #6c757d;
+    font-size: 0.78rem;
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  .cd-picker-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+  }
+  @media (max-width: 780px) {
+    .cd-picker-grid { grid-template-columns: 1fr 1fr; }
+    .cd-picker-grid .cd-picker-btn-cell { grid-column: 1 / span 2; }
+  }
+  .cd-picker-grid label {
+    display: block;
+    color: #adb5bd;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  .cd-picker-grid select {
+    width: 100%;
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    border-radius: 7px;
+    padding: 9px 12px;
+    font-size: 0.92rem;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+  .cd-picker-grid select:focus {
+    outline: none;
+    border-color: #28a745;
+  }
+  .cd-picker-grid select:disabled {
+    background: #1a1d24;
+    color: #6c757d;
+    cursor: not-allowed;
+  }
+  .cd-picker-btn {
+    background: #28a745;
+    color: #fff;
+    border: none;
+    padding: 9px 20px;
+    border-radius: 7px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .cd-picker-btn:hover { background: #2bb84d; }
+  .cd-picker-btn:disabled {
+    background: #2a2d34;
+    color: #6c757d;
+    cursor: not-allowed;
+  }
+  .cd-picker-empty {
+    color: #6c757d;
+    font-size: 0.85rem;
+    font-style: italic;
+    text-align: center;
+    padding: 14px 0 4px;
+  }
+
+  /* Empty state when no cell selected yet */
+  .cd-empty-state {
+    background: #1a1d24;
+    border: 1px dashed #2a2d34;
+    border-radius: 12px;
+    padding: 36px 22px;
+    text-align: center;
+    color: #6c757d;
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+  .cd-empty-state .cd-empty-icon {
+    font-size: 2.2rem;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  /* Selected cell header */
+  .cd-selected-header {
+    background: linear-gradient(135deg, #1a2228 0%, #14171d 100%);
+    border: 1px solid #4eb0ff;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .cd-selected-header .cd-cell-name {
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+  .cd-selected-header .cd-cell-name .cd-fuel {
+    color: #8ec5ff;
+    font-weight: 600;
+  }
+  .cd-selected-header .cd-cell-meta {
+    color: #adb5bd;
+    font-size: 0.82rem;
+  }
+  .cd-selected-header .cd-cell-meta strong { color: #fff; }
+
+  /* Summary cards row */
+  .cd-summary-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 900px) { .cd-summary-row { grid-template-columns: repeat(2, 1fr); } }
+  .cd-summary-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .cd-summary-card .cd-sum-label {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  .cd-summary-card .cd-sum-value {
+    color: #e6e6e6;
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .cd-summary-card .cd-sum-sub {
+    color: #6c757d;
+    font-size: 0.74rem;
+    margin-top: 4px;
+  }
+  .cd-summary-card.qualifies .cd-sum-value { color: #5bd47b; }
+  .cd-summary-card.below .cd-sum-value { color: #ffc870; }
+  .cd-summary-card.phase-4 .cd-sum-value { color: #ffd700; }
+  .cd-summary-card.phase-3 .cd-sum-value { color: #28a745; }
+  .cd-summary-card.phase-2 .cd-sum-value { color: #5bd47b; }
+  .cd-summary-card.phase-1 .cd-sum-value { color: #adb5bd; }
+
+  /* Multiplier card */
+  .cd-mult-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+  .cd-mult-title {
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cd-mult-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 800px) { .cd-mult-grid { grid-template-columns: 1fr; } }
+  .cd-mult-cell {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .cd-mult-cell .cd-mult-label {
+    color: #adb5bd;
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 4px;
+  }
+  .cd-mult-cell .cd-mult-value {
+    color: #e6e6e6;
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .cd-mult-cell .cd-mult-formula {
+    color: #6c757d;
+    font-size: 0.76rem;
+    margin-top: 4px;
+    font-family: ui-monospace, 'SF Mono', monospace;
+  }
+  .cd-mult-cell.raw .cd-mult-value { color: #ffc870; }
+  .cd-mult-cell.effective .cd-mult-value { color: #5bd47b; }
+  .cd-mult-cell.live .cd-mult-value { color: #8ec5ff; }
+  .cd-mult-clamped-warn {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: rgba(255,140,0,0.10);
+    border: 1px solid rgba(255,140,0,0.4);
+    border-radius: 6px;
+    color: #ffc870;
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+  .cd-mult-explainer {
+    margin-top: 10px;
+    color: #6c757d;
+    font-size: 0.76rem;
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  /* Current calibration row card (delta vs live) */
+  .cd-current-card {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+  }
+  .cd-current-card .cd-current-title {
+    color: #adb5bd;
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cd-current-card .cd-current-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    color: #e6e6e6;
+    font-size: 0.84rem;
+  }
+  .cd-current-card .cd-current-row .lbl {
+    color: #6c757d;
+    margin-right: 4px;
+  }
+  .cd-current-card .cd-current-row strong {
+    color: #e6e6e6;
+    font-variant-numeric: tabular-nums;
+  }
+  .cd-current-card .cd-delta-up { color: #5bd47b; font-weight: 700; }
+  .cd-current-card .cd-delta-down { color: #ff8585; font-weight: 700; }
+  .cd-current-card .cd-delta-zero { color: #6c757d; }
+  .cd-current-card.never-calibrated {
+    border-color: rgba(108,117,125,0.35);
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 12px 16px;
+  }
+
+  /* Per-listing table */
+  .cd-listings-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+  .cd-listings-title {
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cd-listings-title .sub {
+    color: #6c757d;
+    font-size: 0.78rem;
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  .cd-listings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .cd-listings-table th {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 700;
+    text-align: left;
+    padding: 8px 8px 6px;
+    border-bottom: 1px solid #2a2d34;
+    white-space: nowrap;
+  }
+  .cd-listings-table th.num,
+  .cd-listings-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .cd-listings-table td {
+    padding: 8px 8px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: top;
+  }
+  .cd-listings-table tr:last-child td { border-bottom: none; }
+  .cd-listings-table tr.is-skipped td { color: #6c757d; font-style: italic; }
+  .cd-listings-table .ratio-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .cd-listings-table .ratio-high   { background: rgba(40,167,69,0.15);  color: #5bd47b; }
+  .cd-listings-table .ratio-mid    { background: rgba(78,176,255,0.15); color: #8ec5ff; }
+  .cd-listings-table .ratio-low    { background: rgba(255,165,0,0.15);  color: #ffc870; }
+  .cd-listings-table .skipped-tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 8px;
+    background: rgba(255,107,107,0.12);
+    color: #ff8585;
+    border: 1px solid rgba(255,107,107,0.3);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .cd-listings-empty {
+    color: #6c757d;
+    font-size: 0.85rem;
+    font-style: italic;
+    text-align: center;
+    padding: 18px 0;
+  }
+
+  @media (max-width: 780px) {
+    .cd-listings-table th:nth-child(3),
+    .cd-listings-table td:nth-child(3),
+    .cd-listings-table th:nth-child(4),
+    .cd-listings-table td:nth-child(4) { display: none; }
+  }
+
+  /* All cells overview (small table) */
+  .cd-allcells-card {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .cd-allcells-title {
+    color: #adb5bd;
+    font-size: 0.88rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+  }
+  .cd-allcells-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .cd-allcells-list a {
+    background: #1a1d24;
+    color: #e6e6e6;
+    border: 1px solid #2a2d34;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.76rem;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .cd-allcells-list a:hover {
+    border-color: #28a745;
+    color: #fff;
+  }
+  .cd-allcells-list a .ac-count {
+    color: #6c757d;
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .cd-allcells-list a.is-active {
+    border-color: #4eb0ff;
+    background: rgba(78,176,255,0.10);
+  }
+  .cd-allcells-list a.under-threshold {
+    opacity: 0.6;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cd-wrap">
+
+  <a href="{{ url_for('admin_index') }}" class="btn-back">← Back to Admin</a>
+
+  <!-- Page header -->
+  <div class="cd-header">
+    <h1 class="cd-title">
+      🔬 Calibration Diagnostic
+      <span class="cd-pill">Admin</span>
+      <span class="cd-readonly">Read-only</span>
+    </h1>
+    <div class="cd-meta">Generated {{ now_display }}</div>
+  </div>
+
+  <!-- Cross-links -->
+  <div class="cd-crosslinks">
+    <a href="{{ url_for('admin_calibration_config') }}">⚙️ Calibration Config &amp; Run</a>
+    <a href="{{ url_for('admin_research') }}">📋 Research Log</a>
+    <a href="{{ url_for('admin_multipliers') }}">🗺️ State Multipliers</a>
+  </div>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+        <div class="cd-flash {{ 'error' if category == 'error' else 'success' }}">
+          <span class="cd-flash-msg">{{ msg }}</span>
+          <button type="button" class="cd-flash-close" onclick="this.parentElement.style.display='none'" aria-label="Close">×</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <!-- Intro / explainer -->
+  <div class="cd-intro">
+    Preview what calibration <strong>would do</strong> for any (make, model, fuel) cell — without writing anything to the database.
+    Runs the same math as <code>run_calibration_for_cell()</code> but does <strong>not</strong> upsert <code>model_calibration</code> or log a <code>calibration_runs</code> row.
+    Use this to spot-check outliers and validate suggested multipliers <em>before</em> hitting "Run Full Calibration" on the config page.
+  </div>
+
+  <!-- Cell picker -->
+  <div class="cd-picker">
+    <h2 class="cd-picker-title">
+      🎯 Pick a Cell
+      <span class="sub">— {{ total_eligible_cells }} cell{{ '' if total_eligible_cells == 1 else 's' }} with eligible listings in the 180-day window</span>
+    </h2>
+
+    {% if eligible_cells %}
+      <form method="GET" action="{{ url_for('admin_calibration_diagnostic') }}" id="cd-picker-form">
+        <div class="cd-picker-grid">
+          <div>
+            <label for="cd-make">Make</label>
+            <select id="cd-make" name="make" required>
+              <option value="">— Select make —</option>
+              {# Server-side: pre-select if make is in URL #}
+              {% set makes_seen = [] %}
+              {% for c in eligible_cells %}
+                {% if c.make not in makes_seen %}
+                  {% set _ = makes_seen.append(c.make) %}
+                  <option value="{{ c.make }}" {% if c.make == selected_make %}selected{% endif %}>{{ c.make }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="cd-model">Model</label>
+            <select id="cd-model" name="model" required {% if not selected_make %}disabled{% endif %}>
+              <option value="">— Select model —</option>
+            </select>
+          </div>
+          <div>
+            <label for="cd-fuel">Fuel</label>
+            <select id="cd-fuel" name="fuel" required {% if not selected_model %}disabled{% endif %}>
+              <option value="">— Select fuel —</option>
+            </select>
+          </div>
+          <div class="cd-picker-btn-cell">
+            <button type="submit" class="cd-picker-btn">Run Diagnostic →</button>
+          </div>
+        </div>
+      </form>
+
+      {# Quick-jump pills under the picker — every cell, one click away.
+         Cells with <3 listings are dimmed but still clickable. #}
+      <div class="cd-allcells-card" style="margin-top: 14px; margin-bottom: 0;">
+        <div class="cd-allcells-title">All eligible cells — click to jump:</div>
+        <div class="cd-allcells-list">
+          {% for c in eligible_cells %}
+            {% set is_active = (c.make == selected_make and c.model == selected_model and c.fuel == selected_fuel) %}
+            {% set under_threshold = c.listing_count < 3 %}
+            <a href="{{ url_for('admin_calibration_diagnostic', make=c.make, model=c.model, fuel=c.fuel) }}"
+               class="{% if is_active %}is-active{% endif %} {% if under_threshold %}under-threshold{% endif %}"
+               title="{{ c.make }} {{ c.model }} ({{ c.fuel }}) — {{ c.listing_count }} listing{{ '' if c.listing_count == 1 else 's' }}">
+              {{ c.make }} {{ c.model }} <span style="color:#8ec5ff;">{{ c.fuel }}</span>
+              <span class="ac-count">{{ c.listing_count }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="cd-picker-empty">
+        No eligible listings in <code>research_log</code> for the last 180 days.
+        Ingest some paste data via <a href="{{ url_for('admin_research') }}" style="color:#28a745;">/admin/research</a>
+        or <a href="{{ url_for('price_tools') }}" style="color:#28a745;">/admin/listing-calibration</a>
+        first.
+      </div>
+    {% endif %}
+  </div>
+
+  {% if not cell_selected %}
+
+    <!-- Empty state -->
+    <div class="cd-empty-state">
+      <span class="cd-empty-icon">👆</span>
+      Pick a cell above to see its calibration breakdown.<br>
+      <span style="color:#adb5bd;">Per-listing detail, implied multiplier, phase that would apply, and delta vs the current calibrated value.</span>
+    </div>
+
+  {% elif diagnostic and diagnostic.ok %}
+
+    <!-- Selected cell header -->
+    <div class="cd-selected-header">
+      <div>
+        <div class="cd-cell-name">
+          {{ diagnostic.make }} {{ diagnostic.model }}
+          <span class="cd-fuel">· {{ diagnostic.fuel }}</span>
+        </div>
+        <div class="cd-cell-meta">
+          {% if diagnostic.listings_oldest_date and diagnostic.listings_newest_date %}
+            Window: <strong>{{ diagnostic.listings_oldest_date }}</strong> → <strong>{{ diagnostic.listings_newest_date }}</strong>
+          {% else %}
+            <span style="color:#6c757d;">No date range available</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="cd-cell-meta">
+        <strong>{{ diagnostic.listings_total }}</strong> listing{{ '' if diagnostic.listings_total == 1 else 's' }} eligible
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="cd-summary-row">
+      <div class="cd-summary-card {{ 'qualifies' if diagnostic.qualifies else 'below' }}">
+        <div class="cd-sum-label">Listings Used</div>
+        <div class="cd-sum-value">{{ diagnostic.listings_used }}</div>
+        <div class="cd-sum-sub">
+          of {{ diagnostic.listings_total }} eligible
+          {% if diagnostic.listings_skipped > 0 %}
+            · {{ diagnostic.listings_skipped }} skipped
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="cd-summary-card phase-{{ diagnostic.phase_would_apply }}">
+        <div class="cd-sum-label">Phase Would Apply</div>
+        <div class="cd-sum-value">
+          {% if diagnostic.phase_would_apply == 4 %}⭐ 4
+          {% elif diagnostic.phase_would_apply == 3 %}✓ 3
+          {% elif diagnostic.phase_would_apply == 2 %}📈 2
+          {% else %}📊 1
+          {% endif %}
+        </div>
+        <div class="cd-sum-sub">
+          {% if diagnostic.phase_would_apply == 4 %}Real-Market (20+)
+          {% elif diagnostic.phase_would_apply == 3 %}Market-verified (10-19)
+          {% elif diagnostic.phase_would_apply == 2 %}Calibrated (3-9)
+          {% else %}Estimate (below threshold)
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="cd-summary-card">
+        <div class="cd-sum-label">Median Listing</div>
+        <div class="cd-sum-value">
+          {% if diagnostic.median_listing_price %}
+            ₹{{ '{:,}'.format(diagnostic.median_listing_price) }}
+          {% else %}—{% endif %}
+        </div>
+        <div class="cd-sum-sub">trimmed median (10%)</div>
+      </div>
+
+      <div class="cd-summary-card">
+        <div class="cd-sum-label">Median Formula</div>
+        <div class="cd-sum-value">
+          {% if diagnostic.median_formula_price %}
+            ₹{{ '{:,}'.format(diagnostic.median_formula_price) }}
+          {% else %}—{% endif %}
+        </div>
+        <div class="cd-sum-sub">trimmed median (10%)</div>
+      </div>
+    </div>
+
+    {% if diagnostic.qualifies %}
+      <!-- Multiplier breakdown -->
+      <div class="cd-mult-card">
+        <h2 class="cd-mult-title">📐 Calibration Multiplier</h2>
+
+        <div class="cd-mult-grid">
+          <div class="cd-mult-cell raw">
+            <div class="cd-mult-label">Raw (median listing / median formula)</div>
+            <div class="cd-mult-value">{{ '%.4f' | format(diagnostic.raw_multiplier) }}</div>
+            <div class="cd-mult-formula">
+              {{ '{:,}'.format(diagnostic.median_listing_price) }} ÷ {{ '{:,}'.format(diagnostic.median_formula_price) }}
+            </div>
+          </div>
+
+          <div class="cd-mult-cell live">
+            <div class="cd-mult-label">Clamped (saved to model_calibration)</div>
+            <div class="cd-mult-value">{{ '%.4f' | format(diagnostic.clamped_multiplier) }}</div>
+            <div class="cd-mult-formula">
+              {% if diagnostic.was_clamped %}
+                clamped to [0.50, 1.50]
+              {% else %}
+                = raw (within bounds)
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="cd-mult-cell effective">
+            <div class="cd-mult-label">Effective (× negotiation_gap)</div>
+            <div class="cd-mult-value">
+              {% if effective_multiplier is not none %}
+                {{ '%.4f' | format(effective_multiplier) }}
+              {% else %}—{% endif %}
+            </div>
+            <div class="cd-mult-formula">
+              {% if current_gap is not none %}
+                {{ '%.4f' | format(diagnostic.clamped_multiplier) }} × {{ '%.4f' | format(current_gap) }}
+              {% else %}—{% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if diagnostic.was_clamped %}
+          <div class="cd-mult-clamped-warn">
+            ⚠️ Raw multiplier <strong>{{ '%.4f' | format(diagnostic.raw_multiplier) }}</strong> was clamped to <strong>{{ '%.4f' | format(diagnostic.clamped_multiplier) }}</strong> — likely an outlier-heavy sample or formula drift for this cell. Worth eyeballing the per-listing table below.
+          </div>
+        {% endif %}
+
+        <div class="cd-mult-explainer">
+          The <span style="color:#5bd47b;">effective multiplier</span> is what users actually see — it's what <code style="background:#0e1117;color:#ffc870;padding:1px 6px;border-radius:4px;">compute_base_valuation()</code> applies in <code style="background:#0e1117;color:#ffc870;padding:1px 6px;border-radius:4px;">car_data.py</code> (v3.5.2 Step C). Final clamp <code style="background:#0e1117;color:#ffc870;padding:1px 6px;border-radius:4px;">[0.50, 1.50]</code> is enforced live.
+        </div>
+      </div>
+
+      <!-- Delta vs current -->
+      {% if diagnostic.current_row %}
+        <div class="cd-current-card">
+          <div class="cd-current-title">
+            📌 Currently saved in model_calibration
+          </div>
+          <div class="cd-current-row">
+            <span>
+              <span class="lbl">Multiplier:</span>
+              <strong>{{ '%.4f' | format(diagnostic.current_row.calibration_multiplier | float) }}</strong>
+              {% set live_mult = diagnostic.current_row.calibration_multiplier | float %}
+              {% set new_mult = diagnostic.clamped_multiplier | float %}
+              {% set delta_pct = ((new_mult - live_mult) / live_mult * 100) if live_mult != 0 else 0 %}
+              {% if delta_pct > 0.05 %}
+                <span class="cd-delta-up">▲ {{ '%.2f' | format(delta_pct) }}%</span>
+              {% elif delta_pct < -0.05 %}
+                <span class="cd-delta-down">▼ {{ '%.2f' | format(delta_pct | abs) }}%</span>
+              {% else %}
+                <span class="cd-delta-zero">≈ no change</span>
+              {% endif %}
+            </span>
+            <span>
+              <span class="lbl">Sample (live):</span>
+              <strong>{{ diagnostic.current_row.sample_count or 0 }}</strong>
+            </span>
+            <span>
+              <span class="lbl">Phase (live):</span>
+              <strong>{{ diagnostic.current_row.phase or 1 }}</strong>
+            </span>
+            <span>
+              <span class="lbl">Last run:</span>
+              <strong>{{ (diagnostic.current_row.last_run_at or '—')[:19] }}</strong>
+            </span>
+          </div>
+        </div>
+      {% else %}
+        <div class="cd-current-card never-calibrated">
+          This cell has never been calibrated. Running calibration would <strong style="color:#5bd47b;">INSERT</strong> a new row in <code>model_calibration</code>.
+        </div>
+      {% endif %}
+
+    {% else %}
+      <!-- Below threshold message -->
+      <div class="cd-current-card never-calibrated">
+        Only {{ diagnostic.listings_used }} usable listing{{ '' if diagnostic.listings_used == 1 else 's' }} — below the
+        <strong style="color:#ffc870;">3-sample minimum</strong>. Running calibration would <strong>skip</strong> this cell.
+        {% if diagnostic.listings_skipped > 0 %}
+          See the table below for why listings were skipped.
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <!-- Per-listing table -->
+    <div class="cd-listings-card">
+      <h2 class="cd-listings-title">
+        📋 Per-Listing Breakdown
+        <span class="sub">— every eligible listing in the window, ratio = used price / formula price</span>
+      </h2>
+
+      {% if diagnostic.per_listing_rows %}
+        <table class="cd-listings-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th class="num">Mileage</th>
+              <th>Cond.</th>
+              <th>Owner</th>
+              <th class="num">Asking</th>
+              <th class="num">Negotiated</th>
+              <th class="num">Used</th>
+              <th class="num">Formula</th>
+              <th class="num">Ratio</th>
+              <th>Entry</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in diagnostic.per_listing_rows %}
+              <tr class="{% if row.skipped_reason %}is-skipped{% endif %}">
+                <td>{{ row.year or '—' }}</td>
+                <td class="num">{{ '{:,}'.format(row.mileage_km) if row.mileage_km else '—' }}</td>
+                <td>{{ row.condition }}</td>
+                <td>{{ row.owner }}</td>
+                <td class="num">
+                  {% if row.asking_price %}₹{{ '{:,}'.format(row.asking_price) }}{% else %}—{% endif %}
+                </td>
+                <td class="num">
+                  {% if row.negotiated_price %}₹{{ '{:,}'.format(row.negotiated_price) }}{% else %}—{% endif %}
+                </td>
+                <td class="num">
+                  {% if row.used_price %}<strong>₹{{ '{:,}'.format(row.used_price) }}</strong>{% else %}—{% endif %}
+                </td>
+                <td class="num">
+                  {% if row.formula_price %}₹{{ '{:,}'.format(row.formula_price) }}
+                  {% else %}<span class="skipped-tag">{{ row.skipped_reason }}</span>{% endif %}
+                </td>
+                <td class="num">
+                  {% if row.ratio %}
+                    {% if row.ratio >= 1.05 %}
+                      <span class="ratio-pill ratio-high">{{ '%.3f' | format(row.ratio) }}</span>
+                    {% elif row.ratio >= 0.95 %}
+                      <span class="ratio-pill ratio-mid">{{ '%.3f' | format(row.ratio) }}</span>
+                    {% else %}
+                      <span class="ratio-pill ratio-low">{{ '%.3f' | format(row.ratio) }}</span>
+                    {% endif %}
+                  {% else %}—{% endif %}
+                </td>
+                <td style="color:#adb5bd; font-size:0.76rem;">{{ row.entry_date or '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="cd-listings-empty">No listings in the 180-day window for this cell.</div>
+      {% endif %}
+    </div>
+
+  {% elif cell_selected %}
+    <!-- Cell selected but diagnostic returned ok=False -->
+    <div class="cd-empty-state">
+      <span class="cd-empty-icon">⚠️</span>
+      Could not run diagnostic. See the error flash above.
+    </div>
+  {% endif %}
+
+</div>
+
+<script>
+  // Cascading Make → Model → Fuel dropdowns driven by cells_tree_json
+  (function() {
+    const TREE = {{ cells_tree_json | safe }};
+    const makeSel = document.getElementById('cd-make');
+    const modelSel = document.getElementById('cd-model');
+    const fuelSel = document.getElementById('cd-fuel');
+    if (!makeSel || !modelSel || !fuelSel) return;
+
+    const SELECTED_MODEL = {{ selected_model | tojson }};
+    const SELECTED_FUEL  = {{ selected_fuel  | tojson }};
+
+    function populateModels(make, preselect) {
+      modelSel.innerHTML = '<option value="">— Select model —</option>';
+      fuelSel.innerHTML = '<option value="">— Select fuel —</option>';
+      fuelSel.disabled = true;
+      if (!make || !TREE[make]) {
+        modelSel.disabled = true;
+        return;
+      }
+      modelSel.disabled = false;
+      const models = Object.keys(TREE[make]).sort();
+      models.forEach(function(m) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        if (m === preselect) opt.selected = true;
+        modelSel.appendChild(opt);
+      });
+    }
+
+    function populateFuels(make, model, preselect) {
+      fuelSel.innerHTML = '<option value="">— Select fuel —</option>';
+      if (!make || !model || !TREE[make] || !TREE[make][model]) {
+        fuelSel.disabled = true;
+        return;
+      }
+      fuelSel.disabled = false;
+      // Fuel order: keep canonical (Petrol/Diesel/CNG/HEV/PHEV/BEV)
+      const fuelOrder = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
+      const fuels = TREE[make][model].slice().sort(function(a, b) {
+        const ai = fuelOrder.indexOf(a.fuel);
+        const bi = fuelOrder.indexOf(b.fuel);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      });
+      fuels.forEach(function(f) {
+        const opt = document.createElement('option');
+        opt.value = f.fuel;
+        opt.textContent = f.fuel + ' (' + f.count + ' listing' + (f.count === 1 ? '' : 's') + ')';
+        if (f.fuel === preselect) opt.selected = true;
+        fuelSel.appendChild(opt);
+      });
+    }
+
+    makeSel.addEventListener('change', function() {
+      populateModels(makeSel.value, null);
+    });
+    modelSel.addEventListener('change', function() {
+      populateFuels(makeSel.value, modelSel.value, null);
+    });
+
+    // Initial population from URL state
+    if (makeSel.value) {
+      populateModels(makeSel.value, SELECTED_MODEL);
+      if (SELECTED_MODEL) {
+        populateFuels(makeSel.value, SELECTED_MODEL, SELECTED_FUEL);
+      }
+    }
+  })();
+</script>
+{% endblock %}
