@@ -21,7 +21,7 @@
   }
   .cc-meta { color: #adb5bd; font-size: 0.82rem; font-style: italic; }
 
-  /* Flash messages — orange success, red error, both with × close */
+  /* Flash messages */
   .cc-flash {
     display: flex;
     justify-content: space-between;
@@ -131,7 +131,7 @@
     border: 1px solid #2a2d34;
     border-radius: 12px;
     padding: 18px 22px;
-    margin-bottom: 18px;
+    margin-bottom: 14px;
   }
   .cc-form-title {
     color: #fff;
@@ -179,7 +179,6 @@
   }
   .cc-form-row textarea { resize: vertical; min-height: 60px; }
 
-  /* Soft warning band shown when value is outside [soft_min, soft_max] */
   .cc-soft-warn {
     display: none;
     background: rgba(255,165,0,0.08);
@@ -215,6 +214,151 @@
     color: #6c757d;
     font-size: 0.76rem;
     font-style: italic;
+  }
+
+  /* ===== NEW: Run Calibration card ===== */
+  .cc-run-card {
+    background: linear-gradient(135deg, #1a2228 0%, #1a1d24 100%);
+    border: 1px solid #28a745;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+  .cc-run-title {
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cc-run-desc {
+    color: #adb5bd;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+  .cc-run-desc strong { color: #5bd47b; font-weight: 700; }
+  .cc-run-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .cc-btn-run {
+    background: #28a745;
+    color: #fff;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 7px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cc-btn-run:hover { background: #2bb84d; }
+  .cc-btn-run:disabled,
+  .cc-btn-run.is-running {
+    background: #2a2d34;
+    color: #6c757d;
+    cursor: not-allowed;
+  }
+  .cc-run-hint {
+    color: #6c757d;
+    font-size: 0.78rem;
+    font-style: italic;
+  }
+  .cc-run-summary {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(40,167,69,0.25);
+    color: #adb5bd;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .cc-run-summary strong { color: #5bd47b; font-weight: 700; }
+
+  /* Recent runs table */
+  .cc-runs-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+  .cc-runs-title {
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cc-runs-title .sub {
+    color: #6c757d;
+    font-size: 0.78rem;
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  .cc-runs-empty {
+    color: #6c757d;
+    font-size: 0.85rem;
+    font-style: italic;
+    text-align: center;
+    padding: 18px 0;
+  }
+  .cc-runs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+  }
+  .cc-runs-table th {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    text-align: left;
+    padding: 8px 10px 6px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .cc-runs-table th.num,
+  .cc-runs-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .cc-runs-table td {
+    padding: 9px 10px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: top;
+  }
+  .cc-runs-table tr:last-child td { border-bottom: none; }
+  .cc-runs-table .status-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .cc-runs-table .status-completed { background: rgba(40,167,69,0.18); color: #5bd47b; border: 1px solid rgba(40,167,69,0.4); }
+  .cc-runs-table .status-running { background: rgba(255,165,0,0.18); color: #ffc870; border: 1px solid rgba(255,165,0,0.4); }
+  .cc-runs-table .status-failed { background: rgba(255,107,107,0.18); color: #ff8585; border: 1px solid rgba(255,107,107,0.4); }
+  .cc-runs-table .when { color: #adb5bd; font-size: 0.78rem; white-space: nowrap; }
+  .cc-runs-table .who { color: #adb5bd; font-size: 0.78rem; word-break: break-all; }
+  .cc-runs-table .runtype { color: #6c757d; font-size: 0.72rem; font-style: italic; }
+  .cc-runs-table .notes-cell {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    max-width: 360px;
   }
 
   /* Audit table */
@@ -277,16 +421,8 @@
   .cc-audit-table .pct-up { color: #5bd47b; font-weight: 600; }
   .cc-audit-table .pct-down { color: #ff8585; font-weight: 600; }
   .cc-audit-table .pct-zero { color: #6c757d; }
-  .cc-audit-table .who {
-    color: #adb5bd;
-    font-size: 0.78rem;
-    word-break: break-all;
-  }
-  .cc-audit-table .when {
-    color: #adb5bd;
-    font-size: 0.78rem;
-    white-space: nowrap;
-  }
+  .cc-audit-table .who { color: #adb5bd; font-size: 0.78rem; word-break: break-all; }
+  .cc-audit-table .when { color: #adb5bd; font-size: 0.78rem; white-space: nowrap; }
   .cc-audit-table .note {
     color: #adb5bd;
     font-size: 0.78rem;
@@ -300,6 +436,8 @@
     .cc-audit-table td:nth-child(4),
     .cc-audit-table th:nth-child(6),
     .cc-audit-table td:nth-child(6) { display: none; }
+    .cc-runs-table th:nth-child(5),
+    .cc-runs-table td:nth-child(5) { display: none; }
   }
 </style>
 {% endblock %}
@@ -307,7 +445,6 @@
 {% block content %}
 <div class="cc-wrap">
 
-  {# Back button — standardized .btn-back class per locked UI rules #}
   <a href="{{ url_for('admin_index') }}" class="btn-back">← Back to Admin</a>
 
   <!-- Page header -->
@@ -430,10 +567,83 @@
     </form>
   </div>
 
-  <!-- Audit history -->
+  <!-- ===== NEW: Run Calibration card ===== -->
+  <div class="cc-run-card">
+    <h2 class="cc-run-title">🚀 Run Calibration Now</h2>
+    <div class="cc-run-desc">
+      Recomputes the calibration multiplier for every <strong>(make, model, fuel)</strong> cell that has ≥3 eligible listings in <code>research_log</code> from the last 180 days.
+      Uses the current negotiation gap (<strong>{{ '%.4f' | format(cache_value) }}</strong>) to convert asking prices into effective sale prices before computing each cell's multiplier.
+      Results are upserted to <code>model_calibration</code> and the run is logged below.
+    </div>
+
+    <form method="POST" action="{{ url_for('admin_calibration_run_now') }}" id="cc-run-form">
+      <div class="cc-run-actions">
+        <button type="submit" class="cc-btn-run" id="cc-btn-run">
+          ▶ Run Full Calibration
+        </button>
+        <span class="cc-run-hint">Synchronous — page reloads when complete (typically 10–60 seconds).</span>
+      </div>
+    </form>
+
+    {% if last_run_summary %}
+      <div class="cc-run-summary">
+        <strong>Last run result:</strong> {{ last_run_summary }}
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Recent calibration runs -->
+  <div class="cc-runs-card">
+    <h2 class="cc-runs-title">
+      📊 Recent Calibration Runs
+      <span class="sub">last {{ recent_runs | length }} run{{ '' if recent_runs | length == 1 else 's' }}</span>
+    </h2>
+
+    {% if recent_runs %}
+      <table class="cc-runs-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Run by</th>
+            <th>Status</th>
+            <th class="num">Cells (ins / upd / skip)</th>
+            <th class="num">Listings used</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in recent_runs %}
+            <tr>
+              <td class="when">
+                {{ run.started_at_display or '—' }}
+                <br><span class="runtype">{{ run.run_type or '—' }}</span>
+              </td>
+              <td class="who">{{ run.run_by or '—' }}</td>
+              <td>
+                <span class="status-pill status-{{ run.status }}">{{ run.status }}</span>
+              </td>
+              <td class="num">
+                <strong style="color:#5bd47b;">{{ run.cells_inserted or 0 }}</strong> /
+                <strong style="color:#8ec5ff;">{{ run.cells_updated or 0 }}</strong> /
+                <span style="color:#6c757d;">{{ run.cells_skipped_low_sample or 0 }}</span>
+              </td>
+              <td class="num">{{ run.listings_used or 0 }} / {{ run.listings_considered or 0 }}</td>
+              <td class="notes-cell">{{ run.notes or '—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="cc-runs-empty">
+        No calibration runs yet. Click "Run Full Calibration" above to perform the first one.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Audit history (negotiation_gap changes) -->
   <div class="cc-audit-card">
     <h2 class="cc-audit-title">
-      📋 Change History
+      📋 Negotiation Gap Change History
       <span class="sub">last {{ audit_rows | length }} change{{ '' if audit_rows | length == 1 else 's' }}</span>
     </h2>
 
@@ -513,7 +723,6 @@
         warn.classList.remove('show');
         return;
       }
-      // Only show soft-warn if within hard bounds but outside soft bounds
       if (v >= HARD_MIN && v <= HARD_MAX && (v < SOFT_MIN || v > SOFT_MAX)) {
         warn.classList.add('show');
       } else {
@@ -522,7 +731,19 @@
     }
     input.addEventListener('input', check);
     input.addEventListener('blur',  check);
-    check();  // run once on load
+    check();
+  })();
+
+  // Disable Run button on click to prevent double-submit
+  (function() {
+    const runForm = document.getElementById('cc-run-form');
+    const runBtn  = document.getElementById('cc-btn-run');
+    if (!runForm || !runBtn) return;
+    runForm.addEventListener('submit', function() {
+      runBtn.disabled = true;
+      runBtn.classList.add('is-running');
+      runBtn.innerHTML = '⏳ Running… (do not close)';
+    });
   })();
 </script>
 {% endblock %}
