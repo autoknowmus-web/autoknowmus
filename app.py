@@ -7452,8 +7452,250 @@ def price_tools_reject():
 # in a loop with per-row error capture so one bad row doesn't poison the
 # whole batch.
 
-@app.route('/admin/price-tools/scrape-init', methods=['POST'])
-def price_tools_scrape_init():
+# ============================================================
+# Sprint 2: UPDATE ANCHOR PRICE — manual paste flow
+# ============================================================
+# Admin enters an ex-showroom price they spotted (from any state).
+# System reverse-derives the Karnataka-equivalent using state_multiplier,
+# compares to current sheet anchor, and either:
+#   - Auto-applies if |delta| <= 5%
+#   - Returns confirm_required if |delta| > 5% (admin must explicitly confirm)
+# Every submission logged to anchor_updates audit table.
+# ============================================================
+
+ANCHOR_DELTA_AUTO_APPLY_THRESHOLD_PCT = 5.0  # |delta| <= this: auto-apply
+
+def _get_current_karnataka_price(make, model, variant, fuel):
+    """Read the current ex-showroom price from car_prices sheet."""
+    try:
+        for r in sheets_writer.read_car_prices():
+            if (r.get('make') == make and r.get('model') == model
+                    and r.get('variant') == variant and r.get('fuel') == fuel):
+                p_str = (r.get('ex_showroom_price') or '').replace(',', '').strip()
+                if p_str:
+                    return int(p_str)
+                return None
+        return None
+    except Exception as e:
+        app.logger.warning(f"_get_current_karnataka_price failed: {e}")
+        return None
+
+
+@app.route('/admin/price-tools/anchor-update')
+def anchor_update_page():
+    """GET: render the Update Anchor Price form."""
+    user = session.get('user')
+    if not _is_admin(user):
+        flash('Admin access required.', 'error')
+        return redirect(url_for('role'))
+
+    # State multipliers + names
+    state_multiplier_map = {}
+    state_names_map = {}
+    rto_states = []
+    try:
+        state_multiplier_map = load_state_multipliers() or {}
+        # RTO_STATES is the canonical list — pull names from there
+        for s in (RTO_STATES if 'RTO_STATES' in globals() else []):
+            code = s.get('code') if isinstance(s, dict) else None
+            name = s.get('name') if isinstance(s, dict) else None
+            if code and name:
+                state_names_map[code] = name
+                rto_states.append({'code': code, 'name': name})
+        rto_states.sort(key=lambda s: s['name'])
+    except Exception as e:
+        app.logger.warning(f"anchor_update_page: state data load failed: {e}")
+
+    # Car data (make → model → {variants, fuels})
+    try:
+        cd_dict = dict(car_data.CAR_DATA) if hasattr(car_data, 'CAR_DATA') else {}
+    except Exception:
+        cd_dict = {}
+    car_data_for_picker = {}
+    for make, models in cd_dict.items():
+        car_data_for_picker[make] = {}
+        for model, mdata in models.items():
+            car_data_for_picker[make][model] = {
+                'variants': sorted((mdata or {}).get('variants', []) or []),
+                'fuels': list((mdata or {}).get('fuels', []) or []),
+            }
+
+    # Current prices map for live preview
+    current_prices_map = {}
+    try:
+        for r in sheets_writer.read_car_prices():
+            key = f"{r.get('make','')}|{r.get('model','')}|{r.get('variant','')}|{r.get('fuel','')}"
+            p_str = (r.get('ex_showroom_price') or '').replace(',', '').strip()
+            if p_str:
+                try:
+                    current_prices_map[key] = int(p_str)
+                except (ValueError, TypeError):
+                    pass
+    except Exception as e:
+        app.logger.warning(f"anchor_update_page: sheet read for preview failed: {e}")
+
+    # Recent 10 anchor updates
+    recent_anchor_updates = []
+    try:
+        r = (supabase.table('anchor_updates').select('*')
+             .order('submitted_at', desc=True).limit(10).execute())
+        recent_anchor_updates = r.data or []
+        for u in recent_anchor_updates:
+            try:
+                dt_str = (u.get('submitted_at') or '').replace('Z', '+00:00')
+                u['submitted_at_display'] = datetime.fromisoformat(dt_str).strftime('%d-%b %H:%M')
+            except Exception:
+                u['submitted_at_display'] = (u.get('submitted_at') or '')[:16]
+    except Exception as e:
+        app.logger.warning(f"anchor_update_page: recent updates read failed: {e}")
+
+    return render_template(
+        'admin_anchor_update.html',
+        user=user,
+        makes=sorted(cd_dict.keys()),
+        rto_states=rto_states,
+        state_multiplier_map=state_multiplier_map,
+        state_names_map=state_names_map,
+        car_data_json=json.dumps(car_data_for_picker),
+        current_prices_map=current_prices_map,
+        recent_anchor_updates=recent_anchor_updates,
+    )
+
+
+@app.route('/admin/price-tools/anchor-update/submit', methods=['POST'])
+def anchor_update_submit():
+    """
+    POST: validate, reverse-derive Karnataka-equivalent, check delta,
+    either auto-apply (delta <= 5%) or return confirm_required (delta > 5%).
+    Always logs to anchor_updates audit table.
+    """
+    user = session.get('user')
+    if not _is_admin(user):
+        return jsonify({'ok': False, 'error': 'admin only'}), 403
+
+    # --- Read + validate form ---
+    source = (request.form.get('source') or '').strip()
+    source_url = (request.form.get('source_url') or '').strip()[:500]
+    submitted_state = (request.form.get('submitted_state') or '').strip().upper()
+    make = (request.form.get('make') or '').strip()
+    model = (request.form.get('model') or '').strip()
+    variant = (request.form.get('variant') or '').strip()
+    fuel = (request.form.get('fuel') or '').strip()
+    notes = (request.form.get('notes') or '').strip()[:500]
+    confirmed = request.form.get('confirmed') == 'true'
+
+    if not all([source, submitted_state, make, model, variant, fuel]):
+        return jsonify({'ok': False, 'error': 'validation',
+                        'detail': 'All fields are required.'}), 400
+
+    # --- Price validation ---
+    price_str = (request.form.get('submitted_price') or '').replace(',', '').strip()
+    try:
+        submitted_price = int(price_str)
+        if submitted_price <= 0 or submitted_price > 1000000000:
+            raise ValueError
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'error': 'validation',
+                        'detail': 'Price must be a positive number under ₹100 Cr.'}), 400
+
+    # --- State multiplier lookup + reverse derivation ---
+    state_multiplier = get_state_multiplier(submitted_state)
+    if state_multiplier <= 0:
+        return jsonify({'ok': False, 'error': 'validation',
+                        'detail': f'Invalid state multiplier for {submitted_state}.'}), 400
+
+    derived_karnataka = int(round(submitted_price / state_multiplier))
+
+    # --- Read current Karnataka anchor ---
+    current_karnataka = _get_current_karnataka_price(make, model, variant, fuel)
+
+    # --- Compute delta ---
+    if current_karnataka and current_karnataka > 0:
+        delta_pct = ((derived_karnataka - current_karnataka) / current_karnataka) * 100.0
+    else:
+        delta_pct = None  # new entry, no prior to compare to
+
+    # --- 5% threshold check ---
+    needs_confirm = (
+        delta_pct is not None
+        and abs(delta_pct) > ANCHOR_DELTA_AUTO_APPLY_THRESHOLD_PCT
+        and not confirmed
+    )
+    if needs_confirm:
+        return jsonify({
+            'ok': False,
+            'error': 'confirm_required',
+            'delta_pct': round(delta_pct, 2),
+            'current_karnataka_price': current_karnataka,
+            'derived_karnataka_price': derived_karnataka,
+        }), 200  # 200 because this is an expected workflow state, not error
+
+    # --- Write to car_prices sheet ---
+    try:
+        sheets_writer.write_price_update_v2(
+            make=make, model=model, variant=variant, fuel=fuel,
+            new_price=derived_karnataka,
+            source=f'ManualAdmin:{source}',
+        )
+    except Exception as e:
+        app.logger.exception('anchor_update_submit: sheet write failed')
+        # Still log the audit row with applied=false so we have a record
+        try:
+            supabase.table('anchor_updates').insert({
+                'submitted_by': user.get('email') or 'unknown',
+                'make': make, 'model': model, 'variant': variant, 'fuel': fuel,
+                'source': source, 'source_url': source_url or None,
+                'submitted_state': submitted_state,
+                'submitted_price': submitted_price,
+                'state_multiplier_used': round(float(state_multiplier), 4),
+                'derived_karnataka_price': derived_karnataka,
+                'previous_karnataka_price': current_karnataka,
+                'delta_pct': round(delta_pct, 4) if delta_pct is not None else None,
+                'was_confirmed_over_threshold': bool(confirmed),
+                'applied': False,
+                'notes': (notes + f' [SHEET WRITE FAILED: {e}]')[:500],
+            }).execute()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': 'sheet_write_failed',
+                        'detail': str(e)}), 500
+
+    # --- Write audit row ---
+    try:
+        supabase.table('anchor_updates').insert({
+            'submitted_by': user.get('email') or 'unknown',
+            'make': make, 'model': model, 'variant': variant, 'fuel': fuel,
+            'source': source, 'source_url': source_url or None,
+            'submitted_state': submitted_state,
+            'submitted_price': submitted_price,
+            'state_multiplier_used': round(float(state_multiplier), 4),
+            'derived_karnataka_price': derived_karnataka,
+            'previous_karnataka_price': current_karnataka,
+            'delta_pct': round(delta_pct, 4) if delta_pct is not None else None,
+            'was_confirmed_over_threshold': bool(confirmed),
+            'applied': True,
+            'notes': notes or None,
+        }).execute()
+    except Exception as e:
+        app.logger.warning(f'anchor_update_submit: audit insert failed (sheet write succeeded): {e}')
+
+    # --- Refresh car_data cache so change is live ---
+    try:
+        car_data.refresh_prices(force=True)
+    except Exception as e:
+        app.logger.warning(f'anchor_update_submit: car_data.refresh_prices failed: {e}')
+
+    # --- Build success message ---
+    if delta_pct is None:
+        msg = f'✅ New anchor saved for {make} {model} {variant} ({fuel}): ₹ {derived_karnataka:,} (Karnataka reference).'
+    else:
+        sign = '+' if delta_pct >= 0 else ''
+        msg = (f'✅ Anchor updated for {make} {model} {variant} ({fuel}): '
+               f'₹ {current_karnataka:,} → ₹ {derived_karnataka:,} '
+               f'({sign}{delta_pct:.2f}%). Cache refreshed.')
+    flash(msg, 'success')
+
+    return jsonify({'ok': True})
     """
     Returns the list of variants to scrape for a given make + model.
     Frontend then loops over these and calls /scrape-one per variant.
