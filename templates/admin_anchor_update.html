@@ -97,15 +97,8 @@
   }
   .au-field textarea { resize: vertical; min-height: 56px; }
 
-  /* Price wrap with ₹ prefix */
-  .au-price-wrap { position: relative; }
-  .au-price-wrap .rupee {
-    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-    color: #ffa500; font-weight: 700; pointer-events: none;
-    font-size: 0.95rem;
-    line-height: 1;
-  }
-  .au-price-wrap input { padding-left: 36px; }
+  /* Price input — plain field with label that includes the ₹ symbol */
+  .au-price-input { /* no special styling needed, inherits from .au-field input */ }
 
   /* Section divider with header — separates form into logical groups */
   .au-section-header {
@@ -375,16 +368,13 @@
 
         <div class="au-field">
           <label for="au-price">
-            Ex-showroom price <span class="req">*</span>
+            Ex-showroom price (₹ INR) <span class="req">*</span>
             <span class="hint">(price you saw in selected state)</span>
           </label>
-          <div class="au-price-wrap">
-            <span class="rupee">₹</span>
-            <input type="text" id="au-price" name="submitted_price"
-                   placeholder="e.g. 14,55,000" inputmode="numeric" required>
-          </div>
+          <input type="text" id="au-price" name="submitted_price"
+                 class="au-price-input"
+                 placeholder="e.g. 14,55,000" inputmode="numeric" required>
         </div>
-
         <div class="au-field span-2">
           <label for="au-notes">
             Notes <span class="hint">(optional, max 500 chars)</span>
