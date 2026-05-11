@@ -593,4 +593,213 @@
     });
     elFuel.disabled = false;
     elModel.disabled = true;
-    elV
+    elVariant.disabled = true;
+    updateButtons();
+  }
+
+  function repopulateModel() {
+    const make = elMake.value;
+    const fuel = elFuel.value;
+    elModel.innerHTML = '<option value="">— Select model —</option>';
+    elVariant.innerHTML = '<option value="">— Select model first —</option>';
+
+    if (!make || !fuel || !CAR_DATA[make]) {
+      elModel.disabled = true;
+      elVariant.disabled = true;
+      updateButtons();
+      return;
+    }
+
+    const models = Object.entries(CAR_DATA[make])
+      .filter(([_m, meta]) => (meta.fuels || []).includes(fuel))
+      .map(([m, _meta]) => m)
+      .sort();
+
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      elModel.appendChild(opt);
+    });
+    elModel.disabled = models.length === 0;
+    elVariant.disabled = true;
+    updateButtons();
+  }
+
+  function repopulateVariant() {
+    const make = elMake.value;
+    const model = elModel.value;
+    elVariant.innerHTML = '<option value="">— Select variant —</option>';
+
+    if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) {
+      elVariant.disabled = true;
+      updateButtons();
+      return;
+    }
+
+    const variants = [...(CAR_DATA[make][model].variants || [])].sort();
+    variants.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      elVariant.appendChild(opt);
+    });
+    elVariant.disabled = variants.length === 0;
+    updateButtons();
+  }
+
+  elMake.addEventListener('change', () => { repopulateFuel(); updatePreview(); });
+  elFuel.addEventListener('change', () => { repopulateModel(); updatePreview(); });
+  elModel.addEventListener('change', () => { repopulateVariant(); updatePreview(); });
+  elVariant.addEventListener('change', updatePreview);
+  elState.addEventListener('change', updatePreview);
+  elSource.addEventListener('change', updateButtons);
+
+  function updatePreview() {
+    const state = elState.value;
+    const make = elMake.value;
+    const model = elModel.value;
+    const variant = elVariant.value;
+    const fuel = elFuel.value;
+    const priceDigits = (elPrice.value || '').replace(/\D+/g, '');
+    const priceNum = priceDigits ? parseInt(priceDigits, 10) : 0;
+
+    const ready = state && priceNum > 0 && make && model && variant && fuel;
+    if (!ready) {
+      elPreview.classList.remove('show');
+      updateButtons();
+      return;
+    }
+
+    const mult = STATE_MULTIPLIERS[state] || 1.0;
+    const stateName = STATE_NAMES[state] || state;
+    const derived = Math.round(priceNum / mult);
+    const carKey = `${make}|${model}|${variant}|${fuel}`;
+    const currentKa = CURRENT_PRICES[carKey] || null;
+
+    elPrevStateName.textContent = stateName;
+    elPrevSubmitted.textContent = inrFmt(priceNum);
+    elPrevMult.textContent = mult.toFixed(4);
+    elPrevDerived.textContent = inrFmt(derived);
+
+    if (currentKa) {
+      elPrevCurrent.textContent = inrFmt(currentKa);
+      const deltaPct = ((derived - currentKa) / currentKa) * 100;
+      const dStr = (deltaPct >= 0 ? '+' : '') + deltaPct.toFixed(2) + '%';
+      elPrevDelta.textContent = dStr;
+      elPrevDelta.className = 'val ' +
+        (Math.abs(deltaPct) > 5 ? 'warn' :
+         deltaPct > 0.5 ? 'delta-pos' :
+         deltaPct < -0.5 ? 'delta-neg' : 'delta-zero');
+    } else {
+      elPrevCurrent.textContent = '— (new entry)';
+      elPrevDelta.textContent = 'new';
+      elPrevDelta.className = 'val delta-zero';
+    }
+
+    elPreview.classList.add('show');
+    updateButtons();
+  }
+
+  function updateButtons() {
+    const valid = elSource.value && elState.value && elMake.value
+      && elFuel.value && elModel.value && elVariant.value
+      && (elPrice.value || '').replace(/\D+/g, '').length > 0;
+    elSubmit.disabled = !valid;
+  }
+
+  elReset.addEventListener('click', () => {
+    elForm.reset();
+    elFuel.disabled = true;
+    elModel.disabled = true;
+    elVariant.disabled = true;
+    elFuel.innerHTML = '<option value="">— Select make first —</option>';
+    elModel.innerHTML = '<option value="">— Select fuel first —</option>';
+    elVariant.innerHTML = '<option value="">— Select model first —</option>';
+    elPreview.classList.remove('show');
+    elWarnPanel.classList.remove('show');
+    elErrorInline.classList.remove('show');
+    updateButtons();
+  });
+
+  function showError(msg) {
+    elErrorInline.textContent = msg;
+    elErrorInline.classList.add('show');
+  }
+  function hideError() {
+    elErrorInline.classList.remove('show');
+  }
+
+  async function postSubmission(confirmed) {
+    hideError();
+    elSubmit.disabled = true;
+    const originalLabel = elSubmit.textContent;
+    elSubmit.textContent = 'Submitting...';
+
+    const fd = new FormData();
+    fd.append('source', elSource.value);
+    fd.append('source_url', document.getElementById('au-source-url').value);
+    fd.append('submitted_state', elState.value);
+    fd.append('make', elMake.value);
+    fd.append('model', elModel.value);
+    fd.append('variant', elVariant.value);
+    fd.append('fuel', elFuel.value);
+    const priceDigits = (elPrice.value || '').replace(/\D+/g, '');
+    fd.append('submitted_price', priceDigits);
+    fd.append('notes', document.getElementById('au-notes').value);
+    if (confirmed) fd.append('confirmed', 'true');
+
+    try {
+      const resp = await fetch('{{ url_for("anchor_update_submit") }}', {
+        method: 'POST',
+        body: fd,
+      });
+      const data = await resp.json();
+
+      if (data.ok) {
+        elWarnPanel.classList.remove('show');
+        elSubmit.textContent = '✓ Saved — reloading…';
+        elSubmit.style.background = '#28a745';
+        setTimeout(() => { window.location.reload(); }, 800);
+        return;
+      }
+
+      if (data.error === 'confirm_required') {
+        elWarnCurrent.textContent = inrFmt(data.current_karnataka_price);
+        elWarnDerived.textContent = inrFmt(data.derived_karnataka_price);
+        const dStr = (data.delta_pct >= 0 ? '+' : '') + data.delta_pct.toFixed(2) + '%';
+        elWarnDelta.textContent = dStr;
+        elWarnPanel.classList.add('show');
+        elWarnPanel.scrollIntoView({behavior: 'smooth', block: 'center'});
+        elSubmit.textContent = originalLabel;
+        elSubmit.disabled = false;
+        return;
+      }
+
+      showError('Could not submit: ' + (data.detail || data.error || 'unknown error'));
+      elSubmit.textContent = originalLabel;
+      elSubmit.disabled = false;
+
+    } catch (err) {
+      showError('Network error — please try again.');
+      elSubmit.textContent = originalLabel;
+      elSubmit.disabled = false;
+    }
+  }
+
+  elForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    postSubmission(false);
+  });
+
+  elWarnConfirm.addEventListener('click', () => {
+    elWarnPanel.classList.remove('show');
+    postSubmission(true);
+  });
+  elWarnRecheck.addEventListener('click', () => {
+    elWarnPanel.classList.remove('show');
+    elPrice.focus();
+    elPrice.select();
+  });
+
+  updateButtons();
+</script>
+{% endblock %}
