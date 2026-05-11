@@ -581,7 +581,11 @@
         <button type="submit" class="cc-btn-run" id="cc-btn-run">
           ▶ Run Full Calibration
         </button>
-        <span class="cc-run-hint">Synchronous — page reloads when complete (typically 10–60 seconds).</span>
+        <a href="{{ url_for('admin_calibration_diagnostic') }}"
+           style="background:#1a1d24; color:#8ec5ff; border:1px solid #4eb0ff; padding:10px 20px; border-radius:7px; font-size:0.88rem; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+          🔬 Per-Cell Diagnostic →
+        </a>
+        <span class="cc-run-hint">Diagnostic is read-only — preview a cell before running calibration.</span>
       </div>
     </form>
 
