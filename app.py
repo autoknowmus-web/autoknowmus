@@ -5967,6 +5967,106 @@ def admin_calibration_run_now():
 
     return redirect(url_for('admin_calibration_config'))
 
+
+# ============================================================
+# Sprint 2.1: ADMIN — CALIBRATION DIAGNOSTIC (read-only preview)
+# ============================================================
+#
+# Lets the admin pick a (make, model, fuel) cell and see what calibration
+# WOULD do — without writing anything. Zero production risk.
+#
+# Two view modes:
+#   - No cell selected → show eligible-cells picker only
+#   - Cell selected (?make=&model=&fuel=) → show full diagnostic
+#
+# The diagnostic re-uses calibration_engine.diagnose_cell() which runs the
+# SAME math as run_calibration_for_cell() but writes nothing.
+# ============================================================
+
+@app.route('/admin/calibration-diagnostic', methods=['GET'])
+@login_required
+@admin_required
+def admin_calibration_diagnostic():
+    """
+    Read-only per-cell calibration diagnostic.
+
+    Query params:
+      make, model, fuel — if all three present, run diagnose_cell()
+                          otherwise just show the picker.
+    """
+    admin = current_user()
+
+    make = (request.args.get('make') or '').strip()
+    model = (request.args.get('model') or '').strip()
+    fuel = (request.args.get('fuel') or '').strip()
+    cell_selected = bool(make and model and fuel)
+
+    # Load eligible cells for the picker (always)
+    eligible_cells = []
+    try:
+        from calibration_engine import list_eligible_cells
+        eligible_cells = list_eligible_cells() or []
+    except Exception as e:
+        app.logger.error(f"admin_calibration_diagnostic: list_eligible_cells failed: {e}")
+        flash(f"Could not load eligible cells: {e}", 'error')
+
+    # If a cell is selected, run the diagnostic
+    diagnostic = None
+    current_gap = None
+    effective_multiplier = None
+    if cell_selected:
+        try:
+            from calibration_engine import diagnose_cell
+            diagnostic = diagnose_cell(make=make, model=model, fuel=fuel)
+
+            if diagnostic and not diagnostic.get('ok'):
+                flash(
+                    f"Diagnostic error for {make} {model} ({fuel}): "
+                    f"{diagnostic.get('error', 'unknown')}",
+                    'error'
+                )
+
+            # Pull current negotiation_gap and compute effective multiplier
+            # so the diagnostic shows what users actually see
+            current_gap = load_negotiation_gap()
+            if diagnostic and diagnostic.get('clamped_multiplier') is not None:
+                raw_eff = float(diagnostic['clamped_multiplier']) * float(current_gap)
+                # Same clamp as compute_base_valuation applies live
+                if raw_eff < 0.50:
+                    raw_eff = 0.50
+                elif raw_eff > 1.50:
+                    raw_eff = 1.50
+                effective_multiplier = round(raw_eff, 4)
+        except Exception as e:
+            app.logger.error(f"admin_calibration_diagnostic: diagnose_cell failed: {e}", exc_info=True)
+            flash(f"Diagnostic failed: {type(e).__name__}: {e}", 'error')
+
+    # Build dropdown structure: {make: {model: [fuel, ...]}}
+    cells_tree = {}
+    for c in eligible_cells:
+        cells_tree.setdefault(c['make'], {}).setdefault(c['model'], []).append({
+            'fuel': c['fuel'],
+            'count': c['listing_count'],
+        })
+
+    return render_template(
+        'admin_calibration_diagnostic.html',
+        user=admin,
+        first_name=firstname_filter(admin.get('name')),
+        eligible_cells=eligible_cells,
+        cells_tree_json=json.dumps(cells_tree),
+        total_eligible_cells=len(eligible_cells),
+        selected_make=make,
+        selected_model=model,
+        selected_fuel=fuel,
+        cell_selected=cell_selected,
+        diagnostic=diagnostic,
+        current_gap=current_gap,
+        effective_multiplier=effective_multiplier,
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
+
+
 # ============================================================
 # app.py — Part 7
 # ------------------------------------------------------------
