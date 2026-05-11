@@ -733,21 +733,21 @@
     </div>
 
     {% if diagnostic.qualifies %}
-      <!-- Multiplier breakdown -->
+      <!-- Multiplier breakdown (v2 model — haircut applied at calibration time) -->
       <div class="cd-mult-card">
         <h2 class="cd-mult-title">📐 Calibration Multiplier</h2>
 
         <div class="cd-mult-grid">
           <div class="cd-mult-cell raw">
-            <div class="cd-mult-label">Raw (median listing / median formula)</div>
+            <div class="cd-mult-label">Effective Listings ÷ Formula</div>
             <div class="cd-mult-value">{{ '%.4f' | format(diagnostic.raw_multiplier) }}</div>
             <div class="cd-mult-formula">
               {{ '{:,}'.format(diagnostic.median_listing_price) }} ÷ {{ '{:,}'.format(diagnostic.median_formula_price) }}
             </div>
           </div>
 
-          <div class="cd-mult-cell live">
-            <div class="cd-mult-label">Clamped (saved to model_calibration)</div>
+          <div class="cd-mult-cell effective">
+            <div class="cd-mult-label">Stored multiplier (final, what users see)</div>
             <div class="cd-mult-value">{{ '%.4f' | format(diagnostic.clamped_multiplier) }}</div>
             <div class="cd-mult-formula">
               {% if diagnostic.was_clamped %}
@@ -758,29 +758,21 @@
             </div>
           </div>
 
-          <div class="cd-mult-cell effective">
-            <div class="cd-mult-label">Effective (× negotiation_gap)</div>
-            <div class="cd-mult-value">
-              {% if effective_multiplier is not none %}
-                {{ '%.4f' | format(effective_multiplier) }}
-              {% else %}—{% endif %}
-            </div>
-            <div class="cd-mult-formula">
-              {% if current_gap is not none %}
-                {{ '%.4f' | format(diagnostic.clamped_multiplier) }} × {{ '%.4f' | format(current_gap) }}
-              {% else %}—{% endif %}
-            </div>
+          <div class="cd-mult-cell live">
+            <div class="cd-mult-label">Haircut applied at calibration</div>
+            <div class="cd-mult-value">{{ '%.4f' | format(diagnostic.haircut_used or current_gap or 0) }}</div>
+            <div class="cd-mult-formula">asking × haircut → effective</div>
           </div>
         </div>
 
         {% if diagnostic.was_clamped %}
           <div class="cd-mult-clamped-warn">
-            ⚠️ Raw multiplier <strong>{{ '%.4f' | format(diagnostic.raw_multiplier) }}</strong> was clamped to <strong>{{ '%.4f' | format(diagnostic.clamped_multiplier) }}</strong> — likely an outlier-heavy sample or formula drift for this cell. Worth eyeballing the per-listing table below.
+            ⚠️ Raw multiplier <strong>{{ '%.4f' | format(diagnostic.raw_multiplier) }}</strong> was clamped to <strong>{{ '%.4f' | format(diagnostic.clamped_multiplier) }}</strong> — likely an outlier-heavy sample or formula drift. Eyeball the per-listing table below.
           </div>
         {% endif %}
 
         <div class="cd-mult-explainer">
-          The <span style="color:#5bd47b;">effective multiplier</span> is what users actually see — it's what <code style="background:#0e1117;color:#ffc870;padding:1px 6px;border-radius:4px;">compute_base_valuation()</code> applies in <code style="background:#0e1117;color:#ffc870;padding:1px 6px;border-radius:4px;">car_data.py</code> (v3.5.2 Step C). Final clamp <code style="background:#0e1117;color:#ffc870;padding:1px 6px;border-radius:4px;">[0.50, 1.50]</code> is enforced live.
+          v2 calibration applies the <span style="color:#8ec5ff;">haircut</span> (0.84 today) to asking prices <em>before</em> the median, so the <span style="color:#5bd47b;">stored multiplier</span> is what <code style="background:#0e1117;color:#ffc870;padding:1px 6px;border-radius:4px;">compute_base_valuation()</code> applies directly in <code style="background:#0e1117;color:#ffc870;padding:1px 6px;border-radius:4px;">car_data.py</code>. Final clamp <code style="background:#0e1117;color:#ffc870;padding:1px 6px;border-radius:4px;">[0.50, 1.50]</code> still enforced live.
         </div>
       </div>
 
@@ -853,7 +845,7 @@
               <th>Owner</th>
               <th class="num">Asking</th>
               <th class="num">Negotiated</th>
-              <th class="num">Used</th>
+              <th class="num">Effective</th>
               <th class="num">Formula</th>
               <th class="num">Ratio</th>
               <th>Entry</th>
@@ -873,7 +865,12 @@
                   {% if row.negotiated_price %}₹{{ '{:,}'.format(row.negotiated_price) }}{% else %}—{% endif %}
                 </td>
                 <td class="num">
-                  {% if row.used_price %}<strong>₹{{ '{:,}'.format(row.used_price) }}</strong>{% else %}—{% endif %}
+                  {% if row.used_price %}
+                    <strong>₹{{ '{:,}'.format(row.used_price) }}</strong>
+                    {% if row.haircut_applied %}
+                      <span style="color:#6c757d; font-size:0.7rem; display:block;">(× haircut)</span>
+                    {% endif %}
+                  {% else %}—{% endif %}
                 </td>
                 <td class="num">
                   {% if row.formula_price %}₹{{ '{:,}'.format(row.formula_price) }}
