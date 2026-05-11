@@ -5879,12 +5879,29 @@ def admin_calibration_config():
     except Exception as e:
         app.logger.warning(f"admin_calibration_config audit read failed: {e}")
 
+    # ----- Recent calibration runs (for the new run-now panel & history table) -----
+    recent_runs = []
+    try:
+        from calibration_engine import get_recent_runs
+        recent_runs = get_recent_runs(limit=5) or []
+        for run in recent_runs:
+            run['started_at_display'] = _format_txn_date(run.get('started_at'))
+    except Exception as e:
+        app.logger.warning(f"admin_calibration_config: get_recent_runs failed: {e}")
+
+    # Pull the most-recent run's notes for the inline "Last run result" line
+    last_run_summary = None
+    if recent_runs:
+        last_run_summary = recent_runs[0].get('notes') or recent_runs[0].get('status')
+
     return render_template(
         'admin_calibration_config.html',
         user=admin,
         first_name=firstname_filter(admin.get('name')),
         current_row=current_row,
         audit_rows=audit_rows,
+        recent_runs=recent_runs,
+        last_run_summary=last_run_summary,
         hard_min=NEGOTIATION_GAP_HARD_MIN,
         hard_max=NEGOTIATION_GAP_HARD_MAX,
         soft_min=NEGOTIATION_GAP_SOFT_MIN,
@@ -5894,6 +5911,61 @@ def admin_calibration_config():
         now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
     )
 
+
+# ============================================================
+# v3.7.1 Step C: ADMIN — Run Calibration Now (manual trigger)
+# ============================================================
+
+@app.route('/admin/calibration-config/run-now', methods=['POST'])
+@login_required
+@admin_required
+def admin_calibration_run_now():
+    """
+    Manually triggers a full-sweep calibration run.
+
+    Synchronous — Flask request blocks until the run completes. On the
+    free Render plan this is usually fine (10–60 seconds for current
+    data volumes). If runs get longer, this should move to a Celery/RQ
+    worker, but for ~70 listings we're well under that bar.
+
+    Flashes a summary line so the admin sees what happened, then
+    redirects back to /admin/calibration-config where the recent-runs
+    table will show the new row.
+    """
+    admin = current_user()
+    admin_email = (admin.get('email') if admin else None) or 'unknown_admin'
+
+    try:
+        from calibration_engine import run_calibration
+        result = run_calibration(run_by=admin_email, run_type='manual')
+
+        if result.get('ok'):
+            # Build a friendly summary line for the flash
+            inserted = result.get('cells_inserted', 0)
+            updated  = result.get('cells_updated', 0)
+            skipped  = result.get('cells_skipped_low_sample', 0)
+            evaluated = result.get('cells_evaluated', 0)
+            listings_used = result.get('listings_used', 0)
+            listings_considered = result.get('listings_considered', 0)
+
+            msg = (
+                f"✅ Calibration complete · "
+                f"Evaluated {evaluated} cells "
+                f"({inserted} new, {updated} updated, {skipped} skipped) · "
+                f"Used {listings_used} of {listings_considered} listings"
+            )
+            if result.get('clamped_cells'):
+                msg += f" · ⚠️ {result['clamped_cells']} cell(s) clamped to bounds"
+            flash(msg, 'success')
+        else:
+            err = result.get('error', 'unknown error')
+            flash(f"❌ Calibration failed: {err}", 'error')
+
+    except Exception as e:
+        app.logger.error(f"admin_calibration_run_now failed: {e}", exc_info=True)
+        flash(f"❌ Calibration trigger failed: {type(e).__name__}: {e}", 'error')
+
+    return redirect(url_for('admin_calibration_config'))
 
 # ============================================================
 # app.py — Part 7
