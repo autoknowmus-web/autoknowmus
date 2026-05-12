@@ -47,6 +47,11 @@ from calibration_engine import (
     get_negotiation_gap,
 )
 
+# v1.0: CarDekho paste-extract route module (registers /admin/price-tools/cardekho-paste)
+# Imported here; registration call lives near the Flask app init in Part 2.
+from cardekho_route import register_cardekho_routes
+)
+
 # v3.0: Market pricing engine — invoked by router when N>=5 listings available.
 # Falls back to depreciation engine (compute_base_valuation) otherwise.
 # v3.5: Now accepts state_multiplier param (applied at final step only).
@@ -159,6 +164,16 @@ def _is_admin_email(email):
     if not email:
         return False
     return email.lower() in {e.lower() for e in ADMIN_EMAILS}
+
+
+# ============================================================
+# v1.0: Register CarDekho paste-extract routes
+# Lives in cardekho_route.py (see import at top of file).
+# Registers:
+#   GET/POST  /admin/price-tools/cardekho-paste
+#   POST      /admin/price-tools/cardekho-paste/submit
+# ============================================================
+register_cardekho_routes(app)
 
 
 # ---------- Jinja filters ----------
