@@ -122,17 +122,39 @@ def _get_supabase() -> Client:
 # with it instead. For now, check that session.user.is_admin is truthy.
 # ============================================================
 
+# Set of admin emails. Imported lazily from app.py inside _require_admin()
+# to avoid a circular import at module load time.
+_ADMIN_EMAILS_CACHE = None
+
+
+def _is_admin_email(email: Optional[str]) -> bool:
+    """Case-insensitive admin allowlist check. Mirrors app.py's helper."""
+    global _ADMIN_EMAILS_CACHE
+    if not email:
+        return False
+    if _ADMIN_EMAILS_CACHE is None:
+        # Lazy import to avoid circular dependency
+        try:
+            from app import ADMIN_EMAILS
+            _ADMIN_EMAILS_CACHE = {e.lower() for e in ADMIN_EMAILS}
+        except Exception:
+            # Fallback — if import fails, use env var
+            env_emails = os.environ.get("ADMIN_EMAILS", "")
+            _ADMIN_EMAILS_CACHE = {
+                e.strip().lower() for e in env_emails.split(",") if e.strip()
+            }
+    return email.lower() in _ADMIN_EMAILS_CACHE
+
+
 def _require_admin() -> Optional[Any]:
     """
     Returns a Flask redirect response if not admin, else None.
 
-    Mirrors the admin gate used elsewhere in your app. If your app.py
-    has a different admin check (e.g. an @admin_required decorator),
-    you can route through that instead — just delete this function
-    and decorate the registered routes.
+    Uses the same ADMIN_EMAILS allowlist pattern as app.py.
     """
-    user = session.get("user")
-    if not user or not user.get("is_admin"):
+    user = session.get("user") or {}
+    user_email = user.get("email")
+    if not _is_admin_email(user_email):
         flash("Admin access required.", "error")
         return redirect(url_for("role"))
     return None
