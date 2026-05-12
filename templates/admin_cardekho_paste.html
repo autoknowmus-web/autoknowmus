@@ -1,0 +1,1280 @@
+{% extends "layout.html" %}
+{% block title %}CarDekho Paste · New Car Prices — AutoKnowMus Admin{% endblock %}
+
+{# ============================================================
+   📁 File: admin_cardekho_paste.html
+   📍 Location: templates/admin_cardekho_paste.html
+   ✏️ Status: NEW FILE (v1.0)
+
+   PURPOSE:
+     A-layer (Anchor) ingester for new-car ex-showroom prices from
+     CarDekho's "Cars with prices in India" filtered search page.
+     Targets the car_prices Google Sheet via pending_reviews queue.
+
+     Companion to admin_paste_extract.html (which ingests CarWale used
+     listings into research_log — U-layer). Same paste UX, different
+     downstream target.
+
+   COLOR SCHEME:
+     CarDekho A-layer = blue (#4eb0ff, ties to AUTOM Anchor blue #4e54ff).
+     CarWale U-layer  = amber/orange.
+     Visual separation matters because admin will use both tools and
+     they should never feel like they do the same thing.
+
+   WORKFLOW:
+     Screen 1: Paste CarDekho text (with expanded model accordions)
+               → click Extract preview
+     Screen 2: Preview table shows all parsed variants grouped by model.
+               Each row has match status: 🟢 Match, 🟡 Fuzzy, 🟦 New, ⚠️ Removed.
+               Two actions:
+                 1. Quick Approve Matches — bulk-writes 🟢 only to car_prices
+                    directly + records as approved in pending_reviews
+                 2. Queue Selected to Review — queues checked rows to
+                    pending_reviews status='pending', admin approves
+                    one-by-one in Review Queue
+
+   FIELDS:
+     - review_type    = 'price_update_cardekho' (distinct from scraper's
+                        'price_update' to avoid dedup collisions)
+     - scraper_url    = 'cardekho_paste' (marker; not a real URL)
+     - scraper_status = parsed_match | parsed_fuzzy_match |
+                        parsed_new_variant | parsed_orphan
+   ============================================================ #}
+
+{% block extra_head %}
+<style>
+  /* ============================================================
+     ADMIN PAGE — CARDEKHO PASTE (NEW-CAR PRICES, A-LAYER)
+     Mirrors admin_paste_extract.html structure; swaps amber accents
+     for blue. Locked UI rules preserved.
+     ============================================================ */
+
+  .admin-wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 16px 24px 28px;
+  }
+
+  /* ─── Admin nav strip ──────────────────────────────────────── */
+  .admin-nav-strip {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+  .admin-nav-strip a {
+    color: #adb5bd;
+    text-decoration: none;
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .admin-nav-strip a:hover {
+    color: #fff;
+    background: #14171d;
+    border-color: #2a2d34;
+  }
+  .admin-nav-strip a.active {
+    color: #fff;
+    background: rgba(78,176,255,0.16);
+    border-color: rgba(78,176,255,0.45);
+  }
+
+  /* ─── Back button ──────────────────────────────────────────── */
+  .btn-back {
+    display: inline-block;
+    background: #6c757d;
+    color: #ffffff !important;
+    text-decoration: none;
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .btn-back:hover { background: #7a838c; color: #ffffff !important; }
+
+  /* ─── Page header ─────────────────────────────────────────── */
+  .page-header {
+    margin-bottom: 16px;
+  }
+  .page-header h1 {
+    color: #ffffff;
+    font-size: 1.45rem;
+    margin: 0 0 6px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .page-header h1 .a-layer-pill {
+    display: inline-block;
+    background: rgba(78,176,255,0.16);
+    color: #4eb0ff;
+    border: 1px solid rgba(78,176,255,0.45);
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+  }
+  .page-header .page-subtitle {
+    color: #adb5bd;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  /* ─── Helper strip (BLUE accent for A-layer) ──────────────── */
+  .helper-strip {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-left: 3px solid #4eb0ff;
+    border-radius: 8px;
+    padding: 11px 14px;
+    margin-bottom: 16px;
+    color: #adb5bd;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .helper-strip strong { color: #e6e6e6; }
+  .helper-strip code {
+    background: #0e1117;
+    color: #4eb0ff;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-family: ui-monospace, 'SF Mono', monospace;
+  }
+  .helper-strip ol {
+    margin: 8px 0 4px 18px;
+    padding: 0;
+  }
+  .helper-strip ol li {
+    margin-bottom: 4px;
+    color: #adb5bd;
+  }
+  .helper-strip a {
+    color: #4eb0ff;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .helper-strip a:hover { text-decoration: underline; }
+
+  /* ─── Flash alerts (× dismissible) ────────────────────────── */
+  .flash-wrap { margin-bottom: 14px; }
+  .flash {
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.5;
+  }
+  .flash.flash-success {
+    background: linear-gradient(135deg, #1a2a22 0%, #14171d 100%);
+    border: 1px solid #28a745;
+    color: #e6e6e6;
+  }
+  .flash.flash-error {
+    background: linear-gradient(135deg, #2a2118 0%, #14171d 100%);
+    border: 1px solid #ff8c00;
+    color: #e6e6e6;
+  }
+  .flash.flash-info {
+    background: linear-gradient(135deg, #182230 0%, #14171d 100%);
+    border: 1px solid #4eb0ff;
+    color: #e6e6e6;
+  }
+  .flash .flash-msg { flex: 1; }
+  .flash .flash-close {
+    background: transparent;
+    border: none;
+    color: #adb5bd;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+  .flash .flash-close:hover { color: #ffffff; }
+
+  /* ─── Section card ────────────────────────────────────────── */
+  .section-card {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .section-card h2 {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-card h2 .h2-sub {
+    color: #adb5bd;
+    font-weight: 400;
+    font-size: 0.8rem;
+    margin-left: 6px;
+  }
+
+  /* ─── Textarea form (Screen 1) ────────────────────────────── */
+  .paste-textarea-wrap {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 14px;
+  }
+  .paste-textarea-wrap label {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .paste-textarea-wrap label .char-counter {
+    color: #6c757d;
+    font-size: 0.72rem;
+    font-weight: 400;
+  }
+  .paste-textarea-wrap label .char-counter.over-limit {
+    color: #ff8c00;
+    font-weight: 600;
+  }
+  .paste-textarea-wrap textarea {
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    border-radius: 7px;
+    padding: 10px 12px;
+    font-size: 0.84rem;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    min-height: 280px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+  .paste-textarea-wrap textarea:focus {
+    outline: none;
+    border-color: #4eb0ff;
+  }
+  .paste-textarea-wrap textarea::placeholder {
+    color: #6c757d;
+    font-family: inherit;
+  }
+
+  .form-submit {
+    background: #4eb0ff;
+    border: none;
+    color: #0e1117;
+    padding: 10px 18px;
+    border-radius: 7px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .form-submit:hover { background: #6cbcff; }
+  .form-submit:disabled { background: #2a2d34; color: #6c757d; cursor: not-allowed; }
+
+  .form-submit-green {
+    background: #28a745;
+    color: #fff;
+  }
+  .form-submit-green:hover { background: #2bb84d; }
+
+  .form-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .upload-meta {
+    color: #6c757d;
+    font-size: 0.74rem;
+    line-height: 1.5;
+    font-style: italic;
+  }
+  .upload-meta strong { color: #adb5bd; font-style: normal; }
+
+  /* ─── Preview stats (Screen 2) ────────────────────────────── */
+  .preview-stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 700px) {
+    .preview-stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .stat-card {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .stat-card .stat-label {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+    font-weight: 600;
+  }
+  .stat-card .stat-value {
+    color: #ffffff;
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card .stat-sub {
+    color: #6c757d;
+    font-size: 0.74rem;
+    margin-top: 3px;
+    line-height: 1.3;
+  }
+  .stat-card.accent-green .stat-value { color: #5bd47b; }
+  .stat-card.accent-amber .stat-value { color: #ffc870; }
+  .stat-card.accent-blue  .stat-value { color: #8ec5ff; }
+  .stat-card.accent-red   .stat-value { color: #ff8585; }
+
+  /* ─── Warnings panel (collapsed sections, etc.) ─────────── */
+  .warnings-panel {
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-left: 3px solid #ffa500;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  .warnings-panel h3 {
+    color: #ffc870;
+    font-size: 0.86rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .warnings-panel .warn-row {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.78rem;
+    color: #adb5bd;
+    line-height: 1.4;
+  }
+  .warnings-panel .warn-row:last-child { border-bottom: none; }
+  .warnings-panel .warn-row strong { color: #ffc870; }
+
+  /* ─── Action bar (above table) ────────────────────────────── */
+  .action-bar {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    justify-content: space-between;
+  }
+  .action-bar .select-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .action-bar .filter-pills {
+    display: inline-flex;
+    background: #14171d;
+    border: 1px solid #2a2d34;
+    border-radius: 8px;
+    padding: 2px;
+    gap: 0;
+  }
+  .action-bar .filter-pill {
+    background: transparent;
+    border: none;
+    color: #adb5bd;
+    padding: 5px 11px;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .action-bar .filter-pill:hover {
+    color: #fff;
+  }
+  .action-bar .filter-pill.active {
+    background: #4eb0ff;
+    color: #0e1117;
+  }
+  .action-bar .select-all-cb {
+    width: 16px;
+    height: 16px;
+    accent-color: #4eb0ff;
+    cursor: pointer;
+  }
+  .action-bar .select-all-label {
+    color: #adb5bd;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+  }
+  .action-bar .action-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  /* ─── Model section (collapsible) ─────────────────────────── */
+  .model-section {
+    margin-bottom: 10px;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #14171d;
+  }
+  .model-section-header {
+    background: #1a1d24;
+    padding: 9px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .model-section-header:hover { background: #20232b; }
+  .model-section-header .model-title {
+    color: #fff;
+    font-size: 0.92rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .model-section-header .model-title .caret {
+    color: #6c757d;
+    transition: transform 0.15s;
+    display: inline-block;
+    width: 12px;
+  }
+  .model-section.collapsed .model-section-header .model-title .caret {
+    transform: rotate(-90deg);
+  }
+  .model-section-header .model-counts {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    font-weight: 400;
+  }
+  .model-section-header .model-counts .ct-match  { color: #5bd47b; }
+  .model-section-header .model-counts .ct-fuzzy  { color: #ffc870; }
+  .model-section-header .model-counts .ct-new    { color: #8ec5ff; }
+  .model-section-header .model-counts .ct-orphan { color: #ff8585; }
+  .model-section-header .model-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .model-section-header .model-mini-btn {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2d34;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .model-section-header .model-mini-btn:hover {
+    border-color: #4eb0ff;
+    color: #fff;
+  }
+  .model-section-body { display: block; }
+  .model-section.collapsed .model-section-body { display: none; }
+
+  /* ─── Preview table ───────────────────────────────────────── */
+  .preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  .preview-table th {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    text-align: left;
+    padding: 9px 10px 7px;
+    border-bottom: 1px solid #2a2d34;
+    white-space: nowrap;
+    background: #1a1d24;
+  }
+  .preview-table th.num,
+  .preview-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .preview-table td {
+    padding: 8px 10px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    line-height: 1.4;
+  }
+  .preview-table tr:last-child td { border-bottom: none; }
+  .preview-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .preview-table tr.row-unchecked td { opacity: 0.4; }
+  .preview-table tr.row-status-new td { background: rgba(78,176,255,0.04); }
+  .preview-table tr.row-status-fuzzy td { background: rgba(255,165,0,0.04); }
+  .preview-table tr.row-status-orphan td { background: rgba(255,107,107,0.04); }
+  .preview-table tr.row-status-removed td { background: rgba(108,117,125,0.06); }
+  .preview-table tr.row-status-new:hover td { background: rgba(78,176,255,0.09); }
+  .preview-table tr.row-status-fuzzy:hover td { background: rgba(255,165,0,0.09); }
+  .preview-table tr.row-status-orphan:hover td { background: rgba(255,107,107,0.09); }
+  .preview-table .keep-cb {
+    width: 16px;
+    height: 16px;
+    accent-color: #4eb0ff;
+    cursor: pointer;
+  }
+  .preview-table .price-cell {
+    color: #5bd47b;
+    font-weight: 600;
+  }
+  .preview-table .price-cell.empty {
+    color: #6c757d;
+    font-weight: 400;
+  }
+  .preview-table .delta-cell {
+    font-size: 0.74rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .preview-table .delta-up { color: #ff8585; }
+  .preview-table .delta-down { color: #5bd47b; }
+  .preview-table .delta-flat { color: #adb5bd; }
+  .preview-table .delta-new { color: #8ec5ff; }
+
+  /* ─── Status badges (per row) ─────────────────────────────── */
+  .status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+  }
+  .status-badge.b-match {
+    background: rgba(40,167,69,0.16);
+    color: #5bd47b;
+    border: 1px solid rgba(40,167,69,0.45);
+  }
+  .status-badge.b-fuzzy {
+    background: rgba(255,165,0,0.16);
+    color: #ffc870;
+    border: 1px solid rgba(255,165,0,0.45);
+  }
+  .status-badge.b-new {
+    background: rgba(78,176,255,0.16);
+    color: #8ec5ff;
+    border: 1px solid rgba(78,176,255,0.45);
+  }
+  .status-badge.b-orphan {
+    background: rgba(255,107,107,0.16);
+    color: #ff8585;
+    border: 1px solid rgba(255,107,107,0.45);
+  }
+  .status-badge.b-removed {
+    background: rgba(108,117,125,0.18);
+    color: #adb5bd;
+    border: 1px solid rgba(108,117,125,0.45);
+  }
+
+  /* ─── Quick-approve inline button on per-row match ─────── */
+  .quick-row-btn {
+    background: rgba(40,167,69,0.10);
+    color: #5bd47b;
+    border: 1px solid rgba(40,167,69,0.45);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-left: 5px;
+  }
+  .quick-row-btn:hover {
+    background: rgba(40,167,69,0.22);
+    color: #5bd47b;
+  }
+  .quick-row-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ─── Match column tooltip (mirrors CarWale paste tooltip) ─ */
+  .preview-table .match-cell-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    position: relative;
+  }
+  .preview-table .match-info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px; height: 14px;
+    background: #2a2d34;
+    color: #adb5bd;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: help;
+    font-style: italic;
+    font-family: Georgia, serif;
+  }
+  .preview-table .match-info-icon:hover,
+  .preview-table .match-info-icon:focus {
+    background: #4eb0ff;
+    color: #fff;
+    outline: none;
+  }
+  .preview-table .match-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: -10px;
+    background: #000;
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #4eb0ff;
+    font-size: 0.74rem;
+    font-weight: 400;
+    line-height: 1.5;
+    width: 300px;
+    text-align: left;
+    z-index: 50;
+    transition: opacity 0.15s;
+    white-space: normal;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  }
+  .preview-table .match-tooltip strong { color: #4eb0ff; }
+  .preview-table .match-tooltip em {
+    color: #5bd47b;
+    font-style: italic;
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 0.72rem;
+    word-break: break-word;
+  }
+  .preview-table .match-tip-section-label {
+    color: #adb5bd;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: block;
+    margin-top: 4px;
+  }
+  .preview-table .match-tip-section-label:first-of-type { margin-top: 0; }
+  .preview-table .match-tip-action {
+    color: #adb5bd;
+    font-size: 0.7rem;
+    font-style: italic;
+    display: block;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    padding-top: 5px;
+    margin-top: 8px;
+  }
+  .preview-table .match-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%; right: 14px;
+    border: 6px solid transparent;
+    border-top-color: #000;
+  }
+  .preview-table .match-tooltip.flip-down {
+    bottom: auto;
+    top: calc(100% + 8px);
+  }
+  .preview-table .match-tooltip.flip-down::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: #000;
+  }
+  .preview-table .match-info-icon:hover + .match-tooltip,
+  .preview-table .match-info-icon:focus + .match-tooltip,
+  .preview-table .match-cell-wrap:hover .match-tooltip {
+    visibility: visible; opacity: 1;
+  }
+
+  /* ─── Confirm bar (sticky-ish footer) ─────────────────────── */
+  .confirm-bar {
+    background: #1a1d24;
+    border: 1px solid #4eb0ff;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    position: sticky;
+    bottom: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+  .confirm-bar .confirm-summary {
+    color: #e6e6e6;
+    font-size: 0.86rem;
+    line-height: 1.4;
+  }
+  .confirm-bar .confirm-summary strong {
+    color: #4eb0ff;
+  }
+  .confirm-bar .confirm-summary .confirm-sub {
+    color: #adb5bd;
+    font-size: 0.76rem;
+    display: block;
+    margin-top: 2px;
+  }
+  .confirm-bar .confirm-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .strip-btn-secondary {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2d34;
+    padding: 8px 14px;
+    border-radius: 7px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.15s;
+  }
+  .strip-btn-secondary:hover {
+    border-color: #6c757d;
+    color: #fff;
+  }
+  .empty-state {
+    text-align: center;
+    padding: 36px 16px;
+    color: #6c757d;
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+  .empty-state .empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.5; }
+  .empty-state strong { color: #adb5bd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+
+  <!-- ADMIN NAV STRIP — Price Tools tab active -->
+  <div class="admin-nav-strip">
+    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
+    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
+    <a href="{{ url_for('admin_multipliers') }}">📈 State Multipliers</a>
+    <a href="{{ url_for('admin_feedback') }}">💬 Feedback Calibration</a>
+    <a href="{{ url_for('admin_research') }}">🔬 Research</a>
+    <a href="{{ url_for('admin_listing_calibration') }}">🚛 Listing Calibration</a>
+    <a href="{{ url_for('admin_price_tools') }}" class="active">💰 Price Tools</a>
+    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
+  </div>
+
+  <a href="{{ url_for('admin_price_tools') }}" class="btn-back">← Back</a>
+
+  <!-- PAGE HEADER -->
+  <div class="page-header">
+    <h1>
+      💰 CarDekho Paste · New Car Prices
+      <span class="a-layer-pill">A-Layer · Anchor</span>
+    </h1>
+    <p class="page-subtitle">
+      Paste CarDekho's <strong>"Cars with prices in India"</strong> filtered search page
+      directly from your browser. The parser extracts ex-showroom Bangalore prices
+      and queues them for review against the <code>car_prices</code> sheet.
+      Exact-match price updates can be quick-approved; new variants always go through
+      the Review Queue.
+    </p>
+  </div>
+
+  <!-- FLASH MESSAGES (× dismissible) -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, msg in messages %}
+          {% set fc = 'success' if category == 'success' else ('info' if category == 'info' else 'error') %}
+          <div class="flash flash-{{ fc }}">
+            <span class="flash-msg">{{ msg }}</span>
+            <button type="button" class="flash-close" onclick="this.parentElement.style.display='none'" aria-label="Dismiss">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% if preview is none %}
+    <!-- ============================================================
+         SCREEN 1 — PASTE FORM
+         ============================================================ -->
+    <div class="helper-strip">
+      <strong>How to use:</strong>
+      <ol>
+        <li>Go to
+            <a href="https://www.cardekho.com/india-newcar/india_newcar.htm" target="_blank" rel="noopener">CarDekho's "Cars with prices in India" page</a>
+            and confirm city is set to <strong>Bangalore</strong> (top-right city selector)</li>
+        <li>Optionally filter by Brand / Budget / Vehicle Type to narrow the list</li>
+        <li><strong>Expand every model accordion</strong> you want to ingest — click each model's
+            "<em>N Variants Matching Your Search Criteria</em>" line to expand</li>
+        <li>Press <code>Ctrl+A</code>, then <code>Ctrl+C</code>, then paste into the textarea below</li>
+        <li>Click <strong>Extract preview</strong> to see all parsed variants with match status</li>
+      </ol>
+      <p style="margin: 8px 0 0; color: #6c757d; font-size: 0.78rem;">
+        <strong style="color:#ffc870;">⚠ Collapsed sections are skipped.</strong>
+        The parser only sees variant rows that were expanded before you copied.
+        Each unexpanded model will appear in the warnings list with its expected count.
+      </p>
+    </div>
+
+    <div class="section-card">
+      <h2>📋 Paste &amp; Extract <span class="h2-sub">— Bangalore ex-showroom prices from CarDekho</span></h2>
+
+      <form action="{{ url_for('admin_cardekho_paste') }}" method="POST" id="paste-form">
+        <div class="paste-textarea-wrap">
+          <label for="raw_text">
+            <span>Paste the CarDekho page here</span>
+            <span class="char-counter" id="char-counter">0 chars · 0 KB</span>
+          </label>
+          <textarea name="raw_text" id="raw_text" required maxlength="200000"
+                    placeholder="Paste your CarDekho 'Cars with prices in India' page here, with model accordions expanded. The parser handles multi-model pastes, multi-word makes (Maruti Suzuki, Mercedes-Benz, etc.), and skips collapsed sections automatically."></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="form-submit" id="extract-btn">Extract preview</button>
+          <span class="upload-meta">
+            Limits: <strong>200,000 chars</strong> max paste size
+            (~50 expanded model accordions) ·
+            Server time: <strong>{{ now_display }}</strong>
+          </span>
+        </div>
+      </form>
+    </div>
+
+  {% else %}
+    <!-- ============================================================
+         SCREEN 2 — PREVIEW TABLE
+         ============================================================ -->
+    <div class="helper-strip">
+      <strong>Preview ready.</strong>
+      <strong>{{ preview.models_found }}</strong>
+      model{{ '' if preview.models_found == 1 else 's' }} parsed,
+      <strong>{{ preview.variants_found | inr }}</strong>
+      variant{{ '' if preview.variants_found == 1 else 's' }} extracted.
+      Review the match status per row, then either
+      <strong style="color:#5bd47b;">Quick Approve Matches</strong> (writes 🟢 exact matches directly to <code>car_prices</code>)
+      or <strong style="color:#4eb0ff;">Queue Selected to Review</strong> (sends checked rows to the Review Queue for one-by-one approval).
+    </div>
+
+    <!-- Top-line stats -->
+    <div class="preview-stats-row">
+      <div class="stat-card accent-green">
+        <div class="stat-label">🟢 Exact Match</div>
+        <div class="stat-value">{{ preview.count_match | inr }}</div>
+        <div class="stat-sub">eligible for quick approve</div>
+      </div>
+      <div class="stat-card accent-amber">
+        <div class="stat-label">🟡 Fuzzy Match</div>
+        <div class="stat-value">{{ preview.count_fuzzy | inr }}</div>
+        <div class="stat-sub">verify before approving</div>
+      </div>
+      <div class="stat-card accent-blue">
+        <div class="stat-label">🟦 New Variant</div>
+        <div class="stat-value">{{ preview.count_new | inr }}</div>
+        <div class="stat-sub">will insert as new row</div>
+      </div>
+      <div class="stat-card accent-red">
+        <div class="stat-label">⚠ Orphan / Skipped</div>
+        <div class="stat-value">{{ (preview.count_orphan + preview.collapsed_models) | inr }}</div>
+        <div class="stat-sub">{{ preview.collapsed_models }} collapsed</div>
+      </div>
+    </div>
+
+    <!-- WARNINGS — collapsed sections, orphans, partial-section warnings -->
+    {% if preview.warnings %}
+      <div class="warnings-panel">
+        <h3>⚠️ Parser warnings <span style="color:#adb5bd; font-weight:400; font-size:0.78rem; margin-left:6px;">— these models could not be fully parsed</span></h3>
+        {% for w in preview.warnings %}
+          <div class="warn-row">
+            <strong>{{ w.make }} {{ w.model }}:</strong> {{ w.message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if preview.variants_found > 0 %}
+      <form action="{{ url_for('admin_cardekho_paste_submit') }}" method="POST" id="confirm-form">
+        <input type="hidden" name="preview_token" value="{{ preview_token }}">
+        <input type="hidden" name="action_mode" id="action_mode" value="queue">
+
+        <!-- ACTION BAR (above table) -->
+        <div class="action-bar">
+          <div class="select-controls">
+            <input type="checkbox" id="check-all" class="select-all-cb" checked
+                   onchange="toggleAllKeep(this.checked)">
+            <label for="check-all" class="select-all-label">Select all</label>
+
+            <div class="filter-pills">
+              <button type="button" class="filter-pill active" data-filter="all" onclick="filterRows('all', this)">All ({{ preview.variants_found }})</button>
+              <button type="button" class="filter-pill" data-filter="match" onclick="filterRows('match', this)">🟢 Match ({{ preview.count_match }})</button>
+              <button type="button" class="filter-pill" data-filter="fuzzy" onclick="filterRows('fuzzy', this)">🟡 Fuzzy ({{ preview.count_fuzzy }})</button>
+              <button type="button" class="filter-pill" data-filter="new" onclick="filterRows('new', this)">🟦 New ({{ preview.count_new }})</button>
+            </div>
+          </div>
+
+          <div class="action-buttons">
+            <a href="{{ url_for('admin_cardekho_paste') }}" class="strip-btn-secondary">Re-paste</a>
+          </div>
+        </div>
+
+        <!-- TABLE GROUPED BY MODEL -->
+        {% for model_group in preview.rows_by_model %}
+          <div class="model-section" data-model-key="{{ model_group.key }}">
+            <div class="model-section-header" onclick="toggleModelSection(this)">
+              <div class="model-title">
+                <span class="caret">▾</span>
+                {{ model_group.make }} {{ model_group.model }}
+                <span class="model-counts">
+                  · {{ model_group.rows|length }} variant{{ '' if model_group.rows|length == 1 else 's' }}
+                  {% if model_group.counts.match > 0 %} · <span class="ct-match">{{ model_group.counts.match }} match</span>{% endif %}
+                  {% if model_group.counts.fuzzy > 0 %} · <span class="ct-fuzzy">{{ model_group.counts.fuzzy }} fuzzy</span>{% endif %}
+                  {% if model_group.counts.new > 0 %} · <span class="ct-new">{{ model_group.counts.new }} new</span>{% endif %}
+                  {% if model_group.counts.orphan > 0 %} · <span class="ct-orphan">{{ model_group.counts.orphan }} orphan</span>{% endif %}
+                </span>
+              </div>
+              <div class="model-actions" onclick="event.stopPropagation();">
+                <button type="button" class="model-mini-btn" onclick="selectModelRows('{{ model_group.key }}', true)">Select all</button>
+                <button type="button" class="model-mini-btn" onclick="selectModelRows('{{ model_group.key }}', false)">Clear</button>
+              </div>
+            </div>
+            <div class="model-section-body">
+              <table class="preview-table">
+                <thead>
+                  <tr>
+                    <th style="width: 32px;"></th>
+                    <th>Variant</th>
+                    <th>Fuel</th>
+                    <th class="num">CC</th>
+                    <th class="num">Current (sheet)</th>
+                    <th class="num">New (CarDekho)</th>
+                    <th class="num">Δ</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in model_group.rows %}
+                    <tr class="preview-row row-status-{{ row.status_key }}"
+                        data-idx="{{ row.idx }}"
+                        data-status="{{ row.status_key }}"
+                        data-model="{{ model_group.key }}">
+                      <td>
+                        <input type="checkbox" class="keep-cb" name="keep_idx" value="{{ row.idx }}"
+                               checked onchange="updateRowState(this)">
+                      </td>
+                      <td>{{ row.variant }}</td>
+                      <td>{{ row.fuel }}</td>
+                      <td class="num">{{ row.cc or '—' }}</td>
+                      <td class="num">
+                        {% if row.current_price %}
+                          ₹ {{ row.current_price | inr }}
+                        {% else %}
+                          <span style="color:#6c757d;">—</span>
+                        {% endif %}
+                      </td>
+                      <td class="num price-cell">₹ {{ row.proposed_price | inr }}</td>
+                      <td class="num delta-cell {{ row.delta_class }}">{{ row.delta_label }}</td>
+                      <td>
+                        <span class="match-cell-wrap">
+                          <span class="status-badge b-{{ row.status_key }}">{{ row.status_label }}</span>
+                          {% if row.status_key == 'match' %}
+                            <button type="button" class="quick-row-btn"
+                                    onclick="quickApproveOne({{ row.idx }})">⚡ Approve</button>
+                          {% endif %}
+                          <span class="match-info-icon" tabindex="0">i</span>
+                          <span class="match-tooltip">
+                            <strong>{{ row.status_label }}</strong><br><br>
+                            <span class="match-tip-section-label">CarDekho variant:</span>
+                            <em>"{{ row.cardekho_variant_full }}"</em>
+                            {% if row.matched_variant_name and row.matched_variant_name != row.variant %}
+                              <span class="match-tip-section-label">Matched in our sheet:</span>
+                              <em>{{ row.matched_variant_name }}</em>
+                            {% endif %}
+                            <span class="match-tip-section-label">What happens on approve:</span>
+                            <em style="color:#adb5bd; font-style:normal;">{{ row.action_description }}</em>
+                            <span class="match-tip-action">
+                              Untick the checkbox to drop this row from queue/approve actions.
+                            </span>
+                          </span>
+                        </span>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endfor %}
+
+        <!-- Confirm bar (sticky footer) -->
+        <div class="confirm-bar">
+          <div class="confirm-summary">
+            <strong id="kept-count">{{ preview.variants_found }}</strong> of {{ preview.variants_found }} rows selected
+            <span class="confirm-sub">
+              <span style="color:#5bd47b;">Quick Approve</span> writes 🟢 matches directly to <code>car_prices</code> (no Review Queue stop). 
+              <span style="color:#4eb0ff;">Queue Selected</span> sends checked rows to Review Queue for one-by-one approval.
+            </span>
+          </div>
+          <div class="confirm-actions">
+            <button type="button" class="form-submit form-submit-green" id="quick-approve-btn"
+                    onclick="submitWithMode('quick_approve_matches')">
+              ⚡ Quick Approve Matches (<span id="quick-count">{{ preview.count_match }}</span>)
+            </button>
+            <button type="submit" class="form-submit" id="queue-btn"
+                    onclick="document.getElementById('action_mode').value='queue';">
+              Queue Selected to Review →
+            </button>
+          </div>
+        </div>
+      </form>
+    {% else %}
+      <div class="section-card">
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <strong>No variants could be parsed.</strong><br>
+          The paste either didn't have any expanded model accordions, or the
+          format didn't match what we expect from CarDekho's filtered search page.
+          <br><br>
+          <a href="{{ url_for('admin_cardekho_paste') }}" class="strip-btn-secondary">← Re-paste</a>
+        </div>
+      </div>
+    {% endif %}
+
+  {% endif %}
+
+</div>
+
+<script>
+  // ============================================================
+  // SCREEN 1 — Char counter for textarea
+  // ============================================================
+  (function setupCharCounter() {
+    const textarea = document.getElementById('raw_text');
+    const counter = document.getElementById('char-counter');
+    if (!textarea || !counter) return;
+    const MAX = 200000;
+
+    function updateCounter() {
+      const text = textarea.value || '';
+      const chars = text.length;
+      const bytes = new Blob([text]).size;
+      const kb = (bytes / 1024).toFixed(1);
+      counter.textContent = chars.toLocaleString() + ' chars · ' + kb + ' KB';
+      if (chars > MAX) {
+        counter.classList.add('over-limit');
+      } else {
+        counter.classList.remove('over-limit');
+      }
+    }
+
+    textarea.addEventListener('input', updateCounter);
+    updateCounter();
+  })();
+
+  // ============================================================
+  // SCREEN 1 — Form submit feedback
+  // ============================================================
+  (function setupExtractFeedback() {
+    const form = document.getElementById('paste-form');
+    const btn = document.getElementById('extract-btn');
+    if (!form || !btn) return;
+    form.addEventListener('submit', function() {
+      btn.disabled = true;
+      btn.textContent = 'Extracting…';
+    });
+  })();
+
+  // ============================================================
+  // SCREEN 2 — Row state, bulk select, filter, model section toggle,
+  // submit with mode (queue vs quick_approve), inline quick approve.
+  // ============================================================
+  function updateRowState(checkbox) {
+    const tr = checkbox.closest('tr');
+    if (!tr) return;
+    if (checkbox.checked) {
+      tr.classList.remove('row-unchecked');
+    } else {
+      tr.classList.add('row-unchecked');
+    }
+    updateKeptCount();
+  }
+
+  function toggleAllKeep(checked) {
+    document.querySelectorAll('input.keep-cb[name="keep_idx"]').forEach(function(cb) {
+      // Only toggle visible rows (respect active filter)
+      const tr = cb.closest('tr');
+      if (tr && tr.style.display !== 'none') {
+        cb.checked = checked;
+        updateRowState(cb);
+      }
+    });
+  }
+
+  function selectModelRows(modelKey, checked) {
+    document.querySelectorAll('tr[data-model="' + modelKey + '"]').forEach(function(tr) {
+      const cb = tr.querySelector('input.keep-cb');
+      if (cb) {
+        cb.checked = checked;
+        updateRowState(cb);
+      }
+    });
+  }
+
+  function updateKeptCount() {
+    const total = document.querySelectorAll('input.keep-cb[name="keep_idx"]').length;
+    const kept = document.querySelectorAll('input.keep-cb[name="keep_idx"]:checked').length;
+    const el = document.getElementById('kept-count');
+    if (el) el.textContent = kept.toString();
+    const checkAll = document.getElementById('check-all');
+    if (checkAll) {
+      checkAll.checked = (kept === total);
+      checkAll.indeterminate = (kept > 0 && kept < total);
+    }
+    const queueBtn = document.getElementById('queue-btn');
+    if (queueBtn) queueBtn.disabled = (kept === 0);
+  }
+
+  function filterRows(filterKey, btnEl) {
+    document.querySelectorAll('.filter-pill').forEach(function(p) { p.classList.remove('active'); });
+    if (btnEl) btnEl.classList.add('active');
+
+    document.querySelectorAll('tr.preview-row').forEach(function(tr) {
+      const status = tr.dataset.status;
+      if (filterKey === 'all' || status === filterKey) {
+        tr.style.display = '';
+      } else {
+        tr.style.display = 'none';
+      }
+    });
+
+    // Hide entire model sections whose rows are all hidden under the active filter
+    document.querySelectorAll('.model-section').forEach(function(section) {
+      const visibleRows = section.querySelectorAll('tr.preview-row:not([style*="display: none"])');
+      section.style.display = visibleRows.length > 0 ? '' : 'none';
+    });
+  }
+
+  function toggleModelSection(headerEl) {
+    const section = headerEl.closest('.model-section');
+    if (section) section.classList.toggle('collapsed');
+  }
+
+  function submitWithMode(mode) {
+    document.getElementById('action_mode').value = mode;
+    const form = document.getElementById('confirm-form');
+    if (form) {
+      // For quick-approve, only submit checked 🟢 match rows
+      if (mode === 'quick_approve_matches') {
+        document.querySelectorAll('input.keep-cb[name="keep_idx"]').forEach(function(cb) {
+          const tr = cb.closest('tr');
+          if (tr && tr.dataset.status !== 'match') {
+            cb.checked = false;
+          }
+        });
+      }
+      form.submit();
+    }
+  }
+
+  function quickApproveOne(idx) {
+    // Uncheck everything, check just this row, set mode, submit
+    document.querySelectorAll('input.keep-cb[name="keep_idx"]').forEach(function(cb) {
+      cb.checked = (cb.value === String(idx));
+    });
+    submitWithMode('quick_approve_matches');
+  }
+
+  // ============================================================
+  // Match tooltip flip-down (port from CarWale paste extract)
+  // ============================================================
+  (function setupMatchTooltipFlip() {
+    const wraps = document.querySelectorAll('.preview-table .match-cell-wrap');
+    wraps.forEach(function(wrap) {
+      const tip = wrap.querySelector('.match-tooltip');
+      const icon = wrap.querySelector('.match-info-icon');
+      if (!tip || !icon) return;
+
+      function adjustFlip() {
+        tip.classList.remove('flip-down');
+        tip.style.visibility = 'hidden';
+        tip.style.opacity = '0';
+        const prevDisplay = tip.style.display;
+        tip.style.display = 'block';
+        const tipHeight = tip.offsetHeight || 200;
+        tip.style.display = prevDisplay;
+        tip.style.visibility = '';
+        tip.style.opacity = '';
+
+        const iconRect = icon.getBoundingClientRect();
+        if (iconRect.top < tipHeight + 16) {
+          tip.classList.add('flip-down');
+        }
+      }
+
+      wrap.addEventListener('mouseenter', adjustFlip);
+      icon.addEventListener('focus', adjustFlip);
+    });
+  })();
+</script>
+{% endblock %}
