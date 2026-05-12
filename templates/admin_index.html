@@ -83,12 +83,74 @@
   }
   .flash-alert.error .close-x { color: #dc3545; }
 
+  /* ============================================================
+     T4.2 — AUTOM SECTION HEADERS
+     Locked colors per memory #29:
+       A = Anchor       → Blue  #4e54ff
+       U = Usage        → Green #28a745
+       T = Territory    → Orange #ffa500
+       O = Observation  → Purple #8a90ff
+       M = Market       → Yellow #ffd700
+       Operational      → Grey  #adb5bd  (non-AUTOM)
+     Treatment mirrors the About page brand framework: full opacity
+     for AUTOM letter + phase word + description, separated by middots.
+     ============================================================ */
+  .autom-section {
+    margin-top: 28px;
+  }
+  .autom-section:first-of-type {
+    margin-top: 18px;
+  }
+  .autom-section-header {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 6px 4px 10px;
+    border-bottom: 1px solid #2a2d34;
+    margin-bottom: 14px;
+  }
+  .autom-letter {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .autom-phase {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .autom-divider {
+    color: #4a4f5a;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .autom-desc {
+    color: #8b92a5;
+    font-size: 12.5px;
+    font-style: italic;
+    line-height: 1.4;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  /* AUTOM letter + phase colors (locked) */
+  .autom-a .autom-letter, .autom-a .autom-phase { color: #4e54ff; }   /* Anchor      — blue   */
+  .autom-u .autom-letter, .autom-u .autom-phase { color: #28a745; }   /* Usage       — green  */
+  .autom-t .autom-letter, .autom-t .autom-phase { color: #ffa500; }   /* Territory   — orange */
+  .autom-o .autom-letter, .autom-o .autom-phase { color: #8a90ff; }   /* Observation — purple */
+  .autom-m .autom-letter, .autom-m .autom-phase { color: #ffd700; }   /* Market      — yellow */
+  .autom-ops .autom-letter, .autom-ops .autom-phase { color: #adb5bd; } /* Ops       — grey   */
+
   /* ---- Tool grid ---- */
   .tools-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
-    margin-top: 18px;
   }
 
   @media (max-width: 920px) {
@@ -98,6 +160,8 @@
   @media (max-width: 600px) {
     .tools-grid { grid-template-columns: 1fr; }
     .admin-title { font-size: 20px; }
+    .autom-letter { font-size: 20px; }
+    .autom-phase  { font-size: 14px; }
   }
 
   .tool-card {
@@ -121,13 +185,14 @@
     background: #1f232b;
   }
 
-  /* Per-tool accent borders — left edge stripe matching tool's identity */
-  .tool-card.accent-green   { border-left: 3px solid #28a745; }
-  .tool-card.accent-blue    { border-left: 3px solid #4e54ff; }
-  .tool-card.accent-orange  { border-left: 3px solid #ffa500; }
-  .tool-card.accent-purple  { border-left: 3px solid #8a90ff; }
-  .tool-card.accent-teal    { border-left: 3px solid #4eb0ff; }
-  .tool-card.accent-pink    { border-left: 3px solid #e066b3; }
+  /* T4.2 — Card accent borders updated to match AUTOM section colors.
+     Cards inherit their section's color via .accent-* classes. */
+  .tool-card.accent-anchor      { border-left: 3px solid #4e54ff; }  /* A — blue   */
+  .tool-card.accent-usage       { border-left: 3px solid #28a745; }  /* U — green  */
+  .tool-card.accent-territory   { border-left: 3px solid #ffa500; }  /* T — orange */
+  .tool-card.accent-observation { border-left: 3px solid #8a90ff; }  /* O — purple */
+  .tool-card.accent-market      { border-left: 3px solid #ffd700; }  /* M — yellow */
+  .tool-card.accent-ops         { border-left: 3px solid #adb5bd; }  /* Ops — grey */
 
   .tool-card-head {
     display: flex;
@@ -213,9 +278,28 @@
     transform: translateX(3px);
   }
 
+  /* ---- M layer "Coming soon" placeholder ---- */
+  .coming-soon-card {
+    background: #14171d;
+    border: 1px dashed #2a2d34;
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+    color: #6c757d;
+    font-size: 13px;
+    font-style: italic;
+    grid-column: 1 / -1;
+  }
+  .coming-soon-card strong {
+    color: #ffd700;
+    font-weight: 700;
+    font-style: normal;
+    margin-right: 4px;
+  }
+
   /* ---- Refresh meta footer ---- */
   .admin-footer {
-    margin-top: 24px;
+    margin-top: 32px;
     padding-top: 12px;
     border-top: 1px solid #2a2d34;
     text-align: center;
@@ -234,7 +318,7 @@
   <div class="admin-header">
     <div>
       <h1 class="admin-title"><span class="admin-icon">🛠️</span>Admin Panel</h1>
-      <div class="admin-subtitle">Operate AutoKnowMus — data health, user activity, price tools, and calibration.</div>
+      <div class="admin-subtitle">Operate AutoKnowMus — pricing layers grouped by AUTOM, plus operational tools.</div>
     </div>
     <div class="admin-meta">{{ now_display }}</div>
   </div>
@@ -249,123 +333,238 @@
     {% endfor %}
   {% endwith %}
 
-  <!-- Tool grid -->
-  <div class="tools-grid">
+  {# ============================================================
+     A — ANCHOR (Blue)
+     New-car ex-showroom reference prices per variant.
+     Data source: car_prices Google Sheet.
+     ============================================================ #}
+  <div class="autom-section autom-a">
+    <div class="autom-section-header">
+      <span class="autom-letter">A</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-phase">Anchor</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-desc">New-car reference prices per variant. The foundation every valuation builds on.</span>
+    </div>
+    <div class="tools-grid">
 
-    <!-- 1. Data Health -->
-    <a href="{{ url_for('admin_data_health') }}" class="tool-card accent-green">
-      <div class="tool-card-head">
-        <span class="tool-icon">📊</span>
-        {% if tool_counts.guardrail_flags > 0 %}
-          <span class="tool-count has-flagged">{{ tool_counts.guardrail_flags }} flag{{ '' if tool_counts.guardrail_flags == 1 else 's' }}</span>
-        {% else %}
-          <span class="tool-count is-zero">healthy</span>
-        {% endif %}
-      </div>
-      <h2 class="tool-name">Data Health</h2>
-      <p class="tool-desc">Phase distribution, guardrail flags, broker signals, model upgrade queue.</p>
-      <div class="tool-meta">{{ tool_counts.deals_30d }} deals last 30d</div>
-      <div class="tool-arrow">Open →</div>
-    </a>
+      <!-- Price Tools -->
+      <a href="{{ url_for('price_tools') }}" class="tool-card accent-anchor">
+        <div class="tool-card-head">
+          <span class="tool-icon">🔧</span>
+          {% if tool_counts.pending_reviews > 0 %}
+            <span class="tool-count has-pending">{{ tool_counts.pending_reviews }} pending</span>
+          {% else %}
+            <span class="tool-count is-zero">queue clear</span>
+          {% endif %}
+        </div>
+        <h2 class="tool-name">Price Tools</h2>
+        <p class="tool-desc">Scrape CarWale prices, review proposed changes, manage discontinued variants.</p>
+        <div class="tool-meta">{{ tool_counts.discontinued_count }} discontinued · {{ tool_counts.missing_count }} missing</div>
+        <div class="tool-arrow">Open →</div>
+      </a>
 
-    <!-- 2. User Activity -->
-    <a href="{{ url_for('admin_user_activity') }}" class="tool-card accent-blue">
-      <div class="tool-card-head">
-        <span class="tool-icon">👥</span>
-        {% if tool_counts.signups_7d > 0 %}
-          <span class="tool-count has-pending">+{{ tool_counts.signups_7d }} new</span>
-        {% else %}
-          <span class="tool-count">{{ tool_counts.total_users }} total</span>
-        {% endif %}
-      </div>
-      <h2 class="tool-name">User Activity</h2>
-      <p class="tool-desc">Signups, search history, deal submitters, retention cohorts.</p>
-      <div class="tool-meta">{{ tool_counts.signups_7d }} signup{{ '' if tool_counts.signups_7d == 1 else 's' }} last 7d</div>
-      <div class="tool-arrow">Open →</div>
-    </a>
+    </div>
+  </div>
 
-    <!-- 3. Price Tools -->
-    <a href="{{ url_for('price_tools') }}" class="tool-card accent-orange">
-      <div class="tool-card-head">
-        <span class="tool-icon">🔧</span>
-        {% if tool_counts.pending_reviews > 0 %}
-          <span class="tool-count has-pending">{{ tool_counts.pending_reviews }} pending</span>
-        {% else %}
-          <span class="tool-count is-zero">queue clear</span>
-        {% endif %}
-      </div>
-      <h2 class="tool-name">Price Tools</h2>
-      <p class="tool-desc">Scrape CarWale prices, review proposed changes, manage discontinued variants.</p>
-      <div class="tool-meta">{{ tool_counts.discontinued_count }} discontinued · {{ tool_counts.missing_count }} missing</div>
-      <div class="tool-arrow">Open →</div>
-    </a>
+  {# ============================================================
+     U — USAGE (Green)
+     Used-listing per-cell calibration. Data source: research_log
+     table → model_calibration multipliers.
+     ============================================================ #}
+  <div class="autom-section autom-u">
+    <div class="autom-section-header">
+      <span class="autom-letter">U</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-phase">Usage</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-desc">Used-market listings calibrate per-model multipliers on top of the anchor.</span>
+    </div>
+    <div class="tools-grid">
 
-    <!-- 4. State Multipliers -->
-    <a href="{{ url_for('admin_multipliers') }}" class="tool-card accent-teal">
-      <div class="tool-card-head">
-        <span class="tool-icon">🌍</span>
-        <span class="tool-count">{{ tool_counts.states_count }} states</span>
-      </div>
-      <h2 class="tool-name">State Multipliers</h2>
-      <p class="tool-desc">Per-state price multipliers, road tax, RTO fees, audit history.</p>
-      <div class="tool-meta">applied at valuation time</div>
-      <div class="tool-arrow">Open →</div>
-    </a>
+      <!-- Research Log -->
+      <a href="{{ url_for('admin_research') }}" class="tool-card accent-usage">
+        <div class="tool-card-head">
+          <span class="tool-icon">🔬</span>
+          {% if tool_counts.research_suggestions > 0 %}
+            <span class="tool-count has-pending">{{ tool_counts.research_suggestions }} suggestion{{ '' if tool_counts.research_suggestions == 1 else 's' }}</span>
+          {% else %}
+            <span class="tool-count">{{ tool_counts.research_total }} entries</span>
+          {% endif %}
+        </div>
+        <h2 class="tool-name">Research Log</h2>
+        <p class="tool-desc">Mystery shopping + friends &amp; family entries; calibration suggestions.</p>
+        <div class="tool-meta">{{ tool_counts.research_included }} included in calibration</div>
+        <div class="tool-arrow">Open →</div>
+      </a>
 
-    <!-- 5. Feedback -->
-    <a href="{{ url_for('admin_feedback') }}" class="tool-card accent-pink">
-      <div class="tool-card-head">
-        <span class="tool-icon">💬</span>
-        {% if tool_counts.feedback_new > 0 %}
-          <span class="tool-count has-pending">{{ tool_counts.feedback_new }} new</span>
-        {% else %}
-          <span class="tool-count is-zero">all reviewed</span>
-        {% endif %}
-      </div>
-      <h2 class="tool-name">Feedback</h2>
-      <p class="tool-desc">User feedback on valuations, brand × state × model wayoff% flags.</p>
-      <div class="tool-meta">{{ tool_counts.feedback_total }} total received</div>
-      <div class="tool-arrow">Open →</div>
-    </a>
+      <!-- Calibration Config -->
+      <a href="{{ url_for('admin_calibration_config') }}" class="tool-card accent-usage">
+        <div class="tool-card-head">
+          <span class="tool-icon">⚙️</span>
+          {% if tool_counts.negotiation_gap is not none %}
+            <span class="tool-count">gap {{ '%.2f' | format(tool_counts.negotiation_gap) }}</span>
+          {% else %}
+            <span class="tool-count has-flagged">unset</span>
+          {% endif %}
+        </div>
+        <h2 class="tool-name">Calibration Config</h2>
+        <p class="tool-desc">Negotiation gap haircut applied to calibrated multipliers; bounds &amp; audit history.</p>
+        <div class="tool-meta">
+          {% if tool_counts.negotiation_gap is not none %}
+            ≈ {{ '%.1f' | format((1 - tool_counts.negotiation_gap) * 100) }}% market haircut
+          {% else %}
+            not configured
+          {% endif %}
+        </div>
+        <div class="tool-arrow">Open →</div>
+      </a>
 
-    <!-- 6. Research -->
-    <a href="{{ url_for('admin_research') }}" class="tool-card accent-purple">
-      <div class="tool-card-head">
-        <span class="tool-icon">🔬</span>
-        {% if tool_counts.research_suggestions > 0 %}
-          <span class="tool-count has-pending">{{ tool_counts.research_suggestions }} suggestion{{ '' if tool_counts.research_suggestions == 1 else 's' }}</span>
-        {% else %}
-          <span class="tool-count">{{ tool_counts.research_total }} entries</span>
-        {% endif %}
-      </div>
-      <h2 class="tool-name">Research Log</h2>
-      <p class="tool-desc">Mystery shopping + friends &amp; family entries; calibration suggestions.</p>
-      <div class="tool-meta">{{ tool_counts.research_included }} included in calibration</div>
-      <div class="tool-arrow">Open →</div>
-    </a>
+      <!-- Calibration Diagnostic (Sprint 2.1) -->
+      <a href="{{ url_for('admin_calibration_diagnostic') }}" class="tool-card accent-usage">
+        <div class="tool-card-head">
+          <span class="tool-icon">🧪</span>
+          <span class="tool-count">per-cell preview</span>
+        </div>
+        <h2 class="tool-name">Calibration Diagnostic</h2>
+        <p class="tool-desc">Read-only per-cell view of listings → formula → multiplier math. No writes.</p>
+        <div class="tool-meta">cell-by-cell trace · safe to explore</div>
+        <div class="tool-arrow">Open →</div>
+      </a>
 
-    <!-- 7. Calibration Config (v3.5.2 Step B) -->
-    <a href="{{ url_for('admin_calibration_config') }}" class="tool-card accent-orange">
-      <div class="tool-card-head">
-        <span class="tool-icon">⚙️</span>
-        {% if tool_counts.negotiation_gap is not none %}
-          <span class="tool-count">gap {{ '%.2f' | format(tool_counts.negotiation_gap) }}</span>
-        {% else %}
-          <span class="tool-count has-flagged">unset</span>
-        {% endif %}
-      </div>
-      <h2 class="tool-name">Calibration Config</h2>
-      <p class="tool-desc">Negotiation gap haircut applied to calibrated multipliers; bounds &amp; audit history.</p>
-      <div class="tool-meta">
-        {% if tool_counts.negotiation_gap is not none %}
-          ≈ {{ '%.1f' | format((1 - tool_counts.negotiation_gap) * 100) }}% market haircut
-        {% else %}
-          not configured
-        {% endif %}
-      </div>
-      <div class="tool-arrow">Open →</div>
-    </a>
+    </div>
+  </div>
 
+  {# ============================================================
+     T — TERRITORY (Orange)
+     Per-state geographic multipliers. Applied at tiers 3-5 of the
+     pricing waterfall when data is not from user's locality.
+     ============================================================ #}
+  <div class="autom-section autom-t">
+    <div class="autom-section-header">
+      <span class="autom-letter">T</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-phase">Territory</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-desc">State-level multipliers reflect local road tax, RTO fees, and regional demand.</span>
+    </div>
+    <div class="tools-grid">
+
+      <!-- State Multipliers -->
+      <a href="{{ url_for('admin_multipliers') }}" class="tool-card accent-territory">
+        <div class="tool-card-head">
+          <span class="tool-icon">🌍</span>
+          <span class="tool-count">{{ tool_counts.states_count }} states</span>
+        </div>
+        <h2 class="tool-name">State Multipliers</h2>
+        <p class="tool-desc">Per-state price multipliers, road tax, RTO fees, audit history.</p>
+        <div class="tool-meta">applied at valuation time</div>
+        <div class="tool-arrow">Open →</div>
+      </a>
+
+    </div>
+  </div>
+
+  {# ============================================================
+     O — OBSERVATION (Purple)
+     User feedback on valuations — the closed loop. Helps surface
+     systematic wayoff cases by brand × state × model.
+     ============================================================ #}
+  <div class="autom-section autom-o">
+    <div class="autom-section-header">
+      <span class="autom-letter">O</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-phase">Observation</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-desc">Real user feedback closes the loop — surfaces where the model is off.</span>
+    </div>
+    <div class="tools-grid">
+
+      <!-- Feedback -->
+      <a href="{{ url_for('admin_feedback') }}" class="tool-card accent-observation">
+        <div class="tool-card-head">
+          <span class="tool-icon">💬</span>
+          {% if tool_counts.feedback_new > 0 %}
+            <span class="tool-count has-pending">{{ tool_counts.feedback_new }} new</span>
+          {% else %}
+            <span class="tool-count is-zero">all reviewed</span>
+          {% endif %}
+        </div>
+        <h2 class="tool-name">Feedback</h2>
+        <p class="tool-desc">User feedback on valuations, brand × state × model wayoff% flags.</p>
+        <div class="tool-meta">{{ tool_counts.feedback_total }} total received</div>
+        <div class="tool-arrow">Open →</div>
+      </a>
+
+    </div>
+  </div>
+
+  {# ============================================================
+     M — MARKET (Yellow)
+     Macro signals: taxes, new launches, seasonality. Not built yet.
+     Placeholder section so the AUTOM framework is visually complete.
+     ============================================================ #}
+  <div class="autom-section autom-m">
+    <div class="autom-section-header">
+      <span class="autom-letter">M</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-phase">Market</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-desc">Macro signals — tax changes, new launches, seasonality. Tooling coming later.</span>
+    </div>
+    <div class="tools-grid">
+      <div class="coming-soon-card">
+        <strong>Coming soon —</strong>admin tools for macro-market signals will appear here once built.
+      </div>
+    </div>
+  </div>
+
+  {# ============================================================
+     OPERATIONAL (Grey)
+     Not part of the AUTOM pricing framework — these are system
+     health and user analytics tools that sit alongside.
+     ============================================================ #}
+  <div class="autom-section autom-ops">
+    <div class="autom-section-header">
+      <span class="autom-phase">Operational</span>
+      <span class="autom-divider">·</span>
+      <span class="autom-desc">System health and user analytics — not part of the pricing waterfall.</span>
+    </div>
+    <div class="tools-grid">
+
+      <!-- Data Health -->
+      <a href="{{ url_for('admin_data_health') }}" class="tool-card accent-ops">
+        <div class="tool-card-head">
+          <span class="tool-icon">📊</span>
+          {% if tool_counts.guardrail_flags > 0 %}
+            <span class="tool-count has-flagged">{{ tool_counts.guardrail_flags }} flag{{ '' if tool_counts.guardrail_flags == 1 else 's' }}</span>
+          {% else %}
+            <span class="tool-count is-zero">healthy</span>
+          {% endif %}
+        </div>
+        <h2 class="tool-name">Data Health</h2>
+        <p class="tool-desc">Phase distribution, guardrail flags, broker signals, model upgrade queue.</p>
+        <div class="tool-meta">{{ tool_counts.deals_30d }} deals last 30d</div>
+        <div class="tool-arrow">Open →</div>
+      </a>
+
+      <!-- User Activity -->
+      <a href="{{ url_for('admin_user_activity') }}" class="tool-card accent-ops">
+        <div class="tool-card-head">
+          <span class="tool-icon">👥</span>
+          {% if tool_counts.signups_7d > 0 %}
+            <span class="tool-count has-pending">+{{ tool_counts.signups_7d }} new</span>
+          {% else %}
+            <span class="tool-count">{{ tool_counts.total_users }} total</span>
+          {% endif %}
+        </div>
+        <h2 class="tool-name">User Activity</h2>
+        <p class="tool-desc">Signups, search history, deal submitters, retention cohorts.</p>
+        <div class="tool-meta">{{ tool_counts.signups_7d }} signup{{ '' if tool_counts.signups_7d == 1 else 's' }} last 7d</div>
+        <div class="tool-arrow">Open →</div>
+      </a>
+
+    </div>
   </div>
 
   <div class="admin-footer">
