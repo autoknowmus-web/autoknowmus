@@ -7501,6 +7501,31 @@ def price_tools_approve():
                 ex_showroom_price=int(r['proposed_price']),
                 source='CarWale',
             )
+        elif rt == 'price_update_cardekho':
+            # CarDekho paste-extract reviews. Route based on scraper_status:
+            #   parsed_match / parsed_fuzzy_match → update existing variant's price
+            #   parsed_new_variant / parsed_orphan → append as new row
+            cd_status = r.get('scraper_status') or ''
+            if cd_status in ('parsed_match', 'parsed_fuzzy_match'):
+                # Use matched_variant_name as the sheet target if present,
+                # else fall back to the variant on the review row.
+                target_variant = r.get('matched_variant_name') or r['variant']
+                sheets_writer.write_price_update_v2(
+                    make=r['make'], model=r['model'],
+                    variant=target_variant, fuel=r['fuel'],
+                    new_price=int(r['proposed_price']),
+                    source='CarDekho',
+                )
+            elif cd_status in ('parsed_new_variant', 'parsed_orphan'):
+                sheets_writer.write_new_variant(
+                    make=r['make'], model=r['model'],
+                    variant=r['variant'], fuel=r['fuel'],
+                    ex_showroom_price=int(r['proposed_price']),
+                    source='CarDekho',
+                )
+            else:
+                return jsonify({'ok': False,
+                                'error': f'unknown CarDekho scraper_status: {cd_status}'}), 400
         else:
             return jsonify({'ok': False,
                             'error': f'unknown review_type: {rt}'}), 400
@@ -7980,6 +8005,33 @@ def price_tools_bulk_approve():
                     ex_showroom_price=int(r['proposed_price']),
                     source='CarWale',
                 )
+            elif rt == 'price_update_cardekho':
+                # CarDekho paste-extract reviews. Route based on scraper_status:
+                #   parsed_match / parsed_fuzzy_match → update existing variant's price
+                #   parsed_new_variant / parsed_orphan → append as new row
+                cd_status = r.get('scraper_status') or ''
+                if cd_status in ('parsed_match', 'parsed_fuzzy_match'):
+                    target_variant = r.get('matched_variant_name') or r['variant']
+                    sheets_writer.write_price_update_v2(
+                        make=r['make'], model=r['model'],
+                        variant=target_variant, fuel=r['fuel'],
+                        new_price=int(r['proposed_price']),
+                        source='CarDekho',
+                    )
+                elif cd_status in ('parsed_new_variant', 'parsed_orphan'):
+                    sheets_writer.write_new_variant(
+                        make=r['make'], model=r['model'],
+                        variant=r['variant'], fuel=r['fuel'],
+                        ex_showroom_price=int(r['proposed_price']),
+                        source='CarDekho',
+                    )
+                else:
+                    results.append({
+                        'id': rid_int, 'ok': False,
+                        'error': f'unknown CarDekho scraper_status: {cd_status}'
+                    })
+                    failed_count += 1
+                    continue
             else:
                 results.append({
                     'id': rid_int, 'ok': False,
