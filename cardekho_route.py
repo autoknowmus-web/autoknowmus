@@ -887,6 +887,24 @@ def _group_rows_by_model(enriched_rows: List[Dict]) -> List[Dict]:
 
 
 def _handle_submit():
+    """POST handler — wrapped with debug error catcher (temporary)."""
+    try:
+        return _handle_submit_inner()
+    except Exception as e:
+        import traceback as _tb
+        tb_str = _tb.format_exc()
+        logger.error("[cardekho] Submit failed: %s", tb_str)
+        flash(
+            "DEBUG SUBMIT ERROR: " + type(e).__name__ + ": " + str(e)[:200],
+            "error",
+        )
+        tb_lines = tb_str.split("\n")
+        relevant_tb = "\n".join(tb_lines[-12:])
+        flash("Traceback (last 12 lines): " + relevant_tb, "error")
+        return redirect(url_for("admin_cardekho_paste"))
+
+
+def _handle_submit_inner():
     """
     POST handler for /admin/price-tools/cardekho-paste/submit.
 
