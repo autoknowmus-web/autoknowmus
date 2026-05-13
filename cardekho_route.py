@@ -16,32 +16,32 @@ DESIGN PRINCIPLES:
     this route module stays unchanged.
 
 STATE HANDLING:
-  Parsed rows are saved to a Supabase 'cardekho_preview_tokens' table
-  (created on first use if missing — see _ensure_preview_token_table()).
+  Parsed rows are saved to a Supabase 'cardekho_preview_tokens' table.
   The token is a short UUID-based string passed via hidden form field.
   Tokens expire after 30 minutes. The token row stores the JSON-serialized
   preview blob so submit() can rehydrate without re-parsing.
 
 FUZZY MATCHING:
   Conservative 90% Jaccard threshold on lowercased word-token sets.
-  Examples:
-    "Adventure"           vs "Adventure"          -> 100% -> match
-    "Adventure DCA"       vs "Adventure DCA"      -> 100% -> match
-    "Adventure DCA"       vs "Adventure"          -> 50%  -> new variant
-    "Smart Plus"          vs "Smart"              -> 50%  -> new variant
-    "Pure Plus DCA"       vs "Pure Plus"          -> 67%  -> new variant
-    "Zxi Plus DT"         vs "Zxi Plus"           -> 67%  -> new variant
-    "Pure Plus DIesel"    vs "Pure Plus Diesel"   -> 67%  -> new variant
-    "LXi"                 vs "Lxi"                -> 100% -> match (case ignored)
-
-  Anything below 90% is tagged 'new variant' for safety. Admin can manually
-  approve in Review Queue with full context.
+  Below 90% is tagged 'new variant' for safety.
 
 CACHE STRATEGY (B-Refresh):
   car_data.refresh_prices(force=True) is called at the start of every
   preview render to guarantee fresh comparison against car_prices Sheet.
-  After Quick Approve writes, refresh is called again to keep cache fresh
-  for subsequent operations.
+  After Quick Approve writes, refresh is called again to keep cache fresh.
+
+QUICK APPROVE WIRING (Session 2):
+  _quick_approve_to_sheet() now calls sheets_writer.write_price_update_v2()
+  which is the actual function in v3.7.0 sheets_writer. It writes:
+    col E (ex_showroom_price) -> new_price
+    col G (notes)             -> "DD-MMM-YYYY CarDekho ..."
+    col I (last_known_price_date) -> "DD-MMM-YYYY"
+  Source tag is "CarDekho" so the notes column distinguishes from CarWale.
+
+DEBUG WRAPPERS (Session 2):
+  Both _handle_paste_extract and _handle_submit are wrapped with try/except
+  that flash exception + traceback to browser. These are TEMPORARY — remove
+  in a future cleanup commit once flows are confirmed stable.
 """
 
 import json
@@ -70,24 +70,17 @@ logger = logging.getLogger(__name__)
 # CONSTANTS
 # ============================================================
 
-# Preview token TTL — admin should finish reviewing well within this window
 PREVIEW_TOKEN_TTL_MINUTES = 30
-
-# Fuzzy match threshold (Jaccard on token sets). Anything >= this is
-# treated as a match; anything below is 'new variant'.
 FUZZY_MATCH_THRESHOLD = 0.90
-
-# Per-paste row caps — prevent runaway pastes from exhausting memory
 MAX_PARSED_ROWS_PER_PASTE = 2000
 MAX_PASTE_CHARS = 200_000
 
-# Distinct review_type used by this tool. Keeps dedup separate from the
-# scraper's 'price_update' / 'discontinued' values so we never collide.
 CARDEKHO_REVIEW_TYPE = "price_update_cardekho"
 CARDEKHO_SCRAPER_URL = "cardekho_paste"
+# Source tag written to car_prices.notes column on Quick Approve writes.
+# Matches the "CarWale" / "Manual" pattern used by sheets_writer v3.7.0.
+CARDEKHO_SOURCE_TAG = "CarDekho"
 
-# Status keys used in the preview UI (must match status_key in
-# admin_cardekho_paste.html template)
 STATUS_MATCH = "match"
 STATUS_FUZZY = "fuzzy"
 STATUS_NEW = "new"
@@ -117,13 +110,9 @@ def _get_supabase() -> Client:
 
 
 # ============================================================
-# ADMIN GATE — borrowed from app.py's session pattern.
-# If your app.py defines a stricter helper, you can wrap this route
-# with it instead. For now, check that session.user.is_admin is truthy.
+# ADMIN GATE
 # ============================================================
 
-# Set of admin emails. Imported lazily from app.py inside _require_admin()
-# to avoid a circular import at module load time.
 _ADMIN_EMAILS_CACHE = None
 
 
@@ -133,12 +122,10 @@ def _is_admin_email(email: Optional[str]) -> bool:
     if not email:
         return False
     if _ADMIN_EMAILS_CACHE is None:
-        # Lazy import to avoid circular dependency
         try:
             from app import ADMIN_EMAILS
             _ADMIN_EMAILS_CACHE = {e.lower() for e in ADMIN_EMAILS}
         except Exception:
-            # Fallback — if import fails, use env var
             env_emails = os.environ.get("ADMIN_EMAILS", "")
             _ADMIN_EMAILS_CACHE = {
                 e.strip().lower() for e in env_emails.split(",") if e.strip()
@@ -147,11 +134,7 @@ def _is_admin_email(email: Optional[str]) -> bool:
 
 
 def _require_admin() -> Optional[Any]:
-    """
-    Returns a Flask redirect response if not admin, else None.
-
-    Uses the same ADMIN_EMAILS allowlist pattern as app.py.
-    """
+    """Returns a Flask redirect response if not admin, else None."""
     user = session.get("user") or {}
     user_email = user.get("email")
     if not _is_admin_email(user_email):
@@ -164,7 +147,6 @@ def _require_admin() -> Optional[Any]:
 # FUZZY MATCHER
 # ============================================================
 
-# Token-extraction regex: split on non-alphanumeric. Lowercase everything.
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
@@ -193,21 +175,7 @@ def _fuzzy_match_variant(
     candidate_prices: Dict[str, int],
     threshold: float = FUZZY_MATCH_THRESHOLD,
 ) -> Optional[Tuple[str, float, int]]:
-    """
-    Find the best fuzzy match for target_variant among candidate_variants.
-
-    Args:
-        target_variant: CarDekho variant name (e.g. "Adventure DCA")
-        target_fuel: Fuel from CarDekho (already mapped to internal vocab)
-        candidate_variants: Existing variants in the sheet for this (make, model)
-        candidate_prices: Map of variant_name -> current_price (for target_fuel)
-                          Used to find which candidates HAVE a price for this fuel.
-        threshold: Jaccard score required to count as fuzzy match (>=)
-
-    Returns:
-        (matched_variant_name, score, current_price) if best match >= threshold
-        None if no candidate clears the threshold
-    """
+    """Find the best fuzzy match for target_variant. Returns None if below threshold."""
     if not candidate_variants:
         return None
 
@@ -226,7 +194,6 @@ def _fuzzy_match_variant(
     if best_variant is None or best_score < threshold:
         return None
 
-    # Only return as a match if we have a price for this fuel
     current_price = candidate_prices.get(best_variant)
     if current_price is None:
         return None
@@ -235,29 +202,11 @@ def _fuzzy_match_variant(
 
 
 # ============================================================
-# CATALOG INDEX (built fresh per preview after refresh)
+# CATALOG INDEX
 # ============================================================
 
 def _build_catalog_index() -> Dict[Tuple[str, str], Dict]:
-    """
-    Build an in-memory index of the current car_prices catalog grouped by
-    (make, model). For each (make, model) returns:
-        {
-            "variants_by_fuel": {
-                "Petrol": ["Adventure", "Pure"],
-                "Diesel": ["Adventure", "Smart Plus"],
-                ...
-            },
-            "prices_by_fuel": {
-                "Petrol": {"Adventure": 1500000, "Pure": 1299000, ...},
-                ...
-            }
-        }
-    Used by the fuzzy matcher to find candidates per (make, model, fuel).
-
-    NOTE: This walks car_data's in-memory cache. car_data.refresh_prices()
-    should be called BEFORE this function to ensure freshness.
-    """
+    """Build in-memory index of car_prices catalog grouped by (make, model)."""
     index: Dict[Tuple[str, str], Dict] = {}
 
     makes = car_data.get_makes()
@@ -291,29 +240,11 @@ def _build_catalog_index() -> Dict[Tuple[str, str], Dict]:
 
 
 # ============================================================
-# CLASSIFY PARSED ROWS AGAINST CATALOG
+# CLASSIFY PARSED ROWS
 # ============================================================
 
 def _classify_rows(parsed_rows: List[Dict], catalog_index: Dict) -> List[Dict]:
-    """
-    Takes parsed CarDekho rows and tags each with match status against the
-    car_prices catalog.
-
-    Returns enriched rows ready for template rendering. Each row gets these
-    extra fields:
-        idx                       (int)  global index across all rows
-        status_key                (str)  match|fuzzy|new|orphan
-        status_label              (str)  human label e.g. "Exact match"
-        current_price             (int|None)
-        matched_variant_name      (str|None) — name in our sheet, if matched
-        match_confidence          (float) — 0.0 to 1.0
-        delta_label, delta_class  (str) — for the Δ column
-        cardekho_variant_full     (str) — original CarDekho display name
-        action_description        (str) — what happens on approve, plain English
-
-    Also returns a previously-pending lookup so we can show "Updated from
-    previous paste on DD-MMM-YYYY" badges. See _load_pending_cardekho_index().
-    """
+    """Tag each parsed row with match status against the car_prices catalog."""
     pending_index = _load_pending_cardekho_index()
     enriched: List[Dict] = []
 
@@ -327,7 +258,6 @@ def _classify_rows(parsed_rows: List[Dict], catalog_index: Dict) -> List[Dict]:
         row = {**row, "proposed_price": proposed_price}
         cardekho_full = f"{make} {model} {variant} ({fuel})"
 
-        # 1) Is the (make, model) in our catalog at all?
         catalog_entry = catalog_index.get((make, model))
         if not catalog_entry:
             enriched.append({
@@ -349,11 +279,10 @@ def _classify_rows(parsed_rows: List[Dict], catalog_index: Dict) -> List[Dict]:
             })
             continue
 
-        # 2) Look for exact variant match in this (make, model, fuel)
         variants_for_fuel = catalog_entry["variants_by_fuel"].get(fuel, [])
         prices_for_fuel = catalog_entry["prices_by_fuel"].get(fuel, {})
 
-        # Case-insensitive exact match check
+        # Case-insensitive exact match
         exact_match_name = None
         for v in variants_for_fuel:
             if v.lower() == variant.lower():
@@ -384,7 +313,6 @@ def _classify_rows(parsed_rows: List[Dict], catalog_index: Dict) -> List[Dict]:
             })
             continue
 
-        # 3) Try fuzzy match
         fuzzy = _fuzzy_match_variant(
             variant, fuel, variants_for_fuel, prices_for_fuel
         )
@@ -413,7 +341,6 @@ def _classify_rows(parsed_rows: List[Dict], catalog_index: Dict) -> List[Dict]:
             })
             continue
 
-        # 4) New variant
         enriched.append({
             **row,
             "idx": idx,
@@ -481,16 +408,11 @@ def _inr(n: Optional[int]) -> str:
 
 
 # ============================================================
-# PENDING-REVIEWS INDEX (for "previously pending" display)
+# PENDING-REVIEWS INDEX
 # ============================================================
 
 def _load_pending_cardekho_index() -> Dict[Tuple[str, str, str, str], Dict]:
-    """
-    Load all currently-pending CarDekho rows so the preview can show
-    'Updated from previous paste on DD-MMM-YYYY' badges.
-
-    Returns map: (make, model, variant, fuel) -> {id, scraped_at, proposed_price}
-    """
+    """Load pending CarDekho rows for 'previously pending' display."""
     sb = _get_supabase()
     try:
         result = (
@@ -522,7 +444,6 @@ def _pending_date_for(idx, make, model, variant, fuel) -> Optional[str]:
     if not rec or not rec.get("scraped_at"):
         return None
     try:
-        # scraped_at comes as ISO string from Supabase
         dt = datetime.fromisoformat(rec["scraped_at"].replace("Z", "+00:00"))
         return dt.strftime("%d-%b-%Y")
     except Exception:
@@ -537,19 +458,7 @@ PREVIEW_TOKEN_TABLE = "cardekho_preview_tokens"
 
 
 def _save_preview_token(preview_blob: Dict, user_email: str) -> str:
-    """
-    Stash the preview blob in Supabase under a fresh token. Returns the token.
-
-    Schema assumed (create this table manually before first use):
-        cardekho_preview_tokens (
-            token TEXT PRIMARY KEY,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            expires_at TIMESTAMPTZ NOT NULL,
-            created_by TEXT,
-            blob JSONB NOT NULL,
-            consumed BOOLEAN DEFAULT FALSE
-        )
-    """
+    """Stash the preview blob in Supabase. Returns the token."""
     sb = _get_supabase()
     token = secrets.token_urlsafe(16)
     expires_at = (
@@ -573,7 +482,7 @@ def _save_preview_token(preview_blob: Dict, user_email: str) -> str:
 
 
 def _load_preview_token(token: str) -> Optional[Dict]:
-    """Retrieve a non-expired, non-consumed preview blob. None if invalid."""
+    """Retrieve a non-expired, non-consumed preview blob."""
     sb = _get_supabase()
     try:
         result = (
@@ -602,7 +511,7 @@ def _load_preview_token(token: str) -> Optional[Dict]:
 
 
 def _consume_preview_token(token: str) -> None:
-    """Mark a token as consumed so it can't be replayed."""
+    """Mark a token as consumed."""
     sb = _get_supabase()
     try:
         sb.table(PREVIEW_TOKEN_TABLE).update({"consumed": True}).eq(
@@ -628,26 +537,11 @@ def _upsert_cardekho_pending_review(
     final_status: str = "pending",
     reviewed_by: Optional[str] = None,
 ) -> Tuple[int, str]:
-    """
-    Insert or update a pending_reviews row for the CarDekho tool.
-
-    Option B (Update Behavior, locked):
-      - If a pending CarDekho row exists for (make, model, variant, fuel),
-        UPDATE its proposed_price, scraped_at, matched_variant_name,
-        scraper_status. Don't change its id.
-      - Else, INSERT a fresh row.
-
-    For Quick Approve path, final_status='approved' goes straight in;
-    no update-existing logic — Quick Approve always creates a fresh
-    historical record.
-
-    Returns (id, action) where action is one of: 'inserted', 'updated'.
-    """
+    """Insert or update a pending_reviews row for the CarDekho tool."""
     sb = _get_supabase()
     now_iso = datetime.now(timezone.utc).isoformat()
 
     if final_status == "pending":
-        # Look for existing pending CarDekho row
         existing = (
             sb.table("pending_reviews")
             .select("id")
@@ -671,7 +565,6 @@ def _upsert_cardekho_pending_review(
             }).eq("id", existing_id).execute()
             return (existing_id, "updated")
 
-    # Insert fresh row
     insert_row = {
         "review_type": CARDEKHO_REVIEW_TYPE,
         "make": make,
@@ -699,15 +592,25 @@ def _upsert_cardekho_pending_review(
 # ============================================================
 # QUICK-APPROVE WRITES TO car_prices SHEET
 # ============================================================
+#
+# v2: Wired to sheets_writer.write_price_update_v2() which is the actual
+# function exposed by sheets_writer.py v3.7.0. It:
+#   - Updates col E (ex_showroom_price) to new_price
+#   - Updates col G (notes) to "DD-MMM-YYYY CarDekho ..."
+#   - Updates col I (last_known_price_date) to today's date
+#
+# We pass source="CarDekho" so notes column distinguishes CarDekho-sourced
+# prices from CarWale scraper / manual entries.
+#
+# Quick Approve only ever processes status_key='match' rows, which means
+# the (make, model, variant, fuel) tuple exists in car_prices. So we use
+# write_price_update_v2, never write_new_variant.
+# ============================================================
 
 def _quick_approve_to_sheet(row: Dict, admin_email: str) -> Tuple[bool, str]:
     """
     Write a single approved row to car_prices Google Sheet via sheets_writer.
-
     Returns (ok, message).
-
-    NOTE: We import sheets_writer lazily so this module loads cleanly even
-    if sheets_writer hits a Google credentials problem at import time.
     """
     try:
         import sheets_writer
@@ -718,25 +621,45 @@ def _quick_approve_to_sheet(row: Dict, admin_email: str) -> Tuple[bool, str]:
     model = row["model"]
     fuel = row["fuel"]
     proposed_price = row["proposed_price"]
+    # For exact-match rows, matched_variant_name is the variant's name as it
+    # exists in car_prices (case-corrected). We use that to ensure write hits
+    # the exact existing row rather than creating a duplicate due to case mismatch.
     target_variant = row.get("matched_variant_name") or row["variant"]
 
-    # We expect sheets_writer to expose either an update_price() or
-    # a more general apply_pending_review() function. Try the common ones.
+    # Build extra note: include CarDekho's verbose variant name if it differs
+    # from our sheet's variant name, so audit trail is preserved.
+    extra_note_parts = []
+    cardekho_variant = row.get("variant", "")
+    if cardekho_variant and cardekho_variant.lower() != target_variant.lower():
+        extra_note_parts.append(f"CD:{cardekho_variant}")
+    extra_note_parts.append(f"by:{admin_email}")
+    extra_note = " ".join(extra_note_parts)
+
     try:
-        if hasattr(sheets_writer, "apply_price_update"):
-            sheets_writer.apply_price_update(
-                make=make, model=model, variant=target_variant,
-                fuel=fuel, new_price=proposed_price,
-            )
-        elif hasattr(sheets_writer, "update_price"):
-            sheets_writer.update_price(
-                make=make, model=model, variant=target_variant,
-                fuel=fuel, price=proposed_price,
-            )
-        else:
-            return (False, "sheets_writer has neither apply_price_update nor update_price")
+        # Coerce price to int — sheets_writer enforces int type strictly
+        price_int = int(proposed_price)
+    except (TypeError, ValueError):
+        return (False, f"proposed_price not coercible to int: {proposed_price!r}")
+
+    try:
+        result = sheets_writer.write_price_update_v2(
+            make=make,
+            model=model,
+            variant=target_variant,
+            fuel=fuel,
+            new_price=price_int,
+            source=CARDEKHO_SOURCE_TAG,
+            extra_note=extra_note,
+        )
+    except RuntimeError as e:
+        # sheets_writer raises RuntimeError on all its failure modes:
+        # row-not-found, API errors, 403, 404, 429, 500, etc.
+        return (False, f"sheets_writer.write_price_update_v2: {e}")
     except Exception as e:
-        return (False, f"sheets_writer write failed: {e}")
+        return (False, f"sheets_writer.write_price_update_v2 unexpected error: {type(e).__name__}: {e}")
+
+    if not (isinstance(result, dict) and result.get("ok")):
+        return (False, f"sheets_writer returned non-ok result: {result!r}")
 
     return (True, "ok")
 
@@ -789,7 +712,6 @@ def _handle_paste_extract_inner():
         )
         return redirect(url_for("admin_cardekho_paste"))
 
-    # 1) Parse via cardekho_parser
     parsed = parse_cardekho_paste(raw_text)
     if not parsed.get("ok"):
         flash(f"Parser error: {parsed.get('summary', 'unknown')}", "error")
@@ -803,7 +725,7 @@ def _handle_paste_extract_inner():
         )
         return redirect(url_for("admin_cardekho_paste"))
 
-    # 2) B-Refresh: force-reload car_data cache so comparison is fresh
+    # B-Refresh: force-reload car_data cache
     try:
         car_data.refresh_prices(force=True)
     except Exception as e:
@@ -814,14 +736,10 @@ def _handle_paste_extract_inner():
             "error",
         )
 
-    # 3) Build catalog index and classify rows
     catalog_index = _build_catalog_index()
     enriched_rows = _classify_rows(parsed["rows"], catalog_index)
-
-    # 4) Group by (make, model) for template rendering
     rows_by_model = _group_rows_by_model(enriched_rows)
 
-    # 5) Compute summary counts
     count_match = sum(1 for r in enriched_rows if r["status_key"] == STATUS_MATCH)
     count_fuzzy = sum(1 for r in enriched_rows if r["status_key"] == STATUS_FUZZY)
     count_new = sum(1 for r in enriched_rows if r["status_key"] == STATUS_NEW)
@@ -839,11 +757,10 @@ def _handle_paste_extract_inner():
         "count_orphan": count_orphan,
         "collapsed_models": collapsed_models,
         "warnings": parsed["warnings"],
-        "rows": enriched_rows,  # flat list — submit() picks by idx
+        "rows": enriched_rows,
         "rows_by_model": rows_by_model,
     }
 
-    # 6) Stash blob under a fresh token
     user = session.get("user") or {}
     user_email = user.get("email") or "unknown"
     try:
@@ -863,10 +780,7 @@ def _handle_paste_extract_inner():
 
 
 def _group_rows_by_model(enriched_rows: List[Dict]) -> List[Dict]:
-    """
-    Group enriched rows by (make, model) for the template's collapsible
-    model-section UI. Returns list of {key, make, model, counts, rows}.
-    """
+    """Group enriched rows by (make, model) for collapsible model-section UI."""
     groups: Dict[Tuple[str, str], Dict] = {}
     for row in enriched_rows:
         key = (row["make"], row["model"])
@@ -905,12 +819,7 @@ def _handle_submit():
 
 
 def _handle_submit_inner():
-    """
-    POST handler for /admin/price-tools/cardekho-paste/submit.
-
-    Reads preview_token, action_mode ('queue' | 'quick_approve_matches'),
-    and keep_idx list. Processes accordingly.
-    """
+    """POST handler for /admin/price-tools/cardekho-paste/submit."""
     token = request.form.get("preview_token", "").strip()
     action_mode = request.form.get("action_mode", "queue").strip()
     keep_idx_raw = request.form.getlist("keep_idx")
@@ -928,7 +837,6 @@ def _handle_submit_inner():
         )
         return redirect(url_for("admin_cardekho_paste"))
 
-    # Build set of selected indices
     keep_idx: set = set()
     for s in keep_idx_raw:
         try:
@@ -1008,9 +916,8 @@ def _do_quick_approve(
     Quick-approve: write 🟢 match rows directly to car_prices sheet AND record
     pending_reviews row with status='approved'.
 
-    Only rows with status_key='match' are processed. Others are skipped
-    (the UI should have already filtered to match-only before submit, but
-    we belt-and-suspenders here).
+    Only rows with status_key='match' are processed. Others are skipped.
+    Wired to sheets_writer.write_price_update_v2() via _quick_approve_to_sheet.
     """
     approved_count = 0
     skipped_non_match = 0
@@ -1048,7 +955,6 @@ def _do_quick_approve(
             pending_errors.append(
                 f"{row['make']} {row['model']} {row['variant']}: {e}"
             )
-            # Don't fail the overall approve — the sheet write already happened
 
         approved_count += 1
 
@@ -1092,14 +998,7 @@ def _map_status_to_scraper(status_key: str) -> str:
 # ============================================================
 
 def register_cardekho_routes(app):
-    """
-    Register CarDekho paste-extract routes on the given Flask app.
-
-    Called from app.py once at module import time:
-
-        from cardekho_route import register_cardekho_routes
-        register_cardekho_routes(app)
-    """
+    """Register CarDekho paste-extract routes on the given Flask app."""
 
     @app.route("/admin/price-tools/cardekho-paste", methods=["GET", "POST"], endpoint="admin_cardekho_paste")
     def admin_cardekho_paste():
