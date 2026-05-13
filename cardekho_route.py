@@ -323,7 +323,8 @@ def _classify_rows(parsed_rows: List[Dict], catalog_index: Dict) -> List[Dict]:
         variant = row["variant"]
         fuel = row["fuel"]
         proposed_price = row["price_inr"]
-
+        # Alias price_inr -> proposed_price so preview template finds it
+        row = {**row, "proposed_price": proposed_price}
         cardekho_full = f"{make} {model} {variant} ({fuel})"
 
         # 1) Is the (make, model) in our catalog at all?
