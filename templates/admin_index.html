@@ -420,6 +420,28 @@
         <div class="tool-arrow">Open →</div>
       </a>
 
+      <!-- Calibration Overview (v3.7.3 — NEW) -->
+      <a href="{{ url_for('admin_calibration_overview') }}" class="tool-card accent-usage">
+        <div class="tool-card-head">
+          <span class="tool-icon">📊</span>
+          {% if tool_counts.calibration_cells is defined and tool_counts.calibration_cells > 0 %}
+            <span class="tool-count">{{ tool_counts.calibration_cells }} cell{{ '' if tool_counts.calibration_cells == 1 else 's' }}</span>
+          {% else %}
+            <span class="tool-count">all cells</span>
+          {% endif %}
+        </div>
+        <h2 class="tool-name">Calibration Overview</h2>
+        <p class="tool-desc">All calibrated (make, model, fuel) cells in one table — sorted by drift, color-coded.</p>
+        <div class="tool-meta">
+          {% if tool_counts.calibration_clamped is defined and tool_counts.calibration_clamped > 0 %}
+            ⚠️ {{ tool_counts.calibration_clamped }} clamped to bounds
+          {% else %}
+            spot problem children fast
+          {% endif %}
+        </div>
+        <div class="tool-arrow">Open →</div>
+      </a>
+
       <!-- Calibration Diagnostic (Sprint 2.1) -->
       <a href="{{ url_for('admin_calibration_diagnostic') }}" class="tool-card accent-usage">
         <div class="tool-card-head">
