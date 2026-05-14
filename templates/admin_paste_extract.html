@@ -4,21 +4,16 @@
 {# ============================================================
    📁 File: admin_paste_extract.html
    📍 Location: templates/admin_paste_extract.html
-   ✏️ Status: EXISTING — full file replacement (v3.5.5.1)
+   ✏️ Status: EXISTING — full file replacement (v3.7.4)
 
-   v3.5.5.1 changes from v3.5.5:
-     - Match column tooltip now uses raw_title (full listing title) as
-       primary "CarWale wrote" content, NOT raw_variant (which is often
-       just a 2-3 char code like "N4" with no context).
-     - Adds a separate "Variant text extracted" line ONLY when raw_variant
-       differs from raw_title — gives admin full context to judge the match.
-     - Section labels use .match-tip-section-label CSS class for clearer
-       hierarchy in the tooltip.
-
-   Per delivery rules:
-     - Default UI rules locked (.btn-back grey, alphabetical dropdowns,
-       × dismissible flashes, Indian comma formatting via | inr filter)
-     - DD-MMM-YYYY date format, "(N Credits)" in brackets, etc.
+   v3.7.4 changes from v3.5.5.1:
+     - Inline .admin-nav-strip CSS removed (now lives in _admin_nav.html)
+     - Hard-coded nav <div> replaced with {% include '_admin_nav.html' %}
+     - Adds "📊 Calibration Overview" to the persistent tab bar
+     - Nothing else touched — all v3.5.5.1 spec preserved:
+       * Match column tooltip uses raw_title (not raw_variant)
+       * Flip-down tooltip behavior, .match-tip-section-label hierarchy
+       * Indian comma formatting, × dismissible flashes, DD-MMM-YYYY dates
    ============================================================ #}
 
 {% block extra_head %}
@@ -35,47 +30,15 @@
        - Flash alerts always have × dismiss
        - DD-MMM-YYYY date format
        - Indian comma formatting on big numbers via | inr filter
+
+     v3.7.4: Admin nav strip CSS removed — now lives in the reusable
+     partial templates/_admin_nav.html.
      ============================================================ */
 
   .admin-wrap {
     max-width: 1280px;
     margin: 0 auto;
     padding: 16px 24px 28px;
-  }
-
-  /* ─── Admin nav strip ──────────────────────────────────────── */
-  .admin-nav-strip {
-    background: #1a1d24;
-    border: 1px solid #2a2d34;
-    border-radius: 10px;
-    padding: 8px 12px;
-    margin-bottom: 14px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 8px;
-  }
-  .admin-nav-strip a {
-    color: #adb5bd;
-    text-decoration: none;
-    background: transparent;
-    border: 1px solid transparent;
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 0.84rem;
-    font-weight: 600;
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-  .admin-nav-strip a:hover {
-    color: #fff;
-    background: #14171d;
-    border-color: #2a2d34;
-  }
-  .admin-nav-strip a.active {
-    color: #fff;
-    background: rgba(40,167,69,0.16);
-    border-color: rgba(40,167,69,0.45);
   }
 
   /* ─── Back button ──────────────────────────────────────────── */
@@ -675,20 +638,12 @@
 {% block content %}
 <div class="admin-wrap">
 
-  <!-- ============================================================
-       ADMIN NAV STRIP
-       Mirrors admin_listing_calibration.html. The "Listing Calibration"
-       tab stays active here too since this is a sub-tool of it.
-       ============================================================ -->
-  <div class="admin-nav-strip">
-    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
-    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
-    <a href="{{ url_for('admin_multipliers') }}">📈 State Multipliers</a>
-    <a href="{{ url_for('admin_feedback') }}">💬 Feedback Calibration</a>
-    <a href="{{ url_for('admin_research') }}">🔬 Research</a>
-    <a href="{{ url_for('admin_listing_calibration') }}" class="active">🚛 Listing Calibration</a>
-    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
-  </div>
+  {# ============================================================
+     ADMIN NAV STRIP — v3.7.4
+     Persistent tab bar across all admin sub-pages.
+     Active tab auto-detected via request.endpoint inside the partial.
+     ============================================================ #}
+  {% include '_admin_nav.html' %}
 
   <a href="{{ url_for('admin_listing_calibration') }}" class="btn-back">← Back</a>
 
