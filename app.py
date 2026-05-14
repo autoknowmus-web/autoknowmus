@@ -2448,10 +2448,18 @@ def seller():
         return render_form(form_data, error='Invalid Make selected.')
     if form_data['model'] not in CAR_DATA[form_data['make']]:
         return render_form(form_data, error='Invalid Model selected.')
-    if form_data['variant'] not in CAR_DATA[form_data['make']][form_data['model']]['variants']:
-        return render_form(form_data, error='Invalid Variant selected.')
-    if form_data['fuel'] not in CAR_DATA[form_data['make']][form_data['model']]['fuels']:
-        return render_form(form_data, error='Selected Fuel is not available for this Model.')
+
+    # v3.7.1 Tier 1 Week 1: Combined variant+fuel validation.
+    # Replaces the old pattern of two independent checks that let through
+    # invalid combinations like Honda City + Hybrid + VX MT.
+    vf_error = _validate_variant_fuel(
+        make=form_data['make'],
+        model=form_data['model'],
+        variant=form_data['variant'],
+        fuel=form_data['fuel'],
+    )
+    if vf_error:
+        return render_form(form_data, error=vf_error)
 
     if not form_data['owner']:
         form_data['owner'] = '1st Owner'
