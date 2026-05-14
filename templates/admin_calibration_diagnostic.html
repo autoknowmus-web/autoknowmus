@@ -1,6 +1,29 @@
 {% extends "layout.html" %}
 {% block title %}Calibration Diagnostic — Admin — AutoKnowMus{% endblock %}
 
+{#
+   admin_calibration_diagnostic.html
+   📂 Path: templates/admin_calibration_diagnostic.html
+   ✏️ Status: EXISTING — full file replacement (v3.7.4)
+
+   v3.7.4 changes from Sprint 2.1 original:
+     - The .cd-crosslinks button row (3 buttons: Calibration Config / Research /
+       State Multipliers) is REMOVED. Replaced with {% include '_admin_nav.html' %}
+       so this page now uses the same persistent 8-tab nav as the other admin
+       sub-pages. The 3 crosslinks are redundant once the standard nav is on
+       every page — it already covers all 3 destinations.
+     - .cd-crosslinks CSS rules removed (no longer used).
+     - Active tab auto-detected from request.endpoint inside the partial.
+       admin_calibration_diagnostic lives under the "📊 Calibration Overview"
+       tab per the partial's grouping rules.
+   All other markup byte-identical: read-only diagnostic header, intro,
+   eligible-cell picker with Make→Model→Fuel cascade, all-cells quick-jump
+   pills, empty state, selected-cell header, 4-card summary row, multiplier
+   breakdown with raw/effective/haircut cells + clamp warning, "currently
+   saved" delta card, per-listing breakdown table with ratio pills + skipped
+   tags, full JS cascade block.
+#}
+
 {% block extra_head %}
 <style>
   /* ============================================================
@@ -38,28 +61,8 @@
   }
   .cd-meta { color: #adb5bd; font-size: 0.82rem; font-style: italic; }
 
-  /* Cross-link bar */
-  .cd-crosslinks {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-  }
-  .cd-crosslinks a {
-    background: #1a1d24;
-    color: #adb5bd;
-    border: 1px solid #2a2d34;
-    padding: 7px 14px;
-    border-radius: 7px;
-    font-size: 0.82rem;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.15s;
-  }
-  .cd-crosslinks a:hover {
-    border-color: #28a745;
-    color: #fff;
-  }
+  /* v3.7.4: .cd-crosslinks CSS removed — the 3-button crosslink row is replaced
+     by the standard 8-tab _admin_nav.html include. */
 
   /* Flash messages */
   .cd-flash {
@@ -544,6 +547,17 @@
 
   <a href="{{ url_for('admin_index') }}" class="btn-back">← Back</a>
 
+  {# ============================================================
+     ADMIN NAV STRIP — v3.7.4
+     Persistent tab bar across all admin sub-pages.
+     Replaces the previous .cd-crosslinks 3-button row (Calibration Config /
+     Research / State Multipliers) — the standard nav already covers those
+     destinations and adds 5 more. Active tab auto-detected via
+     request.endpoint inside the partial; this page lives under
+     "📊 Calibration Overview" per the partial's grouping.
+     ============================================================ #}
+  {% include '_admin_nav.html' %}
+
   <!-- Page header -->
   <div class="cd-header">
     <h1 class="cd-title">
@@ -552,13 +566,6 @@
       <span class="cd-readonly">Read-only</span>
     </h1>
     <div class="cd-meta">Generated {{ now_display }}</div>
-  </div>
-
-  <!-- Cross-links -->
-  <div class="cd-crosslinks">
-    <a href="{{ url_for('admin_calibration_config') }}">⚙️ Calibration Config &amp; Run</a>
-    <a href="{{ url_for('admin_research') }}">📋 Research Log</a>
-    <a href="{{ url_for('admin_multipliers') }}">🗺️ State Multipliers</a>
   </div>
 
   <!-- Flash messages -->
