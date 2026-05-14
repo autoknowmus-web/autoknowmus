@@ -7,7 +7,7 @@ DATA SOURCE: Google Sheets (published as CSV) with full bundled fallback.
 
 How it works:
   1. On first use (and every PRICE_CACHE_TTL_SECONDS), fetches 5 sources:
-     - car_prices: make/model/variant/fuel/ex_showroom_price/status/last_known_price_date rows
+     - car_prices: make/model/variant/fuel/ex_showroom_price/status/last_known_price_date/year_introduced/year_discontinued rows
      - depreciation_curve: age → retention % rows
      - multipliers: condition/owner/fuel multiplier rows
      - meta: data_version, last_updated, etc.
@@ -27,39 +27,34 @@ Environment variables required:
 Optional:
   PRICE_CACHE_TTL_SECONDS (default 3600 = 1 hour)
 
-CHANGES IN THIS VERSION (Phase 3 admin price tools, v3.7.0):
-  - PARSER ADDS: _parse_car_prices() now reads two new columns from car_prices:
-      H: status                  (empty = active, "discontinued" = flagged)
-      I: last_known_price_date   (DD-MMM-YYYY format string)
-    These populate two new nested dicts on each (make, model):
-      variant_fuel_status: {variant: {fuel: "active"|"discontinued"}}
-      variant_fuel_dates:  {variant: {fuel: "DD-MMM-YYYY"|None}}
-  - DISCONTINUED VARIANTS STAY IN DROPDOWNS: a row with status="discontinued"
-    is still parsed and available. Valuations still compute using the last
-    known price. The dashboard reads the status via get_variant_status() and
-    shows a badge if discontinued. This preserves valuations for the long
-    tail of older cars (e.g. 2018 Tata Nexon XM) whose owners still need
-    pricing even though Tata stopped making the trim.
-  - NEW PUBLIC FUNCTIONS:
-      get_variant_status(make, model, variant, fuel)
-        → returns dict {"is_discontinued": bool, "last_known_price_date": str|None}
-        → safe to call for any tuple — returns is_discontinued=False if not found
-      find_missing_prices()
-        → returns list of (make, model, variant, fuel) tuples where
-          ex_showroom_price is missing, zero, or unparseable
-        → used by admin Price Tools "Find Missing" tab
-  - _merge_with_fallback() carries variant_fuel_status and variant_fuel_dates
-    through the merge. Fallback never has these (it's hardcoded).
+CHANGES IN THIS VERSION (Tier 1 Week 1 — year-variant filter, v3.7.1):
+  - PARSER ADDS: _parse_car_prices() now reads two more columns from car_prices:
+      J: year_introduced     (int year or empty)
+      K: year_discontinued   (int year or empty)
+    These populate a new nested dict on each (make, model):
+      variant_fuel_years: {variant: {fuel: {"introduced": int|None, "discontinued": int|None}}}
+  - NEW PUBLIC FUNCTION:
+      get_variant_years(make, model, variant, fuel)
+        → returns dict {"year_introduced": int|None, "year_discontinued": int|None}
+        → safe to call for any tuple — returns both None if not found
+      Used by the Phase B template JS via car_data_json serialization and by
+      any backend code that wants to filter variants by year.
+  - _merge_with_fallback() carries variant_fuel_years through the merge.
+    Fallback never has these (it's hardcoded).
+  - This supports Option 1.5 in the seller/buyer/submit_deal templates:
+    JS filters variants where selected_year < year_introduced when data
+    exists; shows an amber chip when data is missing.
+
+PRIOR CHANGES (Phase 3 admin price tools, v3.7.0, retained):
+  - variant_fuel_status: {variant: {fuel: "active"|"discontinued"}}
+  - variant_fuel_dates:  {variant: {fuel: "DD-MMM-YYYY"|None}}
+  - get_variant_status(), find_missing_prices()
 
 PRIOR CHANGES (per-fuel pricing fix, v3.6.0, retained):
-  - PARSER FIX: _parse_car_prices() stores per-(variant, fuel) prices in a
-    nested dict variant_fuel_prices alongside the flat variants dict.
-  - get_variant_base_price() uses variant_fuel_prices when fuel is provided
-    AND a per-fuel price exists, otherwise falls through to the flat lookup.
-  - _merge_with_fallback() carries variant_fuel_prices through the merge.
+  - variant_fuel_prices: {variant: {fuel: price}}
+  - get_variant_base_price() accepts optional `fuel` param
 
 PRIOR CHANGES (Phase 1A migration, retained):
-  - get_variant_base_price() accepts optional `fuel` parameter
   - get_base_price() returns the lowest-priced variant deterministically
   - listings cache layer for the 740Li pricing engine
   - get_listings_for_car() helper that the engine consumes
@@ -457,19 +452,50 @@ def _fetch_csv(url: str) -> List[Dict[str, str]]:
     return [row for row in reader]
 
 
+def _parse_year_cell(raw) -> Optional[int]:
+    """
+    Parse a year value from a sheet cell. Accepts:
+      - int (e.g. 2017)
+      - str with leading/trailing whitespace
+      - str like "2017", "2017.0"
+      - empty string / None / whitespace-only → returns None
+      - any value that doesn't parse to a 4-digit year in [1990, current+1] → None
+
+    The +1 on the upper bound covers cases where a sheet entry says
+    "2027" for a model launching next year.
+    """
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    try:
+        # Handle "2017.0" style values from spreadsheets that auto-format ints
+        y = int(float(s))
+    except (ValueError, TypeError):
+        return None
+    if y < 1990 or y > CURRENT_YEAR + 1:
+        return None
+    return y
+
+
 def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
     """
     Parse car_prices tab into nested CAR_DATA.
 
     Columns: make, model, variant, fuel, ex_showroom_price, active, notes,
-             status, last_known_price_date  (last 2 added in v3.7.0)
+             status, last_known_price_date,
+             year_introduced, year_discontinued    (last 2 added in v3.7.1)
 
     Output structure per (make, model):
       {
         "variants":              {variant: price}                         # FIRST-seen-fuel price per variant
         "variant_fuel_prices":   {variant: {fuel: price}}                 # full per-(variant, fuel) prices
-        "variant_fuel_status":   {variant: {fuel: "active"|"discontinued"}}  # NEW: discontinued flag
-        "variant_fuel_dates":    {variant: {fuel: "DD-MMM-YYYY"|None}}    # NEW: last known price date
+        "variant_fuel_status":   {variant: {fuel: "active"|"discontinued"}}
+        "variant_fuel_dates":    {variant: {fuel: "DD-MMM-YYYY"|None}}
+        "variant_fuel_years":    {variant: {fuel: {"introduced": int|None,
+                                                   "discontinued": int|None}}}
+                                                                          # NEW v3.7.1
         "fuels":                 [fuel, fuel, ...]                        # canonical-ordered fuel list
       }
 
@@ -477,6 +503,11 @@ def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
     in the dropdowns. Their price stays available so existing owners can
     still get valuations. The dashboard reads variant_fuel_status to decide
     whether to show the "Discontinued · last verified DATE" badge.
+
+    Year columns (J, K) are read into variant_fuel_years. Empty cells
+    parse to None. Bad values (text, out-of-range numbers) also parse to
+    None — the row's pricing data is still kept; only the year info is
+    treated as "unknown" for that row.
     """
     data = {}
     for row in rows:
@@ -495,11 +526,15 @@ def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
         except ValueError:
             continue
 
-        # NEW v3.7.0: read status and last_known_price_date columns.
-        # Empty/missing/anything-other-than-"discontinued" -> "active".
+        # v3.7.0: status and last_known_price_date columns.
         status_raw = str(row.get("status", "")).strip().lower()
         variant_status = "discontinued" if status_raw == "discontinued" else "active"
         last_known_date = str(row.get("last_known_price_date", "")).strip() or None
+
+        # NEW v3.7.1: year_introduced and year_discontinued columns.
+        # Both are optional. Empty / bad → None (treated as "unknown").
+        year_introduced = _parse_year_cell(row.get("year_introduced"))
+        year_discontinued = _parse_year_cell(row.get("year_discontinued"))
 
         if make not in data:
             data[make] = {}
@@ -507,8 +542,9 @@ def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
             data[make][model] = {
                 "variants": {},
                 "variant_fuel_prices": {},
-                "variant_fuel_status": {},   # NEW
-                "variant_fuel_dates": {},    # NEW
+                "variant_fuel_status": {},
+                "variant_fuel_dates": {},
+                "variant_fuel_years": {},   # NEW v3.7.1
                 "fuels": [],
             }
         # Flat dict — keeps the FIRST-seen-fuel price for backward compat.
@@ -521,9 +557,18 @@ def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
             data[make][model]["variant_fuel_status"][variant] = {}
         if variant not in data[make][model]["variant_fuel_dates"]:
             data[make][model]["variant_fuel_dates"][variant] = {}
+        if variant not in data[make][model]["variant_fuel_years"]:
+            data[make][model]["variant_fuel_years"][variant] = {}
         data[make][model]["variant_fuel_prices"][variant][fuel] = price
         data[make][model]["variant_fuel_status"][variant][fuel] = variant_status
         data[make][model]["variant_fuel_dates"][variant][fuel] = last_known_date
+        # NEW v3.7.1: store year info as a nested dict so consumers
+        # don't have to track two parallel maps. Both keys are always
+        # present; values are int or None.
+        data[make][model]["variant_fuel_years"][variant][fuel] = {
+            "introduced":   year_introduced,
+            "discontinued": year_discontinued,
+        }
         # Fuel list — unchanged.
         if fuel not in data[make][model]["fuels"]:
             data[make][model]["fuels"].append(fuel)
@@ -659,13 +704,15 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
     NOTE: The fallback dict uses the OLD shape (no per-fuel data).
     This merge function:
       - Always initializes variant_fuel_prices, variant_fuel_status,
-        variant_fuel_dates as empty dicts for every fallback entry, so
-        downstream lookups never KeyError on the new fields.
+        variant_fuel_dates, variant_fuel_years as empty dicts for every
+        fallback entry, so downstream lookups never KeyError on the new
+        fields.
       - Copies sheet-side per-fuel data over the empty placeholders
         when the sheet provides data for that (make, model).
       - Leaves the per-fuel dicts empty for fallback-only entries —
         get_variant_status() returns is_discontinued=False in that case,
-        which is the correct default.
+        get_variant_years() returns both None, which are the correct
+        defaults.
     """
     merged = {}
     for make, models in fallback_data.items():
@@ -674,8 +721,9 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
             merged[make][model] = {
                 "variants": dict(data["variants"]),
                 "variant_fuel_prices": {},
-                "variant_fuel_status": {},   # NEW
-                "variant_fuel_dates": {},    # NEW
+                "variant_fuel_status": {},
+                "variant_fuel_dates": {},
+                "variant_fuel_years": {},   # NEW v3.7.1
                 "fuels": list(data["fuels"]),
             }
     for make, models in sheet_data.items():
@@ -688,6 +736,7 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
                     "variant_fuel_prices": {},
                     "variant_fuel_status": {},
                     "variant_fuel_dates": {},
+                    "variant_fuel_years": {},
                     "fuels": [],
                 }
             # Flat variants — sheet wins per-variant.
@@ -700,20 +749,28 @@ def _merge_with_fallback(sheet_data: Dict, fallback_data: Dict) -> Dict:
                     merged[make][model]["variant_fuel_prices"][variant] = {}
                 for fuel, price in fuel_map.items():
                     merged[make][model]["variant_fuel_prices"][variant][fuel] = price
-            # NEW: Per-fuel status — sheet wins.
+            # Per-fuel status — sheet wins.
             sheet_vs = data.get("variant_fuel_status", {})
             for variant, fuel_map in sheet_vs.items():
                 if variant not in merged[make][model]["variant_fuel_status"]:
                     merged[make][model]["variant_fuel_status"][variant] = {}
                 for fuel, st in fuel_map.items():
                     merged[make][model]["variant_fuel_status"][variant][fuel] = st
-            # NEW: Per-fuel last_known_price_date — sheet wins.
+            # Per-fuel last_known_price_date — sheet wins.
             sheet_vd = data.get("variant_fuel_dates", {})
             for variant, fuel_map in sheet_vd.items():
                 if variant not in merged[make][model]["variant_fuel_dates"]:
                     merged[make][model]["variant_fuel_dates"][variant] = {}
                 for fuel, dt in fuel_map.items():
                     merged[make][model]["variant_fuel_dates"][variant][fuel] = dt
+            # NEW v3.7.1: Per-fuel years — sheet wins.
+            sheet_vy = data.get("variant_fuel_years", {})
+            for variant, fuel_map in sheet_vy.items():
+                if variant not in merged[make][model]["variant_fuel_years"]:
+                    merged[make][model]["variant_fuel_years"][variant] = {}
+                for fuel, yrs in fuel_map.items():
+                    # yrs is a dict {"introduced": int|None, "discontinued": int|None}
+                    merged[make][model]["variant_fuel_years"][variant][fuel] = yrs
             # Fuel list — union with canonical sort.
             fuel_set = set(merged[make][model]["fuels"]) | set(data["fuels"])
             fuel_order = ["Petrol", "Diesel", "CNG", "HEV", "PHEV", "BEV"]
@@ -806,6 +863,8 @@ def _refresh_cache(force: bool = False) -> Dict:
         # Diagnostics
         fuel_distinct_prices = 0
         discontinued_count = 0
+        year_introduced_count = 0   # NEW v3.7.1
+        year_discontinued_count = 0  # NEW v3.7.1
         for m in _cache["car_data"].values():
             for d in m.values():
                 for v_map in d.get("variant_fuel_prices", {}).values():
@@ -814,6 +873,12 @@ def _refresh_cache(force: bool = False) -> Dict:
                     for st in v_map.values():
                         if st == "discontinued":
                             discontinued_count += 1
+                for v_map in d.get("variant_fuel_years", {}).values():
+                    for yrs in v_map.values():
+                        if yrs.get("introduced") is not None:
+                            year_introduced_count += 1
+                        if yrs.get("discontinued") is not None:
+                            year_discontinued_count += 1
 
         return {
             "status": "refreshed" if not errors else "partial_error",
@@ -827,7 +892,9 @@ def _refresh_cache(force: bool = False) -> Dict:
                 for d in m.values()
             ),
             "fuel_distinct_prices": fuel_distinct_prices,
-            "discontinued_count": discontinued_count,  # NEW v3.7.0
+            "discontinued_count": discontinued_count,
+            "year_introduced_count": year_introduced_count,    # NEW v3.7.1
+            "year_discontinued_count": year_discontinued_count,  # NEW v3.7.1
             "data_version": _cache["meta"].get("data_version", "?"),
             "sheet_overrides": sum(
                 len(d["variants"])
@@ -865,6 +932,7 @@ def get_cache_status() -> Dict:
     _ensure_loaded()
     fuel_distinct_prices = 0
     discontinued_count = 0
+    year_introduced_count = 0   # NEW v3.7.1
     for m in _cache["car_data"].values():
         for d in m.values():
             for v_map in d.get("variant_fuel_prices", {}).values():
@@ -873,6 +941,10 @@ def get_cache_status() -> Dict:
                 for st in v_map.values():
                     if st == "discontinued":
                         discontinued_count += 1
+            for v_map in d.get("variant_fuel_years", {}).values():
+                for yrs in v_map.values():
+                    if yrs.get("introduced") is not None:
+                        year_introduced_count += 1
     return {
         "source": _cache["source"],
         "last_fetch_age_seconds": int(time.time() - _cache["last_fetch"]),
@@ -880,7 +952,8 @@ def get_cache_status() -> Dict:
         "cache_ttl": PRICE_CACHE_TTL_SECONDS,
         "makes": len(_cache["car_data"]),
         "fuel_distinct_prices": fuel_distinct_prices,
-        "discontinued_count": discontinued_count,  # NEW v3.7.0
+        "discontinued_count": discontinued_count,
+        "year_introduced_count": year_introduced_count,  # NEW v3.7.1
         "data_version": _cache["meta"].get("data_version", "?"),
         "last_updated": _cache["meta"].get("last_updated", "?"),
         "listings_count": len(_cache["listings"]) if _cache["listings"] else 0,
@@ -940,18 +1013,8 @@ def get_variant_base_price(make: str, model: str, variant: str,
 def get_variant_status(make: str, model: str, variant: str,
                        fuel: Optional[str] = None) -> Dict:
     """
-    NEW v3.7.0. Returns the discontinued status and last-verified date for
-    a specific (make, model, variant, fuel) tuple.
-
-    Returns:
-      {
-        "is_discontinued":        bool,           # True if status="discontinued" in sheet
-        "last_known_price_date":  str | None,     # "DD-MMM-YYYY" or None if no date set
-      }
-
-    Safe to call for any tuple — returns is_discontinued=False with date=None
-    when the tuple isn't found in the sheet (e.g. fallback-only data).
-    The dashboard renders the discontinued badge ONLY when is_discontinued=True.
+    Returns the discontinued status and last-verified date for a specific
+    (make, model, variant, fuel) tuple. (v3.7.0 — unchanged.)
     """
     _ensure_loaded()
     default = {"is_discontinued": False, "last_known_price_date": None}
@@ -960,9 +1023,6 @@ def get_variant_status(make: str, model: str, variant: str,
     except KeyError:
         return default
 
-    # If fuel not provided, check ANY fuel for this variant — if any are
-    # discontinued, the variant is treated as discontinued. Use the date
-    # from the first discontinued fuel found.
     vfs = model_data.get("variant_fuel_status", {})
     vfd = model_data.get("variant_fuel_dates", {})
     variant_status_map = vfs.get(variant, {})
@@ -977,7 +1037,6 @@ def get_variant_status(make: str, model: str, variant: str,
             }
         return default
 
-    # No specific fuel — check all fuels for this variant
     for f, st in variant_status_map.items():
         if st == "discontinued":
             return {
@@ -987,19 +1046,66 @@ def get_variant_status(make: str, model: str, variant: str,
     return default
 
 
-def find_missing_prices() -> List[Dict[str, str]]:
+def get_variant_years(make: str, model: str, variant: str,
+                      fuel: Optional[str] = None) -> Dict:
     """
-    NEW v3.7.0. Returns list of (make, model, variant, fuel) tuples in the
-    sheet whose ex_showroom_price is missing, zero, or unparseable.
-
-    Used by the admin Price Tools "Find Missing" tab to surface holes in
-    the catalog that need price-scraping attention.
+    NEW v3.7.1. Returns the introduction and discontinuation years for a
+    specific (make, model, variant, fuel) tuple.
 
     Returns:
-      [
-        {"make": "...", "model": "...", "variant": "...", "fuel": "..."},
-        ...
-      ]
+      {
+        "year_introduced":   int | None,    # year the variant launched (J column)
+        "year_discontinued": int | None,    # year the variant was retired (K column)
+      }
+
+    Both None means "no year data on this row" — the UI shows the amber
+    chip in that case. year_introduced set + year_discontinued None means
+    "still in production". Both set means "introduced YEAR_I, retired YEAR_D".
+
+    Safe to call for any tuple — returns both None if the tuple isn't found
+    in the sheet (e.g. fallback-only data).
+
+    Behavior:
+      - fuel provided: returns the exact (variant, fuel) row's years
+      - fuel omitted: returns the FIRST fuel's years for this variant
+        (heuristic: most variants have the same launch year across all
+        their fuels, so this is good enough for UI filtering)
+    """
+    _ensure_loaded()
+    default = {"year_introduced": None, "year_discontinued": None}
+    try:
+        model_data = _cache["car_data"][make][model]
+    except KeyError:
+        return default
+
+    vfy = model_data.get("variant_fuel_years", {})
+    variant_years_map = vfy.get(variant, {})
+
+    if not variant_years_map:
+        return default
+
+    if fuel:
+        yrs = variant_years_map.get(fuel)
+        if yrs is None:
+            return default
+        return {
+            "year_introduced":   yrs.get("introduced"),
+            "year_discontinued": yrs.get("discontinued"),
+        }
+
+    # No specific fuel — return the first fuel's data
+    for f, yrs in variant_years_map.items():
+        return {
+            "year_introduced":   yrs.get("introduced"),
+            "year_discontinued": yrs.get("discontinued"),
+        }
+    return default
+
+
+def find_missing_prices() -> List[Dict[str, str]]:
+    """
+    Returns list of (make, model, variant, fuel) tuples in the sheet whose
+    ex_showroom_price is missing, zero, or unparseable. (v3.7.0 — unchanged.)
     """
     _ensure_loaded()
     out = []
@@ -1351,8 +1457,17 @@ try:
         for st in v_map.values()
         if st == "discontinued"
     )
+    _yr_intro_count = sum(
+        1
+        for m in _cache["car_data"].values()
+        for d in m.values()
+        for v_map in d.get("variant_fuel_years", {}).values()
+        for yrs in v_map.values()
+        if yrs.get("introduced") is not None
+    )
     print(f"[car_data] Loaded {_n} makes. Source: {_src}. "
           f"Per-fuel prices: {_vfp_count}. Discontinued: {_disc_count}. "
+          f"Year-introduced populated: {_yr_intro_count}. "
           f"Listings: {_ln} ({_lsrc}).")
 except Exception as _e:
     print(f"[car_data] Startup load failed: {_e}. Will retry on first request. "
