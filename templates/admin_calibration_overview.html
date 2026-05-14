@@ -192,6 +192,14 @@
 
 {% block content %}
 <div class="calib-wrap">
+
+  {# ============================================================
+     ADMIN NAV STRIP — v3.7.4
+     Persistent tab bar across all admin sub-pages.
+     Active tab auto-detected via request.endpoint inside the partial.
+     ============================================================ #}
+  {% include '_admin_nav.html' %}
+
   <a href="{{ url_for('admin_index') }}" class="btn-back">← Back</a>
 
   <div class="calib-header" style="margin-top: 12px;">
