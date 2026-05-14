@@ -1,6 +1,23 @@
 {% extends "layout.html" %}
 {% block title %}Admin · Feedback Calibration — AutoKnowMus{% endblock %}
 
+{#
+   admin_feedback.html
+   📂 Path: templates/admin_feedback.html
+   ✏️ Status: EXISTING — full file replacement (v3.7.4)
+
+   v3.7.4 changes from v3.5.1-r2:
+     - Inline .admin-nav-strip CSS removed (now lives in _admin_nav.html)
+     - Hard-coded nav <div> replaced with {% include '_admin_nav.html' %}
+     - Active tab now auto-detected from request.endpoint inside the partial.
+     - Visible change: 6-tab orange-active strip → 8-tab green-active strip
+       (adds 🚛 Listing Calibration + 📊 Calibration Overview tabs).
+   All other markup byte-identical: 4-card stats strip, helper strip,
+   aggregate Brand × State × Model table with is-flagged red rows (N≥5 AND
+   wayoff%≥40%), recent feedback table with reaction pills + gap colouring,
+   mobile-collapse responsive layout.
+#}
+
 {% block extra_head %}
 <style>
   /* ============================================================
@@ -45,34 +62,8 @@
   }
   .btn-back:hover { background: #5a6168; }
 
-  /* === Admin nav strip — switch between admin pages.
-         Same style as admin_data_health.html / admin_user_activity.html. === */
-  .admin-nav-strip {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-  }
-  .admin-nav-strip a {
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    text-decoration: none;
-    color: #8b92a5;
-    background: #1a1d24;
-    border: 1px solid #2a2f3a;
-    transition: all 0.15s;
-  }
-  .admin-nav-strip a:hover {
-    color: #e4e6eb;
-    border-color: #3a3f4a;
-  }
-  .admin-nav-strip a.active {
-    color: #ffa500;
-    border-color: rgba(255,165,0,0.4);
-    background: rgba(255,165,0,0.08);
-  }
+  /* v3.7.4: Inline .admin-nav-strip CSS removed — now lives in the reusable
+     partial templates/_admin_nav.html (green-active style, 8 tabs). */
 
   .flash-success-admin {
     background: #28a745; color: #fff; border-radius: 8px;
@@ -296,15 +287,12 @@
 
   <a href="{{ url_for('admin_index') }}" class="btn-back">← Back</a>
 
-  <!-- Admin nav strip — switch between admin pages -->
-  <div class="admin-nav-strip">
-    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
-    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
-    <a href="{{ url_for('admin_multipliers') }}">📐 State Multipliers</a>
-    <a href="{{ url_for('admin_feedback') }}" class="active">💬 Feedback Calibration</a>
-    <a href="{{ url_for('admin_research') }}">🔬 Research</a>
-    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
-  </div>
+  {# ============================================================
+     ADMIN NAV STRIP — v3.7.4
+     Persistent tab bar across all admin sub-pages.
+     Active tab auto-detected via request.endpoint inside the partial.
+     ============================================================ #}
+  {% include '_admin_nav.html' %}
 
   <div class="admin-header">
     <h2 class="admin-title">
