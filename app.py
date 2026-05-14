@@ -6079,6 +6079,137 @@ def admin_calibration_run_now():
 
 
 # ============================================================
+# v3.7.3: ADMIN — CALIBRATION OVERVIEW (all calibrated cells)
+# Read-only table view of every (make, model, fuel) cell that has
+# a calibration_multiplier in model_calibration. Sorted by multiplier
+# desc so problem children (high drift, clamped) surface at the top.
+# Each row links to the per-cell diagnostic for deep-dive.
+# ============================================================
+
+@app.route('/admin/calibration-overview', methods=['GET'])
+@login_required
+@admin_required
+def admin_calibration_overview():
+    """
+    All calibrated cells in one sortable, filterable table.
+    Pulls every row from model_calibration, decorates with drift band
+    (color), phase pill, clamp flag, and search key.
+    """
+    admin = current_user()
+
+    # Resolve current clamp bounds so we can flag clamped cells in the UI.
+    # These constants live in calibration_engine.py.
+    try:
+        from calibration_engine import MULTIPLIER_MIN, MULTIPLIER_MAX
+    except ImportError:
+        MULTIPLIER_MIN, MULTIPLIER_MAX = 0.50, 1.50
+
+    try:
+        r = (supabase.table('model_calibration')
+             .select('*')
+             .order('calibration_multiplier', desc=True)
+             .execute())
+        raw_rows = r.data or []
+    except Exception as e:
+        app.logger.error(f"admin_calibration_overview fetch failed: {e}")
+        flash(f"Could not load calibration table: {e}", 'error')
+        raw_rows = []
+
+    # Decorate each row
+    rows = []
+    distinct_makes_set = set()
+    distinct_fuels_set = set()
+
+    well_calibrated = 0   # |pct| <= 5
+    moderate_drift  = 0   # 5 < |pct| <= 20
+    severe_drift    = 0   # |pct| > 20
+    clamped_count   = 0
+
+    for r_row in raw_rows:
+        mult = float(r_row.get('calibration_multiplier') or 1.0)
+        pct_above = (mult - 1.0) * 100.0
+        abs_pct = abs(pct_above)
+
+        # Drift band — controls color
+        if abs_pct <= 5.0:
+            drift_band = 'good'
+            well_calibrated += 1
+        elif abs_pct <= 10.0:
+            drift_band = 'mild'
+            moderate_drift += 1
+        elif abs_pct <= 20.0:
+            drift_band = 'warn'
+            moderate_drift += 1
+        elif abs_pct <= 40.0:
+            drift_band = 'bad'
+            severe_drift += 1
+        else:
+            drift_band = 'severe'
+            severe_drift += 1
+
+        # Clamped check: multiplier sitting at exactly the boundary
+        # within a small epsilon (NUMERIC(5,4) precision in Postgres)
+        EPS = 0.0005
+        is_clamped = (
+            abs(mult - MULTIPLIER_MIN) < EPS or
+            abs(mult - MULTIPLIER_MAX) < EPS
+        )
+        if is_clamped:
+            clamped_count += 1
+
+        make = r_row.get('make') or ''
+        model = r_row.get('model') or ''
+        fuel = r_row.get('fuel') or ''
+        distinct_makes_set.add(make)
+        distinct_fuels_set.add(fuel)
+
+        # Format last_run_at for display
+        last_run_str = r_row.get('last_run_at') or ''
+        last_run_display = '—'
+        if last_run_str:
+            try:
+                clean = last_run_str.replace('Z', '+00:00')
+                dt = datetime.fromisoformat(clean)
+                last_run_display = dt.strftime('%d-%b-%Y %H:%M')
+            except (ValueError, TypeError):
+                last_run_display = last_run_str[:16]
+
+        rows.append({
+            'make': make,
+            'model': model,
+            'fuel': fuel,
+            'calibration_multiplier': mult,
+            'pct_above_formula': pct_above,
+            'sample_count': r_row.get('sample_count') or 0,
+            'phase': r_row.get('phase') or 1,
+            'median_listing_price': r_row.get('median_listing_price') or 0,
+            'median_formula_price': r_row.get('median_formula_price') or 0,
+            'drift_band': drift_band,
+            'clamped': is_clamped,
+            'clamp_min': MULTIPLIER_MIN,
+            'clamp_max': MULTIPLIER_MAX,
+            'last_run_display': last_run_display,
+            # Lowercase search key for free-text filter (make + model + fuel)
+            'search_key': f"{make} {model} {fuel}".lower(),
+        })
+
+    return render_template(
+        'admin_calibration_overview.html',
+        user=admin,
+        first_name=firstname_filter(admin.get('name')),
+        rows=rows,
+        total_cells=len(rows),
+        well_calibrated=well_calibrated,
+        moderate_drift=moderate_drift,
+        severe_drift=severe_drift,
+        clamped_count=clamped_count,
+        distinct_makes=sorted(distinct_makes_set),
+        distinct_fuels=sorted(distinct_fuels_set),
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
+
+
+# ============================================================
 # Sprint 2.1: ADMIN — CALIBRATION DIAGNOSTIC (read-only preview)
 # ============================================================
 #
