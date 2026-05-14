@@ -2,6 +2,38 @@
 
 {% block title %}Admin Panel — AutoKnowMus{% endblock %}
 
+{#
+   admin_index.html
+   📂 Path: templates/admin_index.html
+   ✏️ Status: EXISTING — full file replacement (v3.7.5)
+
+   v3.7.5 changes:
+     - Added "Listing Calibration" tile as the LEFTMOST card in the
+       U — Usage section (data-entry entry point for the calibration
+       pipeline: paste extractor → research_log → calibration).
+     - New tile uses accent-usage (green) border, matching the rest of
+       the U/Usage section.
+     - Badge is wired to tool_counts.listings_uncalibrated:
+         > 0  → "{n} ready to calibrate" (orange has-pending)
+         = 0  → "all calibrated" (green is-zero)
+       Meta line shows listings_180d + listings_new_7d as context:
+         "554 in 180d · +12 new this week"
+     - REQUIRES app.py changes — three new keys must be added to
+       tool_counts in the admin_index route:
+         listings_uncalibrated  (int)
+         listings_180d          (int)
+         listings_new_7d        (int)
+       Until those are wired, the badge falls through to "all calibrated"
+       and the meta line shows "0 in 180d · +0 new this week".
+
+   All other markup byte-identical: AUTOM section headers (A/U/T/O/M)
+   + Operational section, Price Tools card under A, Research Log +
+   Calibration Config + Calibration Overview + Calibration Diagnostic
+   cards under U (now joined by Listing Calibration as #1), State
+   Multipliers under T, Feedback under O, Coming-Soon placeholder under
+   M, Data Health + User Activity under Operational.
+#}
+
 {% block content %}
 <style>
   .admin-wrap {
@@ -371,6 +403,9 @@
      U — USAGE (Green)
      Used-listing per-cell calibration. Data source: research_log
      table → model_calibration multipliers.
+     v3.7.5: Listing Calibration tile added as the LEFTMOST card —
+     it's the data-entry entry point of the U/Usage pipeline
+     (paste extractor → research_log → calibration multipliers).
      ============================================================ #}
   <div class="autom-section autom-u">
     <div class="autom-section-header">
@@ -381,6 +416,37 @@
       <span class="autom-desc">Used-market listings calibrate per-model multipliers on top of the anchor.</span>
     </div>
     <div class="tools-grid">
+
+      {# v3.7.5 — Listing Calibration (leftmost in U/Usage)
+         Entry point of the calibration data pipeline. Paste extractor
+         lands listings in research_log, which then feed the calibration
+         engine. Counts wired to tool_counts:
+           - listings_uncalibrated → badge (most actionable)
+           - listings_180d         → meta context
+           - listings_new_7d       → meta context
+         Until these are added to tool_counts in app.py, the badge
+         falls through to "all calibrated" and meta shows zeros. #}
+      <a href="{{ url_for('admin_listing_calibration') }}" class="tool-card accent-usage">
+        <div class="tool-card-head">
+          <span class="tool-icon">📋</span>
+          {% if tool_counts.listings_uncalibrated is defined and tool_counts.listings_uncalibrated > 0 %}
+            <span class="tool-count has-pending">{{ tool_counts.listings_uncalibrated }} ready to calibrate</span>
+          {% else %}
+            <span class="tool-count is-zero">all calibrated</span>
+          {% endif %}
+        </div>
+        <h2 class="tool-name">Listing Calibration</h2>
+        <p class="tool-desc">Paste &amp; extract used-listings from CarWale/OLX into research_log; feeds calibration engine.</p>
+        <div class="tool-meta">
+          {{ tool_counts.listings_180d | default(0) }} in 180d
+          {% if (tool_counts.listings_new_7d | default(0)) > 0 %}
+            · +{{ tool_counts.listings_new_7d }} new this week
+          {% else %}
+            · no new this week
+          {% endif %}
+        </div>
+        <div class="tool-arrow">Open →</div>
+      </a>
 
       <!-- Research Log -->
       <a href="{{ url_for('admin_research') }}" class="tool-card accent-usage">
