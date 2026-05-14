@@ -13,48 +13,15 @@
        - Flash alerts always have × dismiss
        - DD-MMM-YYYY date format
        - Indian comma formatting on big numbers
+
+     v3.7.4: Admin nav strip CSS removed from here — now lives in the
+     reusable partial templates/_admin_nav.html.
      ============================================================ */
 
   .admin-wrap {
     max-width: 1280px;
     margin: 0 auto;
     padding: 16px 24px 28px;
-  }
-
-  /* ─── Admin nav strip ──────────────────────────────────────── */
-  .admin-nav-strip {
-    background: #1a1d24;
-    border: 1px solid #2a2d34;
-    border-radius: 10px;
-    padding: 8px 12px;
-    margin-bottom: 14px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 8px;
-  }
- 
-  .admin-nav-strip a {
-    color: #adb5bd;
-    text-decoration: none;
-    background: transparent;
-    border: 1px solid transparent;
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 0.84rem;
-    font-weight: 600;
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-  .admin-nav-strip a:hover {
-    color: #fff;
-    background: #14171d;
-    border-color: #2a2d34;
-  }
-  .admin-nav-strip a.active {
-    color: #fff;
-    background: rgba(40,167,69,0.16);
-    border-color: rgba(40,167,69,0.45);
   }
 
   /* ─── Back button ──────────────────────────────────────────── */
@@ -463,20 +430,12 @@
 {% block content %}
 <div class="admin-wrap">
 
-  <!-- ============================================================
-       ADMIN NAV STRIP
-       New tab "📥 Listing Calibration" sits between Research and
-       Google Analytics. Active state on this tab.
-       ============================================================ -->
-  <div class="admin-nav-strip">
-    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
-    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
-    <a href="{{ url_for('admin_multipliers') }}">📈 State Multipliers</a>
-    <a href="{{ url_for('admin_feedback') }}">💬 Feedback Calibration</a>
-    <a href="{{ url_for('admin_research') }}">🔬 Research</a>
-    <a href="{{ url_for('admin_listing_calibration') }}" class="active">🚛 Listing Calibration</a>
-    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
-  </div>
+  {# ============================================================
+     ADMIN NAV STRIP — v3.7.4
+     Now lives in the reusable partial. Active tab auto-detected
+     via request.endpoint inside _admin_nav.html.
+     ============================================================ #}
+  {% include '_admin_nav.html' %}
 
   <a href="{{ url_for('admin_index') }}" class="btn-back">← Back</a>
 
