@@ -42,8 +42,6 @@
     text-transform: uppercase;
   }
 
-  /* v3.5: Location row replaced — submit_deal uses City dropdown only,
-     because State (reg_state) is already part of the registration number. */
   .location-row { margin-bottom: 1rem; }
 
   /* Registration number group */
@@ -76,14 +74,6 @@
     position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
     color: #4eb0ff; font-size: 1.1rem; pointer-events: none;
   }
-  /* ============================================================
-     v3.5.1 fix #1: Flatpickr altInput is rendered OUTSIDE .date-wrap
-     by the library, so the dark-theme rules above don't reach it.
-     The altInput gets the .flatpickr-alt-input class. We force the
-     dark palette + match the height of sibling form fields, and
-     override the readonly/disabled greyed-out look that browsers
-     apply by default.
-     ============================================================ */
   input.flatpickr-alt-input,
   input.flatpickr-alt-input:read-only,
   input.flatpickr-alt-input[readonly] {
@@ -92,7 +82,6 @@
     -webkit-text-fill-color: #e6e6e6 !important;
     border: 1px solid #2a2d34 !important;
     cursor: pointer !important;
-    /* Match Bootstrap form-control sizing so it aligns with sibling fields */
     padding: 0.375rem 2.5rem 0.375rem 0.75rem;
     font-size: 1rem;
     line-height: 1.5;
@@ -118,7 +107,6 @@
     -webkit-text-fill-color: #e6e6e6 !important;
     caret-color: #e6e6e6;
   }
-  /* Override Flatpickr dark theme to match site palette */
   .flatpickr-calendar {
     background: #1a1d24 !important;
     border: 1px solid #2a2d34 !important;
@@ -239,10 +227,7 @@
   }
   .reward-note .emoji { font-size: 1rem; }
 
-  /* ============================================================
-     v3.5: Mileage display field — locked dark theme.
-     Fixes the white-bg autofill bug per locked UI rule.
-     ============================================================ */
+  /* Mileage display field — locked dark theme. */
   #mileage-display {
     background: #1a1d24 !important;
     color: #e6e6e6 !important;
@@ -262,7 +247,6 @@
     -webkit-text-fill-color: #e6e6e6 !important;
     caret-color: #e6e6e6;
   }
-  /* Same fix for asking/sale price inputs */
   .price-input {
     background: #1a1d24 !important;
     color: #e6e6e6 !important;
@@ -282,6 +266,24 @@
     -webkit-text-fill-color: #e6e6e6 !important;
     caret-color: #e6e6e6;
   }
+
+  /* ============================================================
+     v3.7.1 Tier 1 Week 1: Amber chip for year-variant filter.
+     Same styling as seller.html / buyer.html for consistency.
+     ============================================================ */
+  .year-variant-chip {
+    display: none;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 140, 0, 0.12);
+    border: 1px solid rgba(255, 140, 0, 0.4);
+    border-radius: 6px;
+    color: #ffa500;
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+  .year-variant-chip.show { display: block; }
+  .year-variant-chip .chip-icon { margin-right: 0.35rem; }
 </style>
 {% endblock %}
 
@@ -310,11 +312,7 @@
       <!-- ============ CAR DETAILS ============ -->
       <div class="section-label">Car Details</div>
 
-      {# v3.5.1: Transaction location — STATE + CITY dropdowns, INDEPENDENT of
-         reg_state. Per locked rule #7: a KA-registered car can be sold in MH
-         if the new buyer is in MH. So this row tells us where the transaction
-         happened, while the registration block below tells us where the car
-         is registered. Defaults to KA / Bangalore. #}
+      {# v3.5.1: Transaction location — independent of reg_state. #}
       <div class="row g-3 location-row">
         <div class="col-md-6">
           <label class="form-label">Transaction State <span style="color:#ff6b6b;">*</span></label>
@@ -357,13 +355,19 @@
           <select class="form-select" name="variant" id="variant" required disabled>
             <option value="">Select Model first</option>
           </select>
+          {# v3.7.1 Tier 1 Week 1: amber chip surfaces when year data missing #}
+          <div class="year-variant-chip" id="year-variant-chip">
+            <span class="chip-icon">⚠️</span><span id="year-variant-chip-text">
+              Some variants may not have been available in this year — pick the closest match.
+            </span>
+          </div>
         </div>
       </div>
 
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
-          <select class="form-select" name="year" required>
+          <select class="form-select" name="year" id="year" required>
             <option value="">Select Year</option>
             {% for y in years %}
               <option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>
@@ -381,7 +385,6 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
-          {# v3.5: forced dark bg via CSS to fix the white-bg autofill bug. #}
           <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
                  value="{{ form.mileage or '' }}" placeholder="e.g. 45,000"
                  autocomplete="off">
@@ -428,7 +431,6 @@
         <div class="col-md-5">
           <label class="form-label">Transaction Date <span style="color:#ff6b6b;">*</span></label>
           <div class="date-wrap">
-            <!-- Flatpickr will manage this input. Backend receives YYYY-MM-DD. -->
             <input type="text" class="form-control" id="transaction_date" name="transaction_date"
                    placeholder="DD-MMM-YYYY (e.g. 23-Apr-2026)" autocomplete="off"
                    value="{{ form.transaction_date or '' }}" required readonly>
@@ -546,68 +548,36 @@
   const FUEL_ORDER = ['Petrol', 'Diesel', 'CNG', 'HEV', 'PHEV', 'BEV'];
 
   /* ============================================================
-     v3.5.1: Transaction State + City dropdowns — INDEPENDENT of reg_state.
-     Per locked rule #7: registration ≠ transaction location. A KA-registered
-     car can be sold in MH if the new buyer is in MH. The reg_state field
-     below has no effect on these dropdowns.
-     Same pattern as seller.html / buyer.html for consistency.
+     v3.5.1: Transaction State + City dropdowns
      ============================================================ */
   const RTO_STATES = {{ rto_states | tojson }};
   const CITIES_BY_STATE = {{ cities_by_state_json | safe }};
   const DEFAULT_STATE   = {{ default_state | tojson }};
   const DEFAULT_CITY    = {{ default_city  | tojson }};
 
-  // 36-entry state name map (matches seller/buyer templates).
   const STATE_NAMES = {
-    'AN': 'Andaman & Nicobar Islands',
-    'AP': 'Andhra Pradesh',
-    'AR': 'Arunachal Pradesh',
-    'AS': 'Assam',
-    'BR': 'Bihar',
-    'CG': 'Chhattisgarh',
-    'CH': 'Chandigarh',
-    'DD': 'Daman & Diu',
-    'DL': 'Delhi',
-    'DN': 'Dadra & Nagar Haveli',
-    'GA': 'Goa',
-    'GJ': 'Gujarat',
-    'HP': 'Himachal Pradesh',
-    'HR': 'Haryana',
-    'JH': 'Jharkhand',
-    'JK': 'Jammu & Kashmir',
-    'KA': 'Karnataka',
-    'KL': 'Kerala',
-    'LA': 'Ladakh',
-    'LD': 'Lakshadweep',
-    'MH': 'Maharashtra',
-    'ML': 'Meghalaya',
-    'MN': 'Manipur',
-    'MP': 'Madhya Pradesh',
-    'MZ': 'Mizoram',
-    'NL': 'Nagaland',
-    'OD': 'Odisha',
-    'PB': 'Punjab',
-    'PY': 'Puducherry',
-    'RJ': 'Rajasthan',
-    'SK': 'Sikkim',
-    'TN': 'Tamil Nadu',
-    'TR': 'Tripura',
-    'TS': 'Telangana',
-    'UK': 'Uttarakhand',
-    'UP': 'Uttar Pradesh',
-    'WB': 'West Bengal'
+    'AN': 'Andaman & Nicobar Islands', 'AP': 'Andhra Pradesh',
+    'AR': 'Arunachal Pradesh', 'AS': 'Assam', 'BR': 'Bihar',
+    'CG': 'Chhattisgarh', 'CH': 'Chandigarh', 'DD': 'Daman & Diu',
+    'DL': 'Delhi', 'DN': 'Dadra & Nagar Haveli', 'GA': 'Goa',
+    'GJ': 'Gujarat', 'HP': 'Himachal Pradesh', 'HR': 'Haryana',
+    'JH': 'Jharkhand', 'JK': 'Jammu & Kashmir', 'KA': 'Karnataka',
+    'KL': 'Kerala', 'LA': 'Ladakh', 'LD': 'Lakshadweep',
+    'MH': 'Maharashtra', 'ML': 'Meghalaya', 'MN': 'Manipur',
+    'MP': 'Madhya Pradesh', 'MZ': 'Mizoram', 'NL': 'Nagaland',
+    'OD': 'Odisha', 'PB': 'Punjab', 'PY': 'Puducherry',
+    'RJ': 'Rajasthan', 'SK': 'Sikkim', 'TN': 'Tamil Nadu',
+    'TR': 'Tripura', 'TS': 'Telangana', 'UK': 'Uttarakhand',
+    'UP': 'Uttar Pradesh', 'WB': 'West Bengal'
   };
 
   const userStateEl = document.getElementById('user_state');
   const userCityEl  = document.getElementById('user_city');
 
-  // Prefill: prefer form values (form.user_state / form.user_city), then defaults.
-  // The submit_deal route already injects user_state defaulting to DEFAULT_STATE_CODE.
   const PREFILL_USER_STATE = {{ (form.user_state or default_state) | tojson }};
   const PREFILL_USER_CITY  = {{ (form.user_city  or default_city)  | tojson }};
 
   function buildStateOptions() {
-    // Sort alphabetically by full name (per UI rule).
     const sortedCodes = RTO_STATES.slice().sort(function(a, b) {
       return (STATE_NAMES[a] || a).localeCompare(STATE_NAMES[b] || b);
     });
@@ -624,7 +594,6 @@
   function buildCityOptions(stateCode, preselectCity) {
     userCityEl.innerHTML = '';
     const cities = CITIES_BY_STATE[stateCode] || ['Other'];
-    // Apply locked rule: alphabetical, with "Other" pinned last.
     const others = cities.filter(function(c) { return c !== 'Other'; }).sort();
     const ordered = others.concat(cities.indexOf('Other') >= 0 ? ['Other'] : []);
     ordered.forEach(function(c) {
@@ -636,33 +605,48 @@
     });
   }
 
-  // When state changes, rebuild city dropdown defaulting to first city of new state.
   userStateEl.addEventListener('change', function() {
     buildCityOptions(this.value, null);
   });
 
-  // Initial build
   buildStateOptions();
   buildCityOptions(userStateEl.value || DEFAULT_STATE, PREFILL_USER_CITY);
 
   /* ============================================================
-     Make → Fuel → Model → Variant cascade (unchanged from v3.4)
+     v3.7.1 Tier 1 Week 1: Make → Fuel → Model → Variant cascade
+     ------------------------------------------------------------
+     populateVariants now takes (make, model, fuel, year, preselect)
+     and filters by BOTH fuel and year. See seller.html for full notes.
      ============================================================ */
   const makeEl    = document.getElementById('make');
   const fuelEl    = document.getElementById('fuel');
   const modelEl   = document.getElementById('model');
   const variantEl = document.getElementById('variant');
+  const yearEl    = document.getElementById('year');
+  const chipEl    = document.getElementById('year-variant-chip');
+  const chipText  = document.getElementById('year-variant-chip-text');
 
   const PREFILL = {
     make:    {{ (form.make    or '')|tojson }},
     fuel:    {{ (form.fuel    or '')|tojson }},
     model:   {{ (form.model   or '')|tojson }},
-    variant: {{ (form.variant or '')|tojson }}
+    variant: {{ (form.variant or '')|tojson }},
+    year:    {{ (form.year    or '')|tojson }}
   };
 
   function resetSelect(el, placeholder) {
     el.innerHTML = '<option value="">' + placeholder + '</option>';
     el.disabled = true;
+  }
+
+  function hideYearChip() {
+    if (chipEl) chipEl.classList.remove('show');
+  }
+
+  function showYearChip(message) {
+    if (!chipEl) return;
+    if (message && chipText) chipText.textContent = message;
+    chipEl.classList.add('show');
   }
 
   function populateFuels(make, preselect) {
@@ -697,33 +681,91 @@
     modelEl.disabled = false;
   }
 
-  function populateVariants(make, model, preselect) {
+  /*
+   * populateVariants(make, model, fuel, year, preselect)
+   *
+   * v3.7.1 Tier 1 Week 1: filters by BOTH fuel and year.
+   * See seller.html for the full design notes — same logic here.
+   */
+  function populateVariants(make, model, fuel, year, preselect) {
     resetSelect(variantEl, 'Select Variant');
+    hideYearChip();
+
     if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
-    // Handle both dict-shape (new) and list-shape (legacy) variants structure.
-    // Preserve TRIM ORDER (base → top) — do NOT sort alphabetically.
-    const variantsObj = CAR_DATA[make][model].variants || {};
-    const variants = Array.isArray(variantsObj) ? variantsObj : Object.keys(variantsObj);
-    variants.forEach(v => {
+
+    const modelData    = CAR_DATA[make][model];
+    const vfp          = modelData.variant_fuel_prices || {};
+    const vfy          = modelData.variant_fuel_years  || {};
+    const flatVariants = modelData.variants || {};
+
+    let candidateVariants = [];
+    let yearDataAbsent = false;
+
+    if (Object.keys(vfp).length > 0) {
+      Object.keys(vfp).forEach(variant => {
+        const fuelMap = vfp[variant] || {};
+
+        // Rule 1+2: fuel must exist for this variant (if a fuel is selected)
+        if (fuel && !(fuel in fuelMap)) return;
+
+        // Rule 3: year filter (only when both year selected AND year_introduced known)
+        if (year) {
+          const yearMap = (vfy[variant] || {})[fuel || ''] || (vfy[variant] || {});
+          const introYear = yearMap.introduced;
+          if (introYear !== undefined && introYear !== null) {
+            const selectedYearInt = parseInt(year, 10);
+            if (!isNaN(selectedYearInt) && selectedYearInt < introYear) {
+              return; // variant didn't exist in selected year
+            }
+          } else {
+            yearDataAbsent = true;
+          }
+        }
+
+        candidateVariants.push(variant);
+      });
+    } else {
+      // Legacy fallback — flat variants list (no fuel/year filtering possible)
+      candidateVariants = Array.isArray(flatVariants)
+        ? flatVariants
+        : Object.keys(flatVariants);
+    }
+
+    // Render in trim order (do NOT alphabetize — preserve catalog order)
+    candidateVariants.forEach(v => {
       const opt = document.createElement('option');
       opt.value = v; opt.textContent = v;
       if (preselect && v === preselect) opt.selected = true;
       variantEl.appendChild(opt);
     });
     variantEl.disabled = false;
+
+    if (year && yearDataAbsent) {
+      showYearChip(
+        'Some variants may not have been available in ' + year + ' — pick the closest match.'
+      );
+    }
   }
 
   makeEl.addEventListener('change', function() {
     populateFuels(this.value, null);
     resetSelect(modelEl, 'Select Fuel first');
     resetSelect(variantEl, 'Select Model first');
+    hideYearChip();
   });
   fuelEl.addEventListener('change', function() {
     populateModels(makeEl.value, this.value, null);
     resetSelect(variantEl, 'Select Model first');
+    hideYearChip();
   });
   modelEl.addEventListener('change', function() {
-    populateVariants(makeEl.value, this.value, null);
+    populateVariants(makeEl.value, this.value, fuelEl.value, yearEl.value, null);
+  });
+  // v3.7.1: year change triggers variant re-filter
+  yearEl.addEventListener('change', function() {
+    if (modelEl.value) {
+      populateVariants(makeEl.value, modelEl.value, fuelEl.value, this.value, variantEl.value);
+    }
   });
 
   (function init() {
@@ -732,7 +774,7 @@
       if (PREFILL.fuel) {
         populateModels(PREFILL.make, PREFILL.fuel, PREFILL.model);
         if (PREFILL.model) {
-          populateVariants(PREFILL.make, PREFILL.model, PREFILL.variant);
+          populateVariants(PREFILL.make, PREFILL.model, PREFILL.fuel, PREFILL.year, PREFILL.variant);
         }
       }
     }
@@ -740,16 +782,15 @@
 
   /* ============================================================
      FLATPICKR — date picker for Transaction Date
-     Backend expects YYYY-MM-DD. Display: DD-MMM-YYYY.
      ============================================================ */
   flatpickr("#transaction_date", {
-    dateFormat: "Y-m-d",       // Internal format for backend
-    altInput: true,            // Auto-create a styled display field
-    altFormat: "d-M-Y",        // Display: 23-Apr-2026
-    maxDate: "today",          // Backend rule: no future dates
-    minDate: "2010-01-01",     // Backend rule: must be on or after 2010
-    allowInput: false,         // Force calendar — no manual typing weirdness
-    disableMobile: false,      // Use Flatpickr on mobile too (touch-optimized)
+    dateFormat: "Y-m-d",
+    altInput: true,
+    altFormat: "d-M-Y",
+    maxDate: "today",
+    minDate: "2010-01-01",
+    allowInput: false,
+    disableMobile: false,
     defaultDate: {{ form.transaction_date|tojson if form.transaction_date else 'null' }}
   });
 
