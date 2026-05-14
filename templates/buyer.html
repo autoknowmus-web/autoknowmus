@@ -73,7 +73,7 @@
     color: #6c757d; font-weight: 400; font-size: 0.82rem;
   }
 
-  /* v3.5: Asking price input — locked dark theme (consistency with seller mileage fix). */
+  /* v3.5: Asking price input — locked dark theme. */
   #asking-display {
     background: #1a1d24 !important;
     color: #e6e6e6 !important;
@@ -93,6 +93,23 @@
     -webkit-text-fill-color: #e6e6e6 !important;
     caret-color: #e6e6e6;
   }
+
+  /* ============================================================
+     v3.7.1 Tier 1 Week 1: Amber chip for year-variant filter.
+     ============================================================ */
+  .year-variant-chip {
+    display: none;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 140, 0, 0.12);
+    border: 1px solid rgba(255, 140, 0, 0.4);
+    border-radius: 6px;
+    color: #ffa500;
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+  .year-variant-chip.show { display: block; }
+  .year-variant-chip .chip-icon { margin-right: 0.35rem; }
 </style>
 {% endblock %}
 
@@ -152,8 +169,6 @@
 
       {# ============================================================
          v3.5: LOCATION row — STATE + CITY dropdowns.
-         Default: Karnataka / Bangalore. State change repopulates City.
-         States sorted alphabetically by full name; "Other" pinned last for City.
          ============================================================ #}
       <div class="row g-3 location-row">
         <div class="col-md-6">
@@ -198,6 +213,12 @@
           <select class="form-select" name="variant" id="variant" required disabled>
             <option value="">Select Model first</option>
           </select>
+          {# v3.7.1 Tier 1 Week 1: amber chip surfaces when year data missing #}
+          <div class="year-variant-chip" id="year-variant-chip">
+            <span class="chip-icon">⚠️</span><span id="year-variant-chip-text">
+              Some variants may not have been available in this year — pick the closest match.
+            </span>
+          </div>
         </div>
       </div>
 
@@ -281,43 +302,19 @@
   const DEFAULT_CITY  = {{ default_city  | tojson }};
 
   const STATE_NAMES = {
-    'AN': 'Andaman & Nicobar Islands',
-    'AP': 'Andhra Pradesh',
-    'AR': 'Arunachal Pradesh',
-    'AS': 'Assam',
-    'BR': 'Bihar',
-    'CG': 'Chhattisgarh',
-    'CH': 'Chandigarh',
-    'DD': 'Daman & Diu',
-    'DL': 'Delhi',
-    'DN': 'Dadra & Nagar Haveli',
-    'GA': 'Goa',
-    'GJ': 'Gujarat',
-    'HP': 'Himachal Pradesh',
-    'HR': 'Haryana',
-    'JH': 'Jharkhand',
-    'JK': 'Jammu & Kashmir',
-    'KA': 'Karnataka',
-    'KL': 'Kerala',
-    'LA': 'Ladakh',
-    'LD': 'Lakshadweep',
-    'MH': 'Maharashtra',
-    'ML': 'Meghalaya',
-    'MN': 'Manipur',
-    'MP': 'Madhya Pradesh',
-    'MZ': 'Mizoram',
-    'NL': 'Nagaland',
-    'OD': 'Odisha',
-    'PB': 'Punjab',
-    'PY': 'Puducherry',
-    'RJ': 'Rajasthan',
-    'SK': 'Sikkim',
-    'TN': 'Tamil Nadu',
-    'TR': 'Tripura',
-    'TS': 'Telangana',
-    'UK': 'Uttarakhand',
-    'UP': 'Uttar Pradesh',
-    'WB': 'West Bengal'
+    'AN': 'Andaman & Nicobar Islands', 'AP': 'Andhra Pradesh',
+    'AR': 'Arunachal Pradesh', 'AS': 'Assam', 'BR': 'Bihar',
+    'CG': 'Chhattisgarh', 'CH': 'Chandigarh', 'DD': 'Daman & Diu',
+    'DL': 'Delhi', 'DN': 'Dadra & Nagar Haveli', 'GA': 'Goa',
+    'GJ': 'Gujarat', 'HP': 'Himachal Pradesh', 'HR': 'Haryana',
+    'JH': 'Jharkhand', 'JK': 'Jammu & Kashmir', 'KA': 'Karnataka',
+    'KL': 'Kerala', 'LA': 'Ladakh', 'LD': 'Lakshadweep',
+    'MH': 'Maharashtra', 'ML': 'Meghalaya', 'MN': 'Manipur',
+    'MP': 'Madhya Pradesh', 'MZ': 'Mizoram', 'NL': 'Nagaland',
+    'OD': 'Odisha', 'PB': 'Punjab', 'PY': 'Puducherry',
+    'RJ': 'Rajasthan', 'SK': 'Sikkim', 'TN': 'Tamil Nadu',
+    'TR': 'Tripura', 'TS': 'Telangana', 'UK': 'Uttarakhand',
+    'UP': 'Uttar Pradesh', 'WB': 'West Bengal'
   };
 
   const stateEl = document.getElementById('user_state');
@@ -362,7 +359,10 @@
   buildCityOptions(stateEl.value || DEFAULT_STATE, PREFILL_CITY);
 
   /* ============================================================
-     Make → Fuel → Model → Variant cascade (unchanged from v3.4)
+     v3.7.1 Tier 1 Week 1: Make → Fuel → Model → Variant cascade
+     ------------------------------------------------------------
+     populateVariants now takes (make, model, fuel, year, preselect)
+     and filters by BOTH fuel and year. See seller.html for full notes.
      ============================================================ */
   const makeEl    = document.getElementById('make');
   const fuelEl    = document.getElementById('fuel');
@@ -370,6 +370,8 @@
   const variantEl = document.getElementById('variant');
   const yearEl    = document.getElementById('year');
   const mileageEl = document.getElementById('mileage');
+  const chipEl    = document.getElementById('year-variant-chip');
+  const chipText  = document.getElementById('year-variant-chip-text');
 
   const PREFILL = {
     make:    {{ (form.make    or '')|tojson }},
@@ -383,6 +385,16 @@
   function resetSelect(el, placeholder) {
     el.innerHTML = '<option value="">' + placeholder + '</option>';
     el.disabled = true;
+  }
+
+  function hideYearChip() {
+    if (chipEl) chipEl.classList.remove('show');
+  }
+
+  function showYearChip(message) {
+    if (!chipEl) return;
+    if (message && chipText) chipText.textContent = message;
+    chipEl.classList.add('show');
   }
 
   function populateFuels(make, preselect) {
@@ -419,14 +431,58 @@
     modelEl.disabled = false;
   }
 
-  function populateVariants(make, model, preselect) {
+  /*
+   * populateVariants(make, model, fuel, year, preselect)
+   *
+   * v3.7.1 Tier 1 Week 1: filters by BOTH fuel and year.
+   * See seller.html for the full design notes — same logic here.
+   */
+  function populateVariants(make, model, fuel, year, preselect) {
     resetSelect(variantEl, 'Select Variant');
+    hideYearChip();
+
     if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
-    // Handle both dict-shape (new) and list-shape (legacy) variants structure.
-    // Preserve TRIM ORDER (base → top) — do NOT sort alphabetically.
-    const variantsObj = CAR_DATA[make][model].variants || {};
-    const variants = Array.isArray(variantsObj) ? variantsObj : Object.keys(variantsObj);
-    variants.forEach(v => {
+
+    const modelData    = CAR_DATA[make][model];
+    const vfp          = modelData.variant_fuel_prices || {};
+    const vfy          = modelData.variant_fuel_years  || {};
+    const flatVariants = modelData.variants || {};
+
+    let candidateVariants = [];
+    let yearDataAbsent = false;
+
+    if (Object.keys(vfp).length > 0) {
+      Object.keys(vfp).forEach(variant => {
+        const fuelMap = vfp[variant] || {};
+
+        // Rule 1+2: fuel must exist for this variant (if a fuel is selected)
+        if (fuel && !(fuel in fuelMap)) return;
+
+        // Rule 3: year filter (only when both year selected AND year_introduced known)
+        if (year) {
+          const yearMap = (vfy[variant] || {})[fuel || ''] || (vfy[variant] || {});
+          const introYear = yearMap.introduced;
+          if (introYear !== undefined && introYear !== null) {
+            const selectedYearInt = parseInt(year, 10);
+            if (!isNaN(selectedYearInt) && selectedYearInt < introYear) {
+              return; // variant didn't exist in selected year
+            }
+          } else {
+            yearDataAbsent = true;
+          }
+        }
+
+        candidateVariants.push(variant);
+      });
+    } else {
+      // Legacy fallback — flat variants list (no fuel/year filtering possible)
+      candidateVariants = Array.isArray(flatVariants)
+        ? flatVariants
+        : Object.keys(flatVariants);
+    }
+
+    // Render in trim order (do NOT alphabetize — preserve catalog order)
+    candidateVariants.forEach(v => {
       const opt = document.createElement('option');
       opt.value = v;
       opt.textContent = v;
@@ -434,28 +490,36 @@
       variantEl.appendChild(opt);
     });
     variantEl.disabled = false;
+
+    if (year && yearDataAbsent) {
+      showYearChip(
+        'Some variants may not have been available in ' + year + ' — pick the closest match.'
+      );
+    }
   }
 
   makeEl.addEventListener('change', function() {
     populateFuels(this.value, null);
     resetSelect(modelEl, 'Select Fuel first');
     resetSelect(variantEl, 'Select Model first');
+    hideYearChip();
   });
   fuelEl.addEventListener('change', function() {
     populateModels(makeEl.value, this.value, null);
     resetSelect(variantEl, 'Select Model first');
+    hideYearChip();
   });
   modelEl.addEventListener('change', function() {
-    populateVariants(makeEl.value, this.value, null);
+    populateVariants(makeEl.value, this.value, fuelEl.value, yearEl.value, null);
   });
 
-  (function init() {
+  (function initVariants() {
     if (PREFILL.make) {
       populateFuels(PREFILL.make, PREFILL.fuel);
       if (PREFILL.fuel) {
         populateModels(PREFILL.make, PREFILL.fuel, PREFILL.model);
         if (PREFILL.model) {
-          populateVariants(PREFILL.make, PREFILL.model, PREFILL.variant);
+          populateVariants(PREFILL.make, PREFILL.model, PREFILL.fuel, PREFILL.year, PREFILL.variant);
         }
       }
     }
@@ -480,8 +544,6 @@
 
   /* ============================================================
      Mileage RANGE dropdown
-     Each range: { min, max, mid }
-     Label shown = "X - Y kms"; submitted value = midpoint (used by valuation)
      ============================================================ */
   const MILEAGE_RANGES = [
     { min: 0,      max: 10000,  mid: 5000   },
@@ -576,8 +638,12 @@
     mileageUserTouched = true;
   });
 
+  // v3.7.1: year change ALSO triggers variant re-filter
   yearEl.addEventListener('change', function() {
     applyDefaultMileage();
+    if (modelEl.value) {
+      populateVariants(makeEl.value, modelEl.value, fuelEl.value, this.value, variantEl.value);
+    }
   });
 
   /* ============================================================
