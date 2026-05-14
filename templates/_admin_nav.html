@@ -1,0 +1,119 @@
+{# ============================================================
+   _admin_nav.html — Reusable admin nav strip partial
+   v3.7.4 — Persistent tab bar across all admin sub-pages.
+
+   USAGE:
+     In any admin sub-page template, place this BEFORE the back button:
+       <div class="admin-wrap">
+         {% include '_admin_nav.html' %}
+         <a href="{{ url_for('admin_index') }}" class="btn-back">← Back</a>
+         ...
+
+   ACTIVE-TAB DETECTION:
+     Each tab's `.active` class is applied automatically based on
+     `request.endpoint`. No flags need to be passed from the route.
+     Endpoints that "live under" a tab can be added to the `match`
+     tuple for that tab — e.g. clicking into an upload detail page
+     still highlights "Listing Calibration".
+
+   STYLES:
+     The .admin-nav-strip CSS is duplicated here for self-containment.
+     Sub-pages that already had this CSS inline can keep their copy
+     (no conflict — same selectors, same values) OR remove it; the
+     partial's styles will render correctly either way.
+   ============================================================ #}
+
+<style>
+  /* Scoped to admin-nav-strip — won't collide with other CSS on the page. */
+  .admin-nav-strip {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+  }
+  .admin-nav-strip a {
+    color: #adb5bd;
+    text-decoration: none;
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .admin-nav-strip a:hover {
+    color: #fff;
+    background: #14171d;
+    border-color: #2a2d34;
+  }
+  .admin-nav-strip a.active {
+    color: #fff;
+    background: rgba(40,167,69,0.16);
+    border-color: rgba(40,167,69,0.45);
+  }
+</style>
+
+{# ============================================================
+   Define which endpoints are "live under" each tab so child pages
+   (e.g. an upload detail) still highlight the right parent tab.
+   ============================================================ #}
+{% set _ep = request.endpoint or '' %}
+
+{% set _is_listing_calib =
+    _ep in ('admin_listing_calibration',
+            'admin_listing_calibration_upload',
+            'admin_listing_calibration_upload_detail',
+            'admin_paste_and_extract',
+            'admin_paste_confirm_ingest') %}
+
+{% set _is_calib_overview =
+    _ep in ('admin_calibration_overview',
+            'admin_calibration_diagnostic',
+            'admin_calibration_config') %}
+
+{% set _is_research =
+    _ep in ('admin_research',) %}
+
+{% set _is_state_mult =
+    _ep in ('admin_multipliers',) %}
+
+{% set _is_feedback =
+    _ep in ('admin_feedback',) %}
+
+{% set _is_data_health =
+    _ep in ('admin_data_health',) %}
+
+{% set _is_user_activity =
+    _ep in ('admin_user_activity',) %}
+
+<div class="admin-nav-strip">
+  <a href="{{ url_for('admin_data_health') }}"
+     class="{% if _is_data_health %}active{% endif %}">📊 Data Health</a>
+
+  <a href="{{ url_for('admin_user_activity') }}"
+     class="{% if _is_user_activity %}active{% endif %}">👥 User Activity</a>
+
+  <a href="{{ url_for('admin_multipliers') }}"
+     class="{% if _is_state_mult %}active{% endif %}">📈 State Multipliers</a>
+
+  <a href="{{ url_for('admin_feedback') }}"
+     class="{% if _is_feedback %}active{% endif %}">💬 Feedback Calibration</a>
+
+  <a href="{{ url_for('admin_research') }}"
+     class="{% if _is_research %}active{% endif %}">🔬 Research</a>
+
+  <a href="{{ url_for('admin_listing_calibration') }}"
+     class="{% if _is_listing_calib %}active{% endif %}">🚛 Listing Calibration</a>
+
+  <a href="{{ url_for('admin_calibration_overview') }}"
+     class="{% if _is_calib_overview %}active{% endif %}">📊 Calibration Overview</a>
+
+  <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
+</div>
