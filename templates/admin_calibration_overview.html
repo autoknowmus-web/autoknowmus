@@ -1,0 +1,427 @@
+{% extends "layout.html" %}
+{% block title %}Calibration Overview — AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  .calib-wrap { padding: 24px 32px; }
+  .calib-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    flex-wrap: wrap; gap: 16px; margin-bottom: 16px;
+  }
+  .calib-header h2 {
+    color: #4eb0ff; font-size: 1.5rem; font-weight: 700; margin: 0;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .calib-header h2 .admin-pill {
+    background: #ffa500; color: #1a1d24;
+    font-size: 0.72rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 10px;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .calib-header .header-meta {
+    color: #6c757d; font-size: 0.82rem; text-align: right;
+  }
+
+  /* ---- Top summary cards ---- */
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 1100px) {
+    .summary-row { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 700px) {
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .summary-card {
+    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 10px;
+    padding: 12px 14px; text-align: center;
+  }
+  .summary-card .label {
+    color: #adb5bd; font-size: 0.72rem; text-transform: uppercase;
+    letter-spacing: 0.4px; margin-bottom: 4px;
+  }
+  .summary-card .value {
+    font-size: 1.4rem; font-weight: 700; line-height: 1.1; color: #fff;
+  }
+  .summary-card .value.green { color: #5bd47b; }
+  .summary-card .value.orange { color: #ffa500; }
+  .summary-card .value.red { color: #ff6b6b; }
+  .summary-card .value.blue { color: #4eb0ff; }
+
+  /* ---- Filter row ---- */
+  .filter-row {
+    background: #14171d; border: 1px solid #2a2d34; border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 16px;
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    font-size: 0.85rem;
+  }
+  .filter-row label { color: #adb5bd; }
+  .filter-row select,
+  .filter-row input[type="text"] {
+    background: #1a1d24; border: 1px solid #2a2d34; color: #e6e6e6;
+    border-radius: 6px; padding: 6px 9px; font-size: 0.85rem;
+  }
+  .filter-row select:focus,
+  .filter-row input[type="text"]:focus {
+    outline: none; border-color: #4eb0ff;
+    box-shadow: 0 0 0 0.2rem rgba(78,176,255,0.25);
+  }
+  .filter-row .reset-btn {
+    background: transparent; border: 1px solid #2a2d34; color: #adb5bd;
+    padding: 6px 12px; border-radius: 6px; font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .filter-row .reset-btn:hover { color: #fff; border-color: #6c757d; }
+  .filter-row .count-tag {
+    margin-left: auto; color: #6c757d; font-size: 0.8rem;
+  }
+  .filter-row .count-tag strong { color: #e6e6e6; }
+
+  /* ---- Main table ---- */
+  .calib-table-card {
+    background: #1a1d24; border: 1px solid #2a2d34; border-radius: 12px;
+    overflow: hidden;
+  }
+  .calib-table {
+    width: 100%; border-collapse: collapse; font-size: 0.86rem;
+  }
+  .calib-table thead th {
+    background: #14171d; color: #adb5bd;
+    font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 10px 14px; border-bottom: 1px solid #2a2d34;
+    text-align: left; white-space: nowrap;
+  }
+  .calib-table thead th.num { text-align: right; }
+  .calib-table tbody td {
+    padding: 10px 14px; color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+  }
+  .calib-table tbody tr:last-child td { border-bottom: none; }
+  .calib-table tbody tr:hover { background: rgba(78,176,255,0.04); }
+  .calib-table tbody td.num {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .calib-table .make-col { font-weight: 600; color: #fff; }
+  .calib-table .model-col { color: #e6e6e6; }
+  .calib-table .fuel-pill {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .calib-table .fuel-pill.fuel-Petrol { background: rgba(91,212,123,0.14); color: #5bd47b; }
+  .calib-table .fuel-pill.fuel-Diesel { background: rgba(255,165,0,0.14); color: #ffa500; }
+  .calib-table .fuel-pill.fuel-CNG    { background: rgba(78,176,255,0.14); color: #4eb0ff; }
+  .calib-table .fuel-pill.fuel-HEV    { background: rgba(138,144,255,0.14); color: #8a90ff; }
+  .calib-table .fuel-pill.fuel-PHEV   { background: rgba(138,144,255,0.14); color: #8a90ff; }
+  .calib-table .fuel-pill.fuel-BEV    { background: rgba(78,176,255,0.18); color: #4eb0ff; }
+
+  /* Multiplier color-coding by % above formula */
+  .mult-badge {
+    display: inline-block; padding: 4px 10px;
+    border-radius: 12px; font-size: 0.86rem; font-weight: 700;
+    font-variant-numeric: tabular-nums; letter-spacing: 0.3px;
+    min-width: 70px; text-align: center;
+  }
+  .mult-band-good    { background: rgba(91,212,123,0.18); color: #5bd47b; border: 1px solid rgba(91,212,123,0.4); }
+  .mult-band-mild    { background: rgba(135,220,156,0.14); color: #87dc9c; border: 1px solid rgba(135,220,156,0.3); }
+  .mult-band-warn    { background: rgba(255,200,112,0.16); color: #ffc870; border: 1px solid rgba(255,200,112,0.4); }
+  .mult-band-bad     { background: rgba(255,165,0,0.18); color: #ffa500; border: 1px solid rgba(255,165,0,0.5); }
+  .mult-band-severe  { background: rgba(255,107,107,0.18); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.55); }
+  .mult-band-clamped {
+    background: rgba(255,107,107,0.22); color: #ff8585; border: 1px solid #ff6b6b;
+    box-shadow: 0 0 0 1px rgba(255,107,107,0.3);
+  }
+
+  .pct-cell {
+    font-variant-numeric: tabular-nums; font-weight: 600;
+  }
+  .pct-cell.up   { color: #ff8585; }
+  .pct-cell.down { color: #5bd47b; }
+  .pct-cell.flat { color: #adb5bd; }
+
+  /* Phase pill */
+  .phase-pill {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 10px; font-size: 0.7rem; font-weight: 700;
+    letter-spacing: 0.4px; text-transform: uppercase;
+  }
+  .phase-pill.p4 { background: rgba(255,215,0,0.15); color: #ffd700; border: 1px solid rgba(255,215,0,0.4); }
+  .phase-pill.p3 { background: rgba(40,167,69,0.2);  color: #28a745; border: 1px solid rgba(40,167,69,0.5); }
+  .phase-pill.p2 { background: rgba(40,167,69,0.1);  color: #5bd47b; border: 1px solid rgba(40,167,69,0.3); }
+  .phase-pill.p1 { background: rgba(108,117,125,0.15); color: #adb5bd; border: 1px solid rgba(108,117,125,0.4); }
+
+  .calib-table .diag-link {
+    color: #4eb0ff; text-decoration: none; font-size: 0.78rem;
+    padding: 4px 8px; border: 1px solid rgba(78,176,255,0.3);
+    border-radius: 6px; transition: all 0.15s;
+    white-space: nowrap; display: inline-block;
+  }
+  .calib-table .diag-link:hover {
+    background: rgba(78,176,255,0.12); border-color: #4eb0ff;
+  }
+
+  .empty-state {
+    padding: 40px 20px; text-align: center; color: #6c757d;
+  }
+  .empty-state h4 { color: #adb5bd; margin-bottom: 8px; }
+
+  /* ---- Helper bar at top with quick stats ---- */
+  .quick-legend {
+    margin-top: 4px; color: #6c757d; font-size: 0.78rem;
+    display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+  }
+  .quick-legend .legend-item {
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .quick-legend .swatch {
+    width: 12px; height: 12px; border-radius: 3px;
+    display: inline-block;
+  }
+  .swatch.s-good     { background: rgba(91,212,123,0.7); }
+  .swatch.s-mild     { background: rgba(135,220,156,0.6); }
+  .swatch.s-warn     { background: rgba(255,200,112,0.7); }
+  .swatch.s-bad      { background: rgba(255,165,0,0.7); }
+  .swatch.s-severe   { background: rgba(255,107,107,0.7); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="calib-wrap">
+  <a href="{{ url_for('admin_index') }}" class="btn-back">← Back</a>
+
+  <div class="calib-header" style="margin-top: 12px;">
+    <div>
+      <h2>📊 Calibration Overview <span class="admin-pill">Admin</span></h2>
+      <div class="quick-legend">
+        <span class="legend-item"><span class="swatch s-good"></span> ≤ ±5% (well calibrated)</span>
+        <span class="legend-item"><span class="swatch s-mild"></span> ±5–10%</span>
+        <span class="legend-item"><span class="swatch s-warn"></span> ±10–20%</span>
+        <span class="legend-item"><span class="swatch s-bad"></span> ±20–40%</span>
+        <span class="legend-item"><span class="swatch s-severe"></span> ≥ ±40% or clamped</span>
+      </div>
+    </div>
+    <div class="header-meta">
+      Generated {{ now_display }}<br>
+      <a href="{{ url_for('admin_calibration_config') }}"
+         style="color:#4eb0ff; text-decoration:none;">→ Run / configure calibration</a>
+    </div>
+  </div>
+
+  {% if total_cells == 0 %}
+    <div class="calib-table-card">
+      <div class="empty-state">
+        <h4>No calibrated cells yet</h4>
+        <p>Once you run calibration with ≥3 listings per (make, model, fuel) cell,
+        the multipliers will appear here.</p>
+        <a href="{{ url_for('admin_calibration_config') }}"
+           style="color:#4eb0ff;">→ Go to Calibration Config</a>
+      </div>
+    </div>
+  {% else %}
+
+    {# Summary cards #}
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="label">Total cells</div>
+        <div class="value blue">{{ total_cells }}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Well calibrated (±5%)</div>
+        <div class="value green">{{ well_calibrated }}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Moderate drift (5-20%)</div>
+        <div class="value orange">{{ moderate_drift }}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Severe drift (>20%)</div>
+        <div class="value red">{{ severe_drift }}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Clamped to bounds</div>
+        <div class="value {% if clamped_count > 0 %}red{% else %}blue{% endif %}">{{ clamped_count }}</div>
+      </div>
+    </div>
+
+    {# Filter row #}
+    <div class="filter-row">
+      <label for="filter-make">Make:</label>
+      <select id="filter-make">
+        <option value="">All makes</option>
+        {% for m in distinct_makes %}
+          <option value="{{ m }}">{{ m }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="filter-fuel">Fuel:</label>
+      <select id="filter-fuel">
+        <option value="">All fuels</option>
+        {% for f in distinct_fuels %}
+          <option value="{{ f }}">{{ f }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="filter-phase">Phase:</label>
+      <select id="filter-phase">
+        <option value="">All phases</option>
+        <option value="4">⭐ Phase 4 (20+)</option>
+        <option value="3">✓ Phase 3 (10-19)</option>
+        <option value="2">📈 Phase 2 (3-9)</option>
+      </select>
+
+      <label for="filter-drift">Drift:</label>
+      <select id="filter-drift">
+        <option value="">All</option>
+        <option value="good">≤ ±5%</option>
+        <option value="mild">±5-10%</option>
+        <option value="warn">±10-20%</option>
+        <option value="bad">±20-40%</option>
+        <option value="severe">≥ ±40% / clamped</option>
+      </select>
+
+      <label for="filter-search">Search:</label>
+      <input type="text" id="filter-search" placeholder="model name..." style="width:160px;">
+
+      <button type="button" class="reset-btn" id="filter-reset">Reset</button>
+
+      <span class="count-tag">Showing <strong id="visible-count">{{ total_cells }}</strong> of {{ total_cells }}</span>
+    </div>
+
+    {# Main table #}
+    <div class="calib-table-card">
+      <table class="calib-table">
+        <thead>
+          <tr>
+            <th>Make</th>
+            <th>Model</th>
+            <th>Fuel</th>
+            <th class="num">Multiplier</th>
+            <th class="num">% vs formula</th>
+            <th class="num">Sample</th>
+            <th>Phase</th>
+            <th class="num">Median listing</th>
+            <th class="num">Median formula</th>
+            <th>Last run</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="calib-tbody">
+          {% for row in rows %}
+            <tr class="calib-row"
+                data-make="{{ row.make }}"
+                data-fuel="{{ row.fuel }}"
+                data-phase="{{ row.phase }}"
+                data-drift="{{ row.drift_band }}"
+                data-search="{{ row.search_key }}">
+              <td class="make-col">{{ row.make }}</td>
+              <td class="model-col">{{ row.model }}</td>
+              <td>
+                <span class="fuel-pill fuel-{{ row.fuel }}">{{ row.fuel }}</span>
+              </td>
+              <td class="num">
+                <span class="mult-badge mult-band-{{ row.drift_band }}{% if row.clamped %} mult-band-clamped{% endif %}"
+                      {% if row.clamped %}title="Clamped to [{{ '%.2f'|format(row.clamp_min) }}, {{ '%.2f'|format(row.clamp_max) }}] bound"{% endif %}>
+                  {{ '%.4f'|format(row.calibration_multiplier) }}
+                  {% if row.clamped %}⚠️{% endif %}
+                </span>
+              </td>
+              <td class="num">
+                <span class="pct-cell {% if row.pct_above_formula > 0.5 %}up{% elif row.pct_above_formula < -0.5 %}down{% else %}flat{% endif %}">
+                  {% if row.pct_above_formula > 0 %}+{% endif %}{{ '%.1f'|format(row.pct_above_formula) }}%
+                </span>
+              </td>
+              <td class="num">{{ row.sample_count }}</td>
+              <td>
+                <span class="phase-pill p{{ row.phase }}">
+                  {% if row.phase == 4 %}⭐ Real-Market
+                  {% elif row.phase == 3 %}✓ Verified
+                  {% elif row.phase == 2 %}📈 Calibrated
+                  {% else %}📊 Formula{% endif %}
+                </span>
+              </td>
+              <td class="num">₹ {{ row.median_listing_price | inr }}</td>
+              <td class="num">₹ {{ row.median_formula_price | inr }}</td>
+              <td style="font-size:0.78rem; color:#adb5bd;">{{ row.last_run_display }}</td>
+              <td>
+                <a class="diag-link"
+                   href="{{ url_for('admin_calibration_diagnostic', make=row.make, model=row.model, fuel=row.fuel) }}"
+                   title="Open per-cell diagnostic">Diagnose →</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="empty-state" id="no-results-msg" style="display:none;">
+        <h4>No rows match your filters</h4>
+        <p>Try resetting filters or widening the drift range.</p>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // ============================================================
+  // Filter logic — pure JS, no server roundtrip
+  // ============================================================
+  (function() {
+    const makeEl   = document.getElementById('filter-make');
+    const fuelEl   = document.getElementById('filter-fuel');
+    const phaseEl  = document.getElementById('filter-phase');
+    const driftEl  = document.getElementById('filter-drift');
+    const searchEl = document.getElementById('filter-search');
+    const resetBtn = document.getElementById('filter-reset');
+    const tbody    = document.getElementById('calib-tbody');
+    const countEl  = document.getElementById('visible-count');
+    const emptyEl  = document.getElementById('no-results-msg');
+
+    if (!tbody) return;  // empty state — no table
+
+    const rows = Array.from(tbody.querySelectorAll('.calib-row'));
+
+    function applyFilters() {
+      const make   = makeEl.value;
+      const fuel   = fuelEl.value;
+      const phase  = phaseEl.value;
+      const drift  = driftEl.value;
+      const search = (searchEl.value || '').trim().toLowerCase();
+
+      let visible = 0;
+      rows.forEach(row => {
+        let show = true;
+        if (make   && row.dataset.make   !== make)   show = false;
+        if (fuel   && row.dataset.fuel   !== fuel)   show = false;
+        if (phase  && row.dataset.phase  !== phase)  show = false;
+        if (drift  && row.dataset.drift  !== drift)  show = false;
+        if (search && row.dataset.search.indexOf(search) === -1) show = false;
+        row.style.display = show ? '' : 'none';
+        if (show) visible += 1;
+      });
+
+      countEl.textContent = visible;
+      emptyEl.style.display = (visible === 0) ? 'block' : 'none';
+    }
+
+    [makeEl, fuelEl, phaseEl, driftEl].forEach(el => {
+      el.addEventListener('change', applyFilters);
+    });
+    searchEl.addEventListener('input', applyFilters);
+
+    resetBtn.addEventListener('click', function() {
+      makeEl.value = '';
+      fuelEl.value = '';
+      phaseEl.value = '';
+      driftEl.value = '';
+      searchEl.value = '';
+      applyFilters();
+    });
+  })();
+</script>
+{% endblock %}
