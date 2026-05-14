@@ -9394,36 +9394,91 @@ from datetime import datetime as _dt_paste  # local alias to avoid shadow
 
 def _stash_paste_preview(preview_dict):
     """
-    Save a serialized preview dict to the user's session under a fresh
-    UUID token. Returns the token.
+    Save a serialized preview dict to the paste_previews table in Supabase.
+    Returns the token.
 
-    We store ONE preview per session (not a dict-of-tokens) — if the admin
-    runs another extract, the previous one is overwritten. This keeps the
-    session small (Flask sessions ride in cookies by default).
+    v3.7.2: Migrated from Flask session cookie storage to Supabase. Cookies
+    are capped at ~4KB by browsers; a 200-row paste preview is 50-150KB of
+    JSON, which silently overflowed and made every large paste appear to
+    "expire" on confirm-ingest. Server-side storage removes that limit.
+
+    The token still gets passed via hidden form field; only the data moved.
     """
     token = uuid.uuid4().hex
-    # Tag the preview so we can validate the token on retrieval.
     preview_dict['_token'] = token
-    session['paste_preview'] = preview_dict
-    session.modified = True
+    admin_email = (session.get('user') or {}).get('email', 'unknown')
+
+    try:
+        supabase.table('paste_previews').insert({
+            'token': token,
+            'admin_email': admin_email,
+            'preview_data': preview_dict,
+        }).execute()
+    except Exception as e:
+        app.logger.error(f"_stash_paste_preview: insert failed: {e}")
+        # Fall back to cookie so flow doesn't break catastrophically. If the
+        # preview is too big for the cookie, the user will see the "expired"
+        # message and re-paste — same UX as before.
+        session['paste_preview'] = preview_dict
+        session.modified = True
+
     return token
 
 
 def _retrieve_paste_preview(token):
     """
-    Pull the preview from session by token.
+    Pull the preview from paste_previews table by token.
     Returns the preview dict on success, or None if:
-      - no preview in session
-      - token mismatch
-      - preview older than PASTE_PREVIEW_TTL_SECONDS
+      - no row in DB for this token
+      - row exists but older than PASTE_PREVIEW_TTL_SECONDS
+
+    v3.7.2: Reads from Supabase. Falls back to legacy session cookie if
+    the DB read fails (so existing in-flight previews from before this
+    migration still work for the next 30 minutes).
     """
+    if not token:
+        return None
+
+    try:
+        r = (supabase.table('paste_previews')
+             .select('preview_data, created_at')
+             .eq('token', token)
+             .limit(1)
+             .execute())
+        if r.data:
+            row = r.data[0]
+            preview = row.get('preview_data') or {}
+
+            # TTL check using row.created_at (server time, not client time)
+            created_at_str = row.get('created_at') or ''
+            if created_at_str:
+                try:
+                    clean = created_at_str.replace('Z', '+00:00')
+                    created_at = _dt_paste.fromisoformat(clean)
+                    # Strip tz so we can compare with utcnow() (naive)
+                    if created_at.tzinfo is not None:
+                        created_at = created_at.replace(tzinfo=None)
+                    age_seconds = (_dt_paste.utcnow() - created_at).total_seconds()
+                    if age_seconds > PASTE_PREVIEW_TTL_SECONDS:
+                        return None
+                except (ValueError, TypeError):
+                    return None
+
+            # Tag matches token (defense in depth — should always be true
+            # since we look up BY token)
+            if preview.get('_token') and preview.get('_token') != token:
+                return None
+            return preview
+    except Exception as e:
+        app.logger.warning(f"_retrieve_paste_preview: DB lookup failed: {e}")
+
+    # Fallback to legacy session storage (handles in-flight previews from
+    # before the v3.7.2 migration deployed)
     preview = session.get('paste_preview')
     if not preview:
         return None
     if preview.get('_token') != token:
         return None
-
-    # TTL check
     created_at_str = preview.get('created_at')
     if created_at_str:
         try:
@@ -9436,8 +9491,34 @@ def _retrieve_paste_preview(token):
     return preview
 
 
-def _clear_paste_preview():
-    """Drop the preview from session — called after successful ingest."""
+def _clear_paste_preview(token=None):
+    """
+    Drop the preview from paste_previews — called after successful ingest.
+
+    v3.7.2: Now takes an optional token arg to delete a specific row.
+    Also opportunistically deletes EXPIRED rows (anything older than
+    PASTE_PREVIEW_TTL_SECONDS), keeping the table from growing forever.
+    The cleanup query is one extra DELETE (~10ms) per ingest — negligible
+    cost, runs only on admin actions.
+
+    Also clears the legacy session cookie key (no-op if not present).
+    """
+    # Delete the specific row for this confirm-ingest
+    if token:
+        try:
+            supabase.table('paste_previews').delete().eq('token', token).execute()
+        except Exception as e:
+            app.logger.warning(f"_clear_paste_preview: delete by token failed: {e}")
+
+    # Opportunistic cleanup of expired previews
+    try:
+        cutoff = (_dt_paste.utcnow()
+                  - timedelta(seconds=PASTE_PREVIEW_TTL_SECONDS)).isoformat()
+        supabase.table('paste_previews').delete().lt('created_at', cutoff).execute()
+    except Exception as e:
+        app.logger.warning(f"_clear_paste_preview: expired-cleanup failed: {e}")
+
+    # Legacy fallback — clear any stale session key
     if 'paste_preview' in session:
         session.pop('paste_preview')
         session.modified = True
@@ -9706,7 +9787,7 @@ def admin_paste_confirm_ingest():
 
     # Drop the preview regardless of insert outcome — admin shouldn't be
     # able to "double-confirm" the same preview into the DB.
-    _clear_paste_preview()
+    _clear_paste_preview(token)
 
     if insert_result.get('status') == 'failed' or not insert_result.get('upload_id'):
         flash(
