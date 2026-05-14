@@ -165,6 +165,77 @@ def _is_admin_email(email):
     return email.lower() in {e.lower() for e in ADMIN_EMAILS}
 
 
+def _validate_variant_fuel(make, model, variant, fuel):
+    """
+    Tier 1 Week 1 (v3.7.1) — combined variant+fuel validation.
+
+    Replaces the old pattern of two independent checks (variant exists for
+    model, fuel exists for model) which let through invalid combinations
+    like Honda City + Hybrid + VX MT (where VX MT is petrol-only).
+
+    Reads from car_data's per-(variant, fuel) price dict:
+      CAR_DATA[make][model].variant_fuel_prices[variant][fuel]
+
+    A combination is valid only if a price exists for that exact (variant,
+    fuel) pair. If the lookup fails at any level, returns an error string
+    that the route can pass straight to flash() / render_template.
+
+    Returns:
+      None              — combination is valid
+      str (error msg)   — combination is invalid; describes the problem
+
+    Examples:
+      _validate_variant_fuel("Honda", "City", "VX MT", "Hybrid")
+        → "Variant 'VX MT' is not available in Hybrid for Honda City."
+
+      _validate_variant_fuel("Honda", "City", "e:HEV ZX", "Hybrid")
+        → None  (valid combo)
+
+      _validate_variant_fuel("Honda", "FakeModel", "VX", "Petrol")
+        → "Model 'FakeModel' not found for Honda."
+    """
+    if not (make and model and variant and fuel):
+        return "Make, model, variant and fuel are all required."
+
+    try:
+        car_data_dict = car_data.CAR_DATA
+    except Exception:
+        # Defensive: if car_data isn't loaded for some reason, fail open
+        # rather than block valid requests. The downstream pricing logic
+        # will catch genuinely-missing data.
+        return None
+
+    if make not in car_data_dict:
+        return f"Make '{make}' not found in catalog."
+
+    model_data = car_data_dict.get(make, {}).get(model)
+    if not model_data:
+        return f"Model '{model}' not found for {make}."
+
+    # Primary check — per-fuel price dict (v3.6.0+)
+    vfp = model_data.get("variant_fuel_prices") or {}
+    variant_fuels = vfp.get(variant)
+    if variant_fuels and fuel in variant_fuels:
+        return None  # valid
+
+    # Fallback path — if per-fuel data isn't populated for this row
+    # (e.g. fallback-only entries), accept any variant that exists in
+    # the flat variants dict AND any fuel that exists in the fuels list.
+    # This preserves backward compatibility for fallback data.
+    flat_variants = model_data.get("variants") or {}
+    flat_fuels = model_data.get("fuels") or []
+    if variant in flat_variants and fuel in flat_fuels and not vfp:
+        return None
+
+    # If we got here, the combo is invalid.
+    if variant not in flat_variants:
+        return f"Variant '{variant}' not found for {make} {model}."
+    if fuel not in flat_fuels:
+        return f"Fuel '{fuel}' not available for {make} {model}."
+    # Most likely path — variant exists, fuel exists, but not together.
+    return f"Variant '{variant}' is not available in {fuel} for {make} {model}."
+
+
 # ============================================================
 # v1.0: Register CarDekho paste-extract routes
 # Lives in cardekho_route.py (see import at top of file).
