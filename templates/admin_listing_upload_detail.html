@@ -4,19 +4,16 @@
 {# ============================================================
    📁 File: admin_listing_upload_detail.html
    📍 Location: templates/admin_listing_upload_detail.html
-   ✏️ Status: EXISTING — full file replacement (v3.5.5)
+   ✏️ Status: EXISTING — full file replacement (v3.7.4)
 
-   v3.5.5 changes:
-     - Indian comma formatting via | inr filter on all numeric values
-       (rows, prices, mileage). Replaces US-format '{:,}'.format(...).
-     - Notes panel split into two visual states based on upload.status:
-         partial_error → orange .notes-card  "⚠️ Errors during processing"
-         completed     → soft-blue .notes-info-card "ℹ️ Processing summary"
-       Relies on File 1's status classification fix already deployed.
-
-   Per delivery rules:
-     - Default UI rules locked (.btn-back grey, alphabetical dropdowns,
-       × dismissible flashes, DD-MMM-YYYY dates, Indian commas).
+   v3.7.4 changes from v3.5.5:
+     - Inline .admin-nav-strip CSS removed (now lives in _admin_nav.html)
+     - Hard-coded nav <div> replaced with {% include '_admin_nav.html' %}
+     - Adds "📊 Calibration Overview" to the persistent tab bar
+     - Nothing else touched — all v3.5.5 spec preserved:
+       * Indian comma formatting via | inr filter
+       * Notes panel split: orange (errors) vs soft-blue (informational)
+       * DD-MMM-YYYY dates, × dismissible flashes
    ============================================================ #}
 
 {% block extra_head %}
@@ -24,47 +21,15 @@
   /* ============================================================
      ADMIN PAGE — LISTING CALIBRATION UPLOAD DRILLDOWN
      Mirrors design of admin_listing_calibration.html dashboard.
+
+     v3.7.4: Admin nav strip CSS removed — now lives in the reusable
+     partial templates/_admin_nav.html.
      ============================================================ */
 
   .admin-wrap {
     max-width: 1280px;
     margin: 0 auto;
     padding: 16px 24px 28px;
-  }
-
-  /* ─── Admin nav strip (matches existing admin pages) ──────── */
-  .admin-nav-strip {
-    background: #1a1d24;
-    border: 1px solid #2a2d34;
-    border-radius: 10px;
-    padding: 8px 12px;
-    margin-bottom: 14px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 8px;
-  }
-  .admin-nav-strip a {
-    color: #adb5bd;
-    text-decoration: none;
-    background: transparent;
-    border: 1px solid transparent;
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 0.84rem;
-    font-weight: 600;
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-  .admin-nav-strip a:hover {
-    color: #fff;
-    background: #14171d;
-    border-color: #2a2d34;
-  }
-  .admin-nav-strip a.active {
-    color: #fff;
-    background: rgba(40,167,69,0.16);
-    border-color: rgba(40,167,69,0.45);
   }
 
   /* ─── Back button ──────────────────────────────────────────── */
@@ -250,10 +215,6 @@
        (status='partial_error', genuine errors)
      - .notes-info-card → soft blue, "ℹ️ Processing summary"
        (status='completed', informational notes only)
-
-     File 1 already deployed the status classification logic that
-     makes this distinction work end-to-end. Detail page now matches
-     the badge color in the upload list.
      ============================================================ */
   .notes-card {
     background: linear-gradient(135deg, #2a2118 0%, #14171d 100%);
@@ -452,19 +413,12 @@
 {% block content %}
 <div class="admin-wrap">
 
-  <!-- ============================================================
-       ADMIN NAV STRIP — same as dashboard, no active tab
-       (this is a drilldown page, not a top-level tab)
-       ============================================================ -->
-  <div class="admin-nav-strip">
-    <a href="{{ url_for('admin_data_health') }}">📊 Data Health</a>
-    <a href="{{ url_for('admin_user_activity') }}">👥 User Activity</a>
-    <a href="{{ url_for('admin_multipliers') }}">📈 State Multipliers</a>
-    <a href="{{ url_for('admin_feedback') }}">💬 Feedback Calibration</a>
-    <a href="{{ url_for('admin_research') }}">🔬 Research</a>
-    <a href="{{ url_for('admin_listing_calibration') }}" class="active">🚛 Listing Calibration</a>
-    <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
-  </div>
+  {# ============================================================
+     ADMIN NAV STRIP — v3.7.4
+     Persistent tab bar across all admin sub-pages.
+     Active tab auto-detected via request.endpoint inside the partial.
+     ============================================================ #}
+  {% include '_admin_nav.html' %}
 
   <a href="{{ url_for('admin_listing_calibration') }}" class="btn-back">← Back</a>
 
