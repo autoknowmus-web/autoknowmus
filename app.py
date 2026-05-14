@@ -4477,6 +4477,10 @@ def _fetch_admin_index_counts():
         'research_included':    0,
         # v3.5.2 Step B: negotiation gap value (read from cache)
         'negotiation_gap':      None,
+        # v3.7.5: Listing Calibration tile counts
+        'listings_180d':         0,
+        'listings_new_7d':       0,
+        'listings_uncalibrated': 0,
     }
 
     # ---- Data Health: guardrail_flags + deals_30d ----
@@ -4616,6 +4620,83 @@ def _fetch_admin_index_counts():
         counts['negotiation_gap'] = load_negotiation_gap()
     except Exception as e:
         app.logger.warning(f"admin_index: negotiation_gap fetch failed: {e}")
+
+    # ---- v3.7.5: Listing Calibration tile — listings_180d + listings_new_7d ----
+    # Total Listing Aggregator rows in research_log that the calibration engine
+    # considers eligible (include_in_calibration=true) within the 180-day window.
+    try:
+        cutoff_180d = (datetime.utcnow().date() - timedelta(days=180)).isoformat()
+        r = (supabase.table('research_log')
+             .select('id', count='exact')
+             .eq('data_source', 'Listing Aggregator')
+             .eq('include_in_calibration', True)
+             .gte('entry_date', cutoff_180d)
+             .execute())
+        counts['listings_180d'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: listings_180d count failed: {e}")
+
+    try:
+        cutoff_7d_lc = (datetime.utcnow().date() - timedelta(days=7)).isoformat()
+        r = (supabase.table('research_log')
+             .select('id', count='exact')
+             .eq('data_source', 'Listing Aggregator')
+             .eq('include_in_calibration', True)
+             .gte('entry_date', cutoff_7d_lc)
+             .execute())
+        counts['listings_new_7d'] = r.count or 0
+    except Exception as e:
+        app.logger.warning(f"admin_index: listings_new_7d count failed: {e}")
+
+    # ---- v3.7.5: Listing Calibration tile — listings_uncalibrated ----
+    # Count distinct (make, model, fuel) cells that have >=3 eligible listings
+    # in the 180-day window BUT no row in model_calibration yet — i.e. cells
+    # that WOULD calibrate on the next run but haven't been calibrated yet.
+    #
+    # Done in two fetches + a Python set-diff because the Supabase REST client
+    # doesn't expose GROUP BY directly. Both queries cap at 10000 rows which is
+    # well above any realistic cell count for the foreseeable future.
+    try:
+        cutoff_180d_uc = (datetime.utcnow().date() - timedelta(days=180)).isoformat()
+        # 1) Pull every eligible listing's (make, model, fuel) — bare keys only
+        r1 = (supabase.table('research_log')
+              .select('make, model, fuel')
+              .eq('data_source', 'Listing Aggregator')
+              .eq('include_in_calibration', True)
+              .gte('entry_date', cutoff_180d_uc)
+              .limit(10000)
+              .execute())
+        rows = r1.data or []
+        # 2) Group by cell and count per-cell occurrences
+        cell_counts = {}
+        for row in rows:
+            mk = (row.get('make') or '').strip()
+            md = (row.get('model') or '').strip()
+            fu = (row.get('fuel') or '').strip()
+            if not (mk and md and fu):
+                continue
+            key = (mk, md, fu)
+            cell_counts[key] = cell_counts.get(key, 0) + 1
+        # 3) Eligible cells = those with >=3 listings (matches engine's MIN_SAMPLES_PER_CELL)
+        eligible_cells = {key for key, n in cell_counts.items() if n >= 3}
+
+        # 4) Get all already-calibrated (make, model, fuel) cells
+        r2 = (supabase.table('model_calibration')
+              .select('make, model, fuel')
+              .limit(10000)
+              .execute())
+        calibrated_cells = set()
+        for row in (r2.data or []):
+            mk = (row.get('make') or '').strip()
+            md = (row.get('model') or '').strip()
+            fu = (row.get('fuel') or '').strip()
+            if mk and md and fu:
+                calibrated_cells.add((mk, md, fu))
+
+        # 5) Uncalibrated = eligible but not yet in model_calibration
+        counts['listings_uncalibrated'] = len(eligible_cells - calibrated_cells)
+    except Exception as e:
+        app.logger.warning(f"admin_index: listings_uncalibrated count failed: {e}")
 
     return counts
 
