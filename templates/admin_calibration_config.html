@@ -1,6 +1,27 @@
 {% extends "layout.html" %}
 {% block title %}Calibration Config — Admin — AutoKnowMus{% endblock %}
 
+{#
+   admin_calibration_config.html
+   📂 Path: templates/admin_calibration_config.html
+   ✏️ Status: EXISTING — full file replacement (v3.7.4)
+
+   v3.7.4 changes from previous version:
+     - Added {% include '_admin_nav.html' %} immediately after the back button.
+       This page previously had only a back button — no nav strip — so it was
+       the one admin page where you had to bounce back through /admin to get
+       anywhere else. Now matches every other admin sub-page.
+     - PURELY ADDITIVE: no CSS removed, no markup replaced. Every byte of the
+       original is preserved, with a single new include line inserted.
+     - Active tab auto-detected from request.endpoint inside the partial; this
+       page lives under "📊 Calibration Overview" per the partial's grouping.
+   All other markup byte-identical: current value card, bounds summary strip
+   (hard/typical/default/cache), edit form with soft-warning + audit-note,
+   "🚀 Run Full Calibration" card with double-submit guard, Recent Calibration
+   Runs table, Negotiation Gap Change History audit table, JS for soft-warn
+   live check + run-button disable on submit.
+#}
+
 {% block extra_head %}
 <style>
   .cc-wrap { padding: 14px 30px 30px; max-width: 1100px; margin: 0 auto; }
@@ -446,6 +467,17 @@
 <div class="cc-wrap">
 
   <a href="{{ url_for('admin_index') }}" class="btn-back">← Back</a>
+
+  {# ============================================================
+     ADMIN NAV STRIP — v3.7.4
+     Persistent tab bar across all admin sub-pages.
+     This page previously had only a back button — no nav strip.
+     Active tab auto-detected via request.endpoint inside the partial;
+     this page lives under "📊 Calibration Overview" per the partial's
+     grouping (alongside admin_calibration_overview and
+     admin_calibration_diagnostic).
+     ============================================================ #}
+  {% include '_admin_nav.html' %}
 
   <!-- Page header -->
   <div class="cc-header">
