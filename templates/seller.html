@@ -69,11 +69,6 @@
 
   /* ============================================================
      v3.5: Mileage display field — locked dark theme.
-     Per locked UI rule: disabled/readonly fields must have DARK bg
-     (#1a1d24) with grey text (#6c757d). The previous mileage field had
-     a bug where some browsers rendered a light/white background.
-     This forcibly overrides to ensure consistent dark styling whether
-     enabled, focused, autofilled, or empty.
      ============================================================ */
   #mileage-display {
     background: #1a1d24 !important;
@@ -87,7 +82,6 @@
     border-color: #28a745;
     box-shadow: 0 0 0 0.2rem rgba(40,167,69,0.25);
   }
-  /* Kill Chrome/Edge yellow autofill background */
   #mileage-display:-webkit-autofill,
   #mileage-display:-webkit-autofill:hover,
   #mileage-display:-webkit-autofill:focus {
@@ -95,6 +89,28 @@
     -webkit-text-fill-color: #e6e6e6 !important;
     caret-color: #e6e6e6;
   }
+
+  /* ============================================================
+     v3.7.1 Tier 1 Week 1: Amber chip for year-variant filter.
+     Surfaces under the variant dropdown when the catalog doesn't yet
+     have year_introduced data for the selected (make, model). Tells
+     the user we COULDN'T filter by year, so they should pick the
+     closest match themselves. Goes away the moment we backfill J/K
+     columns in the sheet for that model.
+     ============================================================ */
+  .year-variant-chip {
+    display: none;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 140, 0, 0.12);
+    border: 1px solid rgba(255, 140, 0, 0.4);
+    border-radius: 6px;
+    color: #ffa500;
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+  .year-variant-chip.show { display: block; }
+  .year-variant-chip .chip-icon { margin-right: 0.35rem; }
 </style>
 {% endblock %}
 
@@ -155,8 +171,6 @@
 
       {# ============================================================
          v3.5: LOCATION row — STATE + CITY dropdowns.
-         Default: Karnataka / Bangalore. State change repopulates City.
-         States sorted alphabetically by full name; "Other" pinned last for City.
          ============================================================ #}
       <div class="row g-3 location-row">
         <div class="col-md-6">
@@ -201,14 +215,20 @@
           <select class="form-select" name="variant" id="variant" required disabled>
             <option value="">Select Model first</option>
           </select>
+          {# v3.7.1 Tier 1 Week 1: amber chip surfaces when year data missing #}
+          <div class="year-variant-chip" id="year-variant-chip">
+            <span class="chip-icon">⚠️</span><span id="year-variant-chip-text">
+              Some variants may not have been available in this year — pick the closest match.
+            </span>
+          </div>
         </div>
       </div>
 
-      <!-- Row 3: Year, Owner (optional), Mileage (optional), Condition (optional) -->
+      <!-- Row 3: Year, Owner (optional), Mileage (required), Condition (optional) -->
       <div class="row g-3 mb-4">
         <div class="col-md-3">
           <label class="form-label">Year <span style="color:#ff6b6b;">*</span></label>
-          <select class="form-select" name="year" required>
+          <select class="form-select" name="year" id="year" required>
             <option value="">Select Year</option>
             {% for y in years %}
               <option value="{{ y }}" {% if form.year|string == y|string %}selected{% endif %}>{{ y }}</option>
@@ -228,11 +248,6 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">Mileage (KMs) <span style="color:#ff6b6b;">*</span></label>
-          {# Visible field formats as user types; hidden field carries the raw number for POST.
-             v3.5: forced dark bg via CSS to fix the white-bg autofill bug.
-             v3.5.1: Mileage is now MANDATORY (no auto-default fallback). The `required`
-             attribute on the visible input blocks empty submissions inline, before they
-             hit the backend. Backend also enforces this. #}
           <input type="text" class="form-control" id="mileage-display" inputmode="numeric"
                  value="{{ form.mileage or '' }}" placeholder="e.g. 45,000"
                  autocomplete="off" required>
@@ -268,53 +283,26 @@
 
   /* ============================================================
      v3.5: STATE + CITY dropdowns
-     CITIES_BY_STATE: { 'KA': ['Bangalore', 'Mysore', ..., 'Other'], ... }
-     STATE_NAMES is local-only (templates) — when we DRY, move to app.py.
      ============================================================ */
   const RTO_STATES = {{ rto_states | tojson }};
   const CITIES_BY_STATE = {{ cities_by_state_json | safe }};
   const DEFAULT_STATE = {{ default_state | tojson }};
   const DEFAULT_CITY  = {{ default_city  | tojson }};
 
-  // 36-entry state name map (matches RTO_STATES in app.py).
   const STATE_NAMES = {
-    'AN': 'Andaman & Nicobar Islands',
-    'AP': 'Andhra Pradesh',
-    'AR': 'Arunachal Pradesh',
-    'AS': 'Assam',
-    'BR': 'Bihar',
-    'CG': 'Chhattisgarh',
-    'CH': 'Chandigarh',
-    'DD': 'Daman & Diu',
-    'DL': 'Delhi',
-    'DN': 'Dadra & Nagar Haveli',
-    'GA': 'Goa',
-    'GJ': 'Gujarat',
-    'HP': 'Himachal Pradesh',
-    'HR': 'Haryana',
-    'JH': 'Jharkhand',
-    'JK': 'Jammu & Kashmir',
-    'KA': 'Karnataka',
-    'KL': 'Kerala',
-    'LA': 'Ladakh',
-    'LD': 'Lakshadweep',
-    'MH': 'Maharashtra',
-    'ML': 'Meghalaya',
-    'MN': 'Manipur',
-    'MP': 'Madhya Pradesh',
-    'MZ': 'Mizoram',
-    'NL': 'Nagaland',
-    'OD': 'Odisha',
-    'PB': 'Punjab',
-    'PY': 'Puducherry',
-    'RJ': 'Rajasthan',
-    'SK': 'Sikkim',
-    'TN': 'Tamil Nadu',
-    'TR': 'Tripura',
-    'TS': 'Telangana',
-    'UK': 'Uttarakhand',
-    'UP': 'Uttar Pradesh',
-    'WB': 'West Bengal'
+    'AN': 'Andaman & Nicobar Islands', 'AP': 'Andhra Pradesh',
+    'AR': 'Arunachal Pradesh', 'AS': 'Assam', 'BR': 'Bihar',
+    'CG': 'Chhattisgarh', 'CH': 'Chandigarh', 'DD': 'Daman & Diu',
+    'DL': 'Delhi', 'DN': 'Dadra & Nagar Haveli', 'GA': 'Goa',
+    'GJ': 'Gujarat', 'HP': 'Himachal Pradesh', 'HR': 'Haryana',
+    'JH': 'Jharkhand', 'JK': 'Jammu & Kashmir', 'KA': 'Karnataka',
+    'KL': 'Kerala', 'LA': 'Ladakh', 'LD': 'Lakshadweep',
+    'MH': 'Maharashtra', 'ML': 'Meghalaya', 'MN': 'Manipur',
+    'MP': 'Madhya Pradesh', 'MZ': 'Mizoram', 'NL': 'Nagaland',
+    'OD': 'Odisha', 'PB': 'Punjab', 'PY': 'Puducherry',
+    'RJ': 'Rajasthan', 'SK': 'Sikkim', 'TN': 'Tamil Nadu',
+    'TR': 'Tripura', 'TS': 'Telangana', 'UK': 'Uttarakhand',
+    'UP': 'Uttar Pradesh', 'WB': 'West Bengal'
   };
 
   const stateEl = document.getElementById('user_state');
@@ -324,7 +312,6 @@
   const PREFILL_CITY  = {{ (form.user_city  or default_city)  | tojson }};
 
   function buildStateOptions() {
-    // Sort alphabetically by full name (per UI rule).
     const sortedCodes = RTO_STATES.slice().sort(function(a, b) {
       return (STATE_NAMES[a] || a).localeCompare(STATE_NAMES[b] || b);
     });
@@ -341,8 +328,6 @@
   function buildCityOptions(stateCode, preselectCity) {
     cityEl.innerHTML = '';
     const cities = CITIES_BY_STATE[stateCode] || ['Other'];
-    // Cities are already in app.py order with "Other" last.
-    // Apply locked rule: alphabetical, with "Other" pinned last.
     const others = cities.filter(function(c) { return c !== 'Other'; }).sort();
     const ordered = others.concat(cities.indexOf('Other') >= 0 ? ['Other'] : []);
     ordered.forEach(function(c) {
@@ -352,14 +337,9 @@
       if (preselectCity && c === preselectCity) opt.selected = true;
       cityEl.appendChild(opt);
     });
-    // If preselectCity wasn't found, default to first option.
-    if (preselectCity && cityEl.value !== preselectCity) {
-      // First option remains selected — that's expected when changing state.
-    }
   }
 
   stateEl.addEventListener('change', function() {
-    // When state changes, rebuild city dropdown. Default to first city of new state.
     buildCityOptions(this.value, null);
   });
 
@@ -368,23 +348,45 @@
   buildCityOptions(stateEl.value || DEFAULT_STATE, PREFILL_CITY);
 
   /* ============================================================
-     Make → Fuel → Model → Variant cascade (unchanged from v3.4)
+     v3.7.1 Tier 1 Week 1: Make → Fuel → Model → Variant cascade
+     ------------------------------------------------------------
+     KEY CHANGE: populateVariants now takes (make, model, fuel, year, preselect)
+     and filters by BOTH:
+       - fuel: variant_fuel_prices[variant][fuel] must exist
+       - year: variant_fuel_years[variant][fuel].year_introduced (if set)
+               must be <= selected year
+
+     Any change to fuel OR year triggers a re-render of variant.
      ============================================================ */
   const makeEl    = document.getElementById('make');
   const fuelEl    = document.getElementById('fuel');
   const modelEl   = document.getElementById('model');
   const variantEl = document.getElementById('variant');
+  const yearEl    = document.getElementById('year');
+  const chipEl    = document.getElementById('year-variant-chip');
+  const chipText  = document.getElementById('year-variant-chip-text');
 
   const PREFILL = {
     make:    {{ (form.make    or '')|tojson }},
     fuel:    {{ (form.fuel    or '')|tojson }},
     model:   {{ (form.model   or '')|tojson }},
-    variant: {{ (form.variant or '')|tojson }}
+    variant: {{ (form.variant or '')|tojson }},
+    year:    {{ (form.year    or '')|tojson }}
   };
 
   function resetSelect(el, placeholder) {
     el.innerHTML = '<option value="">' + placeholder + '</option>';
     el.disabled = true;
+  }
+
+  function hideYearChip() {
+    if (chipEl) chipEl.classList.remove('show');
+  }
+
+  function showYearChip(message) {
+    if (!chipEl) return;
+    if (message && chipText) chipText.textContent = message;
+    chipEl.classList.add('show');
   }
 
   function populateFuels(make, preselect) {
@@ -421,14 +423,74 @@
     modelEl.disabled = false;
   }
 
-  function populateVariants(make, model, preselect) {
+  /*
+   * populateVariants(make, model, fuel, year, preselect)
+   *
+   * v3.7.1 Tier 1 Week 1: NEW signature — now takes fuel AND year as inputs.
+   *
+   * Filtering rules:
+   *   1. Variant must exist in `variant_fuel_prices[variant]`
+   *   2. Selected fuel must exist in `variant_fuel_prices[variant][fuel]`
+   *   3. If a year is selected AND year_introduced is set for this
+   *      (variant, fuel), the selected year must be >= year_introduced.
+   *      When year_introduced is missing, we DON'T filter on year
+   *      (and we show the amber chip if year data is sparse for this model).
+   *
+   * Fallback: if `variant_fuel_prices` is empty (legacy fallback-only entries),
+   * fall back to listing all flat variants (no fuel filtering possible).
+   */
+  function populateVariants(make, model, fuel, year, preselect) {
     resetSelect(variantEl, 'Select Variant');
+    hideYearChip();
+
     if (!make || !model || !CAR_DATA[make] || !CAR_DATA[make][model]) return;
-    // Handle both dict-shape (new) and list-shape (legacy) variants structure.
-    // Preserve TRIM ORDER (base → top) — do NOT sort alphabetically.
-    const variantsObj = CAR_DATA[make][model].variants || {};
-    const variants = Array.isArray(variantsObj) ? variantsObj : Object.keys(variantsObj);
-    variants.forEach(v => {
+
+    const modelData    = CAR_DATA[make][model];
+    const vfp          = modelData.variant_fuel_prices || {};
+    const vfy          = modelData.variant_fuel_years  || {};
+    const flatVariants = modelData.variants || {};
+
+    // Decide which variants to show
+    let candidateVariants = [];
+    let yearDataPresent = false;
+    let yearDataAbsent  = false;
+
+    if (Object.keys(vfp).length > 0) {
+      // Modern path — use per-fuel pricing dict
+      Object.keys(vfp).forEach(variant => {
+        const fuelMap = vfp[variant] || {};
+
+        // Rule 1+2: fuel must exist for this variant (if a fuel is selected)
+        if (fuel && !(fuel in fuelMap)) return;
+
+        // Rule 3: year filter (only when both year selected AND year_introduced known)
+        if (year) {
+          const yearMap = (vfy[variant] || {})[fuel || ''] || (vfy[variant] || {});
+          // vfy[variant][fuel] = {introduced, discontinued}; fall back to first fuel if no fuel
+          const introYear = yearMap.introduced;
+          if (introYear !== undefined && introYear !== null) {
+            yearDataPresent = true;
+            const selectedYearInt = parseInt(year, 10);
+            if (!isNaN(selectedYearInt) && selectedYearInt < introYear) {
+              return; // variant didn't exist in selected year
+            }
+          } else {
+            yearDataAbsent = true;
+          }
+        }
+
+        candidateVariants.push(variant);
+      });
+    } else {
+      // Legacy fallback — flat variants list (no fuel/year filtering possible)
+      candidateVariants = Array.isArray(flatVariants)
+        ? flatVariants
+        : Object.keys(flatVariants);
+      // For fallback-only data we don't try to filter by year either
+    }
+
+    // Render in trim order (do NOT alphabetize — preserve catalog order)
+    candidateVariants.forEach(v => {
       const opt = document.createElement('option');
       opt.value = v;
       opt.textContent = v;
@@ -436,19 +498,37 @@
       variantEl.appendChild(opt);
     });
     variantEl.disabled = false;
+
+    // Show amber chip when:
+    //  - a year is selected AND
+    //  - we found at least one variant where year_introduced is missing
+    // This signals "we couldn't filter completely by year for this model"
+    if (year && yearDataAbsent) {
+      showYearChip(
+        'Some variants may not have been available in ' + year + ' — pick the closest match.'
+      );
+    }
   }
 
   makeEl.addEventListener('change', function() {
     populateFuels(this.value, null);
     resetSelect(modelEl, 'Select Fuel first');
     resetSelect(variantEl, 'Select Model first');
+    hideYearChip();
   });
   fuelEl.addEventListener('change', function() {
     populateModels(makeEl.value, this.value, null);
     resetSelect(variantEl, 'Select Model first');
+    hideYearChip();
   });
   modelEl.addEventListener('change', function() {
-    populateVariants(makeEl.value, this.value, null);
+    populateVariants(makeEl.value, this.value, fuelEl.value, yearEl.value, null);
+  });
+  // v3.7.1: year change triggers variant re-filter
+  yearEl.addEventListener('change', function() {
+    if (modelEl.value) {
+      populateVariants(makeEl.value, modelEl.value, fuelEl.value, this.value, variantEl.value);
+    }
   });
 
   (function init() {
@@ -457,7 +537,7 @@
       if (PREFILL.fuel) {
         populateModels(PREFILL.make, PREFILL.fuel, PREFILL.model);
         if (PREFILL.model) {
-          populateVariants(PREFILL.make, PREFILL.model, PREFILL.variant);
+          populateVariants(PREFILL.make, PREFILL.model, PREFILL.fuel, PREFILL.year, PREFILL.variant);
         }
       }
     }
@@ -484,14 +564,12 @@
   }
 
   function formatMileage() {
-    // Strip all non-digit characters
     const digits = mileageDisplay.value.replace(/\D+/g, '');
     if (!digits) {
       mileageDisplay.value = '';
       mileageRaw.value = '';
       return;
     }
-    // Cap at 500000
     let n = parseInt(digits, 10);
     if (n > 500000) n = 500000;
     mileageRaw.value = n;
@@ -500,16 +578,13 @@
 
   mileageDisplay.addEventListener('input', formatMileage);
   mileageDisplay.addEventListener('blur',  formatMileage);
-  // On load, if prefilled as a bare number, format it
   formatMileage();
 
   // v3.5.1: Form-level guard — block submission if mileage is empty.
-  // This catches cases where the visible field's `required` attr is bypassed
-  // (e.g. autofill). Returns focus to the field for fast correction.
   const sellerForm = document.querySelector('form[action="{{ url_for("seller") }}"]');
   if (sellerForm) {
     sellerForm.addEventListener('submit', function(e) {
-      formatMileage(); // Ensure raw is in sync with display
+      formatMileage();
       if (!mileageRaw.value || parseInt(mileageRaw.value, 10) <= 0) {
         e.preventDefault();
         mileageDisplay.focus();
