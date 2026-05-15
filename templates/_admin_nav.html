@@ -1,6 +1,34 @@
+# PASTE INSTRUCTIONS (read first, do not paste yet):
+#
+# This is a FULL FILE REPLACEMENT of templates/_admin_nav.html
+#
+# 1. In GitHub web editor, navigate to: templates/_admin_nav.html
+# 2. Click the pencil (edit) icon
+# 3. Select ALL existing content in the editor (Ctrl-A)
+# 4. Delete it
+# 5. Paste EVERYTHING below the line "=================== BEGIN PASTE HERE ==================="
+#    down to "=================== END OF FILE 5 ==================="
+# 6. Commit with message: "v3.7.8 File 5: add Curve Editor nav tab"
+#
+# WHAT'S CHANGED vs your current version:
+#   - Added `admin_curve_editor` to the _is_calib_overview endpoint set
+#     (so when you're on /admin/curve-editor, Calibration Overview tab
+#     highlights — group it under calibration tools)
+#   - Added a NEW tab: "Curve Editor" between Calibration Overview and
+#     the Google Analytics external link
+#
+# AFTER COMMIT:
+#   - Visible change: every admin page now has a "📉 Curve Editor" tab
+#     in the persistent nav strip at top
+#   - Click it from anywhere → lands on /admin/curve-editor
+#   - The Calibration Overview tab also highlights when you're on the
+#     curve editor (since they're grouped as calibration tools)
+#
+# =================== BEGIN PASTE HERE ===================
 {# ============================================================
    _admin_nav.html — Reusable admin nav strip partial
-   v3.7.4 — Persistent tab bar across all admin sub-pages.
+   v3.7.8 — Added Curve Editor tab + grouped curve editor under
+            the calibration-tools active-detection set.
 
    USAGE:
      In any admin sub-page template, place this BEFORE the back button:
@@ -78,6 +106,13 @@
             'admin_calibration_diagnostic',
             'admin_calibration_config') %}
 
+{# v3.7.8: Curve editor is its own tab. NOT grouped under calib_overview
+   so it gets independent highlighting. Add an endpoint flag for it. #}
+{% set _is_curve_editor =
+    _ep in ('admin_curve_editor',
+            'admin_curve_editor_recompute',
+            'admin_curve_editor_apply') %}
+
 {% set _is_research =
     _ep in ('admin_research',) %}
 
@@ -115,5 +150,9 @@
   <a href="{{ url_for('admin_calibration_overview') }}"
      class="{% if _is_calib_overview %}active{% endif %}">📊 Calibration Overview</a>
 
+  <a href="{{ url_for('admin_curve_editor') }}"
+     class="{% if _is_curve_editor %}active{% endif %}">📉 Curve Editor</a>
+
   <a href="https://analytics.google.com/" target="_blank" rel="noopener">📈 Google Analytics ↗</a>
 </div>
+# =================== END OF FILE 5 ===================
