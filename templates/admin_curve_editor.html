@@ -1,0 +1,970 @@
+{% extends "layout.html" %}
+{% block title %}Curve Editor — Admin · AutoKnowMus{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ============================================================
+     Admin wrap — same container pattern as other admin pages
+     ============================================================ */
+  .admin-wrap { padding: 14px 30px 60px; max-width: 1500px; margin: 0 auto; }
+
+  /* Back button — matches the shared .btn-back pattern */
+  .btn-back {
+    display: inline-block;
+    background: #6c757d;
+    color: #fff;
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 14px;
+    transition: background 0.15s;
+  }
+  .btn-back:hover { background: #5a6268; color: #fff; }
+
+  /* ============================================================
+     Page header — title + subtitle + version stamp
+     ============================================================ */
+  .ce-page-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .ce-page-head h1 {
+    color: #fff;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.2;
+  }
+  .ce-page-head .ce-subtitle {
+    color: #adb5bd;
+    font-size: 0.85rem;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .ce-page-head .ce-version {
+    color: #6c757d;
+    font-size: 0.74rem;
+    font-style: italic;
+    white-space: nowrap;
+  }
+
+  /* ============================================================
+     Header card — top-line counters
+     ============================================================ */
+  .ce-stats-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 1100px) {
+    .ce-stats-row { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .ce-stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  .ce-stat {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .ce-stat .ce-stat-label {
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .ce-stat .ce-stat-value {
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .ce-stat .ce-stat-sub {
+    color: #adb5bd;
+    font-size: 0.72rem;
+    margin-top: 3px;
+  }
+  .ce-stat.is-warning .ce-stat-value { color: #ffa500; }
+  .ce-stat.is-good .ce-stat-value { color: #28a745; }
+  .ce-stat.is-bad .ce-stat-value { color: #ff6b6b; }
+
+  /* ============================================================
+     Action bar — explanation + recompute button
+     ============================================================ */
+  .ce-action-bar {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .ce-action-bar .ce-explain {
+    color: #adb5bd;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    flex: 1;
+    min-width: 280px;
+  }
+  .ce-action-bar .ce-explain strong { color: #28a745; }
+  .ce-action-bar .ce-explain .hl { color: #ffa500; }
+  .ce-recompute-btn {
+    background: transparent;
+    color: #adb5bd;
+    border: 1px solid #2a2d34;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .ce-recompute-btn:hover {
+    border-color: #adb5bd;
+    color: #fff;
+  }
+
+  /* ============================================================
+     Tier section — one block per tier (mass / mid / luxury)
+     ============================================================ */
+  .ce-tier-section {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .ce-tier-header {
+    background: #14171d;
+    padding: 12px 16px;
+    border-bottom: 1px solid #2a2d34;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ce-tier-header .ce-tier-title {
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .ce-tier-header .ce-tier-badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .ce-tier-header .ce-tier-badge.t-mass    { background: rgba(40,167,69,0.16); color: #5bd47b; border: 1px solid rgba(40,167,69,0.45); }
+  .ce-tier-header .ce-tier-badge.t-mid     { background: rgba(78,176,255,0.16); color: #8ec5ff; border: 1px solid rgba(78,176,255,0.45); }
+  .ce-tier-header .ce-tier-badge.t-luxury  { background: rgba(255,165,0,0.16); color: #ffc870; border: 1px solid rgba(255,165,0,0.45); }
+  .ce-tier-header .ce-tier-meta {
+    color: #adb5bd;
+    font-size: 0.78rem;
+  }
+  .ce-tier-header .ce-tier-meta strong { color: #fff; }
+  .ce-tier-header .ce-tier-select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #adb5bd;
+    font-size: 0.78rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .ce-tier-header .ce-tier-select-all:hover { color: #fff; }
+  .ce-tier-header .ce-tier-select-all input[type="checkbox"] {
+    accent-color: #28a745;
+    cursor: pointer;
+  }
+
+  /* ============================================================
+     48-row table
+     ============================================================ */
+  .ce-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+    table-layout: fixed;
+  }
+  .ce-table thead th {
+    color: #6c757d;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 700;
+    text-align: left;
+    padding: 9px 10px;
+    background: #14171d;
+    border-bottom: 1px solid #2a2d34;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .ce-table th.col-checkbox  { width: 38px; text-align: center; }
+  .ce-table th.col-age       { width: 60px; }
+  .ce-table th.col-current   { width: 90px; text-align: right; }
+  .ce-table th.col-suggested { width: 130px; text-align: right; }
+  .ce-table th.col-delta     { width: 90px; text-align: right; }
+  .ce-table th.col-ncells    { width: 80px; text-align: right; }
+  .ce-table th.col-mult      { width: 80px; text-align: right; }
+  .ce-table th.col-confidence { width: 105px; }
+  .ce-table th.col-flags     { width: 70px; text-align: center; }
+  .ce-table th.col-evidence  { width: auto; }
+
+  .ce-table tbody td {
+    padding: 8px 10px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+  }
+  .ce-table tbody tr:last-child td { border-bottom: none; }
+  .ce-table .col-checkbox { text-align: center; }
+  .ce-table .col-age      { color: #adb5bd; font-weight: 600; }
+  .ce-table .col-current,
+  .ce-table .col-suggested,
+  .ce-table .col-delta,
+  .ce-table .col-ncells,
+  .ce-table .col-mult { text-align: right; font-variant-numeric: tabular-nums; }
+  .ce-table .col-flags { text-align: center; }
+
+  /* Row confidence states */
+  .ce-table tr.conf-high      { opacity: 1; }
+  .ce-table tr.conf-low       { opacity: 0.62; background: rgba(255,165,0,0.03); }
+  .ce-table tr.conf-empty     { opacity: 0.38; background: rgba(108,117,125,0.04); }
+  .ce-table tr.has-monotonic-flag { background: rgba(255,107,107,0.06); }
+
+  /* Editable input for suggested value */
+  .ce-suggested-input {
+    width: 80px;
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #5bd47b;
+    border-radius: 5px;
+    padding: 4px 8px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    transition: border-color 0.15s;
+  }
+  .ce-suggested-input:focus {
+    outline: none;
+    border-color: #28a745;
+    box-shadow: 0 0 0 1px rgba(40,167,69,0.3);
+  }
+  .ce-suggested-input:disabled {
+    color: #6c757d;
+    background: #14171d;
+    cursor: not-allowed;
+  }
+  .ce-suggested-input.is-edited {
+    border-color: #ffa500;
+    color: #ffc870;
+  }
+
+  /* Delta arrow + value */
+  .ce-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-weight: 600;
+  }
+  .ce-delta.dir-up   { color: #5bd47b; }
+  .ce-delta.dir-down { color: #ff8585; }
+  .ce-delta.dir-zero { color: #6c757d; }
+
+  /* Confidence pill */
+  .ce-conf-pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 10px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .ce-conf-pill.c-high   { background: rgba(40,167,69,0.18); color: #5bd47b; border: 1px solid rgba(40,167,69,0.45); }
+  .ce-conf-pill.c-low    { background: rgba(255,165,0,0.16); color: #ffc870; border: 1px solid rgba(255,165,0,0.45); }
+  .ce-conf-pill.c-empty  { background: rgba(108,117,125,0.16); color: #adb5bd; border: 1px solid rgba(108,117,125,0.4); }
+
+  /* Monotonic violation flag */
+  .ce-mono-flag {
+    display: inline-block;
+    color: #ff8585;
+    font-size: 1rem;
+    cursor: help;
+  }
+
+  /* Apply checkbox */
+  .ce-apply-checkbox {
+    width: 17px;
+    height: 17px;
+    accent-color: #28a745;
+    cursor: pointer;
+    vertical-align: middle;
+  }
+  .ce-apply-checkbox:disabled { cursor: not-allowed; }
+
+  /* Evidence (top 5 contributing cells) — tooltip-like reveal */
+  .ce-evidence-wrap {
+    position: relative;
+    cursor: help;
+  }
+  .ce-evidence-label {
+    color: #adb5bd;
+    font-size: 0.78rem;
+    border-bottom: 1px dotted #6c757d;
+  }
+  .ce-evidence-popover {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    background: #000;
+    color: #fff;
+    border: 1px solid #28a745;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.4;
+    width: 340px;
+    max-width: 340px;
+    z-index: 30;
+    transition: opacity 0.15s;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    white-space: normal;
+    text-align: left;
+  }
+  .ce-evidence-wrap:hover .ce-evidence-popover { visibility: visible; opacity: 1; }
+  .ce-evidence-popover .ev-header {
+    color: #ffa500;
+    font-weight: 700;
+    font-size: 0.7rem;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+  }
+  .ce-evidence-popover .ev-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 6px;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .ce-evidence-popover .ev-row:last-of-type { border-bottom: none; }
+  .ce-evidence-popover .ev-name { color: #e6e6e6; }
+  .ce-evidence-popover .ev-mult { color: #ffc870; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ce-evidence-popover .ev-n { color: #6c757d; font-variant-numeric: tabular-nums; }
+
+  /* ============================================================
+     Sticky Apply Changes bar (bottom of form)
+     ============================================================ */
+  .ce-apply-bar {
+    position: sticky;
+    bottom: 12px;
+    background: #1a1d24;
+    border: 1px solid #28a745;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    z-index: 5;
+  }
+  .ce-apply-bar .ce-apply-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .ce-apply-bar .ce-apply-summary {
+    color: #adb5bd;
+    font-size: 0.86rem;
+    line-height: 1.45;
+    flex: 1;
+    min-width: 240px;
+  }
+  .ce-apply-bar .ce-apply-summary .ce-count {
+    color: #28a745;
+    font-weight: 700;
+  }
+  .ce-apply-bar .ce-apply-reason {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 220px;
+    max-width: 380px;
+  }
+  .ce-apply-bar .ce-apply-reason label {
+    color: #adb5bd;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+  }
+  .ce-apply-bar .ce-apply-reason input {
+    background: #0e1117;
+    border: 1px solid #2a2d34;
+    color: #e6e6e6;
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.84rem;
+  }
+  .ce-apply-bar .ce-apply-reason input:focus {
+    outline: none;
+    border-color: #28a745;
+  }
+  .ce-apply-bar .ce-apply-submit {
+    background: #28a745;
+    color: #fff;
+    border: none;
+    padding: 11px 22px;
+    border-radius: 7px;
+    font-size: 0.94rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .ce-apply-bar .ce-apply-submit:hover { background: #2bb84d; }
+  .ce-apply-bar .ce-apply-submit:disabled {
+    background: #2a2d34;
+    color: #6c757d;
+    cursor: not-allowed;
+  }
+
+  /* ============================================================
+     Recent audit history table
+     ============================================================ */
+  .ce-audit-section {
+    background: #1a1d24;
+    border: 1px solid #2a2d34;
+    border-radius: 12px;
+    margin-top: 24px;
+    overflow: hidden;
+  }
+  .ce-audit-header {
+    background: #14171d;
+    padding: 12px 16px;
+    border-bottom: 1px solid #2a2d34;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ce-audit-header .ce-audit-sub {
+    color: #adb5bd;
+    font-size: 0.76rem;
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  .ce-audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+  .ce-audit-table thead th {
+    color: #6c757d;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 700;
+    text-align: left;
+    padding: 9px 10px;
+    border-bottom: 1px solid #2a2d34;
+  }
+  .ce-audit-table tbody td {
+    padding: 8px 10px;
+    color: #e6e6e6;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .ce-audit-table tbody tr:last-child td { border-bottom: none; }
+  .ce-audit-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .ce-audit-table .pct-up   { color: #5bd47b; }
+  .ce-audit-table .pct-down { color: #ff8585; }
+  .ce-audit-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    font-size: 0.86rem;
+  }
+
+  /* ============================================================
+     Flash banner (success / error) — same pattern as other admin pages
+     ============================================================ */
+  .ce-flash {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    position: relative;
+    padding-right: 40px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .ce-flash.flash-success {
+    background: rgba(40,167,69,0.12);
+    border: 1px solid rgba(40,167,69,0.45);
+    color: #b8eec5;
+  }
+  .ce-flash.flash-error {
+    background: rgba(255,165,0,0.12);
+    border: 1px solid rgba(255,165,0,0.45);
+    color: #ffe0b0;
+  }
+  .ce-flash .flash-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    background: transparent;
+    border: none;
+    color: inherit;
+    opacity: 0.6;
+    font-size: 1.2rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+  }
+  .ce-flash .flash-close:hover { opacity: 1; }
+
+  /* Lakhs / thousands hint inline */
+  .ce-info-hint {
+    color: #6c757d;
+    font-size: 0.76rem;
+    font-style: italic;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+
+  {% include '_admin_nav.html' %}
+
+  <a href="{{ url_for('admin_index') }}" class="btn-back">← Back to Admin</a>
+
+  {# ============ Flash messages (× dismiss per UI rule #1) ============ #}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+        <div class="ce-flash flash-{{ category }}">
+          <span style="flex:1;">{{ msg }}</span>
+          <button type="button" class="flash-close" onclick="this.parentElement.style.display='none'" aria-label="Dismiss">×</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {# ============ Page header ============ #}
+  <div class="ce-page-head">
+    <div>
+      <h1>📉 Depreciation Curve Editor</h1>
+      <div class="ce-subtitle">
+        Refine retention rates per (tier × age) bucket based on real listing calibration data.
+        Suggested values come from the weighted-average multiplier across calibrated cells in each bucket.
+      </div>
+    </div>
+    <div class="ce-version">v3.7.8 · {{ now_display }}</div>
+  </div>
+
+  {# ============ Top-line stats ============ #}
+  <div class="ce-stats-row">
+    <div class="ce-stat">
+      <div class="ce-stat-label">Total buckets</div>
+      <div class="ce-stat-value">{{ total_buckets }}</div>
+      <div class="ce-stat-sub">16 ages × 3 tiers</div>
+    </div>
+    <div class="ce-stat is-good">
+      <div class="ce-stat-label">High confidence</div>
+      <div class="ce-stat-value">{{ high_confidence }}</div>
+      <div class="ce-stat-sub">≥ {{ min_cells_threshold }} cells per bucket</div>
+    </div>
+    <div class="ce-stat is-warning">
+      <div class="ce-stat-label">Low confidence</div>
+      <div class="ce-stat-value">{{ low_confidence }}</div>
+      <div class="ce-stat-sub">1–{{ min_cells_threshold - 1 }} cells per bucket</div>
+    </div>
+    <div class="ce-stat">
+      <div class="ce-stat-label">No data</div>
+      <div class="ce-stat-value">{{ empty_buckets }}</div>
+      <div class="ce-stat-sub">no calibrated cells</div>
+    </div>
+    <div class="ce-stat is-good">
+      <div class="ce-stat-label">Suggestions</div>
+      <div class="ce-stat-value">{{ has_changes }}</div>
+      <div class="ce-stat-sub">|Δ| ≥ 0.01%</div>
+    </div>
+    {% if monotonic_flags > 0 %}
+      <div class="ce-stat is-bad">
+        <div class="ce-stat-label">Monotonic flags</div>
+        <div class="ce-stat-value">{{ monotonic_flags }}</div>
+        <div class="ce-stat-sub">older retains > younger</div>
+      </div>
+    {% else %}
+      <div class="ce-stat is-good">
+        <div class="ce-stat-label">Monotonic flags</div>
+        <div class="ce-stat-value">0</div>
+        <div class="ce-stat-sub">curve shape sane</div>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ============ Action bar ============ #}
+  <div class="ce-action-bar">
+    <div class="ce-explain">
+      <strong>How this works:</strong> Each row shows the current retention from the depreciation curve
+      and a <span class="hl">suggested</span> value derived from calibrated cells in that bucket.
+      Check the rows you want to apply, optionally edit the suggested value inline, then click
+      <strong>Apply Changes</strong> at the bottom. Every change is logged to the audit table.
+      Greyed rows have insufficient data — they're shown for context but cannot be applied.
+    </div>
+    <a href="{{ url_for('admin_curve_editor_recompute') }}" class="ce-recompute-btn">↻ Recompute</a>
+  </div>
+
+  {# ============ Apply form wraps all 3 tier sections ============ #}
+  <form method="POST" action="{{ url_for('admin_curve_editor_apply') }}" id="ce-apply-form">
+
+    {# ============ Three tier sections ============ #}
+    {% for tier in tiers %}
+      {% set tier_label =
+        'Mass Market (≤ ₹15 Lakh)' if tier == 'mass_market' else
+        'Mid Market (₹15L – ₹35L)' if tier == 'mid_market' else
+        'Luxury (> ₹35 Lakh)' %}
+      {% set tier_class =
+        't-mass' if tier == 'mass_market' else
+        't-mid'  if tier == 'mid_market' else
+        't-luxury' %}
+
+      <div class="ce-tier-section">
+        <div class="ce-tier-header">
+          <div class="ce-tier-title">
+            <span class="ce-tier-badge {{ tier_class }}">{{ tier }}</span>
+            <span>{{ tier_label }}</span>
+          </div>
+          <div class="ce-tier-meta">
+            <strong>{{ by_tier_high[tier] }}</strong> bucket(s) high-confidence ·
+            <strong>{{ by_tier_counts[tier] }}</strong> calibrated cells contributing
+          </div>
+          <label class="ce-tier-select-all">
+            <input type="checkbox" class="ce-tier-select-all-cb" data-tier="{{ tier }}">
+            <span>Select all in tier</span>
+          </label>
+        </div>
+
+        <table class="ce-table">
+          <thead>
+            <tr>
+              <th class="col-checkbox">Apply</th>
+              <th class="col-age">Age (yr)</th>
+              <th class="col-current">Current %</th>
+              <th class="col-suggested">Suggested %</th>
+              <th class="col-delta">Δ</th>
+              <th class="col-ncells">Cells (n)</th>
+              <th class="col-mult">Avg mult</th>
+              <th class="col-confidence">Confidence</th>
+              <th class="col-flags">Flags</th>
+              <th class="col-evidence">Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in suggestions if s.tier == tier %}
+              {% set is_actionable = s.confidence in ('high', 'low') %}
+              {% set row_class = 'conf-' ~ s.confidence %}
+              {% if s.monotonic_violation %}{% set row_class = row_class ~ ' has-monotonic-flag' %}{% endif %}
+              <tr class="{{ row_class }}" data-tier="{{ tier }}" data-age="{{ s.age }}">
+                <td class="col-checkbox">
+                  <input type="checkbox"
+                         name="apply_{{ tier }}_{{ s.age }}"
+                         class="ce-apply-checkbox tier-{{ tier }}"
+                         data-tier="{{ tier }}"
+                         {% if not is_actionable %}disabled title="No data in this bucket"{% endif %}>
+                </td>
+                <td class="col-age">{{ s.age }}</td>
+                <td class="col-current">
+                  {{ '%.2f'|format(s.current_retention) }}
+                  <input type="hidden"
+                         name="current_value_{{ tier }}_{{ s.age }}"
+                         value="{{ '%.2f'|format(s.current_retention) }}">
+                </td>
+                <td class="col-suggested">
+                  <input type="text"
+                         class="ce-suggested-input"
+                         name="new_value_{{ tier }}_{{ s.age }}"
+                         value="{{ '%.2f'|format(s.suggested_retention) }}"
+                         data-original="{{ '%.2f'|format(s.suggested_retention) }}"
+                         inputmode="decimal"
+                         {% if not is_actionable %}disabled{% endif %}>
+                </td>
+                <td class="col-delta">
+                  {% if s.delta > 0.005 %}
+                    <span class="ce-delta dir-up">+{{ '%.2f'|format(s.delta) }}</span>
+                  {% elif s.delta < -0.005 %}
+                    <span class="ce-delta dir-down">{{ '%.2f'|format(s.delta) }}</span>
+                  {% else %}
+                    <span class="ce-delta dir-zero">0.00</span>
+                  {% endif %}
+                </td>
+                <td class="col-ncells">{{ s.n_cells }}</td>
+                <td class="col-mult">
+                  {% if s.n_cells > 0 %}{{ '%.4f'|format(s.weighted_avg_mult) }}{% else %}—{% endif %}
+                </td>
+                <td class="col-confidence">
+                  {% if s.confidence == 'high' %}
+                    <span class="ce-conf-pill c-high">High</span>
+                  {% elif s.confidence == 'low' %}
+                    <span class="ce-conf-pill c-low">Low</span>
+                  {% else %}
+                    <span class="ce-conf-pill c-empty">No data</span>
+                  {% endif %}
+                </td>
+                <td class="col-flags">
+                  {% if s.monotonic_violation %}
+                    <span class="ce-mono-flag" title="Suggested value > previous age in same tier (older car retaining more than younger)">⚠️</span>
+                  {% endif %}
+                </td>
+                <td class="col-evidence">
+                  {% if s.evidence_top %}
+                    <span class="ce-evidence-wrap">
+                      <span class="ce-evidence-label">
+                        {{ s.evidence_top|length }} of {{ s.n_cells }} cell(s)
+                      </span>
+                      <span class="ce-evidence-popover">
+                        <div class="ev-header">Top contributing cells</div>
+                        {% for ev in s.evidence_top %}
+                          <div class="ev-row">
+                            <span class="ev-name">{{ ev.make }} {{ ev.model }} · {{ ev.fuel }}</span>
+                            <span class="ev-mult">×{{ '%.3f'|format(ev.multiplier) }}</span>
+                            <span class="ev-n">n={{ ev.sample_count }}</span>
+                          </div>
+                        {% endfor %}
+                      </span>
+                    </span>
+                  {% else %}
+                    <span style="color:#6c757d; font-size:0.74rem; font-style:italic;">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endfor %}
+
+    {# ============ Sticky Apply bar ============ #}
+    <div class="ce-apply-bar">
+      <div class="ce-apply-row">
+        <div class="ce-apply-summary">
+          <span class="ce-count" id="ce-selected-count">0</span> bucket(s) selected for update.
+          Each checked row will be written to the depreciation_curve sheet and logged to
+          depreciation_curve_audit with a shared batch_id.
+        </div>
+        <div class="ce-apply-reason">
+          <label for="ce-reason-input">Reason / note (optional, max 500 chars)</label>
+          <input type="text" id="ce-reason-input" name="reason"
+                 placeholder="e.g. May-2026 mass-market drift correction"
+                 maxlength="500">
+        </div>
+        <button type="submit" class="ce-apply-submit" id="ce-apply-submit-btn" disabled>
+          Apply Changes
+        </button>
+      </div>
+    </div>
+  </form>
+
+  {# ============ Recent audit history ============ #}
+  <div class="ce-audit-section">
+    <div class="ce-audit-header">
+      📜 Recent changes
+      <span class="ce-audit-sub">last 20 audit entries · most recent first</span>
+    </div>
+    {% if recent_audit and recent_audit|length > 0 %}
+      <table class="ce-audit-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Who</th>
+            <th>Tier</th>
+            <th class="num">Age</th>
+            <th class="num">Old %</th>
+            <th class="num">New %</th>
+            <th class="num">Δ %</th>
+            <th>Reason</th>
+            <th>Batch</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in recent_audit %}
+            <tr>
+              <td>{{ a.changed_at_display }}</td>
+              <td>{{ a.changed_by }}</td>
+              <td>{{ a.tier }}</td>
+              <td class="num">{{ a.year_age }}</td>
+              <td class="num">
+                {% if a.old_value is not none %}{{ '%.2f'|format(a.old_value|float) }}{% else %}—{% endif %}
+              </td>
+              <td class="num">{{ '%.2f'|format(a.new_value|float) }}</td>
+              <td class="num">
+                {% if a.pct_change is not none %}
+                  {% if a.pct_change|float > 0 %}
+                    <span class="pct-up">+{{ '%.2f'|format(a.pct_change|float) }}%</span>
+                  {% elif a.pct_change|float < 0 %}
+                    <span class="pct-down">{{ '%.2f'|format(a.pct_change|float) }}%</span>
+                  {% else %}
+                    0.00%
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ a.reason or '—' }}</td>
+              <td style="font-family: ui-monospace, monospace; color:#6c757d; font-size:0.74rem;">
+                {{ (a.batch_id or '')[:8] }}…
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="ce-audit-empty">
+        No curve changes yet. Apply your first batch above to populate this log.
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  // ============================================================
+  // Curve editor client-side behavior
+  //   - Live count of checked boxes -> sticky apply bar
+  //   - Enable/disable submit button based on count
+  //   - "Select all in tier" propagation
+  //   - Mark edited inputs in orange when user changes the value
+  // ============================================================
+  (function() {
+    const form          = document.getElementById('ce-apply-form');
+    const submitBtn     = document.getElementById('ce-apply-submit-btn');
+    const countEl       = document.getElementById('ce-selected-count');
+    const allCheckboxes = form.querySelectorAll('.ce-apply-checkbox');
+    const allInputs     = form.querySelectorAll('.ce-suggested-input');
+    const tierSelectAll = form.querySelectorAll('.ce-tier-select-all-cb');
+
+    function updateCount() {
+      let n = 0;
+      allCheckboxes.forEach(function(cb) {
+        if (cb.checked && !cb.disabled) n++;
+      });
+      countEl.textContent = n;
+      submitBtn.disabled = (n === 0);
+    }
+
+    // Individual checkbox change
+    allCheckboxes.forEach(function(cb) {
+      cb.addEventListener('change', function() {
+        updateCount();
+        syncTierSelectAll(cb.dataset.tier);
+      });
+    });
+
+    // "Select all in tier" propagation
+    tierSelectAll.forEach(function(saCb) {
+      saCb.addEventListener('change', function() {
+        const tier = saCb.dataset.tier;
+        const tierBoxes = form.querySelectorAll('.ce-apply-checkbox.tier-' + tier);
+        tierBoxes.forEach(function(cb) {
+          if (!cb.disabled) cb.checked = saCb.checked;
+        });
+        updateCount();
+      });
+    });
+
+    function syncTierSelectAll(tier) {
+      if (!tier) return;
+      const saCb = form.querySelector('.ce-tier-select-all-cb[data-tier="' + tier + '"]');
+      if (!saCb) return;
+      const tierBoxes = form.querySelectorAll('.ce-apply-checkbox.tier-' + tier + ':not(:disabled)');
+      const checkedCount = Array.from(tierBoxes).filter(function(cb){ return cb.checked; }).length;
+      if (checkedCount === 0) {
+        saCb.checked = false;
+        saCb.indeterminate = false;
+      } else if (checkedCount === tierBoxes.length) {
+        saCb.checked = true;
+        saCb.indeterminate = false;
+      } else {
+        saCb.checked = false;
+        saCb.indeterminate = true;
+      }
+    }
+
+    // Mark edited inputs
+    allInputs.forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        const orig = inp.dataset.original;
+        if (inp.value.trim() !== orig) {
+          inp.classList.add('is-edited');
+        } else {
+          inp.classList.remove('is-edited');
+        }
+      });
+    });
+
+    // Initial count
+    updateCount();
+
+    // Confirm before submit (extra safety net)
+    form.addEventListener('submit', function(e) {
+      const n = parseInt(countEl.textContent, 10) || 0;
+      if (n === 0) {
+        e.preventDefault();
+        return;
+      }
+      const msg =
+        'Apply ' + n + ' curve change(s) to the live depreciation curve?\n\n' +
+        'This will:\n' +
+        '  • Write ' + n + ' row(s) to depreciation_curve_audit\n' +
+        '  • Update the depreciation_curve Google Sheet\n' +
+        '  • Refresh the price cache so changes go live immediately\n\n' +
+        'Continue?';
+      if (!confirm(msg)) {
+        e.preventDefault();
+      }
+    });
+  })();
+</script>
+{% endblock %}
+{# =================== END OF FILE 4 =================== #}
