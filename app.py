@@ -4698,6 +4698,32 @@ def _fetch_admin_index_counts():
     except Exception as e:
         app.logger.warning(f"admin_index: listings_uncalibrated count failed: {e}")
 
+    # ---- v3.7.8: Curve Editor tile — curve_suggestions_pending ----
+    # Count buckets (tier, age) that have a non-trivial delta AND
+    # sufficient cells to be actionable (confidence='high' or 'low').
+    # Empty buckets (no calibrated cells) are excluded from the count
+    # since they're not actionable — admin can't apply changes there.
+    try:
+        # Reuse the same suggestion computation as the live editor.
+        # _compute_curve_suggestions returns the full 48-row list.
+        curve_suggestions = _compute_curve_suggestions()
+        # Actionable = has cells AND has a meaningful delta
+        counts['curve_suggestions_pending'] = sum(
+            1 for s in curve_suggestions
+            if s.get('confidence') in ('high', 'low')
+            and abs(s.get('delta', 0)) >= 0.005
+        )
+        # Also expose the count of monotonic flags (rows where suggested
+        # would create older>younger retention — these need manual review).
+        counts['curve_monotonic_flags'] = sum(
+            1 for s in curve_suggestions
+            if s.get('monotonic_violation')
+        )
+    except Exception as e:
+        app.logger.warning(f"admin_index: curve_suggestions_pending count failed: {e}")
+        counts['curve_suggestions_pending'] = 0
+        counts['curve_monotonic_flags'] = 0
+
     return counts
 
 
