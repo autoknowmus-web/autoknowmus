@@ -3,16 +3,21 @@
 {#
    admin_data_health.html
    📂 Path: templates/admin_data_health.html
-   ✏️ Status: EXISTING — full file replacement (v3.7.4)
+   ✏️ Status: EXISTING — full file replacement (v3.7.7)
 
-   v3.7.4 changes from previous version:
-     - Inline .admin-nav-strip CSS removed (now lives in _admin_nav.html)
-     - Hard-coded nav <div> replaced with {% include '_admin_nav.html' %}
-     - Active tab now auto-detected from request.endpoint inside the partial.
-     - Visible change: 6-tab orange-active strip → 8-tab green-active strip
-       (adds 🚛 Listing Calibration + 📊 Calibration Overview tabs).
-   All other markup byte-identical: sync card, phase distribution, activity
-   stats, top models, upgrade queue, guardrail flags, broker signals.
+   v3.7.7 changes from v3.7.4:
+     - NEW card: "📉 Depreciation Curve Tiers (v3.7.6)" inserted directly
+       below the Price Data Sync card. Shows per-tier row counts loaded
+       from the depreciation_curve Google Sheet (mass_market / mid_market
+       / luxury). Card is color-coded:
+         - GREEN border: all 3 tiers loaded (expected: 16 rows each)
+         - ORANGE border: only mass-market loaded (mid/lux columns missing
+           in sheet or cache not yet refreshed)
+         - RED border: no curves loaded at all (sheet fetch failed)
+       Uses fields populated by car_data.py v3.7.6 Patch 6 in get_cache_status().
+     - Fixes a stray "{" character that crept in during a previous edit.
+   All other markup byte-identical to v3.7.4: sync card, phase distribution,
+   activity stats, top models, upgrade queue, guardrail flags, broker signals.
 #}
 
 {% block title %}Data Health — Admin · AutoKnowMus{% endblock %}
@@ -532,6 +537,91 @@
            onclick="this.innerHTML = '<span class=\'icon\'>⏳</span> Refreshing...'; this.style.pointerEvents='none'; this.style.opacity='0.7';">
           <span class="icon">🔄</span>Refresh Now
         </a>
+      </div>
+    </div>
+  </div>
+
+  {# ============================================================
+     v3.7.7: Depreciation Curve Tiers card
+     Shows per-tier row counts from the depreciation_curve sheet.
+     Confirms whether v3.7.6 tiered curves loaded correctly.
+
+     Expected when fully loaded: 16 rows per tier (ages 0-15).
+     If any tier shows 0, the sheet is missing that column or the
+     cache hasn't refreshed yet — click "Refresh Now" above.
+     ============================================================ #}
+  {% set mass_rows   = cache_status.mass_market_rows | default(0) %}
+  {% set mid_rows    = cache_status.mid_market_rows  | default(0) %}
+  {% set lux_rows    = cache_status.luxury_rows      | default(0) %}
+  {% set all_loaded  = (mass_rows > 0 and mid_rows > 0 and lux_rows > 0) %}
+  {% set partial     = (mass_rows > 0 and (mid_rows == 0 or lux_rows == 0)) %}
+  {% set none_loaded = (mass_rows == 0 and mid_rows == 0 and lux_rows == 0) %}
+
+  <div class="sync-card" style="border-left-color: {% if all_loaded %}#28a745{% elif partial %}#ffa500{% else %}#dc3545{% endif %};">
+    <div class="sync-card-header">
+      <div class="sync-card-left">
+        <h2 style="color: {% if all_loaded %}#5fd37a{% elif partial %}#ffa500{% else %}#ff6b7a{% endif %};">
+          📉 Depreciation Curve Tiers (v3.7.6)
+        </h2>
+        <div class="sync-meta-grid">
+          <div class="lbl">Mass-market curve:</div>
+          <div class="val">
+            {{ mass_rows }} row{{ '' if mass_rows == 1 else 's' }}
+            {% if mass_rows > 0 %}
+              <span style="color:#5fd37a; margin-left:6px;">✓ loaded</span>
+            {% else %}
+              <span style="color:#ff6b7a; margin-left:6px;">✗ missing</span>
+            {% endif %}
+          </div>
+
+          <div class="lbl">Mid-market curve:</div>
+          <div class="val">
+            {{ mid_rows }} row{{ '' if mid_rows == 1 else 's' }}
+            {% if mid_rows > 0 %}
+              <span style="color:#5fd37a; margin-left:6px;">✓ loaded</span>
+            {% else %}
+              <span style="color:#ff6b7a; margin-left:6px;">✗ missing</span>
+            {% endif %}
+          </div>
+
+          <div class="lbl">Luxury curve:</div>
+          <div class="val">
+            {{ lux_rows }} row{{ '' if lux_rows == 1 else 's' }}
+            {% if lux_rows > 0 %}
+              <span style="color:#5fd37a; margin-left:6px;">✓ loaded</span>
+            {% else %}
+              <span style="color:#ff6b7a; margin-left:6px;">✗ missing</span>
+            {% endif %}
+          </div>
+
+          <div class="lbl">Tier thresholds:</div>
+          <div class="val" style="font-size:11.5px; color:#8b92a5;">
+            &lt; ₹15L → mass-market &nbsp;·&nbsp;
+            ₹15-35L → mid-market &nbsp;·&nbsp;
+            &gt; ₹35L → luxury
+          </div>
+        </div>
+
+        <div class="sync-footnote" style="color: {% if all_loaded %}#5fd37a{% elif partial %}#ffa500{% else %}#ff6b7a{% endif %}; font-style: normal; font-weight: 600;">
+          {% if all_loaded %}
+            ✅ All 3 tier curves loaded from sheet.
+            {% if mass_rows != 16 or mid_rows != 16 or lux_rows != 16 %}
+              <span style="color:#ffa500; font-weight:500;">
+                ⚠️ Expected 16 rows per tier (ages 0-15). Some tiers have fewer — check sheet for blank cells.
+              </span>
+            {% endif %}
+          {% elif partial %}
+            ⚠️ Only mass-market loaded — mid-market and/or luxury columns missing in sheet.
+            <span style="color:#8b92a5; font-weight:500;">
+              Either the sheet doesn't have the new columns yet, or the cache is stale. Click Refresh Now above.
+            </span>
+          {% else %}
+            ❌ Depreciation curve failed to load.
+            <span style="color:#8b92a5; font-weight:500;">
+              Check the depreciation_curve tab in Google Sheets, then click Refresh Now.
+            </span>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
