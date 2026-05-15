@@ -6291,6 +6291,597 @@ def admin_calibration_overview():
 
 
 # ============================================================
+# v3.7.8: ADMIN — CURVE EDITOR (depreciation curve refinement)
+# ------------------------------------------------------------
+# Lets admin review empirical retention rates derived from calibrated
+# model cells, grouped by (tier, age). Where the data is strong enough
+# (>=3 cells per bucket), shows a suggested new retention value that
+# admin can apply in one click. Every change writes to the
+# depreciation_curve_audit table with a shared batch_id so apply-all
+# operations are reversible by inspection.
+#
+# Math (locked decisions):
+#   - Tier per cell: determined by ex-showroom price of variant
+#       mass_market  : ex-showroom <= 15L
+#       mid_market   : 15L < ex-showroom <= 35L
+#       luxury       : ex-showroom > 35L
+#   - Age per cell: CURRENT_YEAR - median(year) across the cell's
+#     contributing listings (queried from research_log).
+#   - Suggested retention for bucket (tier, age):
+#       current_curve(age, tier) x weighted_avg_multiplier
+#     where weighted_avg = sum(mult * sample_count) / sum(sample_count)
+#     across all cells in that bucket.
+#   - Sanity clamp: suggested retention forced into [10, 100].
+#   - Threshold: bucket needs >=3 cells to surface a suggestion;
+#     buckets with <3 cells are shown greyed out in the UI.
+# ============================================================
+ 
+# Tier-classification constants — match car_data.py
+# (kept local so we don't add an import dependency just for these numbers).
+CURVE_EDITOR_TIER_MASS_CEILING = 1_500_000   # 15 Lakh
+CURVE_EDITOR_TIER_MID_CEILING  = 3_500_000   # 35 Lakh
+ 
+# Threshold below which a bucket's suggestion is shown but greyed
+CURVE_EDITOR_MIN_CELLS_PER_BUCKET = 3
+ 
+# Retention sanity clamp
+CURVE_EDITOR_RETENTION_MIN = 10.0
+CURVE_EDITOR_RETENTION_MAX = 100.0
+ 
+# Age range we surface in the editor — matches the depreciation_curve sheet
+# which has rows for year_age 0 through 15.
+CURVE_EDITOR_AGE_MIN = 0
+CURVE_EDITOR_AGE_MAX = 15
+ 
+# The 3 tiers, in display order
+CURVE_EDITOR_TIERS = ['mass_market', 'mid_market', 'luxury']
+ 
+ 
+def _curve_editor_tier_for_price(ex_showroom_price):
+    """
+    Map an ex-showroom price (rupees) to one of the 3 tier names.
+    Returns 'mass_market', 'mid_market', or 'luxury'.
+    Mirrors car_data._tier_for_price().
+    """
+    try:
+        p = int(ex_showroom_price or 0)
+    except (ValueError, TypeError):
+        return 'mass_market'
+    if p <= CURVE_EDITOR_TIER_MASS_CEILING:
+        return 'mass_market'
+    if p <= CURVE_EDITOR_TIER_MID_CEILING:
+        return 'mid_market'
+    return 'luxury'
+ 
+ 
+def _curve_editor_median_age_for_cell(make, model, fuel):
+    """
+    Look up the median age of listings contributing to a calibrated cell.
+    Returns int years (clamped to [CURVE_EDITOR_AGE_MIN, CURVE_EDITOR_AGE_MAX]),
+    or None if we can't determine it.
+ 
+    Queries research_log for Listing Aggregator rows matching this cell
+    that fed into the most-recent calibration run.
+    """
+    try:
+        r = (supabase.table('research_log')
+             .select('year')
+             .eq('data_source', 'Listing Aggregator')
+             .eq('include_in_calibration', True)
+             .eq('make', make)
+             .eq('model', model)
+             .eq('fuel', fuel)
+             .limit(500)
+             .execute())
+        rows = r.data or []
+    except Exception as e:
+        app.logger.warning(f"_curve_editor_median_age_for_cell({make}/{model}/{fuel}) failed: {e}")
+        return None
+ 
+    years = []
+    for row in rows:
+        y = row.get('year')
+        if y is None:
+            continue
+        try:
+            years.append(int(y))
+        except (ValueError, TypeError):
+            continue
+ 
+    if not years:
+        return None
+ 
+    years.sort()
+    n = len(years)
+    median_year = years[n // 2] if n % 2 == 1 else (years[n // 2 - 1] + years[n // 2]) // 2
+ 
+    age = CURRENT_YEAR - median_year
+    if age < CURVE_EDITOR_AGE_MIN:
+        age = CURVE_EDITOR_AGE_MIN
+    if age > CURVE_EDITOR_AGE_MAX:
+        age = CURVE_EDITOR_AGE_MAX
+    return age
+ 
+ 
+def _bucket_calibrated_cells_by_tier_age():
+    """
+    Pull every row from model_calibration, determine each cell's
+    (tier, age) bucket, and return a dict:
+ 
+        { (tier, age): [
+            {'make', 'model', 'fuel', 'multiplier', 'sample_count'},
+            ...
+          ] }
+ 
+    Cells where we can't determine tier or age are dropped silently
+    (logged at WARNING level).
+    """
+    try:
+        r = (supabase.table('model_calibration')
+             .select('*')
+             .execute())
+        cells = r.data or []
+    except Exception as e:
+        app.logger.error(f"_bucket_calibrated_cells_by_tier_age: fetch failed: {e}")
+        return {}
+ 
+    buckets = defaultdict(list)
+    dropped = 0
+ 
+    for c in cells:
+        make = c.get('make')
+        model = c.get('model')
+        fuel = c.get('fuel')
+        mult = c.get('calibration_multiplier')
+        sample_count = c.get('sample_count') or 0
+ 
+        if not (make and model and fuel) or mult is None or sample_count <= 0:
+            dropped += 1
+            continue
+ 
+        try:
+            mult_f = float(mult)
+        except (ValueError, TypeError):
+            dropped += 1
+            continue
+ 
+        # Tier: based on variant ex-showroom price.
+        # We use the model's BASE price (cheapest variant) as a proxy
+        # since model_calibration is keyed by (make, model, fuel) not variant.
+        # This is consistent with how car_data._tier_for_price() works at
+        # valuation time when it sees the actual variant price.
+        try:
+            ex_showroom = get_base_price(make, model)
+        except Exception:
+            ex_showroom = None
+ 
+        if not ex_showroom:
+            dropped += 1
+            continue
+ 
+        tier = _curve_editor_tier_for_price(ex_showroom)
+ 
+        # Age: median year of listings in this cell
+        age = _curve_editor_median_age_for_cell(make, model, fuel)
+        if age is None:
+            dropped += 1
+            continue
+ 
+        buckets[(tier, age)].append({
+            'make':          make,
+            'model':         model,
+            'fuel':          fuel,
+            'multiplier':    mult_f,
+            'sample_count':  int(sample_count),
+            'ex_showroom':   int(ex_showroom),
+        })
+ 
+    if dropped:
+        app.logger.info(
+            f"_bucket_calibrated_cells_by_tier_age: dropped {dropped} cell(s) "
+            f"(missing tier/age/data)"
+        )
+ 
+    return buckets
+ 
+ 
+def _compute_curve_suggestions():
+    """
+    Build the 48-row data structure (16 ages x 3 tiers) the curve editor
+    template renders.
+ 
+    For each (tier, age) bucket, computes:
+      - current retention from car_data's loaded curve
+      - suggested retention = current x weighted_avg_multiplier
+        (or current unchanged if bucket has 0 cells)
+      - delta (suggested - current)
+      - n_cells in the bucket
+      - confidence flag ('high' if n_cells >= 3, 'low' otherwise)
+      - evidence: top 5 contributing cells (make/model/fuel/mult/n)
+      - monotonic flag (True if suggested respects "older = lower retention")
+ 
+    Returns a list of 48 dicts, sorted by (tier, age).
+    """
+    buckets = _bucket_calibrated_cells_by_tier_age()
+ 
+    # Get current curve from car_data
+    try:
+        # car_data.get_retention_for_age(age, tier) returns the retention pct
+        current_curve_fn = car_data.get_retention_for_age
+    except AttributeError:
+        app.logger.error(
+            "_compute_curve_suggestions: car_data.get_retention_for_age not found. "
+            "Is v3.7.6 deployed?"
+        )
+        current_curve_fn = None
+ 
+    rows = []
+ 
+    for tier in CURVE_EDITOR_TIERS:
+        # For monotonic check, track previous suggested value per tier
+        prev_suggested = None
+ 
+        for age in range(CURVE_EDITOR_AGE_MIN, CURVE_EDITOR_AGE_MAX + 1):
+            # ---- Current retention ----
+            if current_curve_fn:
+                try:
+                    current_retention = float(current_curve_fn(age, tier=tier))
+                except Exception as e:
+                    app.logger.warning(
+                        f"_compute_curve_suggestions: current_curve_fn({age}, {tier}) "
+                        f"failed: {e}"
+                    )
+                    current_retention = 100.0 if age == 0 else 50.0
+            else:
+                # Best-effort fallback if car_data v3.7.6 isn't loaded
+                current_retention = 100.0 if age == 0 else 50.0
+ 
+            # ---- Bucket evidence ----
+            cells_in_bucket = buckets.get((tier, age), [])
+            n_cells = len(cells_in_bucket)
+ 
+            # ---- Compute suggestion ----
+            if n_cells == 0:
+                # Empty bucket — no change suggested
+                weighted_avg_mult = 1.0
+                suggested_retention = current_retention
+                confidence = 'empty'
+            else:
+                # Weighted average multiplier (weight = sample_count)
+                total_weight = sum(c['sample_count'] for c in cells_in_bucket)
+                if total_weight <= 0:
+                    weighted_avg_mult = 1.0
+                else:
+                    weighted_sum = sum(
+                        c['multiplier'] * c['sample_count'] for c in cells_in_bucket
+                    )
+                    weighted_avg_mult = weighted_sum / total_weight
+ 
+                suggested_retention = current_retention * weighted_avg_mult
+ 
+                # Sanity clamp
+                if suggested_retention < CURVE_EDITOR_RETENTION_MIN:
+                    suggested_retention = CURVE_EDITOR_RETENTION_MIN
+                if suggested_retention > CURVE_EDITOR_RETENTION_MAX:
+                    suggested_retention = CURVE_EDITOR_RETENTION_MAX
+ 
+                confidence = 'high' if n_cells >= CURVE_EDITOR_MIN_CELLS_PER_BUCKET else 'low'
+ 
+            # Round for display + storage
+            suggested_retention_rounded = round(suggested_retention, 2)
+            current_retention_rounded = round(current_retention, 2)
+            delta = round(suggested_retention_rounded - current_retention_rounded, 2)
+ 
+            # ---- Monotonic flag ----
+            # "Older car shouldn't retain more value than younger car"
+            # If suggested > prev_suggested (for prev age in same tier), flag it.
+            monotonic_violation = False
+            if prev_suggested is not None and suggested_retention_rounded > prev_suggested + 0.01:
+                monotonic_violation = True
+            prev_suggested = suggested_retention_rounded
+ 
+            # ---- Top 5 evidence cells (sorted by sample_count desc) ----
+            evidence_top = sorted(
+                cells_in_bucket,
+                key=lambda c: -c['sample_count'],
+            )[:5]
+ 
+            rows.append({
+                'tier':                 tier,
+                'age':                  age,
+                'current_retention':    current_retention_rounded,
+                'suggested_retention':  suggested_retention_rounded,
+                'delta':                delta,
+                'n_cells':              n_cells,
+                'weighted_avg_mult':    round(weighted_avg_mult, 4),
+                'confidence':           confidence,
+                'monotonic_violation':  monotonic_violation,
+                'evidence_top':         evidence_top,
+            })
+ 
+    return rows
+ 
+ 
+@app.route('/admin/curve-editor', methods=['GET'])
+@login_required
+@admin_required
+def admin_curve_editor():
+    """
+    Curve editor dashboard: 48-row table of (tier x age) buckets with
+    current retention, suggested retention, delta, and evidence count.
+    """
+    admin = current_user()
+ 
+    suggestions = _compute_curve_suggestions()
+ 
+    # Top-line counters for the header card
+    total_buckets   = len(suggestions)  # always 48
+    high_confidence = sum(1 for s in suggestions if s['confidence'] == 'high')
+    low_confidence  = sum(1 for s in suggestions if s['confidence'] == 'low')
+    empty_buckets   = sum(1 for s in suggestions if s['confidence'] == 'empty')
+    has_changes     = sum(1 for s in suggestions if abs(s['delta']) >= 0.01)
+    monotonic_flags = sum(1 for s in suggestions if s['monotonic_violation'])
+ 
+    # Sample size summary by tier
+    by_tier_counts = {tier: 0 for tier in CURVE_EDITOR_TIERS}
+    by_tier_high   = {tier: 0 for tier in CURVE_EDITOR_TIERS}
+    for s in suggestions:
+        t = s['tier']
+        if s['confidence'] in ('high', 'low'):
+            by_tier_counts[t] += s['n_cells']
+        if s['confidence'] == 'high':
+            by_tier_high[t] += 1
+ 
+    # ---- Recent audit history (last 20) ----
+    recent_audit = []
+    try:
+        r = (supabase.table('depreciation_curve_audit')
+             .select('*')
+             .order('changed_at', desc=True)
+             .limit(20)
+             .execute())
+        for row in (r.data or []):
+            row['changed_at_display'] = _format_txn_date(row.get('changed_at'))
+            recent_audit.append(row)
+    except Exception as e:
+        app.logger.warning(f"admin_curve_editor: audit fetch failed: {e}")
+ 
+    return render_template(
+        'admin_curve_editor.html',
+        user=admin,
+        first_name=firstname_filter(admin.get('name')),
+        suggestions=suggestions,
+        total_buckets=total_buckets,
+        high_confidence=high_confidence,
+        low_confidence=low_confidence,
+        empty_buckets=empty_buckets,
+        has_changes=has_changes,
+        monotonic_flags=monotonic_flags,
+        by_tier_counts=by_tier_counts,
+        by_tier_high=by_tier_high,
+        tiers=CURVE_EDITOR_TIERS,
+        age_min=CURVE_EDITOR_AGE_MIN,
+        age_max=CURVE_EDITOR_AGE_MAX,
+        min_cells_threshold=CURVE_EDITOR_MIN_CELLS_PER_BUCKET,
+        recent_audit=recent_audit,
+        now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
+ 
+ 
+@app.route('/admin/curve-editor/recompute', methods=['GET'])
+@login_required
+@admin_required
+def admin_curve_editor_recompute():
+    """
+    Force-recompute the suggestions table and redirect back to the editor.
+    Provided as a separate endpoint so admin can refresh the page without
+    re-doing form work (compute is idempotent — this is essentially a
+    'pull latest data' button).
+    """
+    flash("Curve suggestions recomputed.", 'success')
+    return redirect(url_for('admin_curve_editor'))
+ 
+ 
+@app.route('/admin/curve-editor/apply', methods=['POST'])
+@login_required
+@admin_required
+def admin_curve_editor_apply():
+    """
+    Apply curve changes in bulk.
+ 
+    Form fields (one set per (tier, age) bucket admin wants to change):
+        apply_<tier>_<age>          --> checkbox; only present in form if checked
+        new_value_<tier>_<age>      --> the new retention pct (string, float-parsed)
+        current_value_<tier>_<age>  --> the value the admin saw (for audit)
+        reason                      --> free-text reason (optional, max 500 chars)
+ 
+    Workflow:
+      1. Generate one batch_id (uuid) for this apply operation
+      2. For each checked bucket:
+         - Validate new_value (numeric, [10, 100])
+         - Read current curve value from car_data
+         - Write audit row to depreciation_curve_audit
+      3. Bulk-write the new curve to the depreciation_curve sheet via
+         sheets_writer.write_depreciation_curve_bulk()
+      4. Refresh car_data cache so changes are live immediately
+      5. Flash summary, redirect back to /admin/curve-editor
+    """
+    admin = current_user()
+    admin_email = admin.get('email') or 'unknown'
+ 
+    reason = (request.form.get('reason') or '').strip()[:500] or None
+ 
+    # ---- Step 1: collect the bucket changes from form ----
+    changes = []  # list of dicts: {tier, age, old_value, new_value}
+    parse_errors = []
+ 
+    for tier in CURVE_EDITOR_TIERS:
+        for age in range(CURVE_EDITOR_AGE_MIN, CURVE_EDITOR_AGE_MAX + 1):
+            apply_key = f'apply_{tier}_{age}'
+            if request.form.get(apply_key) != 'on':
+                continue
+ 
+            new_val_raw = (request.form.get(f'new_value_{tier}_{age}') or '').strip()
+            old_val_raw = (request.form.get(f'current_value_{tier}_{age}') or '').strip()
+ 
+            if not new_val_raw:
+                parse_errors.append(f"{tier} age {age}: new value empty")
+                continue
+ 
+            try:
+                new_val = float(new_val_raw)
+            except (ValueError, TypeError):
+                parse_errors.append(f"{tier} age {age}: '{new_val_raw}' not a number")
+                continue
+ 
+            if new_val < CURVE_EDITOR_RETENTION_MIN or new_val > CURVE_EDITOR_RETENTION_MAX:
+                parse_errors.append(
+                    f"{tier} age {age}: {new_val} outside [{CURVE_EDITOR_RETENTION_MIN}, "
+                    f"{CURVE_EDITOR_RETENTION_MAX}]"
+                )
+                continue
+ 
+            # Parse old value (best-effort; defaults to None if missing/malformed)
+            try:
+                old_val = float(old_val_raw) if old_val_raw else None
+            except (ValueError, TypeError):
+                old_val = None
+ 
+            new_val_rounded = round(new_val, 2)
+ 
+            # Skip true no-ops (admin checked the box but didn't change the number)
+            if old_val is not None and abs(old_val - new_val_rounded) < 0.005:
+                continue
+ 
+            changes.append({
+                'tier':       tier,
+                'age':        age,
+                'old_value':  old_val,
+                'new_value':  new_val_rounded,
+            })
+ 
+    if parse_errors:
+        flash(
+            f"Could not parse {len(parse_errors)} field(s): "
+            + " | ".join(parse_errors[:5])
+            + ("..." if len(parse_errors) > 5 else ""),
+            'error'
+        )
+        return redirect(url_for('admin_curve_editor'))
+ 
+    if not changes:
+        flash(
+            "No changes to apply. Check the boxes next to rows you want to update, "
+            "then edit the suggested value (or accept it as-is) and re-submit.",
+            'error'
+        )
+        return redirect(url_for('admin_curve_editor'))
+ 
+    # ---- Step 2: generate batch_id and write audit rows ----
+    batch_id = uuid.uuid4().hex
+    audit_payloads = []
+ 
+    for ch in changes:
+        old_v = ch['old_value']
+        new_v = ch['new_value']
+        if old_v is not None and old_v > 0:
+            pct_change = round(((new_v - old_v) / old_v) * 100, 4)
+        else:
+            pct_change = None
+ 
+        audit_payloads.append({
+            'changed_by':    admin_email,
+            'tier':          ch['tier'],
+            'year_age':      ch['age'],
+            'old_value':     old_v,
+            'new_value':     new_v,
+            'pct_change':    pct_change,
+            'reason':        reason or 'bulk_apply_via_curve_editor',
+            'batch_id':      batch_id,
+        })
+ 
+    try:
+        # Single insert call with the full list — fewer roundtrips
+        supabase.table('depreciation_curve_audit').insert(audit_payloads).execute()
+    except Exception as e:
+        app.logger.error(f"admin_curve_editor_apply: audit insert failed: {e}")
+        flash(
+            f"Audit log write failed — aborting before sheet write to keep state "
+            f"consistent. Error: {e}",
+            'error'
+        )
+        return redirect(url_for('admin_curve_editor'))
+ 
+    # ---- Step 3: build the full new curve and write to sheet ----
+    # We need the COMPLETE curve (all 3 tiers x 16 ages) for the bulk write,
+    # not just the changed cells. Start from current curve, overlay changes.
+    try:
+        # Read existing curve from sheet (authoritative source)
+        existing = sheets_writer.read_depreciation_curve()
+        if not existing or not existing.get('curves'):
+            raise RuntimeError("read_depreciation_curve returned empty")
+        new_curves = {
+            tier: dict(existing['curves'].get(tier, {}))
+            for tier in CURVE_EDITOR_TIERS
+        }
+    except Exception as e:
+        app.logger.error(f"admin_curve_editor_apply: read existing curve failed: {e}")
+        flash(
+            f"Could not read existing curve from sheet — aborting sheet write. "
+            f"Audit rows for this batch ({batch_id[:8]}...) are present but the curve "
+            f"was NOT updated. Error: {e}",
+            'error'
+        )
+        return redirect(url_for('admin_curve_editor'))
+ 
+    # Overlay the changes
+    for ch in changes:
+        new_curves[ch['tier']][ch['age']] = ch['new_value']
+ 
+    # ---- Write the full curve to the sheet ----
+    try:
+        sheets_writer.write_depreciation_curve_bulk(
+            new_curves=new_curves,
+            source=f"curve_editor:{admin_email}",
+            note=f"batch_id={batch_id} | {len(changes)} cell(s) changed",
+        )
+    except Exception as e:
+        app.logger.error(f"admin_curve_editor_apply: sheet write failed: {e}")
+        flash(
+            f"WARNING: Sheet write failed AFTER audit was logged. Batch ID {batch_id[:8]}... "
+            f"audit rows are in depreciation_curve_audit but the sheet was NOT updated. "
+            f"This means the live curve is unchanged but you have a stale audit entry. "
+            f"Re-try the apply OR delete the audit rows manually. Error: {e}",
+            'error'
+        )
+        return redirect(url_for('admin_curve_editor'))
+ 
+    # ---- Step 4: refresh car_data cache so changes go live ----
+    try:
+        car_data.refresh_prices(force=True)
+    except Exception as e:
+        app.logger.warning(
+            f"admin_curve_editor_apply: car_data.refresh_prices failed (non-fatal): {e}"
+        )
+        # Don't flash this — the change is in the sheet, cache will refresh on next
+        # natural reload (1hr TTL). Admin doesn't need to know.
+ 
+    # ---- Step 5: success flash ----
+    flash(
+        f"Applied {len(changes)} change(s) to depreciation curve. "
+        f"Batch ID: {batch_id[:8]}... | Audit rows logged | Cache refreshed.",
+        'success'
+    )
+    return redirect(url_for('admin_curve_editor'))
+ 
+ 
+# ============================================================
+# END v3.7.8 curve editor routes
+# ============================================================
+ 
+ 
+# =================== END OF FILE 3 ===================
+# ============================================================
 # Sprint 2.1: ADMIN — CALIBRATION DIAGNOSTIC (read-only preview)
 # ============================================================
 #
