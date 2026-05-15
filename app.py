@@ -6170,7 +6170,8 @@ def admin_calibration_run_now():
 @app.route('/admin/calibration-overview', methods=['GET'])
 @login_required
 @admin_required
-def admin_calibration_overview():
+now_display=datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC'),
+    )
     """
     All calibrated cells in one sortable, filterable table.
     Pulls every row from model_calibration, decorates with drift band
