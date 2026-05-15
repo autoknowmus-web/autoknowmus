@@ -1095,6 +1095,323 @@ def write_new_variant(make: str, model: str, variant: str, fuel: str,
 # ============================================================
 # PUBLIC API — model_slugs tab (v3.6.8, unchanged)
 # ============================================================
+--------------------------------------------------------------
+ 
+REPLACE WITH:
+--------------------------------------------------------------
+# ============================================================
+# v3.7.8: Depreciation curve read/write
+# ============================================================
+#
+# The depreciation_curve tab is structured as:
+#   A: year_age      (int, 0-15)
+#   B: mass_market   (float, retention pct 0-100)
+#   C: mid_market    (float, retention pct 0-100)
+#   D: luxury        (float, retention pct 0-100)
+#
+# Row 1 is header, rows 2-17 are data (16 ages × 3 tiers = 48 values).
+#
+# These functions support the admin curve editor (v3.7.8+):
+#   read_depreciation_curve() — load current sheet for diffing/UI
+#   write_depreciation_curve_bulk() — apply new tiered values atomically
+# ============================================================
+ 
+DEPRECIATION_CURVE_COLUMNS = [
+    "year_age",      # A
+    "mass_market",   # B
+    "mid_market",    # C
+    "luxury",        # D
+]
+ 
+ 
+def read_depreciation_curve() -> Dict[str, Any]:
+    """
+    v3.7.8: Read all 3 tier curves from the depreciation_curve sheet tab.
+ 
+    Returns:
+      {
+        "header": ["year_age", "mass_market", "mid_market", "luxury"],
+        "curves": {
+            "mass_market": {0: 100.0, 1: 92.0, ..., 15: 36.0},
+            "mid_market":  {0: 100.0, 1: 92.0, ..., 15: 26.0},
+            "luxury":      {0: 100.0, 1: 92.0, ..., 15: 16.0},
+        },
+        "row_count": 16,
+        "rows_by_age": {
+            0: {"mass_market": 100.0, "mid_market": 100.0, "luxury": 100.0},
+            1: {"mass_market": 92.0,  "mid_market": 92.0,  "luxury": 92.0},
+            ...
+        },
+      }
+ 
+    Raises RuntimeError if:
+      - tab doesn't exist
+      - header row doesn't match DEPRECIATION_CURVE_COLUMNS
+      - no data rows
+      - a value can't be parsed as a number
+ 
+    Note: empty/missing cells are silently skipped (don't add to that
+    tier's dict). This matches the parser tolerance in car_data.py.
+    """
+    metadata = _fetch_sheet_metadata_raw()
+    if TAB_DEPRECIATION not in metadata.get("tabs", []):
+        raise RuntimeError(
+            f"Tab '{TAB_DEPRECIATION}' not found in sheet. "
+            f"Available tabs: {metadata.get('tabs', [])}"
+        )
+ 
+    all_values = _fetch_tab_values(TAB_DEPRECIATION)
+    if not all_values:
+        raise RuntimeError(f"Tab '{TAB_DEPRECIATION}' is empty.")
+ 
+    # Validate header row
+    header = [str(c).strip() for c in all_values[0]]
+    if len(header) < 2:
+        raise RuntimeError(
+            f"Tab '{TAB_DEPRECIATION}' header has only {len(header)} columns. "
+            f"Expected at least 'year_age' and 'mass_market'."
+        )
+ 
+    # Determine which columns are present
+    # Tolerant: accept either new 3-tier headers or legacy 'retention_pct'
+    col_indices = {}
+    for i, h in enumerate(header):
+        key = h.strip().lower()
+        if key in ("year_age", "mass_market", "mid_market", "luxury", "retention_pct"):
+            col_indices[key] = i
+ 
+    if "year_age" not in col_indices:
+        raise RuntimeError(
+            f"Tab '{TAB_DEPRECIATION}' header is missing 'year_age' column. "
+            f"Got headers: {header}"
+        )
+ 
+    curves: Dict[str, Dict[int, float]] = {
+        "mass_market": {},
+        "mid_market":  {},
+        "luxury":      {},
+    }
+    rows_by_age: Dict[int, Dict[str, float]] = {}
+ 
+    def _parse_pct(raw):
+        s = str(raw).strip()
+        if not s:
+            return None
+        try:
+            v = float(s)
+        except (ValueError, TypeError):
+            return None
+        # Clamp obvious typos but don't fail
+        if v < 0 or v > 200:
+            return None
+        return v
+ 
+    for row_idx, row in enumerate(all_values[1:], start=2):
+        if not row:
+            continue
+        # Pad short rows
+        padded = list(row) + [""] * (4 - len(row))
+ 
+        try:
+            age = int(str(padded[col_indices["year_age"]]).strip())
+        except (ValueError, TypeError):
+            continue
+        if age < 0 or age > 50:
+            continue
+ 
+        rows_by_age[age] = {}
+ 
+        for tier in ("mass_market", "mid_market", "luxury"):
+            if tier in col_indices:
+                v = _parse_pct(padded[col_indices[tier]])
+                if v is not None:
+                    curves[tier][age] = v
+                    rows_by_age[age][tier] = v
+ 
+        # Legacy fallback: if mass_market column missing but retention_pct exists,
+        # use that for all 3 tiers (matches car_data.py backward compat).
+        if "retention_pct" in col_indices and "mass_market" not in col_indices:
+            v = _parse_pct(padded[col_indices["retention_pct"]])
+            if v is not None:
+                for tier in ("mass_market", "mid_market", "luxury"):
+                    curves[tier][age] = v
+                    rows_by_age[age][tier] = v
+ 
+    row_count = len(rows_by_age)
+ 
+    logger.info(
+        "sheets_writer v3.7.8: read_depreciation_curve loaded %d rows "
+        "(mass:%d, mid:%d, lux:%d)",
+        row_count,
+        len(curves["mass_market"]),
+        len(curves["mid_market"]),
+        len(curves["luxury"]),
+    )
+ 
+    return {
+        "header": header,
+        "curves": curves,
+        "row_count": row_count,
+        "rows_by_age": rows_by_age,
+    }
+ 
+ 
+def write_depreciation_curve_bulk(
+    new_curves: Dict[str, Dict[int, float]],
+    source: str = "admin_curve_editor",
+    note: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    v3.7.8: Atomically rewrite the depreciation_curve sheet tab with new
+    tiered retention values.
+ 
+    Args:
+      new_curves: dict with 3 keys (mass_market, mid_market, luxury), each
+                  mapping age (int 0-15) to retention pct (float 0-100).
+                  Example:
+                    {
+                      "mass_market": {0: 100, 1: 92, ..., 15: 36},
+                      "mid_market":  {0: 100, 1: 92, ..., 15: 26},
+                      "luxury":      {0: 100, 1: 92, ..., 15: 16},
+                    }
+      source: tag for audit/logging (e.g. 'admin_curve_editor', 'manual_seed')
+      note: optional human note (currently logged but not written to sheet)
+ 
+    Validates:
+      - All 3 tiers must be present in input
+      - Each tier must have entries for ages 0-15 (16 ages)
+      - Each value must be 0 <= v <= 100
+      - No NaN/None values
+ 
+    Writes:
+      - Header row at A1:D1 = [year_age, mass_market, mid_market, luxury]
+      - 16 data rows at A2:D17 (ages 0-15)
+      - All in a SINGLE batch API call (atomic on the sheet side)
+ 
+    Returns audit dict:
+      {
+        "ok": True,
+        "action": "depreciation_curve_bulk_write",
+        "tiers_written": ["mass_market", "mid_market", "luxury"],
+        "rows_written": 16,
+        "cells_written": 64,  # 16 ages × 4 columns
+        "source": source,
+        "note": note,
+        "written_at": "DD-MMM-YYYY HH:MM UTC",
+      }
+ 
+    Raises RuntimeError on validation failure or API error.
+    """
+    # ---- Validation ----
+    required_tiers = ("mass_market", "mid_market", "luxury")
+    for tier in required_tiers:
+        if tier not in new_curves:
+            raise RuntimeError(
+                f"write_depreciation_curve_bulk: missing required tier '{tier}'. "
+                f"Got tiers: {list(new_curves.keys())}"
+            )
+        tier_dict = new_curves[tier]
+        if not isinstance(tier_dict, dict):
+            raise RuntimeError(
+                f"write_depreciation_curve_bulk: tier '{tier}' must be a dict "
+                f"(got {type(tier_dict).__name__})"
+            )
+ 
+    expected_ages = list(range(16))  # 0..15 inclusive
+    for tier in required_tiers:
+        tier_dict = new_curves[tier]
+        for age in expected_ages:
+            if age not in tier_dict:
+                raise RuntimeError(
+                    f"write_depreciation_curve_bulk: tier '{tier}' missing "
+                    f"age {age}. Required ages: 0-15 (16 total)."
+                )
+            v = tier_dict[age]
+            if v is None:
+                raise RuntimeError(
+                    f"write_depreciation_curve_bulk: tier '{tier}' age {age} "
+                    f"has None value (not allowed)."
+                )
+            try:
+                fv = float(v)
+            except (ValueError, TypeError):
+                raise RuntimeError(
+                    f"write_depreciation_curve_bulk: tier '{tier}' age {age} "
+                    f"has non-numeric value {v!r}."
+                )
+            if fv < 0 or fv > 100:
+                raise RuntimeError(
+                    f"write_depreciation_curve_bulk: tier '{tier}' age {age} "
+                    f"value {fv} is outside [0, 100]."
+                )
+ 
+    # ---- Build the 17×4 grid (header + 16 data rows) ----
+    grid: List[List[str]] = []
+    grid.append(["year_age", "mass_market", "mid_market", "luxury"])
+    for age in expected_ages:
+        row = [
+            str(age),
+            _format_curve_value(new_curves["mass_market"][age]),
+            _format_curve_value(new_curves["mid_market"][age]),
+            _format_curve_value(new_curves["luxury"][age]),
+        ]
+        grid.append(row)
+ 
+    # ---- Single batch write ----
+    updates = [
+        {
+            "range": f"{TAB_DEPRECIATION}!A1:D17",
+            "values": grid,
+        },
+    ]
+ 
+    try:
+        _write_cells_batch(updates)
+    except RuntimeError as e:
+        raise RuntimeError(
+            f"write_depreciation_curve_bulk: batch write failed: {e}"
+        )
+ 
+    written_at = datetime.utcnow().strftime("%d-%b-%Y %H:%M UTC")
+ 
+    logger.info(
+        "sheets_writer v3.7.8: write_depreciation_curve_bulk OK | "
+        "source=%s | mass:%s mid:%s lux:%s | note=%s",
+        source,
+        new_curves["mass_market"][5],   # age-5 spot check
+        new_curves["mid_market"][5],
+        new_curves["luxury"][5],
+        note or "",
+    )
+ 
+    return {
+        "ok": True,
+        "action": "depreciation_curve_bulk_write",
+        "tiers_written": list(required_tiers),
+        "rows_written": 16,
+        "cells_written": 64,  # 16 rows × 4 cols
+        "source": source,
+        "note": note,
+        "written_at": written_at,
+    }
+ 
+ 
+def _format_curve_value(v: float) -> str:
+    """
+    Format a retention pct for the sheet.
+    Integer values written without decimal: 100 -> "100" not "100.0"
+    Fractional values kept to 2 decimals max: 92.5 -> "92.5"
+    """
+    fv = float(v)
+    if fv == int(fv):
+        return str(int(fv))
+    # Strip trailing zeros: 92.50 -> 92.5, 92.00 -> 92
+    return f"{fv:.2f}".rstrip("0").rstrip(".")
+ 
+ 
+# ============================================================
+# PUBLIC API — model_slugs tab (v3.6.8, unchanged)
+# ============================================================
 
 def read_model_slugs() -> List[Dict[str, Any]]:
     """Read the model_slugs tab. Returns [] if tab doesn't exist."""
