@@ -6324,9 +6324,9 @@ CURVE_EDITOR_TIER_MID_CEILING  = 3_500_000   # 35 Lakh
 # Threshold below which a bucket's suggestion is shown but greyed
 CURVE_EDITOR_MIN_CELLS_PER_BUCKET = 3
  
-# Retention sanity clamp
-CURVE_EDITOR_RETENTION_MIN = 10.0
-CURVE_EDITOR_RETENTION_MAX = 100.0
+# Retention sanity clamp (FRACTION units — car_data stores curve as 0.0-1.0)
+CURVE_EDITOR_RETENTION_MIN = 0.10
+CURVE_EDITOR_RETENTION_MAX = 1.00
  
 # Age range we surface in the editor — matches the depreciation_curve sheet
 # which has rows for year_age 0 through 15.
@@ -6736,8 +6736,8 @@ def admin_curve_editor_apply():
  
             if new_val < CURVE_EDITOR_RETENTION_MIN or new_val > CURVE_EDITOR_RETENTION_MAX:
                 parse_errors.append(
-                    f"{tier} age {age}: {new_val} outside [{CURVE_EDITOR_RETENTION_MIN}, "
-                    f"{CURVE_EDITOR_RETENTION_MAX}]"
+                    f"{tier} age {age}: {new_val:.4f} outside fraction range "
+                    f"[{CURVE_EDITOR_RETENTION_MIN}, {CURVE_EDITOR_RETENTION_MAX}]"
                 )
                 continue
  
