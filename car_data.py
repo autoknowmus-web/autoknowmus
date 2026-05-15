@@ -136,6 +136,33 @@ CONF_CEILING = {1: 62, 2: 77, 3: 90, 4: 96}
 HIGH_DEMAND_BRANDS = {"Maruti Suzuki", "Hyundai", "Honda", "Toyota", "Tata", "Kia", "Mahindra"}
 MEDIUM_DEMAND_BRANDS = {"Ford", "Renault", "Nissan", "Volkswagen", "Skoda", "MG"}
 LUXURY_BRANDS = {"Audi", "BMW", "Mercedes-Benz", "Jaguar", "Land Rover", "Lexus", "Volvo"}
+ 
+# v3.7.6: Price tier thresholds for tiered depreciation curves.
+# Based on ex-showroom price (₹). Used by _tier_for_price() to select
+# the right depreciation curve per car. Tune these here if needed.
+PRICE_TIER_MASS_CEILING   = 1_500_000   # under ₹15L → mass_market curve
+PRICE_TIER_MID_CEILING    = 3_500_000   # ₹15L – ₹35L → mid_market curve
+                                         # above ₹35L → luxury curve
+ 
+ 
+def _tier_for_price(price_inr: Optional[int]) -> str:
+    """
+    v3.7.6: Classify a car into a depreciation tier based on its
+    ex-showroom price. Used to select the right tier curve.
+ 
+    Returns one of: "mass_market", "mid_market", "luxury"
+    Defaults to "mass_market" if price is missing/invalid (safest:
+    most of the catalog is mass-market, and mass-market has the
+    least-aggressive curve — so unknown cars get a slightly generous
+    valuation rather than a punitively low one).
+    """
+    if not price_inr or price_inr <= 0:
+        return "mass_market"
+    if price_inr < PRICE_TIER_MASS_CEILING:
+        return "mass_market"
+    if price_inr < PRICE_TIER_MID_CEILING:
+        return "mid_market"
+    return "luxury"
 
 
 # ============================================================
@@ -399,10 +426,24 @@ FALLBACK_CAR_DATA = {
     },
 }
 
+# v3.7.6: Tiered fallback. Values match the proposed depreciation_curve
+# sheet. These are derived from 38 calibrated cells with 1,000+ listings —
+# not Western used-car training data. If the sheet ever fails to load,
+# valuations land here, which is now MUCH closer to truth than the
+# previous aggressive single-curve fallback.
 FALLBACK_DEPRECIATION_CURVE = {
-    0: 100, 1: 82, 2: 70, 3: 60, 4: 52, 5: 45,
-    6: 39, 7: 33, 8: 28, 9: 23, 10: 18,
-    11: 14, 12: 11, 13: 8, 14: 6, 15: 4,
+    "mass_market": {
+        0: 100, 1: 92, 2: 86, 3: 80, 4: 75, 5: 70, 6: 65, 7: 62, 8: 60,
+        9: 57, 10: 54, 11: 50, 12: 46, 13: 43, 14: 39, 15: 36,
+    },
+    "mid_market": {
+        0: 100, 1: 92, 2: 86, 3: 82, 4: 76, 5: 70, 6: 60, 7: 52, 8: 46,
+        9: 42, 10: 40, 11: 36, 12: 34, 13: 32, 14: 28, 15: 26,
+    },
+    "luxury": {
+        0: 100, 1: 92, 2: 87, 3: 83, 4: 78, 5: 70, 6: 55, 7: 42, 8: 32,
+        9: 28, 10: 25, 11: 23, 12: 21, 13: 20, 14: 18, 15: 16,
+    },
 }
 
 FALLBACK_MULTIPLIERS = {
@@ -583,17 +624,69 @@ def _parse_car_prices(rows: List[Dict[str, str]]) -> Dict:
     return data
 
 
-def _parse_depreciation(rows: List[Dict[str, str]]) -> Dict[int, float]:
-    """Columns: year_age, retention_pct"""
-    out = {}
+def _parse_depreciation(rows: List[Dict[str, str]]) -> Dict[str, Dict[int, float]]:
+    """
+    v3.7.6: Tiered depreciation curves. Reads up to 3 retention columns:
+      mass_market, mid_market, luxury
+ 
+    Backward compat: if mass_market column is missing but retention_pct
+    exists, fills all 3 tiers with the legacy values (so deploying the
+    code change before updating the sheet doesn't break valuations).
+ 
+    Returns:
+      {
+        "mass_market": {0: 100.0, 1: 92.0, ...},
+        "mid_market":  {0: 100.0, 1: 92.0, ...},
+        "luxury":      {0: 100.0, 1: 92.0, ...},
+      }
+    """
+    mass = {}
+    mid = {}
+    lux = {}
+    legacy = {}
     for row in rows:
         try:
             age = int(str(row.get("year_age", "")).strip())
-            pct = float(str(row.get("retention_pct", "")).strip())
-            out[age] = pct
         except (ValueError, TypeError):
             continue
-    return out
+ 
+        def _parse_pct(col_name):
+            raw = str(row.get(col_name, "")).strip()
+            if not raw:
+                return None
+            try:
+                return float(raw)
+            except (ValueError, TypeError):
+                return None
+ 
+        m_pct = _parse_pct("mass_market")
+        if m_pct is not None:
+            mass[age] = m_pct
+        d_pct = _parse_pct("mid_market")
+        if d_pct is not None:
+            mid[age] = d_pct
+        l_pct = _parse_pct("luxury")
+        if l_pct is not None:
+            lux[age] = l_pct
+        # Legacy single-column fallback
+        leg_pct = _parse_pct("retention_pct")
+        if leg_pct is not None:
+            legacy[age] = leg_pct
+ 
+    # If sheet only has legacy column, use it for all three tiers
+    # (so production doesn't break before the sheet is updated).
+    if not mass and legacy:
+        mass = dict(legacy)
+    if not mid and legacy:
+        mid = dict(legacy)
+    if not lux and legacy:
+        lux = dict(legacy)
+ 
+    return {
+        "mass_market": mass,
+        "mid_market":  mid,
+        "luxury":      lux,
+    }
 
 
 def _parse_multipliers(rows: List[Dict[str, str]]) -> Dict:
@@ -945,6 +1038,15 @@ def get_cache_status() -> Dict:
                 for yrs in v_map.values():
                     if yrs.get("introduced") is not None:
                         year_introduced_count += 1
+ 
+    # v3.7.6: Depreciation curve diagnostics — how many rows loaded per tier
+    dep = _cache.get("depreciation") or {}
+    dep_diag = {}
+    if isinstance(dep, dict):
+        for tier in ("mass_market", "mid_market", "luxury"):
+            curve = dep.get(tier) or {}
+            dep_diag[tier + "_rows"] = len(curve) if isinstance(curve, dict) else 0
+ 
     return {
         "source": _cache["source"],
         "last_fetch_age_seconds": int(time.time() - _cache["last_fetch"]),
@@ -959,8 +1061,9 @@ def get_cache_status() -> Dict:
         "listings_count": len(_cache["listings"]) if _cache["listings"] else 0,
         "listings_source": _cache["listings_source"],
         "listings_last_error": _cache["listings_last_error"],
+        # v3.7.6: Per-tier curve row counts
+        **dep_diag,
     }
-
 
 def get_makes() -> List[str]:
     _ensure_loaded()
@@ -1134,10 +1237,35 @@ def get_base_price(make: str, model: str) -> Optional[int]:
         return None
 
 
-def get_retention_for_age(years_old: int) -> float:
-    """Returns depreciation retention multiplier (0.0-1.0). (Unchanged.)"""
+def get_retention_for_age(years_old: int, tier: str = "mass_market") -> float:
+    """
+    Returns depreciation retention multiplier (0.0-1.0).
+ 
+    v3.7.6: Now tier-aware. Pass tier='mass_market' / 'mid_market' / 'luxury'
+    to get the curve appropriate for the car's price segment. Default
+    'mass_market' keeps existing callers (e.g. the dashboard depreciation
+    chart) working — they'll see the mass-market curve shape, which is
+    a sensible generic default.
+ 
+    Interpolates linearly between integer ages. Cap at age 15.
+    """
     _ensure_loaded()
-    curve = _cache["depreciation"]
+    depreciation = _cache["depreciation"]
+ 
+    # v3.7.6: depreciation is now {tier: {age: pct}}.
+    # Defensive: if tier is unknown for any reason, fall back to mass_market.
+    if isinstance(depreciation, dict) and tier in depreciation:
+        curve = depreciation[tier]
+    elif isinstance(depreciation, dict) and "mass_market" in depreciation:
+        curve = depreciation["mass_market"]
+    else:
+        # Legacy shape (just in case): treat the whole dict as a single curve.
+        # This branch fires only if _parse_depreciation somehow returned the
+        # old flat shape — shouldn't happen but doesn't crash.
+        curve = depreciation
+ 
+    if not curve:
+        return 1.0
     if years_old <= 0:
         return 1.0
     if years_old in curve:
@@ -1232,11 +1360,15 @@ def compute_base_valuation(make, model, variant, fuel, year, mileage, condition,
   base = get_variant_base_price(make, model, variant, fuel)
   if base is None:
     return None
-
+ 
   age = max(0, CURRENT_YEAR - int(year))
   age = min(age, 15)
-
-  retention = get_retention_for_age(age)
+ 
+  # v3.7.6: Tier-aware depreciation. Mass-market cars hold value better
+  # than luxury cars in years 5+, so we use a different curve per tier.
+  # Tier is determined from the ex-showroom price (base) just looked up.
+  tier = _tier_for_price(base)
+  retention = get_retention_for_age(age, tier=tier)
   price = base * retention
 
   try:
