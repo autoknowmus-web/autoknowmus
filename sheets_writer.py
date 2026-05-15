@@ -8,26 +8,23 @@ no google-auth. Just JWT-grant OAuth (proven working in 238ms) + plain
 HTTPS calls (proven working in 200ms via /admin/diag-egress).
 
 ----------------------------------------------------------------------
+v3.7.8 — Depreciation curve read/write (additive, no breaking changes)
+----------------------------------------------------------------------
+New in this version:
+  - DEPRECIATION_CURVE_COLUMNS constant
+  - read_depreciation_curve()  — loads all 3 tier curves from the sheet
+  - write_depreciation_curve_bulk() — atomic batch write of new tiered values
+  - _format_curve_value() — private helper for clean number formatting
+Used by:
+  - Admin curve editor page (/admin/curve-editor) added in v3.7.8
+
+----------------------------------------------------------------------
 v3.7.0 — Phase 3 admin price tools support
 ----------------------------------------------------------------------
-New in this version (additive — all v3.6.8 code unchanged):
-
-  - CAR_PRICES_COLUMNS extended with two new headers:
-      H: status                  (empty | "discontinued")
-      I: last_known_price_date   (DD-MMM-YYYY)
-  - write_price_update_v2() — like write_price_update() but ALSO sets
-    column I to today's date. Used for "price_update" review approvals.
-  - write_discontinued_flag() — sets H="discontinued" + I=today. Leaves
-    price (col E) and notes (col G) unchanged. Used for "discontinued"
-    review approvals to preserve the last known price for valuations.
-  - write_new_variant() — appends a brand new row at the bottom of
-    car_prices. Used for "new_variant" review approvals.
-
-Used by:
-  - app.py admin price tools routes (Phase 3)
-  - The same module also continues serving Phase 2 features:
-    health_check, find_row, write_price_update, read_model_slugs,
-    write_model_slug, etc.
+  - CAR_PRICES_COLUMNS extended with H (status) and I (last_known_price_date)
+  - write_price_update_v2() — like write_price_update() but stamps col I too
+  - write_discontinued_flag() / clear_discontinued_flag()
+  - write_new_variant() — appends a brand new row at the bottom of car_prices
 
 ----------------------------------------------------------------------
 v3.6.8 — model_slugs tab support (additive, no breaking changes)
@@ -359,15 +356,6 @@ def _get_access_token() -> str:
         _access_token_expires_at = expires_at
         return token
 
-
-# ============================================================
-# END OF PART 1/2 — sheets_writer.py v3.7.0
-# Continue pasting Part 2/2 after this line.
-# ============================================================
-# ============================================================
-# CONTINUATION OF sheets_writer.py v3.7.0 — PART 2/2
-# Paste this AFTER Part 1/2 in the same file.
-# ============================================================
 
 # ============================================================
 # DIRECT GOOGLE SHEETS REST API CLIENT (unchanged from v3.6.7)
@@ -733,17 +721,6 @@ def write_price_update(make: str, model: str, variant: str, fuel: str,
 # ============================================================
 # v3.7.0: Phase 3 admin price tools — write functions
 # ============================================================
-#
-# Three new functions, one per review type:
-#   write_price_update_v2 — for "price_update" reviews (existing variant, new price)
-#   write_discontinued_flag — for "discontinued" reviews (existing variant, mark stale)
-#   write_new_variant — for "new_variant" reviews (insert new row)
-#
-# All three write to the SAME car_prices sheet but in different ways:
-#   price_update_v2 → updates cols E (price), G (notes), I (date)
-#   discontinued    → updates cols H (status), I (date) only — leaves price/notes
-#   new_variant     → appends a fresh row at the bottom with all 9 cols filled
-# ============================================================
 
 def write_price_update_v2(make: str, model: str, variant: str, fuel: str,
                           new_price: int, source: str = "CarWale",
@@ -751,22 +728,6 @@ def write_price_update_v2(make: str, model: str, variant: str, fuel: str,
     """
     Phase 3: Update ex_showroom_price + notes + last_known_price_date of an
     existing row. Used when admin approves a "price_update" review.
-
-    Updates 3 cells:
-      col E (ex_showroom_price) -> new_price
-      col G (notes)             -> "DD-MMM-YYYY {source} {extra_note}"
-      col I (last_known_price_date) -> "DD-MMM-YYYY"
-
-    Does NOT touch col H (status) — preserves any existing "discontinued" flag
-    in the unlikely case that one was set then later overridden by a new price.
-
-    Args:
-      make, model, variant, fuel: must match an existing row exactly
-      new_price: positive int (rupees, e.g. 658900 for 6.58 Lakh)
-      source: tag for the notes column (default "CarWale" for scraper-sourced)
-      extra_note: optional extra string appended to notes (e.g. "auto-approved")
-
-    Raises RuntimeError if the row doesn't exist or the API call fails.
     """
     if not isinstance(new_price, int) or new_price < 0:
         raise RuntimeError(
@@ -834,23 +795,7 @@ def write_price_update_v2(make: str, model: str, variant: str, fuel: str,
 
 def write_discontinued_flag(make: str, model: str, variant: str, fuel: str,
                             note: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Phase 3: Mark an existing row as discontinued by setting:
-      col H (status) -> "discontinued"
-      col I (last_known_price_date) -> today's date
-
-    Critical: does NOT touch col E (price) or col G (notes). The price stays
-    available so existing owners of this car can still get valuations using
-    the last known number. The dashboard shows a "Discontinued · last
-    verified DATE" badge based on the col H + col I values.
-
-    Args:
-      make, model, variant, fuel: must match an existing row exactly
-      note: optional admin note appended to notes column (col G).
-            If provided, col G is also updated. If None, col G is untouched.
-
-    Raises RuntimeError if the row doesn't exist or the API call fails.
-    """
+    """Phase 3: Mark an existing row as discontinued."""
     target = find_row(make, model, variant, fuel)
     if target is None:
         raise RuntimeError(
@@ -872,7 +817,6 @@ def write_discontinued_flag(make: str, model: str, variant: str, fuel: str,
         },
     ]
 
-    # Optional: append a note to col G if admin provided one
     if note:
         existing_notes = target.get("notes", "")
         merged_notes = f"{existing_notes} | Discontinued {today_str}: {note}".strip(" |")
@@ -903,31 +847,10 @@ def write_discontinued_flag(make: str, model: str, variant: str, fuel: str,
         "last_known_price_date": today_str,
     }
 
+
 def clear_discontinued_flag(make: str, model: str, variant: str, fuel: str,
                             note: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Phase 3.2: Reverse a "discontinued" flag on an existing row.
-
-    Clears:
-      col H (status)                  -> "" (empty = active again)
-      col I (last_known_price_date)   -> today's date (refresh the verified date)
-
-    Critical: does NOT touch col E (price) or col G (notes). The price stays
-    as-is — the variant just rejoins the catalog as active. The dashboard
-    will stop showing the orange "Discontinued" badge for this variant.
-
-    Use case: admin previously approved a NOT FOUND review and flagged a
-    variant as discontinued, then realized the variant is actually still in
-    production (e.g. CarWale just renamed it, or the data gap was temporary).
-    Clicking "Un-discontinue" in the admin UI calls this function.
-
-    Args:
-      make, model, variant, fuel: must match an existing row exactly
-      note: optional admin note appended to notes column (col G).
-            If provided, col G is also updated. If None, col G is untouched.
-
-    Raises RuntimeError if the row doesn't exist or the API call fails.
-    """
+    """Phase 3.2: Reverse a discontinued flag on an existing row."""
     target = find_row(make, model, variant, fuel)
     if target is None:
         raise RuntimeError(
@@ -950,7 +873,6 @@ def clear_discontinued_flag(make: str, model: str, variant: str, fuel: str,
         },
     ]
 
-    # Optional: append a note to col G if admin provided one
     if note:
         existing_notes = target.get("notes", "")
         merged_notes = f"{existing_notes} | Un-discontinued {today_str}: {note}".strip(" |")
@@ -982,38 +904,12 @@ def clear_discontinued_flag(make: str, model: str, variant: str, fuel: str,
         "last_known_price_date": today_str,
     }
 
+
 def write_new_variant(make: str, model: str, variant: str, fuel: str,
                       ex_showroom_price: int,
                       source: str = "CarWale",
                       extra_note: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Phase 3: Append a brand new row to car_prices for a variant that doesn't
-    exist yet. Used when admin approves a "new_variant" review.
-
-    Inserts at the bottom of the tab with all 9 columns filled:
-      A: make
-      B: model
-      C: variant     (CarWale's verbose name, e.g. "VXi Petrol Manual")
-      D: fuel
-      E: ex_showroom_price
-      F: active                       -> "TRUE"
-      G: notes                        -> "DD-MMM-YYYY {source} {extra_note}"
-      H: status                       -> "" (empty = active)
-      I: last_known_price_date        -> "DD-MMM-YYYY"
-
-    Args:
-      make, model, variant, fuel: car identity (variant is CarWale's verbose name)
-      ex_showroom_price: positive int (rupees)
-      source: tag for the notes column (default "CarWale")
-      extra_note: optional extra string appended to notes
-
-    Raises RuntimeError if a row with this (make, model, variant, fuel) already
-    exists (in which case caller should use write_price_update_v2 instead).
-
-    NOTE: Does NOT validate that the variant name doesn't already exist with a
-    DIFFERENT fuel — that's allowed (e.g. "VXi Petrol" and "VXi Diesel" are two
-    valid rows). The check is only on the full (make, model, variant, fuel) tuple.
-    """
+    """Phase 3: Append a brand new row to car_prices for a new variant."""
     if not isinstance(ex_showroom_price, int) or ex_showroom_price < 0:
         raise RuntimeError(
             f"ex_showroom_price must be a non-negative int, got "
@@ -1024,7 +920,6 @@ def write_new_variant(make: str, model: str, variant: str, fuel: str,
             "make, model, variant, fuel are all required (got empty value)"
         )
 
-    # Guard: don't insert duplicate (make, model, variant, fuel)
     existing = find_row(make, model, variant, fuel)
     if existing is not None:
         raise RuntimeError(
@@ -1033,20 +928,16 @@ def write_new_variant(make: str, model: str, variant: str, fuel: str,
             f"to update an existing row, not write_new_variant()."
         )
 
-    # Find the next free row at the bottom by reading the tab.
-    # Note: read_car_prices() returns rows starting from row 2 (header is row 1).
-    # The next free row is max existing _row_number + 1, or 2 if tab is empty.
     all_rows = read_car_prices()
     last_row_num = max(
         (r["_row_number"] for r in all_rows),
-        default=1,  # header is row 1
+        default=1,
     )
     new_row_num = last_row_num + 1
 
     today_str = _today_ddmmmyyyy()
     new_notes = _format_notes(source, extra_note)
 
-    # Single batch with all 9 cells in cols A through I
     updates = [
         {
             "range": f"{TAB_CAR_PRICES}!A{new_row_num}:I{new_row_num}",
@@ -1058,7 +949,7 @@ def write_new_variant(make: str, model: str, variant: str, fuel: str,
                 str(ex_showroom_price),
                 "TRUE",
                 new_notes,
-                "",  # status = active
+                "",
                 today_str,
             ]],
         },
@@ -1093,13 +984,6 @@ def write_new_variant(make: str, model: str, variant: str, fuel: str,
 
 
 # ============================================================
-# PUBLIC API — model_slugs tab (v3.6.8, unchanged)
-# ============================================================
---------------------------------------------------------------
- 
-REPLACE WITH:
---------------------------------------------------------------
-# ============================================================
 # v3.7.8: Depreciation curve read/write
 # ============================================================
 #
@@ -1115,19 +999,19 @@ REPLACE WITH:
 #   read_depreciation_curve() — load current sheet for diffing/UI
 #   write_depreciation_curve_bulk() — apply new tiered values atomically
 # ============================================================
- 
+
 DEPRECIATION_CURVE_COLUMNS = [
     "year_age",      # A
     "mass_market",   # B
     "mid_market",    # C
     "luxury",        # D
 ]
- 
- 
+
+
 def read_depreciation_curve() -> Dict[str, Any]:
     """
     v3.7.8: Read all 3 tier curves from the depreciation_curve sheet tab.
- 
+
     Returns:
       {
         "header": ["year_age", "mass_market", "mid_market", "luxury"],
@@ -1139,17 +1023,15 @@ def read_depreciation_curve() -> Dict[str, Any]:
         "row_count": 16,
         "rows_by_age": {
             0: {"mass_market": 100.0, "mid_market": 100.0, "luxury": 100.0},
-            1: {"mass_market": 92.0,  "mid_market": 92.0,  "luxury": 92.0},
             ...
         },
       }
- 
+
     Raises RuntimeError if:
       - tab doesn't exist
-      - header row doesn't match DEPRECIATION_CURVE_COLUMNS
+      - header row missing year_age column
       - no data rows
-      - a value can't be parsed as a number
- 
+
     Note: empty/missing cells are silently skipped (don't add to that
     tier's dict). This matches the parser tolerance in car_data.py.
     """
@@ -1159,40 +1041,37 @@ def read_depreciation_curve() -> Dict[str, Any]:
             f"Tab '{TAB_DEPRECIATION}' not found in sheet. "
             f"Available tabs: {metadata.get('tabs', [])}"
         )
- 
+
     all_values = _fetch_tab_values(TAB_DEPRECIATION)
     if not all_values:
         raise RuntimeError(f"Tab '{TAB_DEPRECIATION}' is empty.")
- 
-    # Validate header row
+
     header = [str(c).strip() for c in all_values[0]]
     if len(header) < 2:
         raise RuntimeError(
             f"Tab '{TAB_DEPRECIATION}' header has only {len(header)} columns. "
             f"Expected at least 'year_age' and 'mass_market'."
         )
- 
-    # Determine which columns are present
-    # Tolerant: accept either new 3-tier headers or legacy 'retention_pct'
+
     col_indices = {}
     for i, h in enumerate(header):
         key = h.strip().lower()
         if key in ("year_age", "mass_market", "mid_market", "luxury", "retention_pct"):
             col_indices[key] = i
- 
+
     if "year_age" not in col_indices:
         raise RuntimeError(
             f"Tab '{TAB_DEPRECIATION}' header is missing 'year_age' column. "
             f"Got headers: {header}"
         )
- 
+
     curves: Dict[str, Dict[int, float]] = {
         "mass_market": {},
         "mid_market":  {},
         "luxury":      {},
     }
     rows_by_age: Dict[int, Dict[str, float]] = {}
- 
+
     def _parse_pct(raw):
         s = str(raw).strip()
         if not s:
@@ -1201,44 +1080,43 @@ def read_depreciation_curve() -> Dict[str, Any]:
             v = float(s)
         except (ValueError, TypeError):
             return None
-        # Clamp obvious typos but don't fail
         if v < 0 or v > 200:
             return None
         return v
- 
+
+    max_col_idx = max(col_indices.values()) if col_indices else 0
+    pad_to = max_col_idx + 1
+
     for row_idx, row in enumerate(all_values[1:], start=2):
         if not row:
             continue
-        # Pad short rows
-        padded = list(row) + [""] * (4 - len(row))
- 
+        padded = list(row) + [""] * (pad_to - len(row))
+
         try:
             age = int(str(padded[col_indices["year_age"]]).strip())
         except (ValueError, TypeError):
             continue
         if age < 0 or age > 50:
             continue
- 
+
         rows_by_age[age] = {}
- 
+
         for tier in ("mass_market", "mid_market", "luxury"):
             if tier in col_indices:
                 v = _parse_pct(padded[col_indices[tier]])
                 if v is not None:
                     curves[tier][age] = v
                     rows_by_age[age][tier] = v
- 
-        # Legacy fallback: if mass_market column missing but retention_pct exists,
-        # use that for all 3 tiers (matches car_data.py backward compat).
+
         if "retention_pct" in col_indices and "mass_market" not in col_indices:
             v = _parse_pct(padded[col_indices["retention_pct"]])
             if v is not None:
                 for tier in ("mass_market", "mid_market", "luxury"):
                     curves[tier][age] = v
                     rows_by_age[age][tier] = v
- 
+
     row_count = len(rows_by_age)
- 
+
     logger.info(
         "sheets_writer v3.7.8: read_depreciation_curve loaded %d rows "
         "(mass:%d, mid:%d, lux:%d)",
@@ -1247,15 +1125,15 @@ def read_depreciation_curve() -> Dict[str, Any]:
         len(curves["mid_market"]),
         len(curves["luxury"]),
     )
- 
+
     return {
         "header": header,
         "curves": curves,
         "row_count": row_count,
         "rows_by_age": rows_by_age,
     }
- 
- 
+
+
 def write_depreciation_curve_bulk(
     new_curves: Dict[str, Dict[int, float]],
     source: str = "admin_curve_editor",
@@ -1264,45 +1142,17 @@ def write_depreciation_curve_bulk(
     """
     v3.7.8: Atomically rewrite the depreciation_curve sheet tab with new
     tiered retention values.
- 
+
     Args:
       new_curves: dict with 3 keys (mass_market, mid_market, luxury), each
                   mapping age (int 0-15) to retention pct (float 0-100).
-                  Example:
-                    {
-                      "mass_market": {0: 100, 1: 92, ..., 15: 36},
-                      "mid_market":  {0: 100, 1: 92, ..., 15: 26},
-                      "luxury":      {0: 100, 1: 92, ..., 15: 16},
-                    }
-      source: tag for audit/logging (e.g. 'admin_curve_editor', 'manual_seed')
-      note: optional human note (currently logged but not written to sheet)
- 
-    Validates:
-      - All 3 tiers must be present in input
-      - Each tier must have entries for ages 0-15 (16 ages)
-      - Each value must be 0 <= v <= 100
-      - No NaN/None values
- 
-    Writes:
-      - Header row at A1:D1 = [year_age, mass_market, mid_market, luxury]
-      - 16 data rows at A2:D17 (ages 0-15)
-      - All in a SINGLE batch API call (atomic on the sheet side)
- 
-    Returns audit dict:
-      {
-        "ok": True,
-        "action": "depreciation_curve_bulk_write",
-        "tiers_written": ["mass_market", "mid_market", "luxury"],
-        "rows_written": 16,
-        "cells_written": 64,  # 16 ages × 4 columns
-        "source": source,
-        "note": note,
-        "written_at": "DD-MMM-YYYY HH:MM UTC",
-      }
- 
-    Raises RuntimeError on validation failure or API error.
+      source: tag for audit/logging
+      note: optional human note
+
+    Validates all values, writes header + 16 rows in a single batch API call.
+
+    Returns audit dict. Raises RuntimeError on validation or API error.
     """
-    # ---- Validation ----
     required_tiers = ("mass_market", "mid_market", "luxury")
     for tier in required_tiers:
         if tier not in new_curves:
@@ -1316,8 +1166,8 @@ def write_depreciation_curve_bulk(
                 f"write_depreciation_curve_bulk: tier '{tier}' must be a dict "
                 f"(got {type(tier_dict).__name__})"
             )
- 
-    expected_ages = list(range(16))  # 0..15 inclusive
+
+    expected_ages = list(range(16))
     for tier in required_tiers:
         tier_dict = new_curves[tier]
         for age in expected_ages:
@@ -1344,8 +1194,7 @@ def write_depreciation_curve_bulk(
                     f"write_depreciation_curve_bulk: tier '{tier}' age {age} "
                     f"value {fv} is outside [0, 100]."
                 )
- 
-    # ---- Build the 17×4 grid (header + 16 data rows) ----
+
     grid: List[List[str]] = []
     grid.append(["year_age", "mass_market", "mid_market", "luxury"])
     for age in expected_ages:
@@ -1356,59 +1205,57 @@ def write_depreciation_curve_bulk(
             _format_curve_value(new_curves["luxury"][age]),
         ]
         grid.append(row)
- 
-    # ---- Single batch write ----
+
     updates = [
         {
             "range": f"{TAB_DEPRECIATION}!A1:D17",
             "values": grid,
         },
     ]
- 
+
     try:
         _write_cells_batch(updates)
     except RuntimeError as e:
         raise RuntimeError(
             f"write_depreciation_curve_bulk: batch write failed: {e}"
         )
- 
+
     written_at = datetime.utcnow().strftime("%d-%b-%Y %H:%M UTC")
- 
+
     logger.info(
         "sheets_writer v3.7.8: write_depreciation_curve_bulk OK | "
-        "source=%s | mass:%s mid:%s lux:%s | note=%s",
+        "source=%s | mass@5:%s mid@5:%s lux@5:%s | note=%s",
         source,
-        new_curves["mass_market"][5],   # age-5 spot check
+        new_curves["mass_market"][5],
         new_curves["mid_market"][5],
         new_curves["luxury"][5],
         note or "",
     )
- 
+
     return {
         "ok": True,
         "action": "depreciation_curve_bulk_write",
         "tiers_written": list(required_tiers),
         "rows_written": 16,
-        "cells_written": 64,  # 16 rows × 4 cols
+        "cells_written": 64,
         "source": source,
         "note": note,
         "written_at": written_at,
     }
- 
- 
+
+
 def _format_curve_value(v: float) -> str:
     """
     Format a retention pct for the sheet.
     Integer values written without decimal: 100 -> "100" not "100.0"
-    Fractional values kept to 2 decimals max: 92.5 -> "92.5"
+    Fractional values kept to 2 decimals max, trailing zeros stripped: 92.50 -> 92.5
     """
     fv = float(v)
     if fv == int(fv):
         return str(int(fv))
-    # Strip trailing zeros: 92.50 -> 92.5, 92.00 -> 92
     return f"{fv:.2f}".rstrip("0").rstrip(".")
- 
- 
+
+
 # ============================================================
 # PUBLIC API — model_slugs tab (v3.6.8, unchanged)
 # ============================================================
@@ -1533,7 +1380,3 @@ def reset_caches():
         _session = None
         _sheet_metadata_cache = None
     logger.info("sheets_writer: caches reset; next call will re-authenticate")
-
-# ============================================================
-# END OF PART 2/2 — sheets_writer.py v3.7.0
-# ============================================================
