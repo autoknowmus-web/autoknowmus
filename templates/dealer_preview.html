@@ -126,7 +126,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -348,7 +348,7 @@ body {
   .hero-block {
     text-align: center;
     padding: 30px 20px 36px;
-    margin-bottom: 30px;
+    margin-bottom: 18px;
     border-bottom: 1px solid var(--border);
   }
   .hero-logo {
@@ -417,7 +417,7 @@ body {
   }
 
   /* TIER SECTION */
-  .tier-section { margin-bottom: 28px; }
+  .tier-section { margin-bottom: 18px; }
   .tier-section-header {
     display: flex;
     align-items: center;
@@ -558,13 +558,13 @@ body {
   /* MOCKUP-1 SPECIFIC — preserving the screenshot's visual style */
 
   /* Two-column layout: form on left (fixed), hero+calculator stacked on right */
-  .top-grid {
+  #section-valuation .top-grid {
     display: grid;
     grid-template-columns: 380px 1fr;
-    gap: 18px;
+    gap: 14px;
     margin-bottom: 18px;
   }
-  .right-stack { display: flex; flex-direction: column; gap: 18px; }
+  #section-valuation .right-stack { display: flex; flex-direction: column; gap: 14px; }
 
   /* Form */
   .form-row { margin-bottom: 14px; }
@@ -863,7 +863,7 @@ body {
   .intel-card .intel-sub { color: var(--text-muted); font-size: 0.8rem; }
 
   /* Bottom grid: chart + deals table */
-  .bottom-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; }
+  .bottom-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
   .chart-wrap { position: relative; height: 260px; margin-top: 8px; }
   .chart-caption {
     color: var(--text-secondary);
@@ -902,11 +902,11 @@ body {
   .deals-table tr:last-child td { border-bottom: none; }
 
   /* Larger card padding on this page */
-  .card { padding: 22px 24px; }
-  .card.compact { padding: 18px 24px; }
+  .card { padding: 16px 20px; }
+  .card.compact { padding: 12px 20px; }
   .card-title {
     font-size: 1.02rem;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
   }
   .card-title .sub { font-size: 0.84rem; }
 
@@ -920,10 +920,10 @@ body {
   /* MOCKUP-2: matching Mockup 1's visual breathing room */
 
   /* Bigger card padding (same as M1) */
-  .card { padding: 22px 24px; }
+  .card { padding: 16px 20px; }
   .card-title {
     font-size: 1.02rem;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
   }
   .card-title .sub { font-size: 0.84rem; }
   .page-title { font-size: 1.8rem; }
@@ -934,7 +934,7 @@ body {
     background: rgba(78,176,255,0.08);
     border: 1px solid rgba(78,176,255,0.3);
     border-radius: 8px;
-    padding: 10px 16px;
+    padding: 7px 14px;
     color: var(--blue);
     font-size: 0.84rem;
     font-style: italic;
@@ -1006,7 +1006,7 @@ body {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 14px;
-    margin-bottom: 20px;
+    margin-bottom: 14px;
   }
   .stat-card {
     background: var(--bg-card);
@@ -1040,53 +1040,53 @@ body {
   .stat-card .stat-trend.down { color: var(--red); }
 
   /* Top-10 bar list + budget bands grid */
-  .top-grid {
+  #section-demand .top-grid {
     display: grid;
     grid-template-columns: 1.5fr 1fr;
-    gap: 18px;
-    margin-bottom: 20px;
+    gap: 14px;
+    margin-bottom: 14px;
   }
 
   .bar-list { display: flex; flex-direction: column; gap: 11px; }
-  .bar-row {
+  #section-demand .bar-row {
     display: grid;
     grid-template-columns: 180px 1fr 110px;
     gap: 16px;
     align-items: center;
     font-size: 0.9rem;
   }
-  .bar-row .car-name {
+  #section-demand .bar-row .car-name {
     color: var(--text-primary);
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .bar-row .bar-track {
+  #section-demand .bar-row .bar-track {
     background: var(--bg-elevated);
     border-radius: 6px;
     height: 22px;
     overflow: hidden;
     position: relative;
   }
-  .bar-row .bar-fill {
+  #section-demand .bar-row .bar-fill {
     height: 100%;
     border-radius: 6px;
     background: linear-gradient(90deg, var(--green) 0%, var(--green-soft) 100%);
   }
-  .bar-row .bar-fill.warm {
+  #section-demand .bar-row .bar-fill.warm {
     background: linear-gradient(90deg, var(--orange) 0%, #ffd180 100%);
   }
-  .bar-row .bar-fill.cool {
+  #section-demand .bar-row .bar-fill.cool {
     background: linear-gradient(90deg, var(--blue) 0%, #8ec5ff 100%);
   }
-  .bar-row .bar-count {
+  #section-demand .bar-row .bar-count {
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
     text-align: right;
     font-size: 0.84rem;
   }
-  .bar-row .bar-count strong { color: white; }
+  #section-demand .bar-row .bar-count strong { color: white; }
 
   /* Budget bands table */
   .intent-table {
@@ -1353,8 +1353,8 @@ body {
 /* ===== Inventory ===== */
 
   /* MOCKUP-3 v3 — card-based inventory with health tabs + tier toggle */
-  .card { padding: 22px 24px; }
-  .card-title { font-size: 1.02rem; margin-bottom: 16px; }
+  .card { padding: 16px 20px; }
+  .card-title { font-size: 1.02rem; margin-bottom: 10px; }
   .card-title .sub { font-size: 0.84rem; }
   .page-title { font-size: 1.8rem; }
   .page-sub { font-size: 0.95rem; }
@@ -1363,7 +1363,7 @@ body {
     background: rgba(78,176,255,0.08);
     border: 1px solid rgba(78,176,255,0.3);
     border-radius: 8px;
-    padding: 10px 16px;
+    padding: 7px 14px;
     color: var(--blue);
     font-size: 0.84rem;
     font-style: italic;
@@ -1654,7 +1654,7 @@ body {
   .inv-card-bottom {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 18px;
+    gap: 14px;
     align-items: center;
     padding-top: 10px;
     border-top: 1px solid rgba(255,255,255,0.05);
@@ -1817,8 +1817,8 @@ body {
 
 /* ===== Market Spread ===== */
 
-  .card { padding: 22px 24px; }
-  .card-title { font-size: 1.02rem; margin-bottom: 16px; }
+  .card { padding: 16px 20px; }
+  .card-title { font-size: 1.02rem; margin-bottom: 10px; }
   .card-title .sub { font-size: 0.84rem; }
   .page-title { font-size: 1.8rem; }
   .page-sub { font-size: 0.95rem; }
@@ -1827,7 +1827,7 @@ body {
     background: rgba(78,176,255,0.08);
     border: 1px solid rgba(78,176,255,0.3);
     border-radius: 8px;
-    padding: 10px 16px;
+    padding: 7px 14px;
     color: var(--blue);
     font-size: 0.84rem;
     font-style: italic;
@@ -1893,7 +1893,7 @@ body {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 14px;
-    margin-bottom: 20px;
+    margin-bottom: 14px;
   }
   .stat-card {
     background: var(--bg-card);
@@ -1938,7 +1938,7 @@ body {
   .stat-card .stat-locked::before { content: "🔒"; font-size: 0.85rem; }
 
   /* ============ ARBITRAGE SECTION (Edge only) ============ */
-  .arb-section { margin-bottom: 24px; }
+  .arb-section { margin-bottom: 16px; }
   .arb-section-header {
     display: flex;
     justify-content: space-between;
@@ -2231,7 +2231,7 @@ body {
     border: 1px solid rgba(154,123,200,0.4);
     border-radius: 12px;
     padding: 18px 22px;
-    margin-bottom: 22px;
+    margin-bottom: 14px;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -2355,10 +2355,10 @@ body {
     border-radius: 12px;
     padding: 6px 0;
   }
-  .bar-row {
+  #section-market-spread .bar-row {
     display: grid;
     grid-template-columns: 220px 1fr 70px;
-    gap: 18px;
+    gap: 14px;
     align-items: center;
     padding: 14px 22px;
     border-bottom: 1px solid rgba(255,255,255,0.04);
@@ -2394,11 +2394,14 @@ body {
   }
 
   /* The actual bar visualization */
-  .bar-track {
+  /* Higher specificity to override Demand section's .bar-row .bar-track */
+  #section-market-spread .bar-track,
+  .bar-view .bar-track {
     position: relative;
     height: 6px;
     background: linear-gradient(to right, rgba(40,167,69,0.5), rgba(108,117,125,0.4), rgba(255,165,0,0.5));
     border-radius: 3px;
+    overflow: visible;
   }
   .bar-endpoint {
     position: absolute;
@@ -2485,7 +2488,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 18px;
+    gap: 14px;
     margin-top: 12px;
     padding: 10px 0;
     border-top: 1px solid var(--border);
@@ -2591,8 +2594,8 @@ body {
 
 /* ===== Dealer Benchmarking ===== */
 
-  .card { padding: 22px 24px; }
-  .card-title { font-size: 1.02rem; margin-bottom: 16px; }
+  .card { padding: 16px 20px; }
+  .card-title { font-size: 1.02rem; margin-bottom: 10px; }
   .card-title .sub { font-size: 0.84rem; }
   .page-title { font-size: 1.8rem; }
   .page-sub { font-size: 0.95rem; }
@@ -2619,7 +2622,7 @@ body {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 14px;
-    margin-bottom: 22px;
+    margin-bottom: 14px;
   }
   .stat-card {
     background: var(--bg-card);
@@ -2666,7 +2669,7 @@ body {
   .stat-card .stat-sub strong { color: var(--text-primary); font-weight: 700; }
 
   /* DIMENSION BARS */
-  .dimensions-section { margin-bottom: 22px; }
+  .dimensions-section { margin-bottom: 14px; }
   .dimensions-card {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -2678,7 +2681,7 @@ body {
     color: var(--text-muted);
     font-size: 0.82rem;
     font-style: italic;
-    margin-bottom: 22px;
+    margin-bottom: 14px;
   }
 
   /* New structure: top grid (3 cols) + caption row spanning full width */
@@ -2868,7 +2871,7 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 14px;
-    margin-bottom: 22px;
+    margin-bottom: 14px;
   }
   .aging-card, .mix-card {
     background: var(--bg-card);
@@ -3081,8 +3084,8 @@ body {
 
 /* ===== Slow Stock ===== */
 
-  .card { padding: 22px 24px; }
-  .card-title { font-size: 1.02rem; margin-bottom: 16px; }
+  .card { padding: 16px 20px; }
+  .card-title { font-size: 1.02rem; margin-bottom: 10px; }
   .card-title .sub { font-size: 0.84rem; }
   .page-title { font-size: 1.8rem; }
   .page-sub { font-size: 0.95rem; }
@@ -3105,7 +3108,7 @@ body {
   .demo-disclosure strong { color: white; font-weight: 700; font-style: normal; }
 
   /* SECTION DIVIDERS */
-  .major-section { margin-bottom: 28px; }
+  .major-section { margin-bottom: 18px; }
   .major-section-header {
     border-left: 4px solid var(--green);
     padding-left: 12px;
@@ -3928,7 +3931,7 @@ body {
 
 /* ===== Plans & Pricing ===== */
 
-  .card { padding: 22px 24px; }
+  .card { padding: 16px 20px; }
   .page-title { font-size: 1.8rem; }
   .page-sub { font-size: 0.95rem; }
 
@@ -3938,11 +3941,11 @@ body {
     border: 1px solid rgba(255,165,0,0.45);
     border-radius: 12px;
     padding: 16px 22px;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 18px;
+    gap: 14px;
     flex-wrap: wrap;
   }
   .founding-banner .fd-left {
@@ -3989,7 +3992,7 @@ body {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 14px;
-    margin-bottom: 20px;
+    margin-bottom: 14px;
   }
   .pricing-card {
     background: var(--bg-card);
@@ -4143,7 +4146,7 @@ body {
     border: 1px solid rgba(78,176,255,0.3);
     border-radius: 10px;
     padding: 14px 18px;
-    margin-bottom: 22px;
+    margin-bottom: 14px;
     color: var(--text-primary);
     font-size: 0.86rem;
     line-height: 1.5;
@@ -4160,7 +4163,7 @@ body {
     border: 1px solid rgba(154,123,200,0.4);
     border-radius: 12px;
     padding: 18px 22px;
-    margin-bottom: 26px;
+    margin-bottom: 18px;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -4172,7 +4175,7 @@ body {
   .trial-banner .tb-text .tb-detail { color: var(--text-secondary); font-size: 0.82rem; display: block; margin-top: 4px; }
 
   /* COMPARISON TABLE */
-  .compare-wrap { margin-bottom: 26px; }
+  .compare-wrap { margin-bottom: 18px; }
   .compare-title {
     color: white;
     font-size: 1.25rem;
@@ -4286,7 +4289,7 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 14px;
-    margin-bottom: 26px;
+    margin-bottom: 18px;
   }
   .upgrade-callout {
     background: var(--bg-card);
@@ -4334,7 +4337,7 @@ body {
   }
 
   /* FAQ */
-  .faq-wrap { margin-bottom: 26px; }
+  .faq-wrap { margin-bottom: 18px; }
   .faq-title {
     color: white;
     font-size: 1.25rem;
@@ -4451,7 +4454,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
 .shell-body { flex: 1; padding-bottom: 80px; }
 .content-section { display: none; }
 .content-section.active { display: block; }
-.mockup-inline { padding-top: 16px; }
+.mockup-inline { padding-top: 8px; }
 .shell-cta { position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(180deg, rgba(15,18,23,0.85) 0%, rgba(15,18,23,0.98) 60%); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-top: 1px solid var(--border); padding: 12px 22px; display: flex; align-items: center; justify-content: center; gap: 12px; z-index: 100; }
 .shell-cta-text { color: var(--text-secondary); font-size: 0.84rem; line-height: 1.3; }
 .shell-cta-text strong { color: white; }
@@ -4469,7 +4472,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   .shell-body { padding-bottom: 110px; }
   .mockup-inline { padding: 10px 0 0; }
   .mockup-frame { padding: 0 12px; }
-  .stats-row, .top-row, .aging-section, .bottom-row,
+  .stats-row, .top-row, .top-grid, .aging-section, .bottom-row,
   .kpi-row, .signals-grid, .diag-signals, .scenario-cards,
   .pulse-grid, .mc-grid, .compare-grid, .scale-comparison,
   .slow-card-stats, .dim-row, .tier-grid {
@@ -4490,7 +4493,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
 }
 </style>
 </head>
-<body>
+<body class="is-operate view-bar">
 
 <div class="shell-app">
   <header class="shell-header">
@@ -4643,7 +4646,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   <div class="page-title">Valuation</div>
   <div class="page-sub">See what this car sells for, what you should pay to make a profit, and how strong your offer is.</div>
 
-  <div style="margin-top: 22px;"></div>
+  <div style="margin-top: 12px;"></div>
 
   <div class="top-grid">
 
@@ -4945,7 +4948,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   <div class="top-grid">
     <div class="card">
       <div class="card-title">
-        Top 10 Most-Searched Cars
+        Top 7 Most-Searched Cars
         <span class="sub">— Bangalore, last 30 days</span>
       </div>
       <div class="bar-list">
@@ -4956,9 +4959,6 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
         <div class="bar-row"><span class="car-name">Hyundai Venue</span><div class="bar-track"><div class="bar-fill" style="width: 61%"></div></div><span class="bar-count"><strong>174</strong> searches</span></div>
         <div class="bar-row"><span class="car-name">Mahindra XUV500</span><div class="bar-track"><div class="bar-fill" style="width: 54%"></div></div><span class="bar-count"><strong>153</strong> searches</span></div>
         <div class="bar-row"><span class="car-name">Tata Nexon</span><div class="bar-track"><div class="bar-fill" style="width: 47%"></div></div><span class="bar-count"><strong>133</strong> searches</span></div>
-        <div class="bar-row"><span class="car-name">Hyundai Verna</span><div class="bar-track"><div class="bar-fill" style="width: 41%"></div></div><span class="bar-count"><strong>117</strong> searches</span></div>
-        <div class="bar-row"><span class="car-name">Maruti Baleno</span><div class="bar-track"><div class="bar-fill" style="width: 35%"></div></div><span class="bar-count"><strong>99</strong> searches</span></div>
-        <div class="bar-row"><span class="car-name">Honda Amaze</span><div class="bar-track"><div class="bar-fill" style="width: 30%"></div></div><span class="bar-count"><strong>85</strong> searches</span></div>
       </div>
     </div>
 
@@ -6217,11 +6217,11 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
 
   <div class="tier-toggle-row">
     <div class="toggle-label">
-      Viewing as <strong id="tier-name">Operate</strong> tier <span id="tier-helper" style="color:var(--text-muted)">— read-only Market Spread, no route alerts.</span>
+      Viewing as <strong id="ms-tier-name">Operate</strong> tier <span id="tier-helper" style="color:var(--text-muted)">— read-only Market Spread, no route alerts.</span>
     </div>
     <div class="tier-toggle">
-      <button id="btn-operate" class="active tier-operate-btn" onclick="setTier('operate')">Operate</button>
-      <button id="btn-edge" class="tier-edge-btn" onclick="setTier('edge')">Edge</button>
+      <button id="ms-btn-operate" class="active tier-operate-btn" onclick="setTier('operate')">Operate</button>
+      <button id="ms-btn-edge" class="tier-edge-btn" onclick="setTier('edge')">Edge</button>
     </div>
   </div>
 
@@ -6835,7 +6835,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   </div>
 
   <!-- ACTION BAR -->
-  <div class="action-bar" style="margin-top: 22px;">
+  <div class="action-bar" style="margin-top: 14px;">
     <div class="icon">💡</div>
     <div class="text">
       <span class="label">What this tells you:</span>
@@ -7194,7 +7194,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   </details>
 
   <!-- ACTION INSIGHTS -->
-  <div class="action-bar" style="margin-top: 22px;">
+  <div class="action-bar" style="margin-top: 14px;">
     <div class="icon">🎯</div>
     <div class="text">
       <span class="label">What this tells you:</span>
@@ -7807,7 +7807,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   </details>
 
   <!-- ACTION INSIGHTS -->
-  <div class="action-bar" style="margin-top: 22px;">
+  <div class="action-bar" style="margin-top: 14px;">
     <div class="icon">🎯</div>
     <div class="text">
       <span class="label">What this tells you:</span>
@@ -8235,15 +8235,49 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   </main>
 
   <div class="shell-cta">
-    <div class="shell-cta-text">Like what you see? <strong>Let's set up a real demo.</strong></div>
-    <a href="mailto:autoknowmus@gmail.com?subject=Schedule%20a%20demo%20%E2%80%94%20AutoKnowMus%20PRO&body=Hi%2C%20I%27d%20like%20to%20schedule%20a%20demo%20of%20AutoKnowMus%20PRO%20for%20my%20dealership."
-       class="shell-cta-btn">📅 Schedule a Demo</a>
+    <div class="shell-cta-text">Like what you see? <strong>Get full access free for 2 months.</strong></div>
+    <a href="#"
+       id="trial-cta-btn"
+       class="shell-cta-btn"
+       onclick="return openTrialCTA(event);">🎟 Register for 2-month free trial</a>
   </div>
 
 </div>
 
 <script>
 (function() {
+  // ============================================================
+  // CTA: "Register for 2-month free trial"
+  // Mobile → WhatsApp with prefilled message
+  // Desktop → mailto to autoknowmus@gmail.com
+  // ============================================================
+  const WHATSAPP_NUMBER = '919880221405';
+  const PREFILL_MESSAGE = 'Hi, interested in AutoKnowMus PRO 2-month trial';
+  const EMAIL_TO = 'autoknowmus@gmail.com';
+  const EMAIL_SUBJECT = 'AutoKnowMus PRO — 2-month free trial registration';
+  const EMAIL_BODY = 'Hi,\n\nI\'d like to register for the 2-month free Edge trial of AutoKnowMus PRO for my dealership.\n\nDealership name:\nLocation:\nContact number:\n\nThanks,';
+
+  function isMobileDevice() {
+    // Simple, reliable check — UA sniffing is acceptable for routing
+    // (not for feature detection). Touch-only check would miss desktops
+    // with touchscreens, which we don't want to redirect to WhatsApp.
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }
+
+  window.openTrialCTA = function(event) {
+    event.preventDefault();
+    if (isMobileDevice()) {
+      const url = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(PREFILL_MESSAGE);
+      window.location.href = url;
+    } else {
+      const url = 'mailto:' + EMAIL_TO
+        + '?subject=' + encodeURIComponent(EMAIL_SUBJECT)
+        + '&body=' + encodeURIComponent(EMAIL_BODY);
+      window.location.href = url;
+    }
+    return false;
+  };
+
   const tabs = document.querySelectorAll('.shell-tab');
   const sections = document.querySelectorAll('.content-section');
   function showSection(slug) {
@@ -8294,24 +8328,88 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
 
   function setTier(tier) {
     const isEdge = tier === 'edge';
-    document.getElementById('btn-operate').classList.toggle('active', !isEdge);
-    document.getElementById('btn-edge').classList.toggle('active', isEdge);
-    document.getElementById('tier-name').textContent = isEdge ? 'Edge' : 'Operate';
-    document.getElementById('tier-name').nextSibling.textContent = isEdge
-      ? ' tier '
-      : ' tier ';
-    document.querySelector('.toggle-label span').textContent = isEdge
-      ? '— recommendations use price + DTS + peer comparison.'
-      : '— recommendations use price + DTS only.';
-    document.getElementById('demo-tier-pill').textContent = isEdge ? 'Edge' : 'Operate';
-    document.getElementById('demo-tier-pill').className = 'tier-pill ' + (isEdge ? 'tier-edge' : 'tier-operate');
-    document.getElementById('edge-hint').style.display = isEdge ? 'none' : '';
 
+    // Body class — drives Market Spread's CSS-based show/hide of .edge-only / .operate-only
+    document.body.classList.toggle('is-edge', isEdge);
+    document.body.classList.toggle('is-operate', !isEdge);
+
+    // ----- Inventory section tier toggle (btn-operate / btn-edge) -----
+    const invOp = document.getElementById('btn-operate');
+    const invEd = document.getElementById('btn-edge');
+    if (invOp) invOp.classList.toggle('active', !isEdge);
+    if (invEd) invEd.classList.toggle('active', isEdge);
+
+    const tierName = document.getElementById('tier-name');
+    if (tierName) {
+      tierName.textContent = isEdge ? 'Edge' : 'Operate';
+    }
+
+    // Inventory's helper text — generic span inside its .toggle-label
+    // (Inventory's span has no id, Market Spread's span DOES have id="tier-helper",
+    // so target the Inventory span specifically by walking from #tier-name.)
+    if (tierName) {
+      const invHelperSpan = tierName.parentElement.querySelector('span');
+      if (invHelperSpan) {
+        invHelperSpan.textContent = isEdge
+          ? ' tier — recommendations use price + DTS + peer comparison.'
+          : ' tier — recommendations use price + DTS only.';
+      }
+    }
+
+    // Inventory's "Upgrade to Edge" hint banner
+    const edgeHint = document.getElementById('edge-hint');
+    if (edgeHint) edgeHint.style.display = isEdge ? 'none' : '';
+
+    // ----- Market Spread section tier toggle (ms-btn-operate / ms-btn-edge) -----
+    const msOp = document.getElementById('ms-btn-operate');
+    const msEd = document.getElementById('ms-btn-edge');
+    if (msOp) msOp.classList.toggle('active', !isEdge);
+    if (msEd) msEd.classList.toggle('active', isEdge);
+
+    const msTierName = document.getElementById('ms-tier-name');
+    if (msTierName) msTierName.textContent = isEdge ? 'Edge' : 'Operate';
+
+    const msHelper = document.getElementById('tier-helper');
+    if (msHelper) {
+      msHelper.textContent = isEdge
+        ? '— live route alerts active, profit routes ranked using your cost configuration.'
+        : '— read-only Market Spread, no route alerts.';
+    }
+
+    // ----- Shared: show/hide tier-gated elements (used by both sections) -----
     document.querySelectorAll('.edge-only').forEach(el => el.style.display = isEdge ? '' : 'none');
     document.querySelectorAll('.operate-only').forEach(el => el.style.display = isEdge ? 'none' : '');
     document.querySelectorAll('.edge-text').forEach(el => el.style.display = isEdge ? '' : 'none');
     document.querySelectorAll('.operate-text').forEach(el => el.style.display = isEdge ? 'none' : '');
   }
+
+  // ----- Market Spread bar / table view toggle -----
+  function setView(view) {
+    const isTable = view === 'table';
+    document.body.classList.toggle('view-table', isTable);
+    document.body.classList.toggle('view-bar', !isTable);
+    const btnBar = document.getElementById('btn-view-bar');
+    const btnTbl = document.getElementById('btn-view-table');
+    if (btnBar) btnBar.classList.toggle('active', !isTable);
+    if (btnTbl) btnTbl.classList.toggle('active', isTable);
+  }
+
+  // ----- Market Spread cost-line expand/collapse on profit-route cards -----
+  function toggleCostDetail(line) {
+    const card = line.closest('.arb-card');
+    if (!card) return;
+    card.classList.toggle('is-expanded');
+    const icon = line.querySelector('.toggle-icon');
+    if (icon) {
+      icon.textContent = card.classList.contains('is-expanded') ? '⌄' : '›';
+    }
+  }
+
+  // Expose to global so onclick="..." handlers can find them (we're inside an IIFE)
+  window.setTier = setTier;
+  window.setView = setView;
+  window.toggleCostDetail = toggleCostDetail;
+  window.setHealthTab = setHealthTab;
 
 })();
 </script>
