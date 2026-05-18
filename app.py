@@ -10664,5 +10664,54 @@ def admin_paste_confirm_ingest():
 # END app.py — Part 9 (Part 2/2)
 # Continue with the existing `if __name__ == '__main__':` block AFTER this.
 # ============================================================
+
+# ============================================================
+# DEALER PREVIEW — Flask route additions
+# Paste this entire block into app.py, AFTER your last existing route
+# definition and BEFORE the `if __name__ == "__main__":` block (if it exists).
+#
+# IMPORTANT: Make sure `from flask import request` is already at the top of app.py.
+# If you're using Flask's `render_template`, that should already be imported too.
+# ============================================================
+
+# Route 1: The simple path-based URL — always works, no DNS needed
+# Visit: https://autoknowmus.com/dealer-preview
+@app.route('/dealer-preview')
+def dealer_preview_page():
+    """
+    Serves the single-file dealer mockup preview.
+    Works at autoknowmus.com/dealer-preview regardless of subdomain setup.
+    """
+    return render_template('dealer_preview.html')
+
+
+# Route 2: Subdomain-aware root — when pro.autoknowmus.com/ is hit,
+# serve the preview. Only relevant once DNS + Render custom domain are configured.
+# This intercepts the root '/' request and checks which hostname was used.
+@app.before_request
+def serve_preview_on_pro_subdomain():
+    """
+    Subdomain router for pro.autoknowmus.com.
+
+    Behavior:
+    - If request hostname is 'pro.autoknowmus.com', serve the dealer preview
+      for the root path AND any unknown path under that subdomain.
+    - For main domain (autoknowmus.com), this hook does nothing — your existing
+      routes continue to work normally.
+
+    This lets pro.autoknowmus.com behave like a static site dedicated to the
+    dealer preview, without changing any existing routing on the main domain.
+    """
+    host = request.host.lower()
+
+    # Only act on the pro subdomain
+    if host == 'pro.autoknowmus.com' or host.startswith('pro.autoknowmus.com:'):
+        # For any path on the pro subdomain, serve the dealer preview.
+        # The preview's internal hash-based navigation handles its own routing.
+        return render_template('dealer_preview.html')
+
+    # For all other hostnames, do nothing — let normal routing take over
+    return None
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
