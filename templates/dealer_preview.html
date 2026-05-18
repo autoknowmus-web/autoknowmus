@@ -4454,6 +4454,23 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
 .shell-tab { flex-shrink: 0; padding: 8px 14px; border-radius: 7px; font-size: 0.84rem; font-weight: 600; color: var(--text-secondary); text-decoration: none; cursor: pointer; white-space: nowrap; border: 1px solid transparent; background: transparent; font-family: inherit; }
 .shell-tab:hover { background: var(--bg-elevated); color: white; }
 .shell-tab.active { background: rgba(40,167,69,0.15); border-color: rgba(40,167,69,0.4); color: var(--green); }
+.shell-disclaimer-banner {
+  background: rgba(255,165,0,0.12);
+  border-top: 1px solid rgba(255,165,0,0.3);
+  border-bottom: 1px solid rgba(255,165,0,0.3);
+  color: #ffc870;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  padding: 7px 22px;
+  text-align: center;
+  margin-top: 8px;
+}
+.shell-disclaimer-banner strong { color: #ffd180; font-weight: 700; }
+@media (max-width: 480px) {
+  .shell-disclaimer-banner { font-size: 0.7rem; padding: 6px 12px; }
+  .shell-disclaimer-banner .dim-on-mobile { display: none; }
+  .shell-disclaimer-banner::after { content: " · Buttons non-functional."; color: #ffc870; font-weight: 400; }
+}
 .shell-body { flex: 1; padding-bottom: 80px; }
 .content-section { display: none; }
 .content-section.active { display: block; }
@@ -4476,27 +4493,152 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   .shell-body { padding-bottom: 120px; }
   .mockup-inline { padding: 8px 0 0; }
   .mockup-frame { padding: 0 10px; max-width: 100%; }
+
+  /* All multi-column grids stack to single column on mobile */
   .stats-row, .top-row, .top-grid, .aging-section, .bottom-row,
   .kpi-row, .signals-grid, .diag-signals, .scenario-cards,
   .pulse-grid, .mc-grid, .compare-grid, .scale-comparison,
-  .slow-card-stats, .dim-row, .tier-grid {
+  .slow-card-stats, .dim-row, .tier-grid, .calc-grid,
+  .form-row-grid, .footer-cta-buttons, .price-triplet,
+  .arb-cards, .scope-grid, .matrix-row, .signals-row {
     grid-template-columns: 1fr !important;
+    display: grid !important;
   }
+
   a, button { min-height: 36px; }
   .page-title, h1 { font-size: 1.3rem !important; }
   .page-sub { font-size: 0.86rem !important; }
   .stat-value { font-size: 1.45rem !important; }
   .card { padding: 14px 14px !important; }
+  .card-title { flex-wrap: wrap; gap: 6px; }
+
   /* Hero numbers (price ranges, big stats) — force to fit small screens */
-  .selling-hero .range { font-size: 1.6rem !important; }
+  .selling-hero .range,
+  .buy-hero .range,
+  .buy-hero .price-big {
+    font-size: 1.45rem !important;
+    letter-spacing: 0 !important;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
   .selling-hero .midline { font-size: 0.85rem !important; }
-  .buy-hero .range, .buy-hero .price-big { font-size: 1.5rem !important; }
+  .selling-hero .dash { margin: 0 6px !important; }
+
   /* Tables: allow horizontal scroll inside their container only */
   table { display: block; overflow-x: auto; white-space: nowrap; max-width: 100%; }
+
   /* Prevent any card / section from exceeding viewport */
   .content-section, .card, .mockup-frame { max-width: 100%; }
-  /* Reduce gap between sections */
   .mockup-frame .card { margin-bottom: 12px; }
+
+  /* ============================================================
+     FIX #3: Demand bars — stack rows on mobile so bar gets full width
+     Was: 180px car-name | 1fr bar | 110px count (322px+ minimum, doesn't fit)
+     Now: 2-row layout: car-name + count on row 1, bar full width on row 2
+     ============================================================ */
+  #section-demand .bar-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    grid-template-rows: auto auto !important;
+    gap: 4px 10px !important;
+    padding-bottom: 8px;
+  }
+  #section-demand .bar-row .car-name {
+    grid-column: 1; grid-row: 1;
+    white-space: normal !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+  }
+  #section-demand .bar-row .bar-count {
+    grid-column: 2; grid-row: 1;
+    text-align: right;
+    font-size: 0.78rem !important;
+  }
+  #section-demand .bar-row .bar-track {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    width: 100%;
+    height: 14px !important;
+  }
+
+  /* ============================================================
+     FIX #1: Market Spread bars — stack vertically on mobile
+     Was: 220px name | 1fr chart (with absolute-positioned dots/labels) | 70px pct
+     Problem on mobile: the bar-chart's absolute positioning gets squeezed,
+     dots and labels overlap into illegible mess.
+     Fix: full vertical layout — name+spread on top, then full-width thin
+     bar with endpoint prices below, then city labels listed comma-separated.
+     ============================================================ */
+  #section-market-spread .bar-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    gap: 6px 12px !important;
+    padding: 12px 14px !important;
+  }
+  #section-market-spread .model-info {
+    grid-column: 1; grid-row: 1;
+    min-width: 0;
+  }
+  #section-market-spread .model-info .model-name {
+    font-size: 0.86rem !important;
+    word-break: break-word;
+  }
+  #section-market-spread .model-info .model-meta {
+    font-size: 0.7rem !important;
+  }
+  #section-market-spread .spread-pct {
+    grid-column: 2; grid-row: 1;
+    font-size: 0.88rem !important;
+    align-self: center;
+  }
+  #section-market-spread .spread-pct .pct-label { font-size: 0.6rem !important; }
+  #section-market-spread .bar-chart {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    width: 100%;
+    margin-top: 18px;
+    padding: 0 8px;
+    position: relative;
+    min-height: 60px;
+  }
+  /* On mobile, make the bar slightly thicker and the dots bigger so they're touchable */
+  #section-market-spread .bar-chart .bar-track {
+    height: 8px !important;
+    width: 100%;
+  }
+  #section-market-spread .bar-chart .city-dot {
+    width: 10px !important; height: 10px !important;
+    top: -2px !important;
+  }
+  /* Hide every-other city label on mobile so they don't pile up */
+  #section-market-spread .bar-chart .city-label {
+    font-size: 0.6rem !important;
+    top: 14px !important;
+  }
+  #section-market-spread .bar-chart .bar-endpoint {
+    font-size: 0.68rem !important;
+    top: -16px !important;
+  }
+  /* Hide the meta arb-filter-row pills on tight screens — they overflow */
+  .arb-filter-row { flex-wrap: wrap !important; }
+  .arb-route-pill { font-size: 0.7rem !important; }
+
+  /* ============================================================
+     FIX #2 / #4: Force flex children to shrink instead of overflow
+     ============================================================ */
+  .inv-card-top, .car-info-row, .car-summary-stats,
+  .arb-card-header, .arb-card-route,
+  .calc-line, .form-row {
+    flex-wrap: wrap !important;
+  }
+  .car-summary-stats { flex-shrink: 1 !important; gap: 8px !important; }
+  .summary-stat { min-width: 50px !important; }
+  /* "Adjust defaults" link in card-title — wrap so it doesn't push title off-screen */
+  .card-title .right-link { margin-left: 0 !important; font-size: 0.7rem !important; }
+
+  /* Force every direct child of card to never overflow */
+  .card > * { max-width: 100%; }
+  .card { word-wrap: break-word; overflow-wrap: break-word; }
 }
 @media (max-width: 480px) {
   .shell-brand .logo-shield { width: 26px; height: 30px; }
@@ -4506,9 +4648,17 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   .shell-tab { padding: 6px 9px; font-size: 0.74rem; }
   .mockup-frame { padding: 0 8px; }
   .page-title, h1 { font-size: 1.15rem !important; }
-  .selling-hero .range { font-size: 1.4rem !important; }
-  .stat-value { font-size: 1.25rem !important; }
-  .card-title { font-size: 0.94rem !important; }
+  .selling-hero .range,
+  .buy-hero .range,
+  .buy-hero .price-big { font-size: 1.25rem !important; }
+  .stat-value { font-size: 1.2rem !important; }
+  .card-title { font-size: 0.92rem !important; }
+  .card-title .sub { font-size: 0.7rem !important; }
+  .card { padding: 12px !important; }
+  /* Tighter spacing for the disclaimer banner on phones */
+  .shell-disclaimer-banner { font-size: 0.66rem !important; padding: 5px 10px !important; }
+  /* Hide every-OTHER city label on very narrow screens to prevent label collision */
+  #section-market-spread .bar-chart .city-label:nth-child(odd) { display: none; }
 }
 </style>
 </head>
@@ -4537,6 +4687,9 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
       <a href="#slow-stock" class="shell-tab" data-slug="slow-stock">Slow Stock</a>
       <a href="#plans" class="shell-tab" data-slug="plans">Plans & Pricing</a>
     </nav>
+    <div class="shell-disclaimer-banner">
+      ⚠️ These screens are <strong>mockups for feedback only</strong>. Final screens may change. <span class="dim-on-mobile">All buttons and filters are <strong>non-functional</strong> — for representation only.</span>
+    </div>
   </header>
 
   <main class="shell-body">
@@ -7972,7 +8125,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
         <li><span class="check">✓</span><span>Slow stock watchlist with cost-of-holding analysis</span></li>
         <li><span class="check">✓</span><span>National demand · 10 users</span></li>
       </ul>
-      <a href="#" class="pc-cta edge">Claim Edge — 2 mo free</a>
+      <a href="#" class="pc-cta edge" onclick="return openTrialCTA(event);">Start trial in Edge tier — 2 mo free</a>
     </div>
 
   </div>
@@ -8232,8 +8385,8 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
       First 20 paying dealers get 20% off any tier — locked for life — plus 2 months free on Edge.
     </div>
     <div class="footer-cta-buttons">
-      <a href="#" class="footer-btn primary">Claim your Founding Dealer spot →</a>
-      <a href="#" class="footer-btn secondary">Or start free on Spot</a>
+      <a href="#" class="footer-btn primary" onclick="return openTrialCTA(event);">Claim your Founding Dealer spot →</a>
+      <a href="#" class="footer-btn secondary" onclick="return openTrialCTA(event);">Or start free on Spot</a>
     </div>
   </div>
 
@@ -8254,11 +8407,11 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   </main>
 
   <div class="shell-cta">
-    <div class="shell-cta-text">Like what you see? <strong>Get full access free for 2 months.</strong></div>
+    <div class="shell-cta-text">Like what you see? <strong>Get full Edge access free for 2 months.</strong></div>
     <a href="#"
        id="trial-cta-btn"
        class="shell-cta-btn"
-       onclick="return openTrialCTA(event);">🎟 Register for 2-month free trial</a>
+       onclick="return openTrialCTA(event);">🎟 Start trial in Edge tier</a>
   </div>
 
 </div>
