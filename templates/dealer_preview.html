@@ -68,7 +68,9 @@ body {
   color: var(--text-primary);
   line-height: 1.5;
   min-height: 100vh;
-  padding: 24px 32px;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
 }
 
 .mockup-frame { max-width: 1600px; margin: 0 auto; }
@@ -337,9 +339,10 @@ body {
    PRINT
    ============================================================ */
 @media print {
-  body { padding: 12px; background: white; }
+  body { padding: 12px; background: white; overflow-x: visible; }
   .demo-tag { display: none; }
   .mockup-frame { max-width: 100%; }
+  .shell-header, .shell-cta { position: static; }
 }
 
 
@@ -4434,9 +4437,9 @@ body {
    SINGLE-FILE SHELL
    ============================================================ */
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; min-height: 100vh; }
-.shell-app { min-height: 100vh; display: flex; flex-direction: column; }
-.shell-header { position: sticky; top: 0; z-index: 50; background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 12px 0; }
+html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; min-height: 100vh; max-width: 100vw; overflow-x: hidden; }
+.shell-app { min-height: 100vh; display: flex; flex-direction: column; max-width: 100vw; overflow-x: hidden; }
+.shell-header { position: sticky; top: 0; z-index: 50; background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 10px 0 8px; }
 .shell-brand-row { display: flex; justify-content: space-between; align-items: center; padding: 0 22px; margin-bottom: 10px; gap: 12px; flex-wrap: wrap; }
 .shell-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
 .shell-brand .logo-shield { width: 32px; height: 36px; flex-shrink: 0; }
@@ -4464,14 +4467,15 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
 .shell-footer strong { color: var(--text-primary); }
 @media (max-width: 768px) {
   .shell-brand .shell-wordmark { font-size: 0.96rem; }
+  .shell-brand-row { padding: 0 14px; margin-bottom: 6px; }
   .shell-tabs { padding: 0 14px; gap: 2px; }
   .shell-tab { padding: 7px 11px; font-size: 0.78rem; }
   .shell-cta { padding: 10px 14px; flex-direction: column; gap: 6px; text-align: center; }
   .shell-cta-text { font-size: 0.78rem; }
-  .shell-cta-btn { padding: 9px 22px; font-size: 0.86rem; width: 100%; max-width: 320px; justify-content: center; }
-  .shell-body { padding-bottom: 110px; }
-  .mockup-inline { padding: 10px 0 0; }
-  .mockup-frame { padding: 0 12px; }
+  .shell-cta-btn { padding: 10px 16px; font-size: 0.86rem; width: 100%; max-width: 320px; justify-content: center; }
+  .shell-body { padding-bottom: 120px; }
+  .mockup-inline { padding: 8px 0 0; }
+  .mockup-frame { padding: 0 10px; max-width: 100%; }
   .stats-row, .top-row, .top-grid, .aging-section, .bottom-row,
   .kpi-row, .signals-grid, .diag-signals, .scenario-cards,
   .pulse-grid, .mc-grid, .compare-grid, .scale-comparison,
@@ -4480,16 +4484,31 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   }
   a, button { min-height: 36px; }
   .page-title, h1 { font-size: 1.3rem !important; }
+  .page-sub { font-size: 0.86rem !important; }
   .stat-value { font-size: 1.45rem !important; }
-  table { display: block; overflow-x: auto; white-space: nowrap; }
+  .card { padding: 14px 14px !important; }
+  /* Hero numbers (price ranges, big stats) — force to fit small screens */
+  .selling-hero .range { font-size: 1.6rem !important; }
+  .selling-hero .midline { font-size: 0.85rem !important; }
+  .buy-hero .range, .buy-hero .price-big { font-size: 1.5rem !important; }
+  /* Tables: allow horizontal scroll inside their container only */
+  table { display: block; overflow-x: auto; white-space: nowrap; max-width: 100%; }
+  /* Prevent any card / section from exceeding viewport */
+  .content-section, .card, .mockup-frame { max-width: 100%; }
+  /* Reduce gap between sections */
+  .mockup-frame .card { margin-bottom: 12px; }
 }
 @media (max-width: 480px) {
-  .shell-brand .logo-shield { width: 28px; height: 32px; }
+  .shell-brand .logo-shield { width: 26px; height: 30px; }
   .shell-brand .shell-wordmark { font-size: 0.86rem; }
   .shell-brand .pro-badge { font-size: 0.6rem; padding: 1px 6px; }
   .shell-preview-tag { display: none; }
   .shell-tab { padding: 6px 9px; font-size: 0.74rem; }
   .mockup-frame { padding: 0 8px; }
+  .page-title, h1 { font-size: 1.15rem !important; }
+  .selling-hero .range { font-size: 1.4rem !important; }
+  .stat-value { font-size: 1.25rem !important; }
+  .card-title { font-size: 0.94rem !important; }
 }
 </style>
 </head>
@@ -4551,7 +4570,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
       A preview of what AutoKnowMus PRO will look like at launch. Each screen below is a feature you'll use day-to-day, organised by tier.
     </div>
     <div class="hero-research-note">
-      🔬 Dealer Research Preview · May 2026 · Final UI may differ at launch
+      🔬 Dealer Research Preview · Final UI may differ at launch
     </div>
   </div>
 
@@ -4628,7 +4647,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   </div>
 
   <div class="mockup-footer">
-    AutoKnowMus PRO · Dealer Research Preview · May 2026
+    AutoKnowMus PRO · Dealer Research Preview
   </div>
 
 
@@ -6871,7 +6890,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
     <span class="icon">ℹ️</span>
     <span>
       <strong>Comparison group:</strong> 47 active Bangalore used-car dealers contributing inventory data to AutoKnowMus.
-      Your benchmark becomes more precise as more dealers join — we expect 100+ Bangalore dealers in the platform by Q4 2026.
+      Your benchmark becomes more precise as more dealers join — we expect 100+ Bangalore dealers in the platform as adoption grows.
       Demo numbers are illustrative; your real benchmark will reflect platform data at launch.
     </span>
   </div>
@@ -7189,7 +7208,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
       <p><strong>Data sources:</strong> Anonymized inventory data from 47 active Bangalore dealers contributing to AutoKnowMus. No individual dealer's stock or pricing is ever visible — only aggregate medians.</p>
       <p><strong>Rank meaning:</strong> "Rank 9 of 47" means ABC Motors performs better on this dimension than 38 of the 47 other Bangalore dealers. Lower rank number = better.</p>
       <p><strong>Refresh cadence:</strong> Benchmarks update weekly. Your rank may shift week-to-week as other dealers' data flows in.</p>
-      <p><strong>Important honesty layer:</strong> With 47 dealers today, the statistical confidence is good but not perfect. We'll display tighter rank bands once the Bangalore dealer pool crosses 100 (expected Q4 2026). For very niche segments (premium European cars, vintage), dealer comparison will say "insufficient data" until coverage improves.</p>
+      <p><strong>Important honesty layer:</strong> With 47 dealers today, the statistical confidence is good but not perfect. We'll display tighter rank bands once the Bangalore dealer pool crosses 100. For very niche segments (premium European cars, vintage), dealer comparison will say "insufficient data" until coverage improves.</p>
     </div>
   </details>
 
@@ -8228,7 +8247,7 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
 
 
     <div class="shell-footer">
-      <strong>AutoKnowMus PRO</strong> — Shared after our meeting at the AutoKnowMus Bangalore dealer roadshow · May 2026<br>
+      <strong>AutoKnowMus PRO</strong> — Shared after our meeting at the AutoKnowMus Bangalore dealer roadshow<br>
       All mockups for dealer research. Final UI may differ at launch. Numbers indicative.<br>
       Questions? Drop us a line at <strong>autoknowmus@gmail.com</strong>
     </div>
@@ -8252,10 +8271,10 @@ html, body { margin: 0; padding: 0; background: var(--bg-primary); color: var(--
   // Desktop → mailto to autoknowmus@gmail.com
   // ============================================================
   const WHATSAPP_NUMBER = '919880221405';
-  const PREFILL_MESSAGE = 'Hi, interested in AutoKnowMus PRO 2-month trial';
+  const PREFILL_MESSAGE = 'Hi, I am interested to take 2 months trial of AutoKnowMus Pro.\n\nName: ';
   const EMAIL_TO = 'autoknowmus@gmail.com';
   const EMAIL_SUBJECT = 'AutoKnowMus PRO — 2-month free trial registration';
-  const EMAIL_BODY = 'Hi,\n\nI\'d like to register for the 2-month free Edge trial of AutoKnowMus PRO for my dealership.\n\nDealership name:\nLocation:\nContact number:\n\nThanks,';
+  const EMAIL_BODY = 'Hi,\n\nI am interested to take 2 months trial of AutoKnowMus Pro.\n\nName:\nLocation:\nContact number:\n\nThanks,';
 
   function isMobileDevice() {
     // Simple, reliable check — UA sniffing is acceptable for routing
