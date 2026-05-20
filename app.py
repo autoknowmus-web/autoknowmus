@@ -9206,7 +9206,49 @@ def price_tools_un_discontinue():
 
 
 # ============================================================
-# Listing Calibration constants (v3.5.4 — unchanged in v3.5.5)
+# 📁 File: app.py — Part 9 (Part 1/2)
+# 📍 Location: app.py (root of repo)
+# ✏️ Status: EXISTING (full block replacement of Part 9 Part 1/2 ONLY)
+#
+# This block REPLACES your existing "Part 9 (Part 1/2)" section.
+# Part 9 (Part 2/2) is UNCHANGED — keep your currently deployed version.
+# The `if __name__ == '__main__':` block at the end of app.py is UNCHANGED.
+#
+# WHAT CHANGED IN v3.5.6:
+#   - _insert_listings_to_research_log() now adds CROSS-UPLOAD fingerprint
+#     dedup for paste-mode rows (rows with listing_url IS NULL).
+#   - Before insert, we pre-fetch existing research_log fingerprints for
+#     the same (make, model, variant, fuel, year, mileage_km,
+#     asking_price_inr) tuples within the 180-day window.
+#   - If a parsed paste-mode row's fingerprint is already in DB, we skip
+#     the insert and increment a new counter no_url_fingerprint_dupe_count.
+#   - The dedup summary written to listing_uploads.notes now includes
+#     this new counter so the admin sees what happened.
+#   - URL-based dedup (the existing v3.5.3 logic) is UNCHANGED for CSV
+#     rows. Only the no-URL case (paste mode) gets the new dedup path.
+#
+# WHY:
+#   The parser fix in listing_csv_parser.py v2.1 catches INTRA-paste
+#   duplicates (same listing in the Popular Cars widget AND the main
+#   grid of the same page). But if an admin pastes the same CarWale
+#   page across multiple sessions (Monday + Friday), the parser sees
+#   each session in isolation, so cross-session dupes would still slip
+#   through. This belt-and-braces fix catches those.
+#
+# WHAT'S UNCHANGED IN Part 9 Part 1/2:
+#   - All constants (LISTING_DATA_SOURCE, LISTING_MAX_*, PASTE_*, etc.)
+#   - _classify_upload_status_from_notes()
+#   - _serialize_parse_result_for_preview()
+#   - _deserialize_preview_to_parse_result()
+#   - _get_recent_listing_uploads()
+#   - _compute_listing_calibration_stats()
+#   - _get_listing_upload_with_entries()
+#   - All Flask routes (admin_listing_calibration, upload, drilldown)
+# ============================================================
+
+
+# ============================================================
+# Listing Calibration constants (v3.5.4 — unchanged in v3.5.6)
 # ============================================================
 
 # Value written to research_log.data_source for every row coming from the
@@ -9243,16 +9285,15 @@ PASTE_MAX_BLOCKS = 1000                # max listings extractable per paste
 # (paste → review → confirm) is under 5 minutes.
 PASTE_PREVIEW_TTL_SECONDS = 30 * 60
 
+# v3.5.6: Cross-upload fingerprint dedup window. When a paste-mode row
+# (listing_url IS NULL) arrives, we check for existing rows with the same
+# fingerprint inserted within this window. If found, skip the insert.
+# 180 days matches the calibration engine's window so dedup behavior is
+# consistent with how the engine sees the data.
+FINGERPRINT_DEDUP_WINDOW_DAYS = 180
+
 # v3.5.4: PASTE_SOURCE_MAPPING — the source dropdown values shown in the
 # admin UI, plus the tags each one auto-applies to its rows.
-#
-# Keys: human-readable label shown in the dropdown.
-# Values: dict with the column tags applied to every row from this source.
-#
-# Adding a new source (Cars24 paste, Spinny paste, etc.) is just one entry
-# here PLUS a corresponding parser in listing_csv_parser.py. v2 ships
-# CarWale only — Cars24/Spinny placeholders are intentionally not in the
-# dropdown until parsers exist.
 PASTE_SOURCE_MAPPING = {
     'CarWale paste': {
         'data_source':       'Listing Aggregator',
@@ -9260,7 +9301,7 @@ PASTE_SOURCE_MAPPING = {
         'data_source_type':  'asking_price',
         'data_quality_tier': 'aggregator_paste_listings',
         'data_quality':      'medium',
-        'parser':            'parse_carwale_paste',  # function name in listing_csv_parser
+        'parser':            'parse_carwale_paste',
     },
 }
 
@@ -9279,14 +9320,7 @@ from listing_csv_parser import (
 
 
 # ============================================================
-# v3.5.5 NEW HELPER — Classify upload status from notes content
-# ------------------------------------------------------------
-# Previously, the readers used `'partial_error' if notes else 'completed'`
-# which misclassified every successful paste because the dedup summary
-# always populates notes. This helper distinguishes:
-#   - Notes containing real errors → 'partial_error'
-#   - Notes containing only informational content (dedup, counts) → 'completed'
-#   - No notes at all → 'completed'
+# v3.5.5 helper — Classify upload status from notes content (UNCHANGED)
 # ============================================================
 
 def _classify_upload_status_from_notes(notes_text):
@@ -9295,17 +9329,10 @@ def _classify_upload_status_from_notes(notes_text):
     the notes string. The insert helper writes notes for every upload
     (dedup summary is always present), so notes-presence alone is a
     misleading signal.
-
-    The notes string is structured roughly as:
-      "Inserted 25 of 25 kept rows. Dedup: ... . Errors: ..."
-    Only the "Errors: ..." segment indicates a real problem.
     """
     if not notes_text:
         return 'completed'
 
-    # Real errors are tagged with the literal "Errors:" prefix in
-    # _insert_listings_to_research_log(). If absent, the notes are
-    # purely informational (dedup counts, no-URL summary, etc.)
     notes_lower = notes_text.lower()
     if 'errors:' in notes_lower or 'failed' in notes_lower:
         return 'partial_error'
@@ -9314,10 +9341,38 @@ def _classify_upload_status_from_notes(notes_text):
 
 
 # ============================================================
+# v3.5.6 helper — Build cross-upload fingerprint for a paste-mode row
+# ------------------------------------------------------------
+# Same fingerprint shape as listing_csv_parser._fingerprint_for_paste_row
+# so the two layers agree on what "same listing" means.
+# ============================================================
+
+def _build_fingerprint_for_row(row_dict):
+    """
+    Build the cross-upload dedup fingerprint for a row about to be inserted.
+    Used only for paste-mode rows (listing_url IS NULL). Returns a hashable
+    tuple suitable for set/dict lookup.
+
+    Locality and city are deliberately EXCLUDED — see the parser's
+    _fingerprint_for_paste_row() docstring for rationale (same listing
+    rendered in different widgets sometimes has slightly different
+    locality text).
+    """
+    return (
+        row_dict.get('year'),
+        (row_dict.get('make') or '').strip(),
+        (row_dict.get('model') or '').strip(),
+        (row_dict.get('variant') or '').strip(),
+        (row_dict.get('fuel') or '').strip(),
+        row_dict.get('mileage_km'),
+        row_dict.get('asking_price_inr'),
+    )
+
+
+# ============================================================
 # Helper: Insert parsed listings into research_log + listing_uploads
-# v3.5.4 — Now writes marketplace, data_source_type, data_quality_tier,
-# locality. Backwards-compatible defaults keep existing CSV route working.
-# v3.5.5 — UNCHANGED (write logic was correct; only readers were buggy)
+# v3.5.6 — Now adds CROSS-UPLOAD fingerprint dedup for paste-mode rows
+#          (rows where listing_url IS NULL). URL-based dedup unchanged.
 # ============================================================
 
 def _insert_listings_to_research_log(parse_result, state_code, city,
@@ -9329,48 +9384,26 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
     """
     Persist a ParseResult to the database.
 
-    v3.5.4 — Function signature gained 4 new optional kwargs that map to
-    the 4 new columns added in Migrations 10 and 11. Defaults match what
-    the existing CSV upload pipeline always did, so calling without these
-    kwargs is safe and behavior is unchanged.
+    v3.5.6 — DEDUP behavior matrix:
 
-    v3.5.3 Step D — DEDUP LOGIC.
-    Listings are deduped against existing research_log rows by listing_url
-    BEFORE insert. Rules (locked):
-      - URL not seen before                       → INSERT (new)
-      - Same URL + same price + last seen <90d    → SKIP silently (true dupe)
-      - Same URL + different price + last seen <90d → INSERT (price change)
-      - Same URL + last seen >=90d                → INSERT (relisting)
-      - No URL on parsed row                      → INSERT (can't dedup)
-        (paste-mode rows have NO URL by design)
-      - URL appears more than once in THIS upload → keep first only
+      Has URL (CSV mode):
+        - URL not seen before                       → INSERT (new)
+        - Same URL + same price + last seen <90d    → SKIP silently (true dupe)
+        - Same URL + different price + last seen <90d → INSERT (price change)
+        - Same URL + last seen >=90d                → INSERT (relisting)
+        - URL appears more than once in THIS upload → keep first only
 
-    Workflow:
-      1. INSERT a row into listing_uploads with status='processing'
-      2. Pre-fetch existing (url, price, entry_date) tuples for URLs in this batch
-      3. Classify each parsed entry: keep, skip-as-dupe, or price-change/relisting
-      4. Bulk-insert the keep-list into research_log with the upload_id FK
-         and the v3.5.4 column tags
-      5. UPDATE listing_uploads.notes with final dedup stats
+      No URL (PASTE mode) — NEW in v3.5.6:
+        - Fingerprint not seen in research_log (180d) → INSERT (new)
+        - Fingerprint MATCHES an existing row (180d)  → SKIP (cross-upload dupe)
+        - Intra-paste fingerprint dupes are caught by the parser already
+          (listing_csv_parser v2.1) so they don't reach this function
 
-    Params:
-      parse_result:        listing_csv_parser.ParseResult
-      state_code:          2-letter state code (e.g. 'KA')
-      city:                city name (e.g. 'Bangalore')
-      admin_email:         email of the admin doing the upload (for created_by)
-      source_filename:     original filename (for audit)
-      marketplace:         v3.5.4 — written to research_log.marketplace
-                           (default 'CarWale' for back-compat with CSV path)
-      data_source_type:    v3.5.4 — 'asking_price' | 'transaction_price'
-      data_quality_tier:   v3.5.4 — see PASTE_SOURCE_MAPPING for valid values
-      data_quality_legacy: v3.5.4 — written to legacy data_quality column
-                           (default 'medium' for back-compat)
-
-    Returns:
-      dict with: upload_id, status, error, inserted_count, total_count,
-                 parsed_count, skipped_count,
-                 dedup_skipped_count, price_change_count, relisting_count,
-                 no_url_count, intra_file_dupe_count.
+    Returns dict with:
+      upload_id, status, error, inserted_count, total_count,
+      parsed_count, skipped_count,
+      dedup_skipped_count, price_change_count, relisting_count,
+      no_url_count, intra_file_dupe_count, no_url_fingerprint_dupe_count.
     """
     state_code = (state_code or DEFAULT_STATE_CODE).upper()
     city = city or DEFAULT_CITY
@@ -9381,7 +9414,7 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
     upload_payload = {
         'uploaded_by':   admin_email,
         'uploaded_at':   now_iso,
-        'marketplace':   marketplace,                  # v3.5.4: parameterized
+        'marketplace':   marketplace,
         'state_code':    state_code,
         'city':          city,
         'filename':      (source_filename or '')[:200],
@@ -9405,6 +9438,7 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
                 'relisting_count': 0,
                 'no_url_count': 0,
                 'intra_file_dupe_count': 0,
+                'no_url_fingerprint_dupe_count': 0,
             }
         upload_row = upload_resp.data[0]
         upload_id = upload_row['id']
@@ -9423,14 +9457,11 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
             'relisting_count': 0,
             'no_url_count': 0,
             'intra_file_dupe_count': 0,
+            'no_url_fingerprint_dupe_count': 0,
         }
 
     # ============================================================
-    # v3.5.3 Step D: DEDUP STAGE
-    # ------------------------------------------------------------
-    # Pre-fetch existing listings keyed by listing_url. Build an in-memory
-    # lookup so the per-row classification loop is O(N) without further
-    # Supabase calls.
+    # v3.5.3 Step D: URL-BASED DEDUP STAGE
     # ============================================================
 
     DEDUP_WINDOW_DAYS = 90
@@ -9470,6 +9501,61 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
                 )
 
     # ============================================================
+    # v3.5.6 NEW: FINGERPRINT DEDUP STAGE for paste-mode rows
+    # ------------------------------------------------------------
+    # Pre-fetch existing research_log rows with the same (make, model)
+    # tuples appearing in this batch's no-URL rows. We narrow by
+    # (make, model) at the DB level because a wildcard fetch would be
+    # too broad; then we fingerprint-match the results in Python.
+    #
+    # Window: last FINGERPRINT_DEDUP_WINDOW_DAYS days. Matches the
+    # calibration engine's window so dedup behavior aligns with how
+    # the engine sees the data.
+    # ============================================================
+
+    fingerprint_cutoff = today - timedelta(days=FINGERPRINT_DEDUP_WINDOW_DAYS)
+    fingerprint_cutoff_iso = fingerprint_cutoff.isoformat()
+    existing_fingerprints = set()
+
+    # Collect (make, model) tuples from no-URL rows
+    no_url_make_model_pairs = set()
+    for entry in parse_result.parsed:
+        url = (entry.listing_url or '').strip() if entry.listing_url else ''
+        if not url:
+            mk = (entry.make or '').strip()
+            md = (entry.model or '').strip()
+            if mk and md:
+                no_url_make_model_pairs.add((mk, md))
+
+    if no_url_make_model_pairs:
+        # We fetch in batches grouped by make to keep the query manageable.
+        # For most paste sessions this is 1-5 makes per upload.
+        # We refetch per (make, model) to avoid an O(M*N) cross-product
+        # query, but cap distinct fetches at 50 for safety.
+        pairs_to_fetch = list(no_url_make_model_pairs)[:50]
+        for (mk, md) in pairs_to_fetch:
+            try:
+                r = (supabase.table('research_log')
+                     .select(
+                         'make, model, variant, fuel, year, '
+                         'mileage_km, asking_price_inr'
+                     )
+                     .eq('data_source', LISTING_DATA_SOURCE)
+                     .eq('make', mk)
+                     .eq('model', md)
+                     .gte('entry_date', fingerprint_cutoff_iso)
+                     .limit(5000)
+                     .execute())
+                for row in (r.data or []):
+                    fp = _build_fingerprint_for_row(row)
+                    existing_fingerprints.add(fp)
+            except Exception as e:
+                app.logger.warning(
+                    f"_insert_listings_to_research_log: fingerprint pre-fetch "
+                    f"for {mk}/{md} failed: {e}"
+                )
+
+    # ============================================================
     # Step 2: Classify each parsed entry
     # ============================================================
 
@@ -9482,6 +9568,7 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
     relisting_count = 0
     no_url_count = 0
     intra_file_dupe_count = 0
+    no_url_fingerprint_dupe_count = 0  # v3.5.6 NEW
 
     def _parse_date(date_str):
         if not date_str:
@@ -9502,10 +9589,30 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
         if url:
             seen_urls_this_upload.add(url)
 
-        # ---- Cross-file dedup against existing research_log ----
+        # ---- v3.5.6 NEW: Cross-upload fingerprint dedup (no-URL only) ----
         if not url:
-            # No URL = can't dedup. Insert and move on.
-            # v3.5.4: paste-mode rows always land here.
+            # Build the candidate row's fingerprint and check against the
+            # pre-fetched set. If matched, skip the insert entirely.
+            candidate_fp = (
+                entry.year,
+                (entry.make or '').strip(),
+                (entry.model or '').strip(),
+                (entry.variant or '').strip(),
+                (entry.fuel or '').strip(),
+                entry.mileage_km,
+                entry.asking_price,
+            )
+            if candidate_fp in existing_fingerprints:
+                no_url_fingerprint_dupe_count += 1
+                continue
+
+            # Not a dupe — mark this fingerprint as "seen" so any later
+            # identical row in THIS upload also gets skipped (intra-paste
+            # safety net in case the parser somehow let one through).
+            existing_fingerprints.add(candidate_fp)
+
+        # ---- Existing cross-file URL-based dedup ----
+        if not url:
             no_url_count += 1
             decision = 'insert_no_url'
         else:
@@ -9537,9 +9644,7 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
                         price_change_count += 1
                         decision = 'insert_price_change'
 
-        # v3.5.4: Build the research_log row with the 4 new columns.
-        # locality comes from the parser (paste-mode extracts it; CSV-mode
-        # may also extract it from o-j1 — the parser sets it on the row).
+        # Build the research_log row payload
         research_rows.append({
             'make':                  entry.make,
             'model':                 entry.model,
@@ -9564,17 +9669,16 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
             'transaction_date':      None,
             'transaction_completed': False,
             'buyer_type':            None,
-            'data_quality':          data_quality_legacy,    # v3.5.4: parameterized
+            'data_quality':          data_quality_legacy,
             'harvest_notes':         None,
             'include_in_calibration': True,
             'exclusion_reason':      None,
             'created_by':            admin_email,
             'listing_upload_id':     upload_id,
-            # v3.5.4: NEW COLUMNS
             'marketplace':           marketplace,
             'data_source_type':      data_source_type,
             'data_quality_tier':     data_quality_tier,
-            'locality':              entry.locality,         # extracted by parser
+            'locality':              entry.locality,
         })
 
     # ============================================================
@@ -9603,8 +9707,15 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
     note_parts.append(
         f"Inserted {inserted_count} of {len(research_rows)} kept rows."
     )
-    if dedup_skipped_count > 0 or price_change_count > 0 or relisting_count > 0 \
-            or no_url_count > 0 or intra_file_dupe_count > 0:
+    any_dedup = (
+        dedup_skipped_count > 0
+        or price_change_count > 0
+        or relisting_count > 0
+        or no_url_count > 0
+        or intra_file_dupe_count > 0
+        or no_url_fingerprint_dupe_count > 0   # v3.5.6
+    )
+    if any_dedup:
         dedup_summary_parts = []
         if dedup_skipped_count > 0:
             dedup_summary_parts.append(f"{dedup_skipped_count} exact dupes skipped")
@@ -9614,6 +9725,11 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
             dedup_summary_parts.append(f"{relisting_count} relistings (>90d)")
         if intra_file_dupe_count > 0:
             dedup_summary_parts.append(f"{intra_file_dupe_count} intra-file dupes skipped")
+        # v3.5.6 NEW: surface the cross-upload fingerprint dedup count
+        if no_url_fingerprint_dupe_count > 0:
+            dedup_summary_parts.append(
+                f"{no_url_fingerprint_dupe_count} cross-upload paste dupes skipped"
+            )
         if no_url_count > 0:
             dedup_summary_parts.append(f"{no_url_count} rows without URL")
         note_parts.append("Dedup: " + ", ".join(dedup_summary_parts) + ".")
@@ -9635,28 +9751,31 @@ def _insert_listings_to_research_log(parse_result, state_code, city,
         f"skipped={len(parse_result.skipped)} inserted={inserted_count} "
         f"dedup_skipped={dedup_skipped_count} price_change={price_change_count} "
         f"relisting={relisting_count} no_url={no_url_count} "
-        f"intra_file_dupe={intra_file_dupe_count} status={final_status}"
+        f"intra_file_dupe={intra_file_dupe_count} "
+        f"no_url_fingerprint_dupe={no_url_fingerprint_dupe_count} "
+        f"status={final_status}"
     )
 
     return {
-        'upload_id':              upload_id,
-        'status':                 final_status,
-        'error':                  ' | '.join(insert_errors) if insert_errors else None,
-        'inserted_count':         inserted_count,
-        'total_count':            parse_result.total_rows,
-        'parsed_count':           len(parse_result.parsed),
-        'skipped_count':          len(parse_result.skipped),
-        'dedup_skipped_count':    dedup_skipped_count,
-        'price_change_count':     price_change_count,
-        'relisting_count':        relisting_count,
-        'no_url_count':           no_url_count,
-        'intra_file_dupe_count':  intra_file_dupe_count,
+        'upload_id':                     upload_id,
+        'status':                        final_status,
+        'error':                         ' | '.join(insert_errors) if insert_errors else None,
+        'inserted_count':                inserted_count,
+        'total_count':                   parse_result.total_rows,
+        'parsed_count':                  len(parse_result.parsed),
+        'skipped_count':                 len(parse_result.skipped),
+        'dedup_skipped_count':           dedup_skipped_count,
+        'price_change_count':            price_change_count,
+        'relisting_count':               relisting_count,
+        'no_url_count':                  no_url_count,
+        'intra_file_dupe_count':         intra_file_dupe_count,
+        'no_url_fingerprint_dupe_count': no_url_fingerprint_dupe_count,  # v3.5.6
     }
 
 
 # ============================================================
 # v3.5.4 — Helper: Serialize ParseResult for the paste preview UI
-# UNCHANGED in v3.5.5
+# UNCHANGED in v3.5.6
 # ============================================================
 
 def _serialize_parse_result_for_preview(parse_result, source_label,
@@ -9665,14 +9784,6 @@ def _serialize_parse_result_for_preview(parse_result, source_label,
     Convert a ParseResult into a JSON-safe dict suitable for:
       a) Stashing in the user's Flask session (preview → confirm flow)
       b) Sending to the preview template for rendering an editable table
-
-    The preview UI shows ONE ROW PER PARSED LISTING with all fields visible.
-    Skipped rows are surfaced as a count + per-reason breakdown.
-
-    The returned dict can be round-tripped through
-    _deserialize_preview_to_parse_result() to rebuild a ParseResult for
-    insertion. We do NOT store SkippedRow objects in the round-trip — those
-    are display-only on the preview page.
     """
     parsed_rows = []
     for idx, entry in enumerate(parse_result.parsed):
@@ -9695,9 +9806,8 @@ def _serialize_parse_result_for_preview(parse_result, source_label,
             'needs_review':       entry.needs_review,
         })
 
-    # Skip summary by reason (for the preview "skip log" panel)
     skip_summary = {}
-    skip_examples = {}  # one example per reason for the tooltip
+    skip_examples = {}
     for s in parse_result.skipped:
         skip_summary[s.reason] = skip_summary.get(s.reason, 0) + 1
         if s.reason not in skip_examples:
@@ -9723,12 +9833,7 @@ def _serialize_parse_result_for_preview(parse_result, source_label,
 def _deserialize_preview_to_parse_result(preview_dict):
     """
     Rebuild a ParseResult from a serialized preview dict — for the
-    confirm-ingest step. Only the parsed rows are needed; SkippedRow
-    objects are display-only and don't round-trip.
-
-    Returns a ParseResult with empty skipped[] (since skip records are not
-    re-inserted on confirm). The total_rows count is preserved so the
-    listing_uploads row gets accurate totals.
+    confirm-ingest step. UNCHANGED in v3.5.6.
     """
     parsed_list = []
     for row in preview_dict.get('parsed_rows', []):
@@ -9760,26 +9865,14 @@ def _deserialize_preview_to_parse_result(preview_dict):
 
 
 # ============================================================
-# Helper: Fetch recent uploads for the dashboard
-# v3.5.5 — FIX: status now derived from notes content, not notes presence.
-#               parse_success_pct now uses inserted/parsed (real success rate).
+# Helper: Fetch recent uploads for the dashboard (UNCHANGED in v3.5.6)
 # ============================================================
 
 def _get_recent_listing_uploads(limit=50):
     """
     Returns the latest N upload rows, decorated with display dates.
-
-    v3.5.5: Status classification fixed.
-    - Previous bug: `status='partial_error' if notes else 'completed'` — this
-      flagged every successful paste as partial_error because the dedup summary
-      always populates notes.
-    - Fix: status now derived from notes CONTENT via
-      _classify_upload_status_from_notes(), which only flags partial_error
-      when notes contain real errors ("Errors:" prefix).
-
-    parse_success_pct also fixed: was parsed/total (which counted skipped
-    chrome rows like ads/widgets as failures). Now inserted/parsed (true
-    success rate of legitimate listings).
+    v3.5.5 fixes preserved: status from notes content + parse_success_pct
+    from inserted/parsed.
     """
     try:
         r = (supabase.table('listing_uploads')
@@ -9793,7 +9886,6 @@ def _get_recent_listing_uploads(limit=50):
         return []
 
     for row in rows:
-        # DD-MMM-YYYY HH:MM display for created_at
         ca = row.get('created_at')
         if ca:
             try:
@@ -9804,21 +9896,15 @@ def _get_recent_listing_uploads(limit=50):
         else:
             row['created_display'] = '—'
 
-        # Map deployed schema column names to keys the template expects.
         row['parsed_count']    = row.get('parsed_rows') or 0
         row['skipped_count']   = row.get('skipped_rows') or 0
         row['source_filename'] = row.get('filename') or ''
         row['inserted_count']  = row['parsed_count']
 
-        # v3.5.5 FIX: status from notes content, not notes presence
         row['status'] = _classify_upload_status_from_notes(row.get('notes'))
 
         row['parser_version']  = '1.0'
 
-        # v3.5.5 FIX: parse_success_pct = inserted/parsed (real success rate).
-        # The old formula (parsed/total) treated chrome skips (ads, widgets,
-        # EMI lines that the parser correctly rejected) as parse failures,
-        # which made even perfect pastes show ~70% success.
         parsed = row['parsed_count']
         inserted = row['inserted_count']
         if parsed > 0:
@@ -9830,8 +9916,7 @@ def _get_recent_listing_uploads(limit=50):
 
 
 # ============================================================
-# Helper: Aggregate stats for the dashboard cards
-# UNCHANGED in v3.5.5
+# Helper: Aggregate stats for the dashboard cards (UNCHANGED)
 # ============================================================
 
 def _compute_listing_calibration_stats():
@@ -9903,19 +9988,14 @@ def _compute_listing_calibration_stats():
 
 
 # ============================================================
-# Helper: Fetch one upload + its parsed entries (for drilldown)
-# v3.5.5 — FIX: Same status + parse_success_pct fixes as
-#               _get_recent_listing_uploads()
+# Helper: Fetch one upload + its parsed entries (UNCHANGED in v3.5.6)
 # ============================================================
 
 def _get_listing_upload_with_entries(upload_id):
     """
     Returns (upload_row, parsed_entries) tuple for the drilldown page.
     upload_row is None if the id doesn't exist.
-    parsed_entries is a list of research_log rows joined via listing_upload_id.
-
-    v3.5.5: Status classification + parse_success_pct fixes (same as
-    _get_recent_listing_uploads).
+    v3.5.5 fixes preserved.
     """
     try:
         r = (supabase.table('listing_uploads')
@@ -9931,7 +10011,6 @@ def _get_listing_upload_with_entries(upload_id):
     if not upload_row:
         return None, []
 
-    # Decorate created_at
     ca = upload_row.get('created_at')
     if ca:
         try:
@@ -9947,12 +10026,10 @@ def _get_listing_upload_with_entries(upload_id):
     upload_row['source_filename'] = upload_row.get('filename') or ''
     upload_row['inserted_count']  = upload_row['parsed_count']
 
-    # v3.5.5 FIX: status from notes content, not notes presence
     upload_row['status'] = _classify_upload_status_from_notes(upload_row.get('notes'))
 
     upload_row['parser_version']  = '1.0'
 
-    # v3.5.5 FIX: parse_success_pct = inserted/parsed (real success rate)
     parsed = upload_row['parsed_count']
     inserted = upload_row['inserted_count']
     if parsed > 0:
@@ -9980,8 +10057,7 @@ def _get_listing_upload_with_entries(upload_id):
 
 
 # ============================================================
-# ROUTE: Dashboard — GET /admin/listing-calibration
-# UNCHANGED in v3.5.5
+# ROUTE: Dashboard — GET /admin/listing-calibration (UNCHANGED)
 # ============================================================
 
 @app.route('/admin/listing-calibration')
@@ -9991,7 +10067,6 @@ def admin_listing_calibration():
     """
     Listing Calibration dashboard.
     Shows: top-line stats, upload form (CSV), and recent uploads table.
-    v3.5.4: Template now includes a link to the new paste extractor.
     """
     admin = current_user()
     stats = _compute_listing_calibration_stats()
@@ -10014,8 +10089,7 @@ def admin_listing_calibration():
 
 
 # ============================================================
-# ROUTE: CSV Upload POST — POST /admin/listing-calibration/upload
-# UNCHANGED in v3.5.5
+# ROUTE: CSV Upload POST — POST /admin/listing-calibration/upload (UNCHANGED)
 # ============================================================
 
 @app.route('/admin/listing-calibration/upload', methods=['POST'])
@@ -10026,10 +10100,6 @@ def admin_listing_calibration_upload():
     Accepts a multipart CSV upload + state_code + city.
     Parses the CSV, inserts rows into research_log + listing_uploads,
     redirects to the drilldown page on success.
-
-    v3.5.4: Now passes explicit marketplace='CarWale' and the v3.5.4 tier
-    tags to the insert helper. Behavior is identical to v3.5.3 (defaults
-    match) but the tags are now persisted to the DB.
     """
     admin = current_user()
     admin_email = admin.get('email') or 'unknown'
@@ -10104,8 +10174,6 @@ def admin_listing_calibration_upload():
     if not parse_result.parsed and parse_result.skipped:
         pass
 
-    # v3.5.4: Pass explicit tags. Defaults still match historical behavior,
-    # but now the new columns get populated for every CSV upload too.
     insert_result = _insert_listings_to_research_log(
         parse_result=parse_result,
         state_code=state_code,
@@ -10150,8 +10218,7 @@ def admin_listing_calibration_upload():
 
 
 # ============================================================
-# ROUTE: Drilldown — GET /admin/listing-calibration/uploads/<id>
-# UNCHANGED in v3.5.5
+# ROUTE: Drilldown — GET /admin/listing-calibration/uploads/<id> (UNCHANGED)
 # ============================================================
 
 @app.route('/admin/listing-calibration/uploads/<upload_id>')
@@ -10161,8 +10228,7 @@ def admin_listing_calibration_upload_detail(upload_id):
     """
     Per-upload drilldown page.
     Shows: upload metadata, all inserted research_log rows, and the
-    original skip reasons (re-parsed if we still have the source — but
-    typically we don't, so the skip section just shows the count).
+    original skip reasons.
     """
     admin = current_user()
     upload_row, entries = _get_listing_upload_with_entries(upload_id)
@@ -10182,12 +10248,10 @@ def admin_listing_calibration_upload_detail(upload_id):
 
 
 # ============================================================
-# END app.py — Part 9 (Part 1/2)
+# END app.py — Part 9 (Part 1/2) · v3.5.6
 # Continue with your EXISTING Part 9 (Part 2/2) IMMEDIATELY below.
-# (Part 2/2 is UNCHANGED — keep your currently deployed version.)
-# Then the existing `if __name__ == '__main__':` block follows as before.
-# ============================================================
-# app.py — Part 9 (Part 2/2)  ·  Paste Extractor Routes
+# Part 9 (Part 2/2) is UNCHANGED.
+# ============================================================# app.py — Part 9 (Part 2/2)  ·  Paste Extractor Routes
 # ------------------------------------------------------------
 # v3.5.4 — Continuation of Part 1/2.
 #
